@@ -8,4 +8,6 @@ __pycache__/
 *.log
 .env
 .env.*
+!.env.example
+!**/.env.example
 AI_Internship_Technical_QuestionBank.xlsx

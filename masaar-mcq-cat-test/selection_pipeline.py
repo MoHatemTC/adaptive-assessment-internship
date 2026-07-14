@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from engine import fisher_info, rank_candidates, selection_score
 from engine_log import get_logger
 from llm_client import chat_json, llm_configured
+from tracing import trace_llm_response
 
 SELECTION_SYSTEM = """You are the Masaar adaptive testing selector.
 You MUST follow the procedural algorithm exactly. You may ONLY choose an item id
@@ -174,6 +175,20 @@ def llm_select(
 
     user_msg = json.dumps(payload, indent=2)
     data = chat_json(SELECTION_SYSTEM, user_msg)
+    trace_llm_response(
+        "cat.llm.selection",
+        input_data={
+            "competency": competency,
+            "theta_hat": round(theta_hat, 3),
+            "se": round(se, 3),
+            "questions_answered": q_count,
+            "criterion": criterion,
+            "served_ids": served_ids,
+            "shortlist": shortlist,
+        },
+        output_data=data,
+        metadata={"competency": competency, "phase": "llm_selection"},
+    )
 
     selected_id = str(data.get("selected_id", "")).strip()
     id_map = {q["id"]: q for q, *_ in ranked}

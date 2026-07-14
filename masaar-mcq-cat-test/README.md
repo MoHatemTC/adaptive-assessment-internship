@@ -46,12 +46,27 @@ cp .env.example .env
 # edit .env:
 # OPENAI_API_KEY=sk-proj-...
 # OPENAI_MODEL=gpt-4o-mini
+# LANGFUSE_SECRET_KEY=sk-lf-...
+# LANGFUSE_PUBLIC_KEY=pk-lf-...
+# LANGFUSE_BASE_URL=https://cloud.langfuse.com
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
 Setup screen shows connection status and a toggle for LLM selection.
 If OpenAI fails, the app falls back to the same procedure executed deterministically in Python.
+
+## Langfuse tracing
+
+When Langfuse keys are present in `.env`, the app records comparable trace events for:
+
+- session start
+- next-item selection
+- LLM selection responses
+- answer updates
+- competency finalization
+
+Each trace includes `approach_id`, `math_actor`, and `selection_actor` metadata so the three experiment branches can be compared in Langfuse.
 
 ## Question bank JSON
 
@@ -90,5 +105,6 @@ If OpenAI fails, the app falls back to the same procedure executed deterministic
 | `certainty.py` | Combined assessment certainty % |
 | `selection_pipeline.py` | LLM procedural + deterministic item selection |
 | `llm_client.py` | OpenAI client for procedural selection |
+| `tracing.py` | Optional Langfuse trace events for approach comparison |
 | `bank_synth.py` | Gap-fill only when a bank lacks coverage |
 | `assessment.log` | SELECT/UPDATE/SYNTH traces |

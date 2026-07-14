@@ -28,6 +28,7 @@ from engine import (
 from engine_log import get_logger, log_selection, log_session_start, log_synthesis, log_update
 from llm_client import get_model, llm_configured, probe_gateway, provider_label, test_connection
 from selection_pipeline import SelectionResult, select_next_item
+from tracing import trace_final, trace_selection, trace_session_start, trace_update
 
 MIN_ITEMS_PER_COMPETENCY = 8
 BANK_EXHAUSTION_THRESHOLD = 4
@@ -132,6 +133,13 @@ def _apply_selection(state: dict, sel: SelectionResult | None, competency: str =
             mode="LLM" if sel.llm_used else "ENGINE",
             criterion=sel.criterion,
         )
+        trace_selection(
+            competency,
+            state["q_count"],
+            state["theta_hat"],
+            state["se"],
+            sel,
+        )
 
 
 def _pick_next(
@@ -229,14 +237,18 @@ def ensure_current_item(state: dict, pool: list[dict], competency: str) -> None:
     _apply_selection(state, sel, competency)
     state["needs_selection"] = False
     if state["current_item"] is None:
-        finalize_competency(state, bank_exhausted=True)
+        finalize_competency(state, bank_exhausted=True, competency=competency)
 
 
 def unserved_count(pool: list[dict], served_ids: list[str]) -> int:
     return sum(1 for q in pool if q["id"] not in served_ids)
 
 
-def finalize_competency(state: dict, bank_exhausted: bool = False) -> None:
+def finalize_competency(
+    state: dict,
+    bank_exhausted: bool = False,
+    competency: str = "",
+) -> None:
     level, pct, band, low_conf = level_and_band(state["theta_hat"], state["se"])
     state["done"] = True
     state["bank_exhausted"] = bank_exhausted
@@ -249,6 +261,8 @@ def finalize_competency(state: dict, bank_exhausted: bool = False) -> None:
     state["certainty_pct"] = certainty_for_state(state, state.get("self_confidence", "low"))
     state["current_item"] = None
     state["current_fisher_i"] = 0.0
+    if competency:
+        trace_final(competency, state, bank_exhausted=bank_exhausted)
 
 
 def should_stop(state: dict, pool: list[dict]) -> tuple[bool, bool]:
@@ -312,9 +326,19 @@ def grade_and_advance(
         certainty,
         stop and not bank_exhausted,
     )
+    trace_update(
+        competency,
+        state["q_count"],
+        item,
+        correct=is_correct,
+        theta_hat=theta_hat,
+        se=se,
+        certainty_pct=certainty,
+        converged=stop and not bank_exhausted,
+    )
 
     if stop:
-        finalize_competency(state, bank_exhausted=bank_exhausted)
+        finalize_competency(state, bank_exhausted=bank_exhausted, competency=competency)
         return
 
     if use_llm is None:
@@ -328,7 +352,7 @@ def grade_and_advance(
 
     sel = _pick_next(state, pool, competency, use_llm=False)
     if sel is None:
-        finalize_competency(state, bank_exhausted=True)
+        finalize_competency(state, bank_exhausted=True, competency=competency)
     else:
         _apply_selection(state, sel, competency)
 
@@ -379,7 +403,11 @@ def run_simulation(
         grade_and_advance(state, pool, selected, competency=competency, use_llm=False)
 
     if not state["done"]:
-        finalize_competency(state, bank_exhausted=state.get("bank_exhausted", False))
+        finalize_competency(
+            state,
+            bank_exhausted=state.get("bank_exhausted", False),
+            competency=competency,
+        )
 
     return state
 
@@ -662,8 +690,13 @@ def screen_setup() -> None:
                 defer_selection=True,
             )
             if comp_states[comp]["done"] and comp_states[comp]["bank_exhausted"]:
-                finalize_competency(comp_states[comp], bank_exhausted=True)
+                finalize_competency(comp_states[comp], bank_exhausted=True, competency=comp)
         log_session_start(competencies, {c: len(bank_by_comp[c]) for c in competencies})
+        trace_session_start(
+            competencies,
+            {c: len(bank_by_comp[c]) for c in competencies},
+            llm_enabled=use_llm,
+        )
         st.session_state["comp_states"] = comp_states
         st.session_state["competencies"] = competencies
         st.session_state["comp_idx"] = 0
