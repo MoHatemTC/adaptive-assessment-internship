@@ -1,0 +1,5 @@
+.env
+assessment.log
+.venv/
+__pycache__/
+*.pyc

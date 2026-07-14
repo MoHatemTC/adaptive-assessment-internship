@@ -1,0 +1,11 @@
+Docs/
+project/
+.agents/
+.claude/
+.venv/
+__pycache__/
+*.pyc
+*.log
+.env
+.env.*
+AI_Internship_Technical_QuestionBank.xlsx
