@@ -17,7 +17,6 @@ from engine import (
     MAX_QUESTIONS,
     SE_TARGET,
     calibrated_prior_sd,
-    eap_update,
     fisher_info,
     level_and_band,
     p_correct,
@@ -26,8 +25,9 @@ from engine import (
     resolve_b,
 )
 from engine_log import get_logger, log_selection, log_session_start, log_synthesis, log_update
+from llm_full_cat import llm_full_step, posterior_from_theta_se
 from llm_client import get_model, llm_configured, probe_gateway, provider_label, test_connection
-from selection_pipeline import SelectionResult, select_next_item
+from selection_pipeline import SelectionResult
 from tracing import trace_final, trace_selection, trace_session_start, trace_update
 
 MIN_ITEMS_PER_COMPETENCY = 8
@@ -149,17 +149,7 @@ def _pick_next(
     *,
     use_llm: bool = True,
 ) -> SelectionResult | None:
-    return select_next_item(
-        state["theta_hat"],
-        state["se"],
-        state["q_count"],
-        competency,
-        pool,
-        state["served_ids"],
-        state.get("history", []),
-        state.get("posterior"),
-        use_llm=use_llm,
-    )
+    return llm_full_step(state, pool, competency, use_llm=use_llm).selection
 
 
 def init_competency_state(
@@ -258,7 +248,10 @@ def finalize_competency(
     state["low_confidence"] = low_conf or (
         state["q_count"] >= MAX_QUESTIONS and state["se"] > SE_TARGET
     )
-    state["certainty_pct"] = certainty_for_state(state, state.get("self_confidence", "low"))
+    state["certainty_pct"] = state.get("certainty_pct") or certainty_for_state(
+        state,
+        state.get("self_confidence", "low"),
+    )
     state["current_item"] = None
     state["current_fisher_i"] = 0.0
     if competency:
@@ -288,20 +281,26 @@ def grade_and_advance(
         return
 
     is_correct = selected_index == item["answer_index"]
-    posterior, theta_hat, se = eap_update(state["posterior"], item, is_correct)
+    if use_llm is None:
+        use_llm = llm_enabled()
+
+    controller = llm_full_step(
+        state,
+        pool,
+        competency,
+        answered_item=item,
+        is_correct=is_correct,
+        use_llm=use_llm,
+    )
+    theta_hat = controller.theta_hat
+    se = controller.se
+    posterior = posterior_from_theta_se(theta_hat, se)
     state["posterior"] = posterior
     state["theta_hat"] = theta_hat
     state["se"] = se
     state["q_count"] += 1
     state["served_ids"].append(item["id"])
-    conf = state.get("self_confidence", "low")
-    certainty = combined_certainty_pct(
-        se,
-        conf,
-        state["q_count"],
-        state.get("prior_sd", 2.0),
-        se_start=state.get("se_start"),
-    )
+    certainty = controller.certainty_pct
     state["certainty_pct"] = certainty
     state["history"].append(
         {
@@ -312,10 +311,15 @@ def grade_and_advance(
             "se": se,
             "certainty_pct": certainty,
             "fisher_i": state.get("current_fisher_i", 0.0),
+            "math_actor": "llm",
+            "selection_actor": "llm",
+            "llm_fallback": controller.fallback_used,
+            "llm_note": controller.selection_note,
         }
     )
 
     stop, bank_exhausted = should_stop(state, pool)
+    stop = stop or controller.stop
     log_update(
         competency,
         state["q_count"],
@@ -341,20 +345,10 @@ def grade_and_advance(
         finalize_competency(state, bank_exhausted=bank_exhausted, competency=competency)
         return
 
-    if use_llm is None:
-        use_llm = llm_enabled()
-
-    # Defer LLM pick until next render so spinner can show
-    if use_llm:
-        state["current_item"] = None
-        state["needs_selection"] = True
-        return
-
-    sel = _pick_next(state, pool, competency, use_llm=False)
-    if sel is None:
+    if controller.selection is None:
         finalize_competency(state, bank_exhausted=True, competency=competency)
     else:
-        _apply_selection(state, sel, competency)
+        _apply_selection(state, controller.selection, competency)
 
 
 def posterior_chart_df(posterior: np.ndarray) -> pd.DataFrame:
@@ -441,7 +435,7 @@ def render_sidebar_live(state: dict, title: str) -> None:
     c2.metric("SE (uncertainty)", f"{state['se']:.3f}")
     st.sidebar.caption(
         f"Convergence target: SE ≤ {SE_TARGET} · "
-        f"selection: {'OpenAI procedural (KL→Fisher)' if llm_enabled() else 'engine only (KL→Fisher)'}"
+        f"full CAT controller: {'OpenAI' if llm_enabled() else 'coded fallback'}"
     )
 
     item = state.get("current_item")
@@ -592,10 +586,10 @@ def screen_setup() -> None:
         for w in warnings:
             st.markdown(f"- {w}")
 
-    st.subheader("LLM selection (OpenAI)")
+    st.subheader("Full LLM CAT (OpenAI)")
     st.caption(
         f"Provider: `{provider_label()}` · model: `{get_model()}` · "
-        "MCQ grading stays deterministic; LLM only picks the next item via the CAT procedure."
+        "MCQ grading stays deterministic; LLM updates theta/SE and picks the next item."
     )
 
     if "llm_enabled" not in st.session_state:
@@ -621,7 +615,7 @@ def screen_setup() -> None:
     if probe is None:
         if llm_configured():
             st.info(
-                "Credentials found in `.env`. Click **Test OpenAI connection** before enabling LLM selection."
+                "Credentials found in `.env`. Click **Test OpenAI connection** before enabling full LLM CAT."
             )
         else:
             st.warning("No `OPENAI_API_KEY` in `.env`. Copy `.env.example` → `.env` and fill in values.")
@@ -635,14 +629,14 @@ def screen_setup() -> None:
     # Separate widget key from persistent flag — Streamlit deletes widget keys when
     # the control is not rendered on later screens (this broke LLM after q0).
     toggled = st.checkbox(
-        "Use LLM for procedural item selection",
+        "Use LLM for math and next-question selection",
         value=llm_enabled(),
         disabled=not llm_configured(),
-        help="Requires a valid OpenAI API key. Falls back to the same procedure in Python on failure.",
+        help="The LLM returns theta/SE, stop decision, and selected_id; code validates outputs.",
         key="llm_toggle_widget",
     )
     set_llm_enabled(bool(toggled) and llm_configured())
-    st.caption(f"LLM enabled for assessment: **{llm_enabled()}** (persists across screens)")
+    st.caption(f"Full LLM CAT enabled for assessment: **{llm_enabled()}** (persists across screens)")
 
     st.subheader("Self-rating intake")
     if "self_ratings" not in st.session_state:

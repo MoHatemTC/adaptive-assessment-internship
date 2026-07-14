@@ -19,8 +19,8 @@ from engine_log import get_logger
 _ENV_PATH = Path(__file__).resolve().parent / ".env"
 load_dotenv(_ENV_PATH, override=True)
 
-APPROACH_ID = os.getenv("CAT_APPROACH_ID", "approach-1-code-math-llm-pick")
-MATH_ACTOR = os.getenv("CAT_MATH_ACTOR", "code")
+APPROACH_ID = os.getenv("CAT_APPROACH_ID", "approach-3-llm-full-cat")
+MATH_ACTOR = os.getenv("CAT_MATH_ACTOR", "llm")
 SELECTION_ACTOR = os.getenv("CAT_SELECTION_ACTOR", "llm")
 TRACE_NAME = os.getenv("CAT_TRACE_NAME", f"masaar-cat-{APPROACH_ID}")
 
