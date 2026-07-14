@@ -17,7 +17,6 @@ from engine import (
     MAX_QUESTIONS,
     SE_TARGET,
     calibrated_prior_sd,
-    eap_update,
     fisher_info,
     level_and_band,
     p_correct,
@@ -27,6 +26,7 @@ from engine import (
 )
 from engine_log import get_logger, log_selection, log_session_start, log_synthesis, log_update
 from llm_client import get_model, llm_configured, probe_gateway, provider_label, test_connection
+from llm_math import llm_math_update, posterior_from_theta_se
 from selection_pipeline import SelectionResult, select_next_item
 from tracing import trace_final, trace_selection, trace_session_start, trace_update
 
@@ -208,10 +208,7 @@ def init_competency_state(
         base["needs_selection"] = True
         return base
 
-    if use_llm is None:
-        use_llm = llm_enabled()
-
-    sel = _pick_next(base, pool, competency, use_llm=use_llm)
+    sel = _pick_next(base, pool, competency, use_llm=False)
     _apply_selection(base, sel, competency)
     base["bank_exhausted"] = base["current_item"] is None
     base["done"] = base["current_item"] is None
@@ -229,11 +226,8 @@ def ensure_current_item(state: dict, pool: list[dict], competency: str) -> None:
         # Nothing pending
         return
 
-    use_llm = llm_enabled()
-    with st.spinner(
-        "Selecting next question via OpenAI…" if use_llm else "Selecting next question…"
-    ):
-        sel = _pick_next(state, pool, competency, use_llm=use_llm)
+    with st.spinner("Selecting next question with coded CAT logic…"):
+        sel = _pick_next(state, pool, competency, use_llm=False)
     _apply_selection(state, sel, competency)
     state["needs_selection"] = False
     if state["current_item"] is None:
@@ -288,20 +282,19 @@ def grade_and_advance(
         return
 
     is_correct = selected_index == item["answer_index"]
-    posterior, theta_hat, se = eap_update(state["posterior"], item, is_correct)
+    if use_llm is None:
+        use_llm = llm_enabled()
+
+    math_result = llm_math_update(state, item, is_correct, use_llm=use_llm)
+    theta_hat = math_result.theta_hat
+    se = math_result.se
+    posterior = posterior_from_theta_se(theta_hat, se)
     state["posterior"] = posterior
     state["theta_hat"] = theta_hat
     state["se"] = se
     state["q_count"] += 1
     state["served_ids"].append(item["id"])
-    conf = state.get("self_confidence", "low")
-    certainty = combined_certainty_pct(
-        se,
-        conf,
-        state["q_count"],
-        state.get("prior_sd", 2.0),
-        se_start=state.get("se_start"),
-    )
+    certainty = math_result.certainty_pct
     state["certainty_pct"] = certainty
     state["history"].append(
         {
@@ -312,6 +305,9 @@ def grade_and_advance(
             "se": se,
             "certainty_pct": certainty,
             "fisher_i": state.get("current_fisher_i", 0.0),
+            "math_actor": "llm",
+            "math_fallback": math_result.fallback_used,
+            "math_note": math_result.math_note,
         }
     )
 
@@ -339,15 +335,6 @@ def grade_and_advance(
 
     if stop:
         finalize_competency(state, bank_exhausted=bank_exhausted, competency=competency)
-        return
-
-    if use_llm is None:
-        use_llm = llm_enabled()
-
-    # Defer LLM pick until next render so spinner can show
-    if use_llm:
-        state["current_item"] = None
-        state["needs_selection"] = True
         return
 
     sel = _pick_next(state, pool, competency, use_llm=False)
@@ -441,7 +428,7 @@ def render_sidebar_live(state: dict, title: str) -> None:
     c2.metric("SE (uncertainty)", f"{state['se']:.3f}")
     st.sidebar.caption(
         f"Convergence target: SE ≤ {SE_TARGET} · "
-        f"selection: {'OpenAI procedural (KL→Fisher)' if llm_enabled() else 'engine only (KL→Fisher)'}"
+        f"selection: engine only (KL→Fisher) · math: {'OpenAI' if llm_enabled() else 'coded fallback'}"
     )
 
     item = state.get("current_item")
@@ -592,10 +579,10 @@ def screen_setup() -> None:
         for w in warnings:
             st.markdown(f"- {w}")
 
-    st.subheader("LLM selection (OpenAI)")
+    st.subheader("LLM math (OpenAI)")
     st.caption(
         f"Provider: `{provider_label()}` · model: `{get_model()}` · "
-        "MCQ grading stays deterministic; LLM only picks the next item via the CAT procedure."
+        "MCQ grading and next-question selection stay deterministic; LLM updates theta/SE."
     )
 
     if "llm_enabled" not in st.session_state:
@@ -621,7 +608,7 @@ def screen_setup() -> None:
     if probe is None:
         if llm_configured():
             st.info(
-                "Credentials found in `.env`. Click **Test OpenAI connection** before enabling LLM selection."
+                "Credentials found in `.env`. Click **Test OpenAI connection** before enabling LLM math."
             )
         else:
             st.warning("No `OPENAI_API_KEY` in `.env`. Copy `.env.example` → `.env` and fill in values.")
@@ -635,14 +622,14 @@ def screen_setup() -> None:
     # Separate widget key from persistent flag — Streamlit deletes widget keys when
     # the control is not rendered on later screens (this broke LLM after q0).
     toggled = st.checkbox(
-        "Use LLM for procedural item selection",
+        "Use LLM for theta/SE math updates",
         value=llm_enabled(),
         disabled=not llm_configured(),
-        help="Requires a valid OpenAI API key. Falls back to the same procedure in Python on failure.",
+        help="Next-question selection remains coded; only the post-answer math is delegated.",
         key="llm_toggle_widget",
     )
     set_llm_enabled(bool(toggled) and llm_configured())
-    st.caption(f"LLM enabled for assessment: **{llm_enabled()}** (persists across screens)")
+    st.caption(f"LLM math enabled for assessment: **{llm_enabled()}** (persists across screens)")
 
     st.subheader("Self-rating intake")
     if "self_ratings" not in st.session_state:
