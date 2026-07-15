@@ -165,6 +165,8 @@ def trace_selection(
             "llm_used": selection.llm_used,
             "rule_applied": selection.rule_applied,
             "adaptation_note": selection.adaptation_note,
+            "rephrased_stem": getattr(selection, "rephrased_stem", ""),
+            "original_stem": item.get("stem", ""),
         },
         metadata={"competency": competency, "phase": "selection"},
     )

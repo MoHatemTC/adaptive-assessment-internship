@@ -38,6 +38,7 @@ MCQ **grading stays deterministic** (exact index match). The **LLM selects the n
 3. LLM must follow tie-break rules (info → |b−θ| → sub-competency coverage → discrimination)
 4. LLM returns `selected_id` **only from the shortlist** — invalid ids fall back to engine
 5. LLM also returns `adaptation_note` explaining why the item refines the estimate
+6. LLM may rephrase the selected stem based on competency level and certainty, while preserving the original answer/options
 
 ### Configure
 
@@ -55,6 +56,8 @@ streamlit run app.py
 
 Setup screen shows connection status and a toggle for LLM selection.
 If OpenAI fails, the app falls back to the same procedure executed deterministically in Python.
+
+For Streamlit deployment, use `masaar-mcq-cat-test/streamlit_app.py` as the main file path. See `DEPLOYMENT.md`.
 
 ## Langfuse tracing
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from engine import fisher_info, rank_candidates, selection_score
+from engine import fisher_info, level_and_band, rank_candidates, selection_score
 from engine_log import get_logger
 from llm_client import chat_json, llm_configured
 from tracing import trace_llm_response
@@ -27,7 +27,8 @@ Return JSON with this schema:
     "Step 2: ..."
   ],
   "adaptation_note": "<1-2 sentences on why this item best refines ability estimate now>",
-  "rule_applied": "<which tie-break rule if any, else 'highest information'>"
+  "rule_applied": "<which tie-break rule if any, else 'highest information'>",
+  "rephrased_stem": "<selected question stem rewritten for the examinee, preserving meaning>"
 }
 
 PROCEDURE (execute in order):
@@ -37,6 +38,14 @@ PROCEDURE (execute in order):
 4. If still tied, pick the sub_competency least represented in served_history.
 5. If still tied, pick the highest discrimination (a).
 6. selected_id MUST be one of the shortlist ids.
+
+REPHRASING RULES:
+- After selecting the item, rephrase only the selected item's stem.
+- Preserve the technical meaning, answer, options, and difficulty.
+- Do not reveal hints or the correct answer.
+- Adapt wording to examinee_parameters.level_band and certainty_pct:
+  lower certainty -> clearer wording; higher level -> use normal technical phrasing.
+- If the original stem is already ideal, return it unchanged.
 """
 
 
@@ -51,6 +60,7 @@ class SelectionResult:
     adaptation_note: str = ""
     rule_applied: str = ""
     shortlist_ids: list[str] = field(default_factory=list)
+    rephrased_stem: str = ""
 
 
 def _served_sub_counts(served_ids: list[str], pool: list[dict]) -> dict[str, int]:
@@ -122,6 +132,8 @@ def llm_select(
     if not ranked:
         return None
 
+    level, pct, band, low_confidence = level_and_band(theta_hat, se)
+    certainty_pct = 100.0 if se <= 0 else max(0.0, min(100.0, 100.0 * (1.0 - se / 2.0)))
     sub_counts = _served_sub_counts(served_ids, pool)
     shortlist = []
     for q, info, fi, kl in ranked:
@@ -138,7 +150,7 @@ def llm_select(
                 "kl_i": round(kl, 4),
                 "b_distance": round(abs(q["b"] - theta_hat), 2),
                 "sub_competency_served_count": sub_counts.get(q.get("sub_competency", ""), 0),
-                "stem_preview": (q.get("stem", "")[:120] + "…") if len(q.get("stem", "")) > 120 else q.get("stem", ""),
+                "stem": q.get("stem", ""),
             }
         )
 
@@ -157,6 +169,13 @@ def llm_select(
         "competency": competency,
         "theta_hat": round(theta_hat, 3),
         "se": round(se, 3),
+        "examinee_parameters": {
+            "competency_level": level,
+            "competency_pct": pct,
+            "level_band": band,
+            "low_confidence": low_confidence,
+            "certainty_pct": round(certainty_pct, 1),
+        },
         "questions_answered": q_count,
         "criterion": criterion,
         "served_ids": served_ids,
@@ -168,6 +187,7 @@ def llm_select(
             "Then: least-served sub_competency",
             "Then: highest a",
             "Must return selected_id from shortlist only",
+            "Rephrase only the selected stem for the examinee level/certainty",
         ],
     }
 
@@ -200,6 +220,9 @@ def llm_select(
         return deterministic_select(theta_hat, q_count, pool, served_ids, posterior)
 
     q = id_map[selected_id]
+    rephrased_stem = str(data.get("rephrased_stem", "")).strip()
+    if not rephrased_stem:
+        rephrased_stem = q.get("stem", "")
     info = selection_score(theta_hat, q_count, q, posterior)
     fi = fisher_info(theta_hat, q)
 
@@ -217,6 +240,7 @@ def llm_select(
         adaptation_note=str(data.get("adaptation_note", "")),
         rule_applied=str(data.get("rule_applied", "")),
         shortlist_ids=[s["id"] for s in shortlist],
+        rephrased_stem=rephrased_stem,
     )
 
     get_logger().info(
