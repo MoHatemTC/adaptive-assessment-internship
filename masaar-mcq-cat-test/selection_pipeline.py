@@ -52,6 +52,10 @@ class SelectionResult:
     rule_applied: str = ""
     shortlist_ids: list[str] = field(default_factory=list)
     rephrased_stem: str = ""
+    # Populated when rephrase_guard rejected the LLM's rewrite and the original
+    # calibrated stem was administered instead. Surfaced in the UI, not swallowed.
+    rephrase_rejected_reason: str = ""
+    rephrase_rejected_code: str = ""
 
 
 def _served_sub_counts(served_ids: list[str], pool: list[dict]) -> dict[str, int]:

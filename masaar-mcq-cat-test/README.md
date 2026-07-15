@@ -33,11 +33,71 @@ Stop when `SE ≤ 0.65` or `12` questions (recalibrated from unreachable 0.45@10
 
 MCQ **grading stays deterministic** (exact index match). The **LLM updates theta/SE and selects the next item** from validated candidates:
 
-1. Code grades the submitted answer.
-2. Current state, recent result, stop thresholds, and unserved candidates are sent to OpenAI.
-3. LLM returns updated `theta_hat`, `SE`, certainty, stop decision, and `selected_id`.
-4. Code validates numeric bounds and selected ids.
-5. LLM may rephrase the selected stem based on competency level and certainty, while preserving the original answer/options.
+A CAT step is **ordered**: a response updates θ, and the *updated* θ decides which item
+is most informative next. So the step is two LLM calls, not one:
+
+| # | Actor | Does |
+|---|---|---|
+| 1 | **LLM** | Updates θ̂/SE from the graded response (3PL score function + Newton update) |
+| 2 | code | Checks the direction invariant; applies the **stopping rule** |
+| 3 | code | Ranks unserved items by KL/Fisher **at the LLM's new θ̂** → top-5 shortlist |
+| 4 | **LLM** | Picks from that scored shortlist, applies tie-breaks, rewords the stem |
+
+The model still makes every decision a person would call a decision. What it no longer
+does is guess at quantities the engine can compute exactly.
+
+### Why it changed
+
+The previous design asked for the update **and** the selection in one call. That makes
+the ordering above impossible to honour — the engine cannot score candidates at a θ it
+hasn't been told yet — so the call shipped raw `a`/`b`/`c` for all ~24 unserved items and
+let the model free-pick. Nothing computed how much information any candidate carried, and
+*"prefer items whose difficulty is informative near theta"* left the model eyeballing
+`|b − θ|`, which ignores discrimination and guessing entirely. That is not adaptive
+testing. Two calls cost more per question; the branch is an experiment, and correctness
+wins.
+
+### Stopping is a rule, not an opinion
+
+The LLM used to end the assessment by returning `stop=true`, and `app.py` obeyed it
+(`stop = stop or controller.stop`). A stopping rule is part of the measurement: stop early
+and the SE guarantee the report rests on is void. The model's `should_stop` is still
+collected, traced, and counted in the sidebar as a **stop disagreement** — a genuinely
+interesting signal — but code decides.
+
+### What is validated, and what deliberately is not
+
+| Check | Status | Why |
+|---|---|---|
+| Correct → θ̂ must not fall; incorrect → θ̂ must not rise | **Enforced** (falls back to coded EAP) | Exact invariant: the 3PL likelihood is monotone in θ. Held in 0/8000 coded EAP updates. |
+| SE must not increase | **Not enforced** | *Looks* like an invariant but isn't — SE rose in **23%** of those 8000 updates (up to +0.28) after a surprising response. Enforcing it would reject correct maths. |
+| `selected_id` ∈ shortlist | **Enforced** | Otherwise selection isn't information-driven. |
+| Deviation from coded EAP > 0.35 | **Warned, never rejected** | The Newton update approximates the grid EAP; a correct implementation trips 0.35 ~2.9% of the time. |
+
+The LLM is never shown the coded EAP result — otherwise this branch would measure copying
+rather than capability. `test_approach.py` asserts the coded θ̂ appears in no payload.
+
+### Adaptive rephrasing and its guardrail
+
+Every rewrite is validated by `rephrase_guard.py` before display and rejected if it
+restates the key's unique wording (measured against how much it echoes the distractors),
+drops an identifier the item turns on, or changes length drastically. Rejections fall back
+to the original calibrated stem and surface in the UI and log. Rephrasing is an
+uncalibrated deviation from IRT — untick it on the setup screen for a clean run.
+
+### Known property of this approach
+
+The LLM returns `(theta, se)`, so `posterior_from_theta_se` rebuilds a **Gaussian** belief
+from two moments and the true posterior shape is lost. Selection integrates Fisher
+information over that belief, so it runs on the LLM's summary rather than an exact
+posterior. Approach 1 keeps the full grid posterior.
+
+### Tests
+
+```bash
+python test_approach.py         # 30 checks, no API key needed
+python test_rephrase_guard.py
+```
 
 ### Configure
 

@@ -106,6 +106,15 @@ def set_llm_enabled(value: bool) -> None:
     st.session_state["llm_enabled"] = bool(value)
 
 
+def rephrase_enabled() -> bool:
+    """Adaptive stem rephrasing. On by default — part of this branch's full-LLM remit."""
+    return bool(st.session_state.get("rephrase_enabled", True))
+
+
+def set_rephrase_enabled(value: bool) -> None:
+    st.session_state["rephrase_enabled"] = bool(value)
+
+
 def _apply_selection(state: dict, sel: SelectionResult | None, competency: str = "") -> None:
     if sel is None:
         state.update({"current_item": None, "done": True, "bank_exhausted": True})
@@ -115,7 +124,13 @@ def _apply_selection(state: dict, sel: SelectionResult | None, competency: str =
         item["original_stem"] = sel.item.get("stem", "")
         item["display_stem"] = sel.rephrased_stem
     state["current_item"] = item
-    state["current_fisher_i"] = sel.info_score
+    # Two different quantities. info_score is whatever criterion ranked the shortlist —
+    # for the first 3 questions that is KL, a sum over the theta grid of order 1-10.
+    # fisher_i is Fisher information at theta-hat, which for a 3PL item cannot exceed
+    # ~0.6. Storing the criterion score under "fisher" made the UI report impossible
+    # values like "Fisher I = 8.0".
+    state["current_info_score"] = sel.info_score
+    state["current_fisher_i"] = sel.fisher_i
     state["last_selection"] = {
         "id": sel.item["id"],
         "criterion": sel.criterion,
@@ -128,7 +143,11 @@ def _apply_selection(state: dict, sel: SelectionResult | None, competency: str =
         "shortlist_ids": sel.shortlist_ids,
         "rephrased_stem": sel.rephrased_stem,
         "original_stem": sel.item.get("stem", ""),
+        "rephrase_rejected_reason": sel.rephrase_rejected_reason,
+        "rephrase_rejected_code": sel.rephrase_rejected_code,
     }
+    if sel.rephrase_rejected_reason:
+        st.session_state["rephrase_rejects"] = st.session_state.get("rephrase_rejects", 0) + 1
     if competency:
         log_selection(
             competency,
@@ -155,7 +174,8 @@ def _pick_next(
     *,
     use_llm: bool = True,
 ) -> SelectionResult | None:
-    return llm_full_step(state, pool, competency, use_llm=use_llm).selection
+    return llm_full_step(state, pool, competency, use_llm=use_llm,
+                         allow_rephrase=rephrase_enabled()).selection
 
 
 def init_competency_state(
@@ -297,6 +317,7 @@ def grade_and_advance(
         answered_item=item,
         is_correct=is_correct,
         use_llm=use_llm,
+        allow_rephrase=rephrase_enabled(),
     )
     theta_hat = controller.theta_hat
     se = controller.se
@@ -317,15 +338,27 @@ def grade_and_advance(
             "se": se,
             "certainty_pct": certainty,
             "fisher_i": state.get("current_fisher_i", 0.0),
-            "math_actor": "llm",
+            "math_actor": "coded" if controller.fallback_used else "llm",
             "selection_actor": "llm",
             "llm_fallback": controller.fallback_used,
             "llm_note": controller.selection_note,
+            "coded_theta": controller.coded_theta,
+            "theta_deviation": controller.theta_deviation,
+            "invariant_violation": controller.invariant_violation,
+            "llm_wanted_stop": controller.llm_wanted_stop,
         }
     )
+    # Session tallies — whether the LLM can run a CAT is only visible in aggregate.
+    if not controller.fallback_used and controller.theta_deviation is not None:
+        st.session_state.setdefault("math_devs", []).append(controller.theta_deviation)
+    if controller.invariant_violation:
+        st.session_state["math_violations"] = st.session_state.get("math_violations", 0) + 1
+    if controller.stop_disagreement:
+        st.session_state["stop_disagreements"] = st.session_state.get("stop_disagreements", 0) + 1
 
+    # The stopping rule is code's. The model's `should_stop` is recorded and traced but
+    # never obeyed: an early stop voids the SE guarantee the final report rests on.
     stop, bank_exhausted = should_stop(state, pool)
-    stop = stop or controller.stop
     log_update(
         competency,
         state["q_count"],
@@ -429,6 +462,48 @@ def render_certainty_gauge(certainty_pct: float, se: float, label_prefix: str = 
     st.progress(certainty_pct / 100.0, text=f"Confidence in θ̂ estimate — {label}")
 
 
+def render_controller_audit() -> None:
+    """How well the LLM is running the CAT — the measurement this branch produces.
+
+    The LLM never sees the coded EAP, so the deviation shown here is a real comparison.
+    Worth showing live: a controller that drifts is invisible in θ̂ alone, because the
+    estimate still looks like a plausible number.
+    """
+    devs = st.session_state.get("math_devs", [])
+    violations = st.session_state.get("math_violations", 0)
+    disagreements = st.session_state.get("stop_disagreements", 0)
+    rejects = st.session_state.get("rephrase_rejects", 0)
+    if not (devs or violations or disagreements or rejects):
+        return
+
+    st.sidebar.markdown("**LLM controller audit**")
+    if devs:
+        c1, c2 = st.sidebar.columns(2)
+        c1.metric(
+            "mean |Δθ̂|", f"{sum(devs) / len(devs):.3f}",
+            help=("Gap between the LLM's θ̂ and the coded EAP. Some drift is expected: the "
+                  "prompt specifies a Newton update, which approximates the grid EAP."),
+        )
+        c2.metric(
+            "worst |Δθ̂|", f"{max(devs):.3f}",
+            delta="suspect" if max(devs) > 0.35 else "in tolerance",
+            delta_color="inverse" if max(devs) > 0.35 else "normal",
+        )
+    if violations:
+        st.sidebar.error(
+            f"{violations} invariant violation(s): the LLM moved θ̂ the wrong way for a "
+            "graded response. Rejected; coded EAP used instead."
+        )
+    if disagreements:
+        st.sidebar.info(
+            f"{disagreements} stop disagreement(s): the model would have stopped at a "
+            "different point than the rule. The rule decides — stopping early would void "
+            "the SE guarantee."
+        )
+    if rejects:
+        st.sidebar.warning(f"{rejects} rephrasing(s) rejected — original wording shown instead.")
+
+
 def render_sidebar_live(state: dict, title: str) -> None:
     st.sidebar.subheader(title)
     certainty = state.get(
@@ -439,6 +514,7 @@ def render_sidebar_live(state: dict, title: str) -> None:
     c1, c2 = st.sidebar.columns(2)
     c1.metric("θ̂ (ability)", f"{state['theta_hat']:.3f}")
     c2.metric("SE (uncertainty)", f"{state['se']:.3f}")
+    render_controller_audit()
     st.sidebar.caption(
         f"Convergence target: SE ≤ {SE_TARGET} · "
         f"full CAT controller: {'OpenAI' if llm_enabled() else 'coded fallback'}"
@@ -646,6 +722,30 @@ def screen_setup() -> None:
     )
     set_llm_enabled(bool(toggled) and llm_configured())
     st.caption(f"Full LLM CAT enabled for assessment: **{llm_enabled()}** (persists across screens)")
+    st.caption(
+        "Each answer costs **two** LLM calls: the ability update, then selection from an "
+        "engine-scored shortlist. They are separate because the shortlist can only be "
+        "scored once θ̂ has been updated — a CAT step is ordered."
+    )
+
+    rephrase_toggled = st.checkbox(
+        "Adaptively rephrase question stems",
+        value=rephrase_enabled(),
+        disabled=not llm_enabled(),
+        help=(
+            "The LLM rewrites the stem to suit the examinee. Every rewrite is validated "
+            "before display; rejected ones fall back to the original wording."
+        ),
+        key="rephrase_toggle_widget",
+    )
+    set_rephrase_enabled(bool(rephrase_toggled) and llm_enabled())
+    if rephrase_enabled():
+        st.caption(
+            "⚠️ Rephrasing is an **uncalibrated deviation from IRT**: `b` is calibrated for the "
+            "original wording. `rephrase_guard.py` rejects rewrites that leak the key, drop "
+            "identifiers the item turns on, or change length drastically — but it cannot prove "
+            "difficulty is preserved. Turn this off for a psychometrically clean run."
+        )
 
     if "selected_competencies_widget" not in st.session_state:
         st.session_state["selected_competencies_widget"] = competencies.copy()
