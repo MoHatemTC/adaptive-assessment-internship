@@ -1,0 +1,530 @@
+[
+  {
+    "id": "T2-Q02",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.1 · Data wrangling (pandas/NumPy)",
+    "difficulty": "easy",
+    "discrimination": "medium",
+    "stem": "NumPy array A has shape (3, 1) and array B has shape (1, 4). What is the shape of A + B?",
+    "options": [
+      "(1, 4)",
+      "(3, 3)",
+      "(3, 4)",
+      "(3, 1)"
+    ],
+    "answer_index": 2,
+    "rationale": "Broadcasting stretches each size-1 axis to match the other operand, so axis 0 becomes 3 and axis 1 becomes 4, giving (3, 4).",
+    "misconceptions": [
+      "Believes the second operand's shape wins rather than each axis broadcasting independently",
+      "Believes the leading dimension is copied across both axes, producing a square result",
+      "CORRECT",
+      "Believes the first operand's shape wins rather than each axis broadcasting independently"
+    ]
+  },
+  {
+    "id": "T2-Q04",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.2 · Cleaning & preprocessing",
+    "difficulty": "easy",
+    "discrimination": "high",
+    "stem": "You standardize features with StandardScaler around a train/test split. Which procedure avoids data leakage?",
+    "options": [
+      "Fit the scaler on the full dataset, then split it into train and test",
+      "Fit the scaler on the training set, then transform train and test",
+      "Fit one scaler on the training set and a separate one on the test set",
+      "Standardize each row instead of each column so the split cannot matter"
+    ],
+    "answer_index": 1,
+    "rationale": "Only training rows may inform the scaler's mean and variance; test rows are then transformed with those frozen training statistics.",
+    "misconceptions": [
+      "Thinks fitting before splitting is harmless, ignoring that test statistics leak into the scaler",
+      "CORRECT",
+      "Thinks each split should be scaled on its own statistics, which silently shifts test features",
+      "Confuses row-wise normalization with column-wise standardization and assumes it sidesteps leakage"
+    ]
+  },
+  {
+    "id": "T2-Q05",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.2 · Cleaning & preprocessing",
+    "difficulty": "medium",
+    "discrimination": "high",
+    "stem": "A categorical feature 'city' has 500 unique values and feeds a linear model. Which encoding keeps dimensionality manageable AND avoids imposing a false ordering?",
+    "options": [
+      "One-hot encode the 500 cities into 500 binary indicator columns",
+      "Label-encode the cities as integers 0-499 in alphabetical order",
+      "Frequency- or target-encode the cities into one numeric column",
+      "Drop the city feature, since 500 levels cannot be modelled usefully"
+    ],
+    "answer_index": 2,
+    "rationale": "Frequency or target encoding maps each city to a single meaningful numeric value, avoiding both a 500-column sparse matrix and an arbitrary ordinal scale.",
+    "misconceptions": [
+      "Ignores the dimensionality constraint, treating one-hot as the default for any categorical",
+      "Fails to see that integer codes impose a spurious ordering a linear model will exploit",
+      "CORRECT",
+      "Assumes high cardinality makes a feature unusable rather than a matter of encoding choice"
+    ]
+  },
+  {
+    "id": "T2-Q08",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.3 · EDA & visualization",
+    "difficulty": "easy",
+    "discrimination": "medium",
+    "stem": "Two variables have a Pearson correlation coefficient of r = -0.9. Which interpretation is correct?",
+    "options": [
+      "Increases in one variable cause decreases in the other variable",
+      "About 90% of the variance in one variable is explained by the other",
+      "The variables move oppositely in a strong, nearly linear pattern",
+      "A strong monotonic relationship that need not be linear at all"
+    ],
+    "answer_index": 2,
+    "rationale": "Pearson's r measures the strength and direction of a linear association; -0.9 means a strong negative linear relationship, with no causal or variance-share claim.",
+    "misconceptions": [
+      "Reads correlation as causation rather than as co-movement",
+      "Confuses r with R-squared; the explained variance here is 0.81, not 0.90",
+      "CORRECT",
+      "Confuses Pearson's r with Spearman's rank correlation, which is the monotonic measure"
+    ]
+  },
+  {
+    "id": "T2-Q10",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.4 · SQL & querying",
+    "difficulty": "easy",
+    "discrimination": "high",
+    "stem": "Tables: users(id) and orders(id, user_id). You want one row per user with their order count, showing 0 for users who never ordered. Which query shape works?",
+    "options": [
+      "INNER JOIN users to orders, GROUP BY users.id, COUNT(orders.id)",
+      "LEFT JOIN users to orders, GROUP BY users.id, COUNT(orders.id)",
+      "RIGHT JOIN users to orders, GROUP BY users.id, COUNT(orders.id)",
+      "CROSS JOIN users to orders, GROUP BY users.id, COUNT(orders.id)"
+    ],
+    "answer_index": 1,
+    "rationale": "A LEFT JOIN keeps every user row; COUNT on the orders key ignores the NULLs produced for order-less users, yielding 0 for them.",
+    "misconceptions": [
+      "Forgets INNER JOIN drops users with no matching order rows entirely",
+      "CORRECT",
+      "Reverses the preserved side; this keeps all orders and drops order-less users",
+      "Thinks CROSS JOIN pairs matching rows rather than producing every combination"
+    ]
+  },
+  {
+    "id": "T2-Q11",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.5 · Classical ML",
+    "difficulty": "very_easy",
+    "discrimination": "low",
+    "stem": "You must predict whether a customer will churn (yes/no) and also output a churn probability. Which approach is appropriate?",
+    "options": [
+      "Linear regression, thresholding its raw output at 0.5 for the class",
+      "K-means clustering with k=2, using cluster distance as probability",
+      "PCA on the features, using the first component score as probability",
+      "Logistic regression, using predict_proba for the churn probability"
+    ],
+    "answer_index": 3,
+    "rationale": "Logistic regression is a probabilistic classifier: it models P(churn | x) directly and exposes calibrated-by-design probabilities alongside a class decision.",
+    "misconceptions": [
+      "Treats unbounded regression output as a probability, ignoring that it can fall outside [0, 1]",
+      "Confuses unsupervised clustering with supervised classification and distance with probability",
+      "Confuses dimensionality reduction with prediction; PCA has no notion of the target",
+      "CORRECT"
+    ]
+  },
+  {
+    "id": "T2-Q12",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.5 · Classical ML",
+    "difficulty": "very_easy",
+    "discrimination": "medium",
+    "stem": "Which of the following is an UNSUPERVISED learning task?",
+    "options": [
+      "Estimating tomorrow's electricity load from ten years of past loads",
+      "Splitting a product catalogue into themes nobody has defined yet",
+      "Flagging incoming support tickets as urgent or routine for triage",
+      "Scoring credit applicants on their chance of missing a payment"
+    ],
+    "answer_index": 1,
+    "rationale": "Only the catalogue task has no target variable to learn from: the themes are discovered from the inputs alone, which is the defining property of unsupervised learning.",
+    "misconceptions": [
+      "Thinks forecasting is unsupervised because no human hand-annotated the historical loads",
+      "CORRECT",
+      "Thinks sorting items into predefined categories is unsupervised because the model decides",
+      "Thinks risk scoring is unsupervised because the output is a score rather than a class"
+    ]
+  },
+  {
+    "id": "T2-Q16",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.6 · Model evaluation & metrics",
+    "difficulty": "easy",
+    "discrimination": "low",
+    "stem": "A fraud dataset is 99% negative and 1% positive. A model that always predicts 'negative' reaches 99% accuracy. Which metric better reflects real performance?",
+    "options": [
+      "Overall accuracy, since it aggregates both classes fairly",
+      "Mean squared error between predicted and true class labels",
+      "R-squared, the fraction of label variance the model explains",
+      "Precision and recall on the positive class, or PR-AUC"
+    ],
+    "answer_index": 3,
+    "rationale": "Precision, recall and PR-AUC are computed on the minority positive class, so a model that never predicts fraud scores near zero instead of 99%.",
+    "misconceptions": [
+      "Does not see that accuracy is dominated by the majority class under heavy imbalance",
+      "Applies a regression loss to a classification problem",
+      "Applies a regression goodness-of-fit measure to a classification problem",
+      "CORRECT"
+    ]
+  },
+  {
+    "id": "T2-Q17",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.7 · Feature engineering",
+    "difficulty": "very_easy",
+    "discrimination": "low",
+    "stem": "Which of these is an example of feature engineering for a model predicting ride demand?",
+    "options": [
+      "Raising the learning rate so the model fits demand faster",
+      "Adding more hidden layers so the model learns time patterns",
+      "Shrinking the test split so more demand rows are used to train",
+      "Deriving hour-of-day and is_weekend from the raw timestamp"
+    ],
+    "answer_index": 3,
+    "rationale": "Feature engineering means constructing new input variables from raw data; extracting hour-of-day and is_weekend exposes cyclical demand structure the raw timestamp hides.",
+    "misconceptions": [
+      "Confuses hyperparameter tuning with constructing input features",
+      "Confuses model architecture changes with constructing input features",
+      "Confuses evaluation-protocol changes with constructing input features",
+      "CORRECT"
+    ]
+  },
+  {
+    "id": "T2-Q20",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.8 · Bias–variance & regularization",
+    "difficulty": "very_easy",
+    "discrimination": "high",
+    "stem": "A model reaches 2% error on the data it was trained on, but 30% error on a held-out test set. What does this indicate?",
+    "options": [
+      "High bias — the model underfits the training data",
+      "High variance — the model overfits the training data",
+      "Irreducible noise that no model could reduce further",
+      "The learning rate is too low for the model to converge"
+    ],
+    "answer_index": 1,
+    "rationale": "Fitting the training set well while generalizing poorly is the signature of high variance: the model has memorized noise specific to the training sample.",
+    "misconceptions": [
+      "Inverts the diagnosis; underfitting would show high error on training data too",
+      "CORRECT",
+      "Attributes the gap to irreducible noise, which would raise training error equally",
+      "Blames optimization, which would leave training error high rather than low"
+    ]
+  },
+  {
+    "id": "T2-Q21",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.1 · Data wrangling (pandas/NumPy)",
+    "difficulty": "very_easy",
+    "discrimination": "medium",
+    "stem": "Which pandas expression returns the number of rows and columns of DataFrame df as a tuple like (1000, 12)?",
+    "options": [
+      "df.shape",
+      "df.size",
+      "df.ndim",
+      "len(df)"
+    ],
+    "answer_index": 0,
+    "rationale": "df.shape is the attribute holding the (n_rows, n_columns) tuple for a DataFrame.",
+    "misconceptions": [
+      "CORRECT",
+      "Thinks size gives dimensions; it returns the total element count as one integer",
+      "Thinks ndim gives dimensions; it returns the number of axes, which is always 2",
+      "Thinks len gives both dimensions; it returns the row count alone, as an integer"
+    ]
+  },
+  {
+    "id": "T2-Q22",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.1 · Data wrangling (pandas/NumPy)",
+    "difficulty": "hard",
+    "discrimination": "low",
+    "stem": "DataFrame df has columns 'g' and 'v'. You want a new column giving each row the mean of 'v' within its own group 'g', aligned to df's original index. Which expression produces it?",
+    "options": [
+      "df.groupby('g')['v'].transform('mean')",
+      "df.groupby('g')['v'].mean().to_numpy()",
+      "df.groupby('g')['v'].agg('mean')",
+      "df.groupby('g')['v'].apply('mean')"
+    ],
+    "answer_index": 0,
+    "rationale": "transform returns a Series the same length as df, broadcasting each group's statistic back onto that group's original rows.",
+    "misconceptions": [
+      "CORRECT",
+      "Thinks stripping the index fixes the length; the array has one entry per group, not per row",
+      "Thinks agg broadcasts back to rows; it collapses to one row per group",
+      "Thinks apply broadcasts back to rows; with a reducer it also collapses to one row per group"
+    ]
+  },
+  {
+    "id": "T2-Q23",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.2 · Cleaning & preprocessing",
+    "difficulty": "very_hard",
+    "discrimination": "high",
+    "stem": "You fill missing values with each column's median computed over the whole dataset, then run 5-fold cross-validation on the imputed table. Why is the resulting CV score optimistic?",
+    "options": [
+      "Each fold's validation rows helped set the median filling their own features",
+      "Median imputation always biases predictions toward the majority class label",
+      "The imputed rows become near-duplicates that the folds repeatedly reuse",
+      "Cross-validation is invalid on any dataset where values have been imputed"
+    ],
+    "answer_index": 0,
+    "rationale": "The median is a statistic of the full dataset, so every held-out fold contributed to the values used to impute it — information from validation rows leaks into their own features.",
+    "misconceptions": [
+      "CORRECT",
+      "Confuses feature imputation with label imbalance; imputation touches inputs, not the target",
+      "Thinks the inflation comes from duplicate rows rather than from statistics computed across folds",
+      "Over-generalizes to ban imputation, missing that fitting it inside each fold is correct"
+    ]
+  },
+  {
+    "id": "T2-Q24",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.3 · EDA & visualization",
+    "difficulty": "medium",
+    "discrimination": "medium",
+    "stem": "A sample of household incomes is strongly right-skewed, with a small number of very large values. Which statement is correct?",
+    "options": [
+      "The median exceeds the mean, and the mean better reflects a typical income",
+      "The mean and median coincide, since skew only affects the variance",
+      "The mode exceeds both, since the largest values pull the peak rightward",
+      "The mean exceeds the median, and the median is the more typical income"
+    ],
+    "answer_index": 3,
+    "rationale": "A long right tail drags the mean upward past the median, so the median is the more representative measure of a typical value.",
+    "misconceptions": [
+      "Inverts the direction of the skew's effect on mean versus median",
+      "Thinks skew affects only spread, not the location of the mean relative to the median",
+      "Thinks outliers move the mode; the peak stays at the dense low end under right skew",
+      "CORRECT"
+    ]
+  },
+  {
+    "id": "T2-Q25",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.3 · EDA & visualization",
+    "difficulty": "very_hard",
+    "discrimination": "high",
+    "stem": "Within every age group, drug A has a higher recovery rate than drug B, yet in the pooled data drug B has the higher recovery rate. What best explains this?",
+    "options": [
+      "The pooled sample is simply too small for the group-level rates to hold up",
+      "Age confounds the comparison: it drives both treatment assignment and recovery",
+      "The group-level rates must contain an arithmetic error somewhere in the tables",
+      "Recovery rate is a nonlinear metric, so group rates can never be pooled at all"
+    ],
+    "answer_index": 1,
+    "rationale": "This is Simpson's paradox: the groups have unequal sizes and unequal baseline recovery, and treatment is unevenly distributed across them, so pooling reverses the within-group ordering.",
+    "misconceptions": [
+      "Attributes a structural reversal to sampling noise, which does not flip consistent orderings",
+      "CORRECT",
+      "Assumes the reversal is impossible and must be a computational mistake",
+      "Believes rates can never be aggregated, rather than that aggregation needs correct weighting"
+    ]
+  },
+  {
+    "id": "T2-Q26",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.4 · SQL & querying",
+    "difficulty": "medium",
+    "discrimination": "high",
+    "stem": "What does this return? SELECT dept, COUNT(*) AS c FROM emp WHERE salary > 100000 GROUP BY dept HAVING COUNT(*) > 5",
+    "options": [
+      "Departments with more than 5 employees earning over 100000, and that count",
+      "Departments with more than 5 employees total, and their count of high earners",
+      "Departments where both total headcount and high-earner count exceed 5 rows",
+      "Every department, with high earners counted only where that count exceeds 5"
+    ],
+    "answer_index": 0,
+    "rationale": "WHERE filters rows before grouping, so only high earners are grouped and counted; HAVING then filters the resulting groups on that same count.",
+    "misconceptions": [
+      "CORRECT",
+      "Thinks HAVING applies to total headcount rather than to the post-WHERE aggregate",
+      "Thinks WHERE and HAVING impose two independent counts on different row sets",
+      "Thinks HAVING blanks out a column instead of removing whole groups from the result"
+    ]
+  },
+  {
+    "id": "T2-Q27",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.4 · SQL & querying",
+    "difficulty": "very_hard",
+    "discrimination": "medium",
+    "stem": "Table b column x holds the values 1, 2 and NULL. Table a has rows with x = 1, 3 and 5. What does SELECT * FROM a WHERE a.x NOT IN (SELECT x FROM b) return?",
+    "options": [
+      "The rows with x = 3 and x = 5, because the NULL in b is simply ignored",
+      "The rows with x = 3 and x = 5, plus any rows of a whose own x is NULL",
+      "No rows at all, because every comparison against the NULL yields UNKNOWN",
+      "An error, because NOT IN forbids a NULL inside the subquery's result set"
+    ],
+    "answer_index": 2,
+    "rationale": "NOT IN expands to x <> 1 AND x <> 2 AND x <> NULL; the last conjunct is UNKNOWN for every row, so the WHERE clause is never TRUE and no rows are returned.",
+    "misconceptions": [
+      "Assumes NOT IN skips NULLs the way IN effectively does, which is the classic trap",
+      "Assumes NULLs in a are the issue, rather than the NULL inside the subquery",
+      "CORRECT",
+      "Assumes the engine raises an error rather than silently returning an empty set"
+    ]
+  },
+  {
+    "id": "T2-Q28",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.5 · Classical ML",
+    "difficulty": "hard",
+    "discrimination": "high",
+    "stem": "You train k-NN and a random forest on the same features, where one feature ranges 0-1 and another ranges 0-1,000,000, without standardizing. What happens?",
+    "options": [
+      "Both degrade about equally, since every model needs standardized inputs",
+      "The random forest degrades, because its splits favour small-scale features",
+      "Neither degrades, because both models rescale their inputs internally",
+      "k-NN degrades, because distances are dominated by the large-scale feature"
+    ],
+    "answer_index": 3,
+    "rationale": "k-NN's Euclidean distance is scale-sensitive, so the million-scale feature swamps the other; tree splits use per-feature thresholds and are invariant to monotone rescaling.",
+    "misconceptions": [
+      "Over-generalizes 'always scale your data' without asking which models are scale-sensitive",
+      "Inverts the reasoning; tree splits are chosen per feature and ignore units entirely",
+      "Believes estimators standardize inputs by default, which scikit-learn does not do",
+      "CORRECT"
+    ]
+  },
+  {
+    "id": "T2-Q29",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.6 · Model evaluation & metrics",
+    "difficulty": "hard",
+    "discrimination": "high",
+    "stem": "On a test set with a 0.5% positive rate, a model scores ROC-AUC 0.95, yet precision at the deployed threshold is only 0.10. Which explanation is correct?",
+    "options": [
+      "ROC-AUC is threshold-free and insensitive to the tiny positive base rate",
+      "A ROC-AUC of 0.95 is impossible alongside precision that low; recompute the AUC",
+      "Precision below 0.5 always means the model performs worse than random guessing",
+      "The ROC-AUC was surely computed on the training set rather than on the test set"
+    ],
+    "answer_index": 0,
+    "rationale": "ROC-AUC uses the false positive rate, whose huge negative denominator hides the many false positives that crush precision at a fixed threshold on a rare-positive set.",
+    "misconceptions": [
+      "CORRECT",
+      "Assumes the two numbers are contradictory rather than measuring different things",
+      "Compares precision to 0.5 instead of to the 0.005 base rate, which 0.10 far exceeds",
+      "Reaches for a leakage explanation when the metrics are consistent on the same test set"
+    ]
+  },
+  {
+    "id": "T2-Q30",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.6 · Model evaluation & metrics",
+    "difficulty": "very_hard",
+    "discrimination": "medium",
+    "stem": "A binary classifier ranks every positive above every negative (ROC-AUC = 1.0), but all its predicted probabilities lie between 0.48 and 0.52. Which statement is true?",
+    "options": [
+      "It is well calibrated but discriminates poorly, so the AUC must be miscomputed",
+      "It discriminates perfectly but is badly calibrated, so Brier stays poor",
+      "Probabilities near 0.5 always mean the model has learned nothing from the data",
+      "A perfect AUC guarantees calibration, so the Brier score must be close to zero"
+    ],
+    "answer_index": 1,
+    "rationale": "AUC depends only on the ranking of scores, which is perfect here, while calibration depends on their absolute values, which are all near 0.5 and thus far from the 0/1 outcomes.",
+    "misconceptions": [
+      "Swaps the two concepts, treating narrow probability spread as evidence of calibration",
+      "CORRECT",
+      "Assumes probability magnitude implies discriminative power, ignoring that only order matters to AUC",
+      "Assumes discrimination implies calibration; they are independent properties of a scorer"
+    ]
+  },
+  {
+    "id": "T2-Q31",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.7 · Feature engineering",
+    "difficulty": "medium",
+    "discrimination": "medium",
+    "stem": "You are building a model that scores loan applications at the moment of application to predict eventual default. Which candidate feature is target leakage?",
+    "options": [
+      "The applicant's declared annual income at the time of application",
+      "The ratio of the requested loan amount to declared annual income",
+      "The number of collection calls made after the borrower defaulted",
+      "The number of prior loans the applicant closed before applying"
+    ],
+    "answer_index": 2,
+    "rationale": "Collection calls happen only after a default occurs, so the feature does not exist at scoring time and encodes the target itself.",
+    "misconceptions": [
+      "Treats a legitimate application-time field as leakage because it correlates with default",
+      "Treats a derived ratio of application-time fields as leakage merely because it is engineered",
+      "CORRECT",
+      "Treats historical repayment behaviour as leakage although it predates the application"
+    ]
+  },
+  {
+    "id": "T2-Q32",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.7 · Feature engineering",
+    "difficulty": "hard",
+    "discrimination": "medium",
+    "stem": "Adding the explicit product feature x1*x2 to a training matrix benefits which model most, and for what reason?",
+    "options": [
+      "Linear regression, whose additive form cannot represent an interaction at all",
+      "A deep decision tree, which is unable to split on two features at the same time",
+      "k-NN, whose distance metric averages away feature interactions by construction",
+      "Naive Bayes, which already multiplies features and so needs the term made explicit"
+    ],
+    "answer_index": 0,
+    "rationale": "A linear model is additive in its inputs and can only capture an x1-by-x2 interaction if that product is supplied as its own feature.",
+    "misconceptions": [
+      "CORRECT",
+      "Misses that successive splits on x1 then x2 already let a deep tree model interactions",
+      "Assumes distance-based methods need interaction terms; local neighbourhoods capture them implicitly",
+      "Confuses Naive Bayes multiplying per-feature likelihoods with modelling a feature interaction"
+    ]
+  },
+  {
+    "id": "T2-Q33",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.8 · Bias–variance & regularization",
+    "difficulty": "hard",
+    "discrimination": "medium",
+    "stem": "You have 10,000 features, most believed irrelevant, and you want the fitted model itself to select a sparse subset. Which penalty accomplishes this, and why?",
+    "options": [
+      "L2 (Ridge), because its squared penalty shrinks irrelevant coefficients to exactly zero",
+      "L2 (Ridge), because a squared penalty drops correlated features out of the fit entirely",
+      "No penalty, because ordinary least squares already zeroes uninformative coefficients",
+      "L1 (Lasso), because its constraint corners set some coefficients to exactly zero"
+    ],
+    "answer_index": 3,
+    "rationale": "The L1 penalty's diamond-shaped constraint region has corners on the axes, so the optimum frequently lands where coefficients are exactly zero, performing selection.",
+    "misconceptions": [
+      "Believes ridge produces exact zeros; it shrinks coefficients asymptotically but never to zero",
+      "Believes ridge removes correlated features; it instead spreads weight across them",
+      "Believes OLS zeroes noise coefficients; it fits them to small non-zero values instead",
+      "CORRECT"
+    ]
+  },
+  {
+    "id": "T2-Q34",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.8 · Bias–variance & regularization",
+    "difficulty": "very_hard",
+    "discrimination": "high",
+    "stem": "Starting from an unregularized model that overfits, you steadily increase the regularization strength lambda. How do bias, variance and test error behave?",
+    "options": [
+      "Bias falls and variance rises; test error dips and then rises past some lambda",
+      "Bias rises and variance falls; test error dips and then rises past some lambda",
+      "Both bias and variance fall, so test error decreases monotonically in lambda",
+      "Bias is unchanged and variance falls, so test error decreases for any lambda"
+    ],
+    "answer_index": 1,
+    "rationale": "Stronger regularization constrains the hypothesis space, raising bias and lowering variance; test error falls while the variance saving dominates, then rises once bias takes over.",
+    "misconceptions": [
+      "Inverts the trade-off, treating regularization as if it increased model flexibility",
+      "CORRECT",
+      "Denies the trade-off exists, assuming regularization is free improvement at any strength",
+      "Assumes constraining the model costs no bias, so more shrinkage is always better"
+    ]
+  }
+]
