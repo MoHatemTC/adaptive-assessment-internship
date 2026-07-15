@@ -9,15 +9,12 @@ from __future__ import annotations
 import json
 import os
 from functools import lru_cache
-from pathlib import Path
 from typing import Any
 
-from dotenv import load_dotenv
-
+from config_env import load_runtime_config
 from engine_log import get_logger
 
-_ENV_PATH = Path(__file__).resolve().parent / ".env"
-load_dotenv(_ENV_PATH, override=True)
+load_runtime_config()
 
 APPROACH_ID = os.getenv("CAT_APPROACH_ID", "approach-3-llm-full-cat")
 MATH_ACTOR = os.getenv("CAT_MATH_ACTOR", "llm")
