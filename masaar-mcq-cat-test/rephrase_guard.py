@@ -11,14 +11,30 @@ So the rephrase is treated as untrusted output and checked before use. Anything 
 fails falls back to the original stem, which is always safe: it is the wording the
 parameters were calibrated on.
 
-Three failure modes, in order of how much damage they do:
+Four failure modes, in order of how much damage they do:
 
-1. ANSWER LEAK — the rewrite pulls in wording unique to the correct option, turning a
+1. POLARITY FLIP — the rewrite negates the question ("Which is TRUE" -> "Which is NOT
+   TRUE" / "FALSE" / "...EXCEPT which one"). Grading still uses the original
+   `answer_index`, so the examinee is asked the opposite question and marked against the
+   original key: they are scored wrong *for answering correctly*. This is a scoring bug,
+   not calibration drift, which is why it is checked first.
+2. ANSWER LEAK — the rewrite pulls in wording unique to the correct option, turning a
    4-way discrimination into a giveaway. Detected differentially: leaking toward the
    key is only meaningful relative to how much the rewrite echoes the distractors.
-2. TECHNICAL DRIFT — an identifier, literal, or number the item hinges on is gone
+3. TECHNICAL DRIFT — an identifier, literal, or number the item hinges on is gone
    (`sorted(nums)` -> "the sorting function"). The item now tests something else.
-3. LENGTH BLOWUP — a rewrite far longer/shorter than the original is not a rephrase.
+4. LENGTH BLOWUP — a rewrite far longer/shorter than the original is not a rephrase.
+
+Note why (1) needs its own check rather than falling out of (2) or (3): polarity is
+carried by function words, and every negation word is a stopword. `_words()` strips them
+and `code_tokens()` never sees them, so the leak and drift checks are blind to negation
+*by construction* -- they compare content, and "Which is TRUE" and "Which is NOT TRUE"
+have identical content. All three of "NOT TRUE", "FALSE" and "EXCEPT which one" passed
+the original guard clean.
+
+What this still does NOT do is prove difficulty is preserved. A stem reworded easier or
+harder, with polarity and identifiers intact, is administered with its original `b`. The
+guard bounds the damage; it does not eliminate it. Rephrasing is off by default.
 """
 
 from __future__ import annotations
@@ -48,6 +64,17 @@ other some such only own same so too very can will just should now would could
 may might must shall about into over under again further once here there
 """.split())
 
+# Words that flip a question's polarity. Deliberately broad, and matched on the raw text
+# rather than through `_words()`, which strips exactly these as stopwords. A false
+# positive only costs a fallback to the original calibrated stem, which is always safe —
+# the same trade the _CODE_TOKEN regex makes.
+_NEGATION = re.compile(
+    r"(?:\bnot\b|n't\b|\bnever\b|\bexcept\b|\bexcluding\b|\bfalse\b|\bincorrect\b"
+    r"|\bwrong\b|\binvalid\b|\bcannot\b|\bnone\b|\bneither\b|\bnor\b|\bunless\b"
+    r"|\bwithout\b|\bfails?\b|\buntrue\b|\bomits?\b|\bomitted\b)",
+    re.IGNORECASE,
+)
+
 MIN_LEN_RATIO = 0.5
 MAX_LEN_RATIO = 2.0
 # Fraction of the key's unique wording that must show up before we call it a leak.
@@ -68,6 +95,16 @@ class RephraseCheck:
 
 def _words(text: str) -> set[str]:
     return {w for w in re.findall(r"[a-z0-9_]+", text.lower()) if w not in _STOPWORDS and len(w) > 2}
+
+
+def is_negated(text: str) -> bool:
+    """True when the stem asks a negated or exception-style question.
+
+    Boolean rather than a marker-set comparison on purpose: "Which is NOT true" and
+    "Which is false" are the same question worded differently, and both should pass.
+    Only a *change* in polarity is a flip.
+    """
+    return bool(_NEGATION.search(text))
 
 
 def code_tokens(text: str) -> set[str]:
@@ -104,6 +141,15 @@ def check_rephrase(original_stem: str, rephrased: str, options: list[str], answe
     # otherwise mask the diagnostic ones (a leaky rewrite is usually also longer).
     key = options[answer_index]
     distractors = [o for i, o in enumerate(options) if i != answer_index]
+
+    if is_negated(original_stem) != is_negated(rephrased):
+        return RephraseCheck(
+            False, original_stem,
+            "flips the question's polarity — the rewrite "
+            f"{'adds' if is_negated(rephrased) else 'drops'} a negation, so the examinee "
+            "would be asked the opposite question but graded against the original key",
+            "negation",
+        )
 
     if len(key) > 12 and key.lower().strip(" .") in rephrased.lower():
         return RephraseCheck(False, original_stem, "restates the correct option verbatim", "leak")

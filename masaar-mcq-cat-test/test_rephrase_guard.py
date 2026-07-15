@@ -96,6 +96,30 @@ def main() -> int:
     )
     expect(r.ok, "echoing a distractor is not treated as a leak", r.reason)
 
+    # Polarity. Every one of these passed the guard before `is_negated` existed: the
+    # negation words are stopwords, so the leak/drift checks compare identical content
+    # and see nothing. Grading still used the original answer_index, so the examinee was
+    # asked the opposite question and marked wrong for answering it right.
+    pos = "Which statement is TRUE about `squares = (n*n for n in range(1_000_000))`?"
+    opts = ["Evaluated lazily", "Stored in a list", "Sorted on creation", "Cached in memory"]
+    for flip in [
+        pos.replace("is TRUE", "is NOT TRUE"),
+        pos.replace("is TRUE", "is FALSE"),
+        pos.replace("is TRUE", "is incorrect"),
+        pos.replace("Which statement is TRUE", "All of the following are TRUE EXCEPT which one"),
+    ]:
+        r = check_rephrase(pos, flip, opts, 0)
+        expect(not r.ok and r.code == "negation",
+               f"polarity flip rejected: {flip[:46]}…", f"ok={r.ok} code={r.code!r}")
+
+    # ...but a negated stem reworded with its polarity intact is a legitimate rephrase,
+    # and rewording it positive must be caught in the other direction too.
+    neg = "Which statement is NOT true about generators?"
+    expect(check_rephrase(neg, "Which statement about generators is false?", opts, 0).ok,
+           "negated stem may be reworded while staying negated")
+    r = check_rephrase(neg, "Which statement about generators is true?", opts, 0)
+    expect(not r.ok and r.code == "negation", "dropping a negation is rejected too", r.reason)
+
     print(f"\ncode_tokens sample — T1-Q02: {sorted(code_tokens(q02['stem']))}")
     print(f"\n{'PASSED' if not failures else f'FAILED ({len(failures)})'}")
     return 1 if failures else 0

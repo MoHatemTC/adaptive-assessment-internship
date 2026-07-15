@@ -134,12 +134,36 @@ def main() -> int:
            "the model's stop opinion is recorded as a disagreement")
     expect(res.selection is not None, "a next item is still selected despite the LLM's request")
 
-    # --- the rule does stop when it should -----------------------------------
-    stub(lambda p: {**newton(p), "se": 0.3, "should_stop": False}, pick_top)
+    # --- the LLM's claimed SE cannot stop the test either ---------------------
+    # This used to assert the opposite: stub se=0.3 and expect a stop. That was the bug.
+    # The prompt's Newton SE is monotonically non-increasing (info >= 0) and never widened
+    # once in 48,000 measured updates, while the grid EAP SE rises ~10% of the time after
+    # a surprising response. A stopping rule fed by a number that cannot move against it
+    # guarantees nothing, so code derives the SE and the rule runs on that.
+    stub(lambda p: {**newton(p), "se": 0.21, "should_stop": True}, pick_top)
     res = llm_full_step(fresh_state(), pool, "Agentic AI & Orchestration",
                         answered_item=item, is_correct=True, use_llm=True)
-    expect(res.stop and res.se <= SE_TARGET,
-           "the rule stops at the SE target even when the LLM wants to continue")
+    expect(res.se > 0.5,
+           "an absurdly confident LLM se is not the se the rule sees",
+           f"llm claimed 0.21, rule saw {res.se:.3f}")
+    expect(not res.stop,
+           "the LLM cannot end the test by reporting a tiny se",
+           f"se={res.se:.3f} certainty={res.certainty_pct:.1f}%")
+
+    # --- the rule does stop once the posterior is genuinely narrow ------------
+    # The stop comes from the *belief*, not from a number anyone asserted: a narrow prior
+    # makes the code-derived SE small, and the confidence rule fires on that. (Reaching
+    # SE ≤ 0.65 from a flat prior takes more than 12 items on a 4-option bank — c = 0.25
+    # means information genuinely vanishes at low θ — so the narrow state is constructed
+    # rather than answered into.)
+    stub(lambda p: {**newton(p), "should_stop": False}, pick_top)
+    res = llm_full_step(fresh_state(se=0.4), pool, "Agentic AI & Orchestration",
+                        answered_item=item, is_correct=True, use_llm=True)
+    expect(res.stop and res.stop_rule_reason == "confidence",
+           "the rule stops on a narrow posterior even when the LLM wants to continue",
+           f"stop={res.stop} reason={res.stop_rule_reason!r} "
+           f"certainty={res.certainty_pct:.1f}% se={res.se:.3f}")
+    expect(res.converged, "a rule-driven stop on a measurement criterion reports converged")
 
     # --- direction invariant --------------------------------------------------
     expect(check_direction(0.0, -0.4, True) != "", "correct answer moving θ̂ down is a violation")

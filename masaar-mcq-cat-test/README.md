@@ -28,7 +28,57 @@ Live `assessment.log` showed failures this build addresses:
 | Clone synthesis recycling stems | Curated unique bank; clone path only fills gaps |
 
 Selection: **KL information for questions 1–3**, then **posterior-expected 3PL Fisher**.
-Stop when `SE ≤ 0.65` or `12` questions (recalibrated from unreachable 0.45@10 with coarse banks).
+
+## Convergence
+
+A competency ends when **any** of three rules fires. `engine.check_convergence` owns all
+three; `app.should_stop` adds bank exhaustion, which only it can see.
+
+| Rule | Condition | Reported as converged? |
+|---|---|---|
+| Confidence | `certainty ≥ 90%` (`CONFIDENCE_TARGET`) | yes |
+| Stable level | same level `3×` in a row (`STABLE_WINDOW`), after `6` questions (`MIN_QUESTIONS`) and only at `certainty ≥ 80%` (`STABILITY_FLOOR`) | yes, but flagged low-confidence when `SE > 0.65` |
+| Budget | `12` questions (`MAX_QUESTIONS`) | **no** — running out is not convergence |
+
+The confidence rule is *exactly* the old `SE ≤ 0.65` test: `posterior_certainty_pct` maps
+`SE_TARGET` to precisely 90% and caps at 89% above it. Restating it in confidence units
+puts the stopping rule in the same units as the candidate's report; it does not change
+behaviour.
+
+### Why the stable-level rule has two guards
+
+`level = round(3 + θ̂)` is a 5-way bucket, and θ̂ moves slowly, so the bucket repeats
+long before the estimate is precise. Measured over 200 candidates × 7 θ × 5 competencies:
+
+| Config | RMSE | mean items | mean SE | stability stops |
+|---|---:|---:|---:|---:|
+| No guards beyond `MIN_QUESTIONS=6` | 0.825 | 7.2 | 0.853 | **98%** |
+| `+ STABILITY_FLOOR = 0.80` (shipped) | 0.747 | 9.1 | 0.781 | 87% |
+| Stability rule removed | 0.712 | 11.8 | 0.730 | 0% |
+
+Without the floor the rule fired in 98% of sessions at SE ≈ 0.85 and swallowed the
+confidence rule entirely (which fired in 0.9%). `MIN_QUESTIONS` alone was not enough.
+
+**The stability rule is a test-length optimisation, not evidence of precision.** It buys
+a shorter test and costs accuracy. A stability stop still reports `low_confidence` when
+SE exceeds 0.65, and the report names the exit route, so a short run cannot read as a
+certain one.
+
+## Exposure control
+
+`EXPOSURE_TOP_K` (default 3, `CAT_EXPOSURE_TOP_K` to override) applies **randomesque**
+exposure control: the ranked window returned by `rank_candidates` starts at a uniform
+random rank in `[0, k)`, so the administered item is rank `o ~ U[0,k)`.
+
+It is applied to the *window* rather than the final pick on purpose: on the LLM branches
+the LLM is the chooser, and randomising after its pick would discard the decision those
+branches exist to measure. This way it composes identically with a coded picker and an
+LLM picker.
+
+Set `top_k=1` to restore deterministic argmax — `simulate_cat.py` does, so recovery is
+measured without randomesque noise. Before this existed, selection was fully
+deterministic at `temperature=0`: every candidate at a given θ̂ received an identical
+form, and one item was administered in 100% of 200 sessions.
 
 ## Full LLM CAT controller (OpenAI)
 
@@ -39,10 +89,10 @@ is most informative next. So the step is two LLM calls, not one:
 
 | # | Actor | Does |
 |---|---|---|
-| 1 | **LLM** | Updates θ̂/SE from the graded response (3PL score function + Newton update) |
-| 2 | code | Checks the direction invariant; applies the **stopping rule** |
+| 1 | **LLM** | Updates θ̂ from the graded response (3PL score function + Newton update) |
+| 2 | code | Checks the direction invariant; derives SE and certainty from the exact posterior; applies the **stopping rule** |
 | 3 | code | Ranks unserved items by KL/Fisher **at the LLM's new θ̂** → top-5 shortlist |
-| 4 | **LLM** | Picks from that scored shortlist, applies tie-breaks, rewords the stem |
+| 4 | **LLM** | Picks from that scored shortlist, applies tie-breaks, optionally rewords the stem |
 
 The model still makes every decision a person would call a decision. What it no longer
 does is guess at quantities the engine can compute exactly.
@@ -66,32 +116,78 @@ and the SE guarantee the report rests on is void. The model's `should_stop` is s
 collected, traced, and counted in the sidebar as a **stop disagreement** — a genuinely
 interesting signal — but code decides.
 
+**And code now owns the rule's *input*, not just its comparison.** That claim was
+previously only half true: `rule_stop = se <= SE_TARGET` consumed the **LLM's** `se`, and
+the prompt's Newton update `se = sqrt(1/(1/se_prev² + info))` is monotonically
+non-increasing since `info ≥ 0` — it never widened once in 48,000 measured updates, while
+the grid EAP SE rises ~10% of the time after a surprising response. A rule fed by a
+quantity that cannot move against it guarantees nothing. Code now derives
+`posterior_se_about(posterior, θ̂) = sqrt(E[(θ − θ̂)²])`, which widens when the evidence
+says so and, being measured about the LLM's θ̂, equals `sqrt(Var + (mean − θ̂)²)` — so a
+bad estimate reports as uncertain and stops later, rather than confidently wrong and
+sooner. The model's `se` is still traced as `se_llm` beside `se_used`.
+
+Certainty is computed in code for the same reason. The prompt asked for `100*(1 − se/2)`,
+which disagrees with `combined_certainty_pct` by **22.5 points at the SE target** (67.5%
+vs 90.0%), so certainty silently changed scale whenever the LLM fell back.
+
 ### What is validated, and what deliberately is not
 
 | Check | Status | Why |
 |---|---|---|
-| Correct → θ̂ must not fall; incorrect → θ̂ must not rise | **Enforced** (falls back to coded EAP) | Exact invariant: the 3PL likelihood is monotone in θ. Held in 0/8000 coded EAP updates. |
-| SE must not increase | **Not enforced** | *Looks* like an invariant but isn't — SE rose in **23%** of those 8000 updates (up to +0.28) after a surprising response. Enforcing it would reject correct maths. |
+| Correct → θ̂ must not fall; incorrect → θ̂ must not rise | **Enforced** (falls back to coded EAP) | Exact invariant: the 3PL likelihood is monotone in θ. Verified against 480 (item, prior) pairs including grid-edge priors with `c>0`: 0 violations. |
+| A response with no usable `theta_hat` | **Falls back, and is counted as a fallback** | Otherwise garbage books as a successful LLM step with deviation 0.0 and *improves* the branch's headline metric. |
+| SE must not increase | **Not enforced, and no longer the LLM's to report** | *Looks* like an invariant but isn't — the grid EAP SE rises ~10% of the time after a surprising response. See above for why code derives SE instead. |
 | `selected_id` ∈ shortlist | **Enforced** | Otherwise selection isn't information-driven. |
-| Deviation from coded EAP > 0.35 | **Warned, never rejected** | The Newton update approximates the grid EAP; a correct implementation trips 0.35 ~2.9% of the time. |
+| Stem rewrite flips polarity | **Enforced** | `TRUE` → `NOT TRUE` was graded against the original key: the examinee is marked wrong for answering correctly. |
+| Deviation from coded EAP > `DEVIATION_WARN` | **Warned, never rejected** | The Newton update approximates the grid EAP; demanding agreement would make the comparison vacuous. |
 
 The LLM is never shown the coded EAP result — otherwise this branch would measure copying
 rather than capability. `test_approach.py` asserts the coded θ̂ appears in no payload.
 
+> **Corrected claims.** This table asserted the EAP SE rises in "23%" of 8000 updates (up
+> to +0.28) and that `DEVIATION_WARN=0.35` trips "~2.9%" of the time. Measured: ~10% (up
+> to +0.23), and 0.35 trips **0.00%** — |Δθ̂| runs median 0.010 / p95 0.090 / p99 0.169.
+> The decisions were right; the numbers weren't. `DEVIATION_WARN` is now 0.20, since a
+> threshold a correct implementation never reaches cannot flag a wrong one.
+
+### Am I actually measuring the LLM?
+
+Two calls per question means two chances to fall back, and a fallback is silent by
+construction: θ̂ still looks like a plausible number. The sidebar audit now leads with
+`LLM ran N/M math steps`, warns above 20% fallback, and **errors** when every step fell
+back — that run measures the engine and must not be reported as approach 3. Previously the
+panel early-returned when there was nothing to show, so a 100%-fallback run displayed
+nothing at all while the trace tags still said `math:llm`.
+
 ### Adaptive rephrasing and its guardrail
 
-Every rewrite is validated by `rephrase_guard.py` before display and rejected if it
-restates the key's unique wording (measured against how much it echoes the distractors),
-drops an identifier the item turns on, or changes length drastically. Rejections fall back
-to the original calibrated stem and surface in the UI and log. Rephrasing is an
-uncalibrated deviation from IRT — untick it on the setup screen for a clean run.
+**Off by default** (it was on). Every rewrite is validated by `rephrase_guard.py` before
+display and rejected if it **flips the question's polarity**, restates the key's unique
+wording, drops an identifier the item turns on, or changes length drastically. Rejections
+fall back to the original calibrated stem and surface in the UI and log.
+
+> The polarity check was missing, and it was the worst of the four. `TRUE` → `NOT TRUE` /
+> `FALSE` / `…EXCEPT which one` all passed the guard clean while grading still used the
+> original `answer_index` — the examinee was asked the opposite question and marked wrong
+> for answering it right. The guard was blind to it by construction: negation words are
+> stopwords, so the leak and drift checks compare content and see nothing.
+
+Rephrasing remains an uncalibrated deviation from IRT: the guard still cannot prove a
+rewrite preserved difficulty, and the item is scored with the `b` calibrated on the
+original stem. Leave it off for a clean run.
 
 ### Known property of this approach
 
-The LLM returns `(theta, se)`, so `posterior_from_theta_se` rebuilds a **Gaussian** belief
-from two moments and the true posterior shape is lost. Selection integrates Fisher
-information over that belief, so it runs on the LLM's summary rather than an exact
-posterior. Approach 1 keeps the full grid posterior.
+The LLM emits a scalar `theta_hat`, so the ability estimate is a point summary with no
+shape. That is inherent to this branch's design.
+
+What is **no longer** true is that the belief is collapsed to a Gaussian. The step used to
+rebuild the posterior from `(theta, se)` on every path — including the coded fallback, so
+this branch's "coded reference" was never approach 1's coded EAP — leaving `E[Fisher]`
+selection integrating over a symmetric fiction while real 3PL posteriors are skewed near
+the guessing floor. Measured, it changed the selected item in 11.0% of trials. Code now
+carries the exact grid posterior, as approach 1 does.
 
 ### Tests
 
@@ -118,11 +214,27 @@ The setup screen probes the connection on load and shows live usage and cost.
 
 For Streamlit deployment, use `masaar-mcq-cat-test/streamlit_app.py` as the main file path. See `DEPLOYMENT.md`.
 
+If OpenAI fails, the app falls back to the same procedure executed deterministically in
+Python — and as of the tie-break fix below, that claim is actually true.
+
+> The fallback used to be a *different estimator*. `deterministic_select` keyed its sort
+> on raw `info` first, and tuple comparison is lexicographic, so a 0.5% information
+> difference settled the order outright and the documented "within 1% → prefer smaller
+> |b−θ|" rule was unreachable: across 505 θ-points on this bank the top two scores were
+> never exactly equal, so the tie-breaks ran **0 times**. The LLM was told to apply the
+> 1% band (and did). Measured across all 5 competencies, the two procedures disagreed at
+> 39 θ-points. `NEAR_TOP_REL` now collapses the 1% band into a single sort key, so code
+> and prompt agree.
+>
+> Content balancing is still weak: `|b−θ|` is continuous, so it almost always decides
+> before the sub-competency tie-break is reached. Sub-competency coverage measures
+> 7.4/8 per session, but that is the bank being well spread, not the algorithm
+> balancing. Real content balancing needs a constraint, not a tie-break.
+
 ## The LLM is required
 
 There is no engine-only mode and no "use the LLM" toggle. Each branch exists to measure
-what happens when the LLM owns part of the CAT; a run that quietly used coded logic
-instead produces a number that looks like a result and answers a different question. The
+what happens when the LLM owns part of the CAT; a run that quietly used coded logicinstead produces a number that looks like a result and answers a different question. The
 connection is probed automatically on load and the app stops with an actionable error if
 it fails.
 
@@ -141,16 +253,19 @@ python measure_llm_cost.py --competencies 2   # real calls, real tokens
 python measure_llm_cost.py --dry-run          # structure only, no spend
 ```
 
-Measured on `gpt-4o-mini` ($0.15/$0.60 per 1M tokens), 2 sessions of 12 questions:
+Measured on `gpt-4o-mini` ($0.15/$0.60 per 1M tokens), 2 sessions of 12 questions per
+branch. A **competency** is up to 12 questions; a full assessment is 5 competencies.
 
-| | |
-|---|---|
-| LLM calls per question | 2 (update, then selection) |
-| LLM calls per competency | 24 |
-| Tokens per competency | 45,715 in · 8,760 out |
-| **Cost per competency** | **$0.0061** |
-| Full assessment (5 competencies, 1 candidate) | $0.0303 |
-| 100 candidates × 5 competencies | $3.03 |
+| Branch | Calls/question | Calls/competency | Tokens/competency | $/competency | $/assessment | $/100 candidates |
+|---|---:|---:|---|---:|---:|---:|
+| `approach-1-code-math-llm-pick` | 1 (selection) | 12 | 34,754 in / 3,971 out | $0.0038 | $0.0190 | $1.90 |
+| `approach-2-llm-math-code-pick` | 1 (ability update) | 12 | 14,047 in / 7,300 out | $0.0032 | $0.0162 | $1.62 |
+| `approach-3-llm-full-cat` | 2 (update, then selection) | 24 | 45,715 in / 8,760 out | $0.0061 | $0.0303 | $3.03 |
+
+Approach 3 costs ~1.9× approach 1 because it cannot be adaptive in one call: selecting the
+next item and updating ability in a single response means the item is chosen against a
+stale θ̂. Approach 2 is cheapest despite doing the harder task — its prompt carries one
+item's parameters, while approach 1 ships a 5-item shortlist every turn.
 
 Pricing lives in `MODEL_PRICING_USD_PER_1M` in `llm_client.py`; an unpriced model reports
 no cost rather than a wrong one. The setup screen has a live **LLM usage & cost** panel.
@@ -177,8 +292,7 @@ against each other:
 | Tag | Value on this branch |
 |---|---|
 | approach id | `approach-3-llm-full-cat` |
-| math actor | `math:llm` |
-| selection actor | `selection:llm` |
+| math actor | `math:llm` || selection actor | `selection:llm` |
 | bank | `bank:enriched_bank_cat` |
 | model | `model:gpt-4o-mini` |
 
@@ -221,9 +335,9 @@ python test_usage_tracing.py   # metering + cost attribution; no API key or Lang
 
 | File | Contents |
 |---|---|
-| `enriched_bank_cat.json` | **Preferred** — 120 MCQs, 5 competencies × 24, calibrated `a`/`b`/`c` per item, cueing-controlled |
-| `enriched_bank.json` | Earlier 122-item bank. Labels only (no numeric IRT), and heavily cued — see below |
-| `sample_bank.json` | Small 21-item smoke bank (2 competencies) |
+| `enriched_bank_cat.json` | **The bank the app runs.** 120 MCQs, 5 competencies × 24, calibrated `a`/`b`/`c` per item, cueing-controlled |
+| `enriched_bank.json` | Earlier 122-item bank, kept for reference only — labels only (no numeric IRT) and heavily cued. Not loadable from the UI; see below |
+| `sample_bank.json` | Small 21-item smoke bank, reference only |
 
 ## `enriched_bank_cat.json` — the CAT-ready bank
 
@@ -245,10 +359,14 @@ A candidate who always picked "the long B" scored ~89% on the old bank without r
 ### Design rules
 
 - **24 items per competency**: 8 sub-competencies × 3, ladder 5/5/4/5/5 across `very_easy…very_hard`.
-- **`a` is independent of `b`.** Discrimination is spread across every difficulty band
-  (a very_easy item can still separate sharply). Pinning high `a` to high `b` starves the
-  low-θ end of information and leaves weak candidates measured with blunt items —
+- **`a` should be independent of `b`.** Discrimination is spread across every difficulty
+  band (a very_easy item can still separate sharply). Pinning high `a` to high `b` starves
+  the low-θ end of information and leaves weak candidates measured with blunt items —
   `validate_bank.py` fails on `corr(difficulty, a) > 0.75` for this reason.
+  **This bank measures `corr(difficulty, a) = +0.50`**, which passes the gate but is not
+  independence: mean `a` climbs monotonically 0.90 → 1.46 from `very_easy` to `very_hard`.
+  So the low-θ information collapse below is *partly a bank property*, not only the 3PL
+  guessing floor it is attributed to.
 - **Within a band, the sharpest item takes the outer edge** of the `b` range, since
   information is scarcest at the ladder's extremes.
 - **Distractors are misconceptions, not filler.** Each is a specific error a candidate
@@ -263,18 +381,37 @@ python validate_bank.py enriched_bank_cat.json   # exit 1 on any violation
 python simulate_cat.py enriched_bank_cat.json 300
 ```
 
+`simulate_cat.py` drives **`selection_pipeline.select_next_item(use_llm=False)`** — the
+pipeline the app administers — not `engine.select_item`.
+
+> It used to call `engine.select_item`: pure greedy argmax, with no shortlist, no 1%
+> band, no tie-breaks and no exposure control. That is a path **no branch ships**, so
+> every number below was evidence for a program nobody runs. `use_llm=False` keeps the
+> run offline and deterministic while measuring the coded procedure the LLM is held
+> against — which is the baseline the branch comparison needs. Numbers moved when this
+> was fixed; the older figures in git history are not comparable.
+
 `validate_bank.py` treats "no cueing" as a hypothesis to test rather than a judgement call:
 chi-square on key position, exact binomial on longest-is-key **and** shortest-is-key, and a
 mean length-rank z-test (a bank can pass "is longest" while the key is reliably *second*
 longest — equally learnable). It also walks the ability range and fails if the best available
 item at any θ is too blunt to measure there.
 
-### Measured behaviour (300 simulated candidates per point)
+### Measured behaviour (200 simulated candidates per point)
 
-| Operating condition | RMSE(θ̂) | Reaches SE ≤ 0.65 in 12 items |
+Driven through `select_next_item(use_llm=False)` with `top_k=1`, under the three-rule
+convergence check:
+
+| Operating condition | RMSE(θ̂) | Converged (confidence or stable level) |
 |---|---|---|
-| No self-rating (pessimistic bound) | 0.72 | 16% |
-| Honest self-rating (expected case) | 0.63 | 35% |
+| No self-rating (pessimistic bound) | 0.764 | 86% |
+| Honest self-rating (expected case) | 0.649 | 81% |
+
+The convergence rate is **not** comparable to the pre-convergence-rule figures (16% / 35%),
+which counted only `SE ≤ 0.65` and measured the unshipped `engine.select_item` path. Most
+of the 81–86% here is the stable-level rule, which stops at SE ≈ 0.78 — precision did not
+improve, the exit route changed. `certainty ≥ 90%` alone still fires in roughly 15% of
+sessions, matching the old 16%.
 
 θ̂ is **essentially unbiased at every ability level** (bias −0.11…+0.10 in the expected case),
 including θ=±2.5.

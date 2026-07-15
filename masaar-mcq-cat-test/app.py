@@ -13,10 +13,16 @@ import streamlit as st
 from bank_synth import synthesize_bank
 from certainty import certainty_label, combined_certainty_pct, posterior_certainty_pct
 from engine import (
+    CONFIDENCE_TARGET,
     GRID,
     MAX_QUESTIONS,
+    MIN_QUESTIONS,
     SE_TARGET,
+    STABILITY_FLOOR,
+    STABLE_WINDOW,
+    Convergence,
     calibrated_prior_sd,
+    check_convergence,
     fisher_info,
     level_and_band,
     p_correct,
@@ -33,7 +39,7 @@ from llm_client import (
     provider_label,
     test_connection,
 )
-from llm_full_cat import llm_full_step, posterior_from_theta_se
+from llm_full_cat import DEVIATION_WARN, llm_full_step, posterior_from_theta_se
 from selection_pipeline import SelectionResult
 from tracing import trace_final, trace_selection, trace_session_start, trace_update
 
@@ -118,8 +124,15 @@ def set_llm_enabled(value: bool) -> None:
 
 
 def rephrase_enabled() -> bool:
-    """Adaptive stem rephrasing. On by default — part of this branch's full-LLM remit."""
-    return bool(st.session_state.get("rephrase_enabled", True))
+    """Adaptive stem rephrasing. OFF by default.
+
+    It was on, which made the psychometrically dirty configuration the one every run
+    used. `b` is calibrated for specific wording, so a rewritten stem is not the item the
+    parameters describe, and rephrase_guard checks surface fidelity (polarity, leaks,
+    dropped identifiers, length) — it cannot prove difficulty was preserved. Opt in when
+    studying the feature; do not measure a candidate through it by accident.
+    """
+    return bool(st.session_state.get("rephrase_enabled", False))
 
 
 def set_rephrase_enabled(value: bool) -> None:
@@ -214,6 +227,9 @@ def init_competency_state(
         "q_count": 0,
         "served_ids": served_ids,
         "history": [],
+        "level_history": [],
+        "stop_reason": "",
+        "converged": False,
         "current_item": None,
         "current_fisher_i": 0.0,
         "bank_exhausted": False,
@@ -275,6 +291,7 @@ def finalize_competency(
     state: dict,
     bank_exhausted: bool = False,
     competency: str = "",
+    conv: Convergence | None = None,
 ) -> None:
     level, pct, band, low_conf = level_and_band(state["theta_hat"], state["se"])
     state["done"] = True
@@ -282,27 +299,32 @@ def finalize_competency(
     state["level"] = level
     state["pct"] = pct
     state["band"] = band
-    state["low_confidence"] = low_conf or (
-        state["q_count"] >= MAX_QUESTIONS and state["se"] > SE_TARGET
-    )
-    state["certainty_pct"] = state.get("certainty_pct") or certainty_for_state(
-        state,
-        state.get("self_confidence", "low"),
-    )
+    state["stop_reason"] = conv.reason if conv else ("bank_exhausted" if bank_exhausted else "")
+    state["converged"] = bool(conv and conv.converged)
+    # low_confidence tracks the *estimate*, not the exit route. A stability stop is a
+    # legitimate exit that can still land above SE_TARGET, and the report must say so
+    # rather than let "converged" imply a precision it never reached.
+    state["low_confidence"] = low_conf or not state["converged"]
+    state["certainty_pct"] = certainty_for_state(state, state.get("self_confidence", "low"))
     state["current_item"] = None
     state["current_fisher_i"] = 0.0
     if competency:
         trace_final(competency, state, bank_exhausted=bank_exhausted)
 
 
-def should_stop(state: dict, pool: list[dict]) -> tuple[bool, bool]:
-    """Return (should_stop, bank_exhausted)."""
-    if state["se"] <= SE_TARGET or state["q_count"] >= MAX_QUESTIONS:
-        return True, False
-    remaining = unserved_count(pool, state["served_ids"])
-    if remaining < BANK_EXHAUSTION_THRESHOLD:
-        return True, True
-    return False, False
+def should_stop(state: dict, pool: list[dict]) -> Convergence:
+    """Apply the three convergence rules, then bank exhaustion.
+
+    Exhaustion is checked last and only when no measurement rule fired: a competency
+    that reached the confidence target on its final available item converged, and
+    should not be reported as having run out of questions.
+    """
+    conv = check_convergence(state["certainty_pct"], state["level_history"], state["q_count"])
+    if conv.stop:
+        return conv
+    if unserved_count(pool, state["served_ids"]) < BANK_EXHAUSTION_THRESHOLD:
+        return Convergence(True, "bank_exhausted", False)
+    return Convergence(False)
 
 
 def grade_and_advance(
@@ -332,7 +354,11 @@ def grade_and_advance(
     )
     theta_hat = controller.theta_hat
     se = controller.se
-    posterior = posterior_from_theta_se(theta_hat, se)
+    # The exact grid posterior, not a Gaussian rebuilt from (theta, se). The LLM still
+    # owns theta_hat; the belief it is measured against keeps its true shape.
+    posterior = controller.posterior
+    if posterior is None:
+        posterior = posterior_from_theta_se(theta_hat, se)
     state["posterior"] = posterior
     state["theta_hat"] = theta_hat
     state["se"] = se
@@ -340,6 +366,8 @@ def grade_and_advance(
     state["served_ids"].append(item["id"])
     certainty = controller.certainty_pct
     state["certainty_pct"] = certainty
+    level_now = level_and_band(theta_hat, se)[0]
+    state["level_history"].append(level_now)
     state["history"].append(
         {
             "id": item["id"],
@@ -348,6 +376,7 @@ def grade_and_advance(
             "theta_hat": theta_hat,
             "se": se,
             "certainty_pct": certainty,
+            "level": level_now,
             "fisher_i": state.get("current_fisher_i", 0.0),
             "math_actor": "coded" if controller.fallback_used else "llm",
             "selection_actor": "llm",
@@ -360,8 +389,17 @@ def grade_and_advance(
         }
     )
     # Session tallies — whether the LLM can run a CAT is only visible in aggregate.
-    if not controller.fallback_used and controller.theta_deviation is not None:
-        st.session_state.setdefault("math_devs", []).append(controller.theta_deviation)
+    # math_steps counts every attempted step and math_fallbacks every one that landed on
+    # coded EAP, because without them an all-fallback run was indistinguishable from a
+    # real one: only invariant violations were counted, deviations were appended solely
+    # when the LLM *succeeded*, and the trace tags are static constants. A branch whose
+    # whole claim is "the LLM ran the CAT" has to be able to show that it did.
+    st.session_state["math_steps"] = st.session_state.get("math_steps", 0) + 1
+    if controller.fallback_used:
+        st.session_state["math_fallbacks"] = st.session_state.get("math_fallbacks", 0) + 1
+    else:
+        if controller.theta_deviation is not None:
+            st.session_state.setdefault("math_devs", []).append(controller.theta_deviation)
     if controller.invariant_violation:
         st.session_state["math_violations"] = st.session_state.get("math_violations", 0) + 1
     if controller.stop_disagreement:
@@ -369,7 +407,8 @@ def grade_and_advance(
 
     # The stopping rule is code's. The model's `should_stop` is recorded and traced but
     # never obeyed: an early stop voids the SE guarantee the final report rests on.
-    stop, bank_exhausted = should_stop(state, pool)
+    conv = should_stop(state, pool)
+    stop, bank_exhausted = conv.stop, conv.reason == "bank_exhausted"
     log_update(
         competency,
         state["q_count"],
@@ -378,7 +417,7 @@ def grade_and_advance(
         theta_hat,
         se,
         certainty,
-        stop and not bank_exhausted,
+        conv.converged,
     )
     trace_update(
         competency,
@@ -388,11 +427,13 @@ def grade_and_advance(
         theta_hat=theta_hat,
         se=se,
         certainty_pct=certainty,
-        converged=stop and not bank_exhausted,
+        converged=conv.converged,
     )
 
     if stop:
-        finalize_competency(state, bank_exhausted=bank_exhausted, competency=competency)
+        finalize_competency(
+            state, bank_exhausted=bank_exhausted, competency=competency, conv=conv
+        )
         return
 
     if controller.selection is None:
@@ -484,10 +525,29 @@ def render_controller_audit() -> None:
     violations = st.session_state.get("math_violations", 0)
     disagreements = st.session_state.get("stop_disagreements", 0)
     rejects = st.session_state.get("rephrase_rejects", 0)
-    if not (devs or violations or disagreements or rejects):
+    steps = st.session_state.get("math_steps", 0)
+    fallbacks = st.session_state.get("math_fallbacks", 0)
+    if not (devs or violations or disagreements or rejects or steps):
         return
 
     st.sidebar.markdown("**LLM controller audit**")
+
+    # First, because it qualifies everything below it. This panel used to early-return
+    # when the LLM failed on every step, so a run that was 100% coded EAP displayed
+    # nothing at all and still reported as "LLM full CAT".
+    if steps:
+        rate = fallbacks / steps
+        msg = f"LLM ran {steps - fallbacks}/{steps} math steps ({1 - rate:.0%})"
+        if fallbacks == steps:
+            st.sidebar.error(
+                f"⚠ Every math step fell back to coded EAP ({fallbacks}/{steps}). "
+                "This run measures the engine, not the LLM — do not report it as approach 3."
+            )
+        elif rate > 0.2:
+            st.sidebar.warning(f"{msg} — {rate:.0%} fell back to coded EAP.")
+        else:
+            st.sidebar.caption(msg)
+
     if devs:
         c1, c2 = st.sidebar.columns(2)
         c1.metric(
@@ -497,8 +557,8 @@ def render_controller_audit() -> None:
         )
         c2.metric(
             "worst |Δθ̂|", f"{max(devs):.3f}",
-            delta="suspect" if max(devs) > 0.35 else "in tolerance",
-            delta_color="inverse" if max(devs) > 0.35 else "normal",
+            delta="suspect" if max(devs) > DEVIATION_WARN else "in tolerance",
+            delta_color="inverse" if max(devs) > DEVIATION_WARN else "normal",
         )
     if violations:
         st.sidebar.error(
@@ -527,7 +587,10 @@ def render_sidebar_live(state: dict, title: str) -> None:
     c2.metric("SE (uncertainty)", f"{state['se']:.3f}")
     render_controller_audit()
     st.sidebar.caption(
-        f"Convergence target: SE ≤ {SE_TARGET} · "
+        f"Stops when: certainty ≥ {CONFIDENCE_TARGET:.0%} · "
+        f"or same level {STABLE_WINDOW}× in a row "
+        f"(after {MIN_QUESTIONS} questions, certainty ≥ {STABILITY_FLOOR:.0%}) · "
+        f"or {MAX_QUESTIONS} questions · "
         f"full CAT controller: {'OpenAI' if llm_enabled() else 'coded fallback'}"
     )
 
@@ -968,6 +1031,11 @@ def screen_assessment() -> None:
         st.rerun()
 
 
+def stop_reason_label(state: dict) -> str:
+    """Human-readable exit route, for a report that should not hide why it ended."""
+    return Convergence(True, state.get("stop_reason", "")).label or "—"
+
+
 def screen_report() -> None:
     st.header("Final Report")
     comp_states = st.session_state["comp_states"]
@@ -986,6 +1054,7 @@ def screen_report() -> None:
                 "SE": round(s["se"], 3),
                 "Certainty %": round(s.get("certainty_pct", 0), 1),
                 "Questions": s["q_count"],
+                "Stopped because": stop_reason_label(s),
                 "Low confidence": s["low_confidence"],
                 "Bank exhausted": s.get("bank_exhausted", False),
             }
@@ -1010,9 +1079,18 @@ def screen_report() -> None:
                 st.caption(
                     f"θ̂ = {s['theta_hat']:.3f}, SE = {s['se']:.3f}, "
                     f"certainty = {cert:.1f}% ({certainty_label(cert)}), "
-                    f"{s['q_count']} questions answered"
+                    f"{s['q_count']} questions answered · "
+                    f"stopped because {stop_reason_label(s)}"
                 )
                 st.progress(cert / 100.0, text=f"Assessment certainty — {certainty_label(cert)}")
+                if s.get("stop_reason") == "stable_level":
+                    # A settled band is not a precise estimate. Saying so here keeps the
+                    # shorter test from reading as a more certain one.
+                    st.caption(
+                        f"The level repeated {STABLE_WINDOW}× in a row, which ended the "
+                        f"competency early. That is a stable *band*, not a precise θ̂ — "
+                        f"read the certainty above for precision."
+                    )
             with cols[1]:
                 if s["low_confidence"]:
                     st.error("⚠ Low confidence")

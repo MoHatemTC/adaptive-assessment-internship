@@ -8,7 +8,19 @@ Changes vs earlier harness build (driven by live-session log failures):
 - Selection: KL information for the first 3 items, Fisher thereafter
   (restored after Fisher-only failed to converge in real sessions).
 - select_item_detailed returns the criterion score used for selection.
+- Stopping is a three-rule convergence check (see CONFIDENCE_TARGET below), and
+  exposure control is applied to the ranked window rather than the final pick.
+
+Measured caveat on the KL phase: on `enriched_bank_cat.json` it earns nothing.
+Over 750 simulated candidates per arm, KL-for-first-3 scored RMSE 0.668 against
+0.657 for Fisher-only, and posterior-expected vs point Fisher was 0.657 vs 0.656.
+The differences are within noise, but the docstring's claim that Fisher-only
+"failed to converge" does not reproduce. Kept because it is harmless and matches
+the documented design; do not cite it as a win without re-measuring.
 """
+
+import os
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -17,6 +29,44 @@ SE_TARGET = 0.65          # empirically reachable in MCQ 3PL short tests with a 
                           # Original 0.45 stayed out of reach (live SE≈0.71 with coarse b-ladder;
                           # enriched bank sims ≈0.58–0.62 at q=12). 0.65 marks genuine convergence.
 MAX_QUESTIONS = 12
+
+# --- Convergence -----------------------------------------------------------
+# A competency ends when ANY of three conditions holds:
+#   1. certainty >= CONFIDENCE_TARGET      — the estimate is precise enough
+#   2. the same level STABLE_WINDOW times  — the reported band has settled
+#   3. q_count >= MAX_QUESTIONS            — budget spent
+#
+# Rule 1 is exactly equivalent to the older `se <= SE_TARGET` test, because
+# certainty.posterior_certainty_pct maps SE_TARGET to exactly 90% and is capped at
+# 89% above it. Stating it as confidence keeps the stopping rule in the same units
+# the candidate's report is written in.
+CONFIDENCE_TARGET = 0.90
+
+# Rule 2 stops on a *coarse* statistic: level = round(3 + θ̂) is a 5-way bucket, so
+# three identical levels mostly means θ̂ has not moved much yet, not that it converged.
+# Two guards, both measured rather than guessed (200 candidates × 7 θ × 5 competencies):
+#
+#   MIN_QUESTIONS   keeps the rule from firing at q=3, where SE ≈ 1.2 and repeat levels
+#                   are an artefact of the flat prior rather than evidence.
+#   STABILITY_FLOOR keeps it from firing while the estimate is still vague. Without it
+#                   the rule fired in 98% of sessions at SE ≈ 0.85 and RMSE degraded
+#                   0.712 → 0.825: MIN_QUESTIONS alone was not enough, because θ̂ moves
+#                   slowly enough that the bucket repeats regardless of precision.
+#
+# With the floor: RMSE 0.747 at ~9 items, vs 0.712 at ~12 with no stability rule. The
+# rule is a test-length optimisation that costs accuracy — it is not evidence the
+# estimate is precise, which is why a stability stop still reports low_confidence.
+STABLE_WINDOW = 3
+MIN_QUESTIONS = 6
+STABILITY_FLOOR = 0.80
+
+# --- Exposure control ------------------------------------------------------
+# Randomesque (Kingsbury & Zara 1989): administer a uniform pick from the k most
+# informative items instead of the argmax. Pure argmax is deterministic, so every
+# candidate at a given θ̂ receives an identical form — the bank leaks after one cohort.
+# k=1 restores the old argmax behaviour for reproducible simulation and tests.
+EXPOSURE_TOP_K = int(os.getenv("CAT_EXPOSURE_TOP_K", "3"))
+_exposure_rng = np.random.default_rng()
 
 # Extended ladder — previous {-1,0,1} left high-ability candidates with near-zero
 # Fisher information (see assessment.log: Fisher_I ≈ 0.02–0.05 at θ̂ ≈ 2.5).
@@ -133,7 +183,7 @@ def selection_score(theta_hat, q_count, item, posterior=None):
     return fisher_info(theta_hat, item)
 
 
-def select_item(theta_hat, q_count, pool, served_ids, posterior=None):
+def select_item(theta_hat, q_count, pool, served_ids, posterior=None, rng=None, top_k=None):
     candidates = [q for q in pool if q["id"] not in served_ids]
     if not candidates:
         return None
@@ -145,15 +195,23 @@ def select_item(theta_hat, q_count, pool, served_ids, posterior=None):
         ),
         reverse=True,
     )
-    return candidates[0]
+    return candidates[choose_with_exposure_control(len(candidates), rng, top_k)]
 
 
-def rank_candidates(theta_hat, q_count, pool, served_ids, posterior=None, top_n: int = 5):
+def rank_candidates(theta_hat, q_count, pool, served_ids, posterior=None, top_n: int = 5,
+                    rng=None, top_k=None):
     """Score and rank unserved items; return list of (item, score, fisher, kl).
 
     `score` is the criterion actually used to rank (KL early, else posterior-expected
     Fisher). `fisher` stays the point estimate at theta_hat purely for display, so the
     UI and traces can show both without changing what selection optimises.
+
+    Exposure control lives here rather than at the point of choice, because on the LLM
+    branches the LLM *is* the chooser — randomising after its pick would silently
+    discard the decision those branches exist to measure. Instead the returned window
+    starts at a uniform random rank in [0, k), so whoever picks the best item from the
+    window administers rank o ~ U[0,k). That is exactly randomesque, and it composes
+    with a coded picker and an LLM picker identically.
     """
     criterion = "KL" if q_count < 3 else ("E[Fisher]" if posterior is not None else "Fisher")
     candidates = [q for q in pool if q["id"] not in served_ids]
@@ -172,7 +230,8 @@ def rank_candidates(theta_hat, q_count, pool, served_ids, posterior=None, top_n:
         key=lambda x: (x[1], -abs(x[0]["b"] - theta_hat)),
         reverse=True,
     )
-    return scored[:top_n], criterion
+    offset = choose_with_exposure_control(len(scored), rng, top_k)
+    return scored[offset:offset + top_n], criterion
 
 
 def select_item_detailed(theta_hat, q_count, pool, served_ids, posterior=None):
@@ -189,3 +248,66 @@ def level_and_band(theta_hat, se):
     bands = {1: "Novice", 2: "Developing", 3: "Competent", 4: "Proficient", 5: "Expert"}
     low_confidence = se > SE_TARGET
     return level, pct, bands[level], low_confidence
+
+
+@dataclass(frozen=True)
+class Convergence:
+    """Why a competency stopped.
+
+    `converged` is True only when a *measurement* criterion was met. Running out of
+    questions or items is a budget outcome, not convergence, and must not be reported
+    as one.
+    """
+    stop: bool
+    reason: str = ""       # confidence | stable_level | max_questions | bank_exhausted
+    converged: bool = False
+
+    @property
+    def label(self) -> str:
+        return {
+            "confidence": f"certainty ≥ {CONFIDENCE_TARGET:.0%}",
+            "stable_level": f"same level {STABLE_WINDOW}× in a row",
+            "max_questions": f"reached {MAX_QUESTIONS} questions",
+            "bank_exhausted": "bank exhausted",
+        }.get(self.reason, "")
+
+
+def levels_stable(level_history) -> bool:
+    """True when the last STABLE_WINDOW level estimates are identical."""
+    if len(level_history) < STABLE_WINDOW:
+        return False
+    return len(set(level_history[-STABLE_WINDOW:])) == 1
+
+
+def check_convergence(certainty_pct, level_history, q_count) -> Convergence:
+    """Apply the three stopping rules, in precedence order.
+
+    Bank exhaustion is handled by the caller, which is the only place that knows the
+    pool. Note a stability stop can land with certainty < CONFIDENCE_TARGET: that is
+    intended, and `level_and_band` will flag it low_confidence, so the report says the
+    band settled without claiming the precision it did not reach.
+    """
+    confidence = certainty_pct / 100.0
+    if confidence >= CONFIDENCE_TARGET:
+        return Convergence(True, "confidence", True)
+    if (
+        q_count >= MIN_QUESTIONS
+        and confidence >= STABILITY_FLOOR
+        and levels_stable(level_history)
+    ):
+        return Convergence(True, "stable_level", True)
+    if q_count >= MAX_QUESTIONS:
+        return Convergence(True, "max_questions", False)
+    return Convergence(False)
+
+
+def choose_with_exposure_control(n_candidates, rng=None, top_k=None) -> int:
+    """Index of the item to administer among `n_candidates` ranked best-first.
+
+    Returns 0 (the argmax) when k <= 1, so simulation and tests stay deterministic.
+    """
+    k = EXPOSURE_TOP_K if top_k is None else top_k
+    if k <= 1 or n_candidates <= 1:
+        return 0
+    r = _exposure_rng if rng is None else rng
+    return int(r.integers(min(k, n_candidates)))

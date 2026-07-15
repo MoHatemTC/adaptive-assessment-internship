@@ -43,9 +43,11 @@ import numpy as np
 
 from certainty import combined_certainty_pct
 from engine import (
+    CONFIDENCE_TARGET,
     GRID,
     MAX_QUESTIONS,
     SE_TARGET,
+    check_convergence,
     eap_update,
     fisher_info,
     level_and_band,
@@ -81,7 +83,6 @@ Return JSON only:
 {
   "theta_hat": number between -4 and 4,
   "se": number between 0.2 and 2.5,
-  "certainty_pct": number between 0 and 100,
   "calculation_steps": ["P = ...", "score = ...", "info = ...", "theta_hat = ...", "se = ..."],
   "math_note": "one sentence explaining the update",
   "should_stop": true or false,
@@ -94,7 +95,8 @@ Hard constraint, checked by code -- a violation means your update is discarded:
 Do not clamp toward theta_prev to satisfy this; compute it properly.
 
 should_stop is advisory only: code applies the stopping rule. Report what you would do.
-certainty_pct: report 100 * (1 - se / 2.0), clipped to [0, 100].
+Your `se` is recorded and compared, but code computes the SE the assessment uses and the
+stopping rule runs on. Report your honest value; do not tune it.
 """
 
 # ---------------------------------------------------------------------------
@@ -136,6 +138,15 @@ REPHRASING RULES:
 DIRECTION_EPS = 1e-3
 SHORTLIST_N = 5
 
+# |Δθ̂| against the coded EAP above which the LLM's update is flagged suspect in the UI.
+# Warned, never rejected: the prompt specifies a Newton update, which approximates the
+# grid EAP rather than reproducing it, so demanding agreement would make the comparison
+# vacuous. The UI hardcoded 0.35 and cited "trips ~2.9% of the time" — measured on this
+# bank from consistent state, |Δθ̂| runs median 0.010 / p95 0.090 / p99 0.169 and 0.35
+# trips 0.00%. A threshold a correct implementation never reaches cannot flag a wrong
+# one, so it sits just above p99.
+DEVIATION_WARN = 0.20
+
 
 @dataclass
 class FullCATResult:
@@ -144,6 +155,11 @@ class FullCATResult:
     certainty_pct: float
     stop: bool
     selection: SelectionResult | None
+    # The exact grid posterior after this response, carried rather than re-derived from
+    # (theta, se) so the belief keeps its shape across the session.
+    posterior: np.ndarray | None = None
+    stop_rule_reason: str = ""
+    converged: bool = False
     calculation_steps: list[str] = field(default_factory=list)
     selection_note: str = ""
     fallback_used: bool = False
@@ -159,11 +175,14 @@ class FullCATResult:
 
 
 def posterior_from_theta_se(theta_hat: float, se: float) -> np.ndarray:
-    """Gaussian belief rebuilt from the LLM's two reported moments.
+    """Gaussian belief rebuilt from two moments.
 
-    Lossy by design: the model emits (theta, se), so the true posterior shape is gone.
-    Selection integrates Fisher information over this belief, so it runs on the LLM's
-    summary rather than an exact posterior — inherent to this branch, worth knowing.
+    Retained for callers holding only (theta, se). The step no longer uses it: it carries
+    the exact grid posterior instead, because rebuilding the belief from two moments every
+    step discarded the posterior's shape — 3PL posteriors are genuinely skewed near the
+    guessing floor — and left the E[Fisher] selection integral running over a Gaussian
+    fiction. It also meant this branch's "coded fallback" was never approach 1's coded
+    EAP, so the comparison was against a moving baseline.
     """
     sd = max(float(se), 0.2)
     posterior = np.exp(-0.5 * ((GRID - float(theta_hat)) / sd) ** 2)
@@ -172,6 +191,27 @@ def posterior_from_theta_se(theta_hat: float, se: float) -> np.ndarray:
         posterior = np.ones_like(GRID)
         total = posterior.sum()
     return posterior / total
+
+
+def posterior_se_about(posterior: np.ndarray, theta_hat: float) -> float:
+    """Posterior SD about `theta_hat`: sqrt(E[(theta - theta_hat)^2]).
+
+    Code computes the SE, not the model, and on this branch that matters more than on
+    approach 2 — here the *stopping rule* consumes it. The docstring above says stopping
+    is a rule and not an opinion, but code owning the comparison while the model owns the
+    input is only half a rule: the prompt's Newton SE, sqrt(1/(1/se_prev^2 + info)), is
+    monotonically non-increasing since info >= 0 and never widened once in 48,000
+    measured updates, while the grid EAP SE rises ~10% of the time after a surprising
+    response. A `se <= SE_TARGET` test fed by a quantity that cannot move against it does
+    not guarantee what the final report claims.
+
+    Measured about theta_hat rather than the posterior mean, this equals
+    sqrt(Var + (mean - theta_hat)^2): it reduces to the exact EAP SE when the LLM lands on
+    the mean and grows when it does not. The LLM still owns theta_hat -- every decision a
+    person would call a decision -- but a bad estimate now reports as uncertain instead of
+    confidently wrong, and stops later rather than sooner.
+    """
+    return float(np.sqrt(np.sum((GRID - float(theta_hat)) ** 2 * posterior)))
 
 
 def _num(value: Any, default: float) -> float:
@@ -212,8 +252,13 @@ def check_direction(theta_prev: float, theta_new: float, is_correct: bool) -> st
 
 def _llm_math(state: dict, item: dict, is_correct: bool, competency: str,
               coded_theta: float, coded_se: float, coded_certainty: float,
+              post: np.ndarray, certainty_of,
               ) -> tuple[float, float, float, dict, str, bool]:
     """Phase 1. Returns (theta, se, certainty, raw, violation, used_fallback).
+
+    The LLM supplies theta_hat. `post` is the exact grid posterior code already computed
+    (Bayes, not a judgement call), and se/certainty are derived from it here rather than
+    taken from the model — see posterior_se_about.
 
     coded_* are passed in for comparison and fallback only; they never enter the
     payload. Handing the model the answer would make this branch measure copying.
@@ -227,7 +272,11 @@ def _llm_math(state: dict, item: dict, is_correct: bool, competency: str,
                  "difficulty": item.get("difficulty", "medium"),
                  "discrimination": item.get("discrimination", "medium")},
         "response": {"correct": bool(is_correct), "x": 1 if is_correct else 0},
-        "stop_thresholds": {"se_target": SE_TARGET, "max_questions": MAX_QUESTIONS},
+        # Advertised so `should_stop` is an informed opinion rather than a guess. Code
+        # applies these; the model never does.
+        "stop_thresholds": {"confidence_target": CONFIDENCE_TARGET,
+                            "se_target": SE_TARGET,
+                            "max_questions": MAX_QUESTIONS},
     }
 
     try:
@@ -239,9 +288,21 @@ def _llm_math(state: dict, item: dict, is_correct: bool, competency: str,
         get_logger().warning("LLM_FULL_MATH | error=%s — coded EAP fallback", exc)
         return coded_theta, coded_se, coded_certainty, {"fallback_error": str(exc)}, "", True
 
-    theta_hat = float(np.clip(_num(data.get("theta_hat"), coded_theta), -4.0, 4.0))
-    se = float(np.clip(_num(data.get("se"), coded_se), 0.2, 2.5))
-    certainty = float(np.clip(_num(data.get("certainty_pct"), coded_certainty), 0.0, 100.0))
+    # A response with no usable theta_hat is a failed step, not one that happens to agree
+    # with the engine. Defaulting it to coded_theta while reporting fallback_used=False
+    # would book garbage as a successful LLM step with deviation 0.0.
+    raw_theta = _num(data.get("theta_hat"), float("nan"))
+    if not np.isfinite(raw_theta):
+        get_logger().warning("LLM_FULL_MATH | %s | no usable theta_hat — coded EAP fallback",
+                             item["id"])
+        return coded_theta, coded_se, coded_certainty, data, "", True
+
+    theta_hat = float(np.clip(raw_theta, -4.0, 4.0))
+    # Recorded for comparison, never used: the stopping rule must not run on a number
+    # that structurally cannot widen.
+    se_llm = float(np.clip(_num(data.get("se"), coded_se), 0.2, 2.5))
+    se = posterior_se_about(post, theta_hat)
+    certainty = certainty_of(se)
     violation = check_direction(theta_prev, theta_hat, is_correct)
 
     trace_llm_response(
@@ -249,6 +310,8 @@ def _llm_math(state: dict, item: dict, is_correct: bool, competency: str,
         metadata={"competency": competency, "phase": "llm_full_math",
                   "coded_theta": round(coded_theta, 4), "coded_se": round(coded_se, 4),
                   "theta_deviation": round(abs(theta_hat - coded_theta), 4),
+                  # se_llm is the model's claim; se_used drives the stopping rule.
+                  "se_llm": round(se_llm, 4), "se_used": round(se, 4),
                   "invariant_violation": violation},
     )
 
@@ -376,36 +439,50 @@ def llm_full_step(
     math_raw: dict[str, Any] = {}
     math_fallback = False
     if answered_item is not None and is_correct is not None:
-        _p, coded_theta, coded_se = eap_update(state["posterior"], answered_item, is_correct)
-        coded_certainty = combined_certainty_pct(
-            coded_se, state.get("self_confidence", "low"), next_q_count,
-            state.get("prior_sd", 2.0), se_start=state.get("se_start"))
+        # Bayes, not a judgement call: code always multiplies prior by likelihood and
+        # carries the exact grid belief forward. The LLM supplies theta_hat only.
+        posterior, coded_theta, coded_se = eap_update(
+            state["posterior"], answered_item, is_correct)
+
+        def certainty_of(se_value: float) -> float:
+            return combined_certainty_pct(
+                se_value, state.get("self_confidence", "low"), next_q_count,
+                state.get("prior_sd", 2.0), se_start=state.get("se_start"))
+
+        coded_certainty = certainty_of(coded_se)
         if use_llm:
             theta_hat, se, certainty, math_raw, violation, math_fallback = _llm_math(
                 state, answered_item, is_correct, competency,
-                coded_theta, coded_se, coded_certainty)
+                coded_theta, coded_se, coded_certainty, posterior, certainty_of)
         else:
             theta_hat, se, certainty, math_fallback = coded_theta, coded_se, coded_certainty, True
     else:
         theta_hat, se = state["theta_hat"], state["se"]
         coded_theta, coded_se = theta_hat, se
         certainty = state.get("certainty_pct", 0.0)
+        posterior = state["posterior"]
 
-    posterior = posterior_from_theta_se(theta_hat, se)
-
-    # --- Stopping: a rule, applied by code --------------------------------------
+    # --- Stopping: a rule, applied by code, on a quantity code computed ----------
+    # `se` here is posterior_se_about, not the model's Newton se. Code owning the
+    # comparison while the model owned the input was only half a rule.
     llm_wanted_stop = bool(math_raw.get("should_stop", False))
     unserved = [q for q in pool if q["id"] not in served_ids]
-    rule_stop = se <= SE_TARGET or next_q_count >= MAX_QUESTIONS or not unserved
+    level_history = list(state.get("level_history", []))
+    if answered_item is not None and is_correct is not None:
+        level_history.append(level_and_band(theta_hat, se)[0])
+    conv = check_convergence(certainty, level_history, next_q_count)
+    rule_stop = conv.stop or not unserved
     stop_disagreement = llm_wanted_stop != rule_stop
     if stop_disagreement:
         get_logger().info(
             "LLM_FULL_STOP | model wanted stop=%s, rule says stop=%s (rule wins) | "
-            "se=%.3f target=%.2f q=%d/%d",
-            llm_wanted_stop, rule_stop, se, SE_TARGET, next_q_count, MAX_QUESTIONS)
+            "reason=%s certainty=%.1f%% se=%.3f q=%d/%d",
+            llm_wanted_stop, rule_stop, conv.reason or "bank_exhausted",
+            certainty, se, next_q_count, MAX_QUESTIONS)
 
     result = FullCATResult(
         theta_hat=theta_hat, se=se, certainty_pct=certainty, stop=rule_stop, selection=None,
+        posterior=posterior, stop_rule_reason=conv.reason, converged=conv.converged,
         calculation_steps=_steps(math_raw.get("calculation_steps")),
         selection_note=str(math_raw.get("math_note", "")),
         fallback_used=math_fallback, raw=math_raw,
