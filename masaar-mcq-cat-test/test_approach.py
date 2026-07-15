@@ -182,6 +182,16 @@ def main() -> int:
            f"fallback={res_far.fallback_used} dev_rejected={res_far.deviation_rejected} "
            f"invariant={res_far.invariant_violation!r}")
 
+    # A rejected step must report the deviation that got it rejected, not 0.0. Booking the
+    # model's worst failures as perfect agreement censored the sampled distribution at
+    # exactly the gate, so DEVIATION_REJECT measured a 0% false-rejection rate *by
+    # construction* and was calibrated against a distribution its own censoring created.
+    far_dev = DEVIATION_REJECT + 0.3
+    expect(res_far.theta_deviation is not None
+           and abs(res_far.theta_deviation - far_dev) < 1e-6,
+           "a rejected step records the model's real deviation, not 0.0",
+           f"expected ≈{far_dev:.2f}, recorded {res_far.theta_deviation}")
+
     # --- a full session with a competent LLM terminates and recovers ability ---
     # Model executes the documented Newton update correctly.
     def newton(p):

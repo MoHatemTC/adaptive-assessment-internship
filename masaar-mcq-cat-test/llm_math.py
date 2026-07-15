@@ -74,65 +74,46 @@ uses. Report your honest value; do not tune it.
 # absorbs the model's own rounding when it reports a few decimal places.
 DIRECTION_EPS = 1e-3
 
-# Deviation from the coded EAP above which the LLM's answer is flagged as suspect in
-# the UI. Deliberately NOT a rejection: the Newton update the prompt specifies is a
-# normal approximation to the grid EAP, so exact agreement is not expected, and forcing
-# agreement would make the whole comparison vacuous.
+# |Δθ̂| against the coded EAP above which the LLM's update is flagged in the logs (WARN)
+# and above which it is rejected and replaced by the coded EAP (REJECT).
 #
-# Measured in *session* conditions: 2400 steps, the real adaptive selection loop, a
-# correct Newton implementation, theta in [-2, +2].
+# Measured IN PATH: 160 candidates through the real adaptive loop, θ in [-2,+2], ~9 steps
+# a session, a correct Newton implementation vs a model that only nudges theta_prev by
+# 1e-4 -- with the deviation of *rejected* steps recorded rather than booked as 0.0:
 #
-#   correct   mean 0.103   p50 0.099   p95 0.209   p99 0.279   max 0.347
-#   lazy      mean 0.409   p50 0.411   p95 0.858   p99 0.998   max 0.998
-#
-# 0.30 sits just above the correct p99: it fires on 0.8% of correct steps and 61.7% of a
-# degenerate model's. That is the point of the number -- a warning nobody can act on is
-# noise, and one that never fires is decoration.
-#
-# TWO EARLIER CALIBRATIONS OF THIS CONSTANT WERE WRONG, IN OPPOSITE DIRECTIONS, AND BOTH
-# FOR THE SAME REASON: they measured a situation the code is never in.
-#
-#   0.35, "trips ~2.9% of the time"   -- roughly right by luck; the cited p99 of 0.69 is
-#                                        ~2.5x the real 0.279.
-#   0.20, "p99 = 0.169, so 0.35 never  -- measured single-step from *consistent* state,
-#          fires"                        i.e. theta_prev == the posterior mean. That never
-#                                        happens after step 1: the LLM owns theta_hat and
-#                                        code owns the posterior, so the two estimators
-#                                        drift apart cumulatively over a session, and the
-#                                        deviation is mostly that drift. At 0.20 a correct
-#                                        implementation trips on 6.5% of steps.
-#
-# The drift is the branch's real behaviour, not an error -- it costs RMSE 0.678 vs 0.648
-# for pure EAP -- but any threshold calibrated without it is measuring a different program.
-DEVIATION_WARN = 0.30
-
-# Deviation above which the update is *rejected*, not merely flagged.
-#
-# Only direction was ever enforced, which is a hole: theta_prev + 3.9 satisfies it, and so
-# does theta_prev + 1e-4. "Some deviation is expected" cannot mean "any theta at all".
-#
-# The threshold has to be loose or it defeats the branch. Forcing agreement with the coded
-# EAP would make this a copy of the engine wearing an LLM's name -- precisely the mistake
-# the payload's no-coded-reference rule exists to prevent, arriving through the back door.
-# So it sits ~6x above the measured p99 of a *correct* implementation (|dtheta| p99 =
-# 0.169): correct maths never reaches it, and nothing that reaches it is doing the maths.
-#
-# 0.50 from the same 2400-step measurement (see DEVIATION_WARN):
+#   correct   mean 0.136   p95 0.317   p99 0.813   max 1.904
+#   lazy      mean 0.464   p95 1.051   p99 1.465   max 2.154
 #
 #   threshold   fires on correct   fires on lazy
-#      0.35            0.0%            55.6%
-#      0.50            0.0%            35.8%     <- here
-#      1.00            0.0%             0.0%
+#      0.30            5.9%            65.2%     <- WARN
+#      0.50            1.3%            39.4%     <- REJECT
+#      1.00            0.9%             6.5%
 #
-# 1.00 was the first guess and it is worthless: a degenerate model's deviation maxes out
-# at 0.998, because it is bounded by the step the model failed to take. A gate above that
-# rejects nothing at all. This is why the threshold had to come from the distribution
-# rather than from "loose enough to be safe" -- the safe-sounding number did nothing.
+# THE DISTRIBUTIONS OVERLAP AND NO PER-STEP THRESHOLD SEPARATES THEM. An earlier version
+# of this comment claimed correct maths tops out at 0.347 and is therefore never rejected.
+# That was an artifact of the accounting bug fixed in _coded_result: a rejected step
+# recorded theta_deviation = 0.0, so the sampled distribution could not contain a value
+# above the gate, and the gate measured a 0% false-rejection rate *by construction*. The
+# threshold was calibrated against a distribution its own censoring had created. The real
+# rate is 1.3% of steps, ~12% of sessions. Approach 3 measures the same shape (max 1.904)
+# from a different controller, which is what a real property looks like.
 #
-# 0.50 sits 44% above the correct max (0.347), so correct maths is never rejected, while
-# still tripping ~36% of a lazy model's steps. Per *session* that is what matters: at ~9
-# steps, 1 - 0.642^9 = 98% of degenerate sessions get caught at least once. 0.35 would
-# catch more but sits 1% above the observed correct max, which is not margin.
+# The tail is not arithmetic error. The LLM owns theta_hat while code owns the posterior,
+# so the two estimators drift apart cumulatively; the Newton update is taken from the
+# drifted theta_prev while the coded EAP is taken from the true posterior, and the gap is
+# mostly that drift. It is the branch's real behaviour, and it costs RMSE: this branch
+# lands ~0.72 where the pure coded EAP lands ~0.65.
+#
+# So 0.50 is kept knowing it trips ~12% of *correct* sessions, because a false rejection
+# here is close to free -- it falls back to the coded EAP, which is the better estimator
+# anyway. The gate cannot cost accuracy it is not protecting, and it buys 100% of
+# degenerate sessions caught. 1.00 was the first guess and catches 6.5% of lazy steps;
+# "loose enough to be safe" is how a gate ends up doing nothing.
+#
+# The honest detector is the session mean -- 0.14 correct vs 0.46 lazy -- which is what
+# the audit panel leads with. The per-step gate is a floor under the damage, not proof
+# about any single step.
+DEVIATION_WARN = 0.30
 DEVIATION_REJECT = 0.50
 
 
@@ -243,11 +224,22 @@ def check_direction(theta_prev: float, theta_new: float, is_correct: bool) -> st
 
 
 def _coded_result(theta: float, se: float, certainty: float, note: str, steps: list[str],
-                  raw: dict, posterior: np.ndarray | None = None) -> LLMMathResult:
+                  raw: dict, posterior: np.ndarray | None = None,
+                  theta_deviation: float | None = None,
+                  se_deviation: float | None = None) -> LLMMathResult:
+    """The coded EAP standing in for the model's update.
+
+    theta_deviation defaults to None, not 0.0. When this result is a *rejection*, the
+    caller passes the model's own deviation: hardcoding 0.0 booked the model's worst
+    failures as perfect agreement with the engine, which censored the very distribution
+    the DEVIATION_REJECT threshold is calibrated against — the recorded devs could not
+    exceed the gate, so the gate measured 0% false-rejections by construction.
+    """
     return LLMMathResult(
         theta_hat=theta, se=se, certainty_pct=certainty, posterior=posterior,
         calculation_steps=steps, math_note=note, fallback_used=True, raw=raw,
-        coded_theta=theta, coded_se=se, theta_deviation=0.0, se_deviation=0.0,
+        coded_theta=theta, coded_se=se,
+        theta_deviation=theta_deviation, se_deviation=se_deviation,
     )
 
 
@@ -376,8 +368,8 @@ def llm_math_update(
     deviation_rejected = not violation and theta_dev > DEVIATION_REJECT
     reason = violation or (
         f"θ̂ deviates {theta_dev:.2f} from the coded EAP ({theta_hat:.3f} vs "
-        f"{coded_theta:.3f}); a correct Newton update stays under 0.35 in session "
-        "conditions, so this is not the procedure being executed"
+        f"{coded_theta:.3f}), past the {DEVIATION_REJECT} gate — correct maths reaches "
+        "this on ~1% of steps, so this bounds the damage rather than proving fault"
         if deviation_rejected else ""
     )
 
@@ -389,6 +381,7 @@ def llm_math_update(
             f"LLM math rejected: {reason}",
             [f"Rejected LLM update: {reason}", "Used coded EAP update."],
             data, posterior=post,
+            theta_deviation=theta_dev, se_deviation=se_dev,
         )
         result.invariant_violation = violation
         result.deviation_rejected = deviation_rejected

@@ -515,22 +515,26 @@ def render_math_audit(state: dict) -> None:
     c1, c2 = st.sidebar.columns(2)
     if devs:
         mean_dev = sum(devs) / len(devs)
-        # ~0.10 is what a correct Newton implementation averages in session conditions;
-        # a model that has stopped doing the arithmetic averages ~0.41. This mean is the
-        # detector no single-step gate can be, so it is worth reading.
+        # The session mean is the detector no single-step gate can be: measured in path,
+        # correct maths averages ~0.14 and a model that has stopped doing the arithmetic
+        # averages ~0.46, while their per-step distributions overlap all the way to 1.9.
         c1.metric(
             "mean |Δθ̂|", f"{mean_dev:.3f}",
-            delta="correct ≈0.10" if mean_dev < 0.25 else "degenerate ≈0.41?",
-            delta_color="normal" if mean_dev < 0.25 else "inverse",
+            delta="correct ≈0.14" if mean_dev < 0.30 else "degenerate ≈0.46?",
+            delta_color="normal" if mean_dev < 0.30 else "inverse",
             help=("Average gap between the LLM's θ̂ and the coded EAP this session. Drift "
-                  "is expected — the prompt specifies a Newton update, which approximates "
-                  "the grid EAP and diverges from it cumulatively. Measured over 2400 "
-                  "steps: correct ≈0.10, a model faking the update ≈0.41."),
+                  "is expected — the prompt specifies a Newton update taken from the LLM's "
+                  "own θ̂, so it diverges from the coded EAP cumulatively. Measured in "
+                  "path: correct ≈0.14, a model faking the update ≈0.46."),
         )
+        # Deliberately no verdict. A single worst step carries almost no signal here:
+        # correct maths reaches 1.9, so any threshold that calls one step "suspect" would
+        # be calling ~1 correct session in 8 suspect. Read the mean.
         c2.metric(
             "worst |Δθ̂|", f"{max(devs):.3f}",
-            delta="suspect" if max(devs) > DEVIATION_WARN else "in tolerance",
-            delta_color="inverse" if max(devs) > DEVIATION_WARN else "normal",
+            help=("The single largest gap this session. Shown for context, not as a "
+                  "verdict: a correct implementation reaches 1.9 on rare steps, so no "
+                  "per-step threshold separates it from a model doing nothing."),
         )
     if violations:
         st.sidebar.error(
@@ -540,8 +544,9 @@ def render_math_audit(state: dict) -> None:
     if dev_rejects:
         st.sidebar.warning(
             f"{dev_rejects} update(s) rejected for deviating more than {DEVIATION_REJECT} "
-            "from the coded EAP — further than a correct Newton update reaches, so the "
-            "procedure was not being executed. The coded EAP was used instead."
+            "from the coded EAP; the coded EAP was used instead. This is a damage floor, "
+            "not a verdict — correct maths trips it in ~12% of sessions because θ̂ drift "
+            "compounds. Read the mean above."
         )
 
 
