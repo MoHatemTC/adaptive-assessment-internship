@@ -164,6 +164,7 @@ def _pick_next(
         state["served_ids"],
         state.get("history", []),
         state.get("posterior"),
+        state.get("certainty_pct"),
         use_llm=use_llm,
     )
 

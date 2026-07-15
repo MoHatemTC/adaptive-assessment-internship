@@ -127,13 +127,15 @@ def llm_select(
     served_ids: list[str],
     history: list[dict],
     posterior=None,
+    certainty_pct: float | None = None,
 ) -> SelectionResult | None:
     ranked, criterion = rank_candidates(theta_hat, q_count, pool, served_ids, posterior)
     if not ranked:
         return None
 
     level, pct, band, low_confidence = level_and_band(theta_hat, se)
-    certainty_pct = 100.0 if se <= 0 else max(0.0, min(100.0, 100.0 * (1.0 - se / 2.0)))
+    if certainty_pct is None:
+        certainty_pct = 100.0 if se <= 0 else max(0.0, min(100.0, 100.0 * (1.0 - se / 2.0)))
     sub_counts = _served_sub_counts(served_ids, pool)
     shortlist = []
     for q, info, fi, kl in ranked:
@@ -264,6 +266,7 @@ def select_next_item(
     served_ids: list[str],
     history: list[dict] | None = None,
     posterior=None,
+    certainty_pct: float | None = None,
     *,
     use_llm: bool = True,
 ) -> SelectionResult | None:
@@ -272,7 +275,15 @@ def select_next_item(
     if use_llm and llm_configured():
         try:
             result = llm_select(
-                theta_hat, se, q_count, competency, pool, served_ids, history, posterior
+                theta_hat,
+                se,
+                q_count,
+                competency,
+                pool,
+                served_ids,
+                history,
+                posterior,
+                certainty_pct,
             )
             if result is not None:
                 return result
