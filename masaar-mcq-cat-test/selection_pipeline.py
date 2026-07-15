@@ -21,7 +21,7 @@ from the provided shortlist — never invent ids.
 Return JSON with this schema:
 {
   "selected_id": "<id from shortlist>",
-  "criterion_used": "KL" | "Fisher",
+  "criterion_used": "<echo the `criterion` field given to you, verbatim>",
   "procedure_steps": [
     "Step 1: ...",
     "Step 2: ..."
@@ -31,7 +31,8 @@ Return JSON with this schema:
 }
 
 PROCEDURE (execute in order):
-1. Note questions_answered and criterion (KL if <3 else Fisher).
+1. Read the `criterion` field in the payload — the engine has already decided it
+   (KL early in the test, otherwise Fisher). Do not choose it yourself.
 2. From shortlist, pick the item with the highest info_score for that criterion.
 3. If two items are within 1% relative info_score, pick the one with smallest |b - theta_hat|.
 4. If still tied, pick the sub_competency least represented in served_history.
@@ -51,6 +52,17 @@ class SelectionResult:
     adaptation_note: str = ""
     rule_applied: str = ""
     shortlist_ids: list[str] = field(default_factory=list)
+
+
+def _normalize_criterion(name: str) -> str:
+    """Map criterion labels to a family. The engine may report "E[Fisher]" while the
+    LLM echoes "Fisher"; both are the same criterion for mismatch purposes."""
+    n = name.strip().lower()
+    if "fisher" in n:
+        return "fisher"
+    if "kl" in n:
+        return "kl"
+    return n
 
 
 def _served_sub_counts(served_ids: list[str], pool: list[dict]) -> dict[str, int]:
@@ -207,10 +219,18 @@ def llm_select(
     if isinstance(steps, str):
         steps = [steps]
 
+    claimed = str(data.get("criterion_used", criterion))
+    if _normalize_criterion(claimed) != _normalize_criterion(criterion):
+        get_logger().warning(
+            "LLM_SELECT | criterion mismatch: engine used %s, LLM reported %s",
+            criterion,
+            claimed,
+        )
+
     result = SelectionResult(
         item=q,
         info_score=float(info),
-        criterion=str(data.get("criterion_used", criterion)),
+        criterion=criterion,
         fisher_i=float(fi),
         llm_used=True,
         procedure_steps=steps,
