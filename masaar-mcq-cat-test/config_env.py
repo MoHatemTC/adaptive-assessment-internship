@@ -26,14 +26,50 @@ KNOWN_KEYS = (
     "CAT_TRACE_NAME",
 )
 
+SECRET_SECTIONS = (
+    "LLM",
+    "llm",
+    "OpenAI",
+    "openai",
+    "Fuse",
+    "fuse",
+    "Langfuse",
+    "langfuse",
+    "CAT",
+    "cat",
+)
+
+
+def _secret_get(container, key: str):
+    try:
+        return container.get(key)
+    except Exception:
+        try:
+            return container[key]
+        except Exception:
+            return None
+
+
+def _find_secret(secrets, key: str):
+    value = _secret_get(secrets, key)
+    if value is not None:
+        return value
+
+    for section_name in SECRET_SECTIONS:
+        section = _secret_get(secrets, section_name)
+        if section is None:
+            continue
+        value = _secret_get(section, key)
+        if value is not None:
+            return value
+    return None
+
 
 def load_runtime_config() -> None:
-    """Load config from local .env and top-level Streamlit secrets.
+    """Load config from local .env and Streamlit secrets.
 
-    Streamlit Community Cloud stores secrets in `st.secrets`; root-level TOML
-    values are not always available through `os.getenv()` early enough for
-    imported clients. This bridge makes the app work in both local and cloud
-    runtimes without committing secrets.
+    Supports both top-level TOML keys and grouped secrets such as `[LLM]`,
+    `[Fuse]`, `[Langfuse]`, or `[CAT]`.
     """
     load_dotenv(ENV_PATH, override=True)
 
@@ -47,9 +83,6 @@ def load_runtime_config() -> None:
     for key in KNOWN_KEYS:
         if os.getenv(key):
             continue
-        try:
-            value = secrets.get(key)
-        except Exception:
-            continue
+        value = _find_secret(secrets, key)
         if value is not None:
             os.environ[key] = str(value)
