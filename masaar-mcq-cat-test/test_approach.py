@@ -21,7 +21,12 @@ import numpy as np
 
 import llm_math
 from engine import MAX_QUESTIONS, SE_TARGET, eap_update, p_correct, prior_from_level, select_item
-from llm_math import check_direction, llm_math_update, posterior_from_theta_se
+from llm_math import (
+    DEVIATION_REJECT,
+    check_direction,
+    llm_math_update,
+    posterior_from_theta_se,
+)
 
 BANK = Path(__file__).parent / "enriched_bank_cat.json"
 failures: list[str] = []
@@ -156,13 +161,26 @@ def main() -> int:
 
     # Measured about the LLM's theta_hat, so a wrong estimate reports as uncertain
     # rather than confidently wrong: sqrt(Var + (mean - theta_hat)^2).
+    # Offset stays inside DEVIATION_REJECT: past it the update is rejected outright and
+    # the SE is the coded EAP's, which tests the gate rather than the SE property.
     st_ = fresh_state(pool)
     _p2, coded_th2, coded_se2 = eap_update(st_["posterior"], item, True)
-    stub({"theta_hat": coded_th2 + 1.0, "se": 0.3})
+    off = DEVIATION_REJECT * 0.8
+    stub({"theta_hat": coded_th2 + off, "se": 0.3})
     res_off = llm_math_update(st_, item, True, use_llm=True)
-    expect(res_off.se > coded_se2,
+    expect(not res_off.fallback_used and res_off.se > coded_se2,
            "an off-target θ̂ widens the SE instead of hiding in it",
-           f"θ̂ off by 1.0 -> se {res_off.se:.3f} vs coded {coded_se2:.3f}")
+           f"θ̂ off by {off:.2f} -> se {res_off.se:.3f} vs coded {coded_se2:.3f}")
+
+    # ...and past the gate it is not merely widened, it is rejected.
+    stub({"theta_hat": coded_th2 + DEVIATION_REJECT + 0.3, "se": 0.3})
+    res_far = llm_math_update(st_, item, True, use_llm=True)
+    expect(res_far.fallback_used and res_far.deviation_rejected
+           and not res_far.invariant_violation,
+           "a θ̂ past DEVIATION_REJECT is rejected as a magnitude failure, not "
+           "miscounted as an invariant violation",
+           f"fallback={res_far.fallback_used} dev_rejected={res_far.deviation_rejected} "
+           f"invariant={res_far.invariant_violation!r}")
 
     # --- a full session with a competent LLM terminates and recovers ability ---
     # Model executes the documented Newton update correctly.
@@ -195,7 +213,11 @@ def main() -> int:
             r = llm_math_update(st, nxt, correct, use_llm=True)
             viol += bool(r.invariant_violation)
             st["theta_hat"], st["se"] = r.theta_hat, r.se
-            st["posterior"] = posterior_from_theta_se(r.theta_hat, r.se)
+            # The exact posterior the update carried, not a Gaussian rebuilt from its two
+            # moments. This test kept the old round-trip after the code stopped doing it,
+            # which manufactured drift that is not in the real path — and once the
+            # magnitude gate landed, that drift was large enough to reject correct maths.
+            st["posterior"] = r.posterior
             st["q_count"] += 1
             served.append(nxt["id"])
         expect(len(served) <= MAX_QUESTIONS, f"session at θ={true_theta:+.0f} respects MAX_QUESTIONS")

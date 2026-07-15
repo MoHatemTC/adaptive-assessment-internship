@@ -40,7 +40,12 @@ from llm_client import (
     provider_label,
     test_connection,
 )
-from llm_math import llm_math_update, posterior_from_theta_se
+from llm_math import (
+    DEVIATION_REJECT,
+    DEVIATION_WARN,
+    llm_math_update,
+    posterior_from_theta_se,
+)
 from selection_pipeline import SelectionResult, select_next_item
 from tracing import trace_final, trace_selection, trace_session_start, trace_update
 
@@ -358,6 +363,14 @@ def grade_and_advance(
         st.session_state.setdefault("math_devs", []).append(math_result.theta_deviation)
     if math_result.invariant_violation:
         st.session_state["math_violations"] = st.session_state.get("math_violations", 0) + 1
+    # Counted apart from invariant violations: a direction violation proves the update is
+    # wrong, a magnitude rejection judges that the model is not running the procedure.
+    # One counter for both would report a number that is not what its label says.
+    if math_result.deviation_rejected:
+        st.session_state["math_dev_rejects"] = st.session_state.get("math_dev_rejects", 0) + 1
+    st.session_state["math_steps"] = st.session_state.get("math_steps", 0) + 1
+    if math_result.fallback_used:
+        st.session_state["math_fallbacks"] = st.session_state.get("math_fallbacks", 0) + 1
 
     conv = should_stop(state, pool)
     stop, bank_exhausted = conv.stop, conv.reason == "bank_exhausted"
@@ -476,28 +489,59 @@ def render_math_audit(state: dict) -> None:
     """
     devs = st.session_state.get("math_devs", [])
     violations = st.session_state.get("math_violations", 0)
-    if not devs and not violations:
+    dev_rejects = st.session_state.get("math_dev_rejects", 0)
+    steps = st.session_state.get("math_steps", 0)
+    fallbacks = st.session_state.get("math_fallbacks", 0)
+    if not (devs or violations or dev_rejects or steps):
         return
 
     st.sidebar.markdown("**LLM math audit** (vs coded EAP)")
+
+    # First, because it qualifies every number below it: if the model never ran, this
+    # panel is describing the engine. The early return used to hide exactly that.
+    if steps:
+        rate = fallbacks / steps
+        if fallbacks == steps:
+            st.sidebar.error(
+                f"⚠ Every math step fell back to coded EAP ({fallbacks}/{steps}). "
+                "This session measures the engine, not the LLM."
+            )
+        elif rate > 0.2:
+            st.sidebar.warning(f"{steps - fallbacks}/{steps} math steps ran on the model "
+                               f"— {rate:.0%} fell back to coded EAP.")
+        else:
+            st.sidebar.caption(f"LLM ran {steps - fallbacks}/{steps} math steps.")
+
     c1, c2 = st.sidebar.columns(2)
     if devs:
         mean_dev = sum(devs) / len(devs)
+        # ~0.10 is what a correct Newton implementation averages in session conditions;
+        # a model that has stopped doing the arithmetic averages ~0.41. This mean is the
+        # detector no single-step gate can be, so it is worth reading.
         c1.metric(
             "mean |Δθ̂|", f"{mean_dev:.3f}",
-            help=("Average gap between the LLM's θ̂ and the coded EAP over this session. "
-                  "Some drift is expected: the prompt specifies a Newton update, which "
-                  "approximates the grid EAP rather than reproducing it."),
+            delta="correct ≈0.10" if mean_dev < 0.25 else "degenerate ≈0.41?",
+            delta_color="normal" if mean_dev < 0.25 else "inverse",
+            help=("Average gap between the LLM's θ̂ and the coded EAP this session. Drift "
+                  "is expected — the prompt specifies a Newton update, which approximates "
+                  "the grid EAP and diverges from it cumulatively. Measured over 2400 "
+                  "steps: correct ≈0.10, a model faking the update ≈0.41."),
         )
         c2.metric(
             "worst |Δθ̂|", f"{max(devs):.3f}",
-            delta="suspect" if max(devs) > 0.35 else "in tolerance",
-            delta_color="inverse" if max(devs) > 0.35 else "normal",
+            delta="suspect" if max(devs) > DEVIATION_WARN else "in tolerance",
+            delta_color="inverse" if max(devs) > DEVIATION_WARN else "normal",
         )
     if violations:
         st.sidebar.error(
             f"{violations} invariant violation(s): the LLM moved θ̂ the wrong way for a "
             "graded response. Those updates were rejected and the coded EAP used instead."
+        )
+    if dev_rejects:
+        st.sidebar.warning(
+            f"{dev_rejects} update(s) rejected for deviating more than {DEVIATION_REJECT} "
+            "from the coded EAP — further than a correct Newton update reaches, so the "
+            "procedure was not being executed. The coded EAP was used instead."
         )
 
 
