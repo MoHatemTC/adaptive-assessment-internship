@@ -106,6 +106,15 @@ def set_llm_enabled(value: bool) -> None:
     st.session_state["llm_enabled"] = bool(value)
 
 
+def rephrase_enabled() -> bool:
+    """Adaptive stem rephrasing. On by default — it is this branch's distinguishing feature."""
+    return bool(st.session_state.get("rephrase_enabled", True))
+
+
+def set_rephrase_enabled(value: bool) -> None:
+    st.session_state["rephrase_enabled"] = bool(value)
+
+
 def _apply_selection(state: dict, sel: SelectionResult | None, competency: str = "") -> None:
     if sel is None:
         state.update({"current_item": None, "done": True, "bank_exhausted": True})
@@ -115,7 +124,13 @@ def _apply_selection(state: dict, sel: SelectionResult | None, competency: str =
         item["original_stem"] = sel.item.get("stem", "")
         item["display_stem"] = sel.rephrased_stem
     state["current_item"] = item
-    state["current_fisher_i"] = sel.info_score
+    # Two different quantities, kept apart on purpose. info_score is whatever criterion
+    # ranked the shortlist — for the first 3 questions that is KL, a sum over the theta
+    # grid of order 1-10. fisher_i is Fisher information at theta-hat, which for a 3PL
+    # item cannot exceed ~0.6. Storing the criterion score under "fisher" made the UI
+    # report "Fisher I = 8.0", which is not a possible value.
+    state["current_info_score"] = sel.info_score
+    state["current_fisher_i"] = sel.fisher_i
     state["last_selection"] = {
         "id": sel.item["id"],
         "criterion": sel.criterion,
@@ -128,7 +143,13 @@ def _apply_selection(state: dict, sel: SelectionResult | None, competency: str =
         "shortlist_ids": sel.shortlist_ids,
         "rephrased_stem": sel.rephrased_stem,
         "original_stem": sel.item.get("stem", ""),
+        "rephrase_rejected_reason": sel.rephrase_rejected_reason,
+        "rephrase_rejected_code": sel.rephrase_rejected_code,
     }
+    if sel.rephrase_rejected_reason:
+        # Count rejections over the session so a systematically bad prompt is visible
+        # rather than showing up once per question and scrolling away.
+        st.session_state["rephrase_rejects"] = st.session_state.get("rephrase_rejects", 0) + 1
     if competency:
         log_selection(
             competency,
@@ -166,6 +187,7 @@ def _pick_next(
         state.get("posterior"),
         state.get("certainty_pct"),
         use_llm=use_llm,
+        allow_rephrase=rephrase_enabled(),
     )
 
 
@@ -196,6 +218,7 @@ def init_competency_state(
         "history": [],
         "current_item": None,
         "current_fisher_i": 0.0,
+        "current_info_score": 0.0,
         "bank_exhausted": False,
         "done": False,
         "level": None,
@@ -268,6 +291,7 @@ def finalize_competency(
     state["certainty_pct"] = certainty_for_state(state, state.get("self_confidence", "low"))
     state["current_item"] = None
     state["current_fisher_i"] = 0.0
+    state["current_info_score"] = 0.0
     if competency:
         trace_final(competency, state, bank_exhausted=bank_exhausted)
 
@@ -436,6 +460,80 @@ def render_certainty_gauge(certainty_pct: float, se: float, label_prefix: str = 
     st.progress(certainty_pct / 100.0, text=f"Confidence in θ̂ estimate — {label}")
 
 
+def render_cat_state_row(state: dict, item: dict, sel_meta: dict, q_num: int) -> None:
+    """The four numbers that explain why this question is on screen.
+
+    Previously this was one dense caption line. The whole point of a CAT is that the
+    question is a consequence of theta-hat and SE, so those belong next to the
+    question rather than only in the sidebar.
+    """
+    criterion = sel_meta.get("criterion", "—")
+    fisher_i = state.get("current_fisher_i", 0.0)
+    se = state["se"]
+    target_gap = se - SE_TARGET
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Question", f"{q_num} / {MAX_QUESTIONS}")
+    c2.metric("θ̂ ability", f"{state['theta_hat']:+.2f}")
+    c3.metric(
+        "SE",
+        f"{se:.2f}",
+        delta=f"{target_gap:+.2f} vs target" if target_gap > 0 else "target reached",
+        delta_color="inverse" if target_gap > 0 else "normal",
+        help=f"Assessment stops when SE ≤ {SE_TARGET} or {MAX_QUESTIONS} questions are used.",
+    )
+    # Always Fisher here, never the raw criterion score: KL and Fisher are on different
+    # scales, so showing "the criterion's number" would make the value jump an order of
+    # magnitude at question 4 for no reason the examinee could interpret.
+    c4.metric(
+        "Fisher I",
+        f"{fisher_i:.3f}",
+        help=(
+            f"Information this item carries about your ability at θ̂ (3PL, max ≈0.6 with "
+            f"4 options). Ranked by **{criterion}** — KL for the first 3 questions while "
+            f"θ̂ is still moving, posterior-expected Fisher afterwards."
+        ),
+    )
+    st.progress(
+        min(1.0, max(0.0, (state.get("se_start", 2.0) - se) / max(state.get("se_start", 2.0) - SE_TARGET, 1e-6))),
+        text=f"Convergence toward SE ≤ {SE_TARGET} · certainty {state.get('certainty_pct', 0):.0f}%",
+    )
+
+
+def render_selection_rationale(state: dict, item: dict, sel_meta: dict) -> None:
+    """Show the shortlist the LLM actually chose from, and what it was told."""
+    st.markdown(f"**Criterion:** `{sel_meta.get('criterion', '?')}` — "
+                f"**rule applied:** {sel_meta.get('rule_applied', '—')}")
+    if sel_meta.get("adaptation_note"):
+        st.info(sel_meta["adaptation_note"])
+    for step in sel_meta.get("procedure_steps", []):
+        st.caption(step)
+
+    # The LLM picks from an engine-scored shortlist; showing it makes clear the LLM is
+    # executing the CAT procedure, not free-picking questions.
+    shortlist_ids = sel_meta.get("shortlist_ids") or []
+    if shortlist_ids:
+        pool_by_id = {q["id"]: q for q in st.session_state["bank_by_comp"].get(
+            item.get("competency", ""), [])}
+        rows = []
+        for sid in shortlist_ids:
+            q = pool_by_id.get(sid)
+            if not q:
+                continue
+            rows.append({
+                "id": sid,
+                "chosen": "✅" if sid == item["id"] else "",
+                "difficulty": q.get("difficulty", ""),
+                "a": round(q.get("a", 0), 2),
+                "b": round(q.get("b", 0), 2),
+                "|b−θ̂|": round(abs(q.get("b", 0) - state["theta_hat"]), 2),
+                "Fisher I": round(fisher_info(state["theta_hat"], q), 4),
+            })
+        if rows:
+            st.caption(f"Engine-scored shortlist ({len(rows)} candidates) — the LLM may only pick from these:")
+            st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+
+
 def render_sidebar_live(state: dict, title: str) -> None:
     st.sidebar.subheader(title)
     certainty = state.get(
@@ -456,8 +554,9 @@ def render_sidebar_live(state: dict, title: str) -> None:
         fi = state.get("current_fisher_i") or fisher_info(state["theta_hat"], item)
         sel_meta = state.get("last_selection") or {}
         st.sidebar.caption(
-            f"Next **{item['id']}** ({item.get('difficulty', '?')}) · "
-            f"{sel_meta.get('criterion', 'Fisher')} score = **{fi:.4f}**"
+            f"Next **{item['id']}** ({item.get('difficulty', '?')}, b={item.get('b', 0):+.2f}) · "
+            f"Fisher I = **{fi:.4f}** · ranked by {sel_meta.get('criterion', 'Fisher')} "
+            f"(score {state.get('current_info_score', 0.0):.4f})"
         )
         if sel_meta.get("adaptation_note"):
             with st.sidebar.expander("LLM adaptation note", expanded=False):
@@ -654,6 +753,26 @@ def screen_setup() -> None:
     set_llm_enabled(bool(toggled) and llm_configured())
     st.caption(f"LLM enabled for assessment: **{llm_enabled()}** (persists across screens)")
 
+    rephrase_toggled = st.checkbox(
+        "Adaptively rephrase question stems",
+        value=rephrase_enabled(),
+        disabled=not llm_enabled(),
+        help=(
+            "The LLM rewrites the stem to suit the examinee's level. Every rewrite is "
+            "checked before display; rejected ones fall back to the original wording."
+        ),
+        key="rephrase_toggle_widget",
+    )
+    set_rephrase_enabled(bool(rephrase_toggled) and llm_enabled())
+    if rephrase_enabled():
+        st.caption(
+            "⚠️ Rephrasing is an **uncalibrated deviation from IRT**: `b` is calibrated for the "
+            "original wording, so a rewritten stem is not strictly the item that was calibrated. "
+            "`rephrase_guard.py` rejects rewrites that leak the key, drop identifiers the item "
+            "turns on, or change length drastically — but it cannot prove difficulty is preserved. "
+            "Turn this off for a psychometrically clean run."
+        )
+
     if "selected_competencies_widget" not in st.session_state:
         st.session_state["selected_competencies_widget"] = competencies.copy()
     else:
@@ -810,31 +929,34 @@ def screen_assessment() -> None:
 
     item = state["current_item"]
     q_num = state["q_count"] + 1
+    sel_meta = state.get("last_selection") or {}
     st.subheader(comp)
-    st.caption(
-        f"Question {q_num} of up to {MAX_QUESTIONS} · "
-        f"info score = {state.get('current_fisher_i', 0):.4f} · "
-        f"certainty {state.get('certainty_pct', 0):.1f}%"
-    )
 
-    sel_meta = state.get("last_selection")
-    if sel_meta and sel_meta.get("llm_used"):
+    render_cat_state_row(state, item, sel_meta, q_num)
+
+    if sel_meta.get("llm_used"):
         with st.expander("Why this question? (LLM procedural selection)", expanded=False):
-            st.markdown(f"**Criterion:** {sel_meta.get('criterion', '?')}")
-            st.markdown(f"**Rule:** {sel_meta.get('rule_applied', '—')}")
-            if sel_meta.get("adaptation_note"):
-                st.info(sel_meta["adaptation_note"])
-            for step in sel_meta.get("procedure_steps", []):
-                st.caption(step)
-            if sel_meta.get("rephrased_stem") and sel_meta.get("rephrased_stem") != sel_meta.get("original_stem"):
-                st.markdown("**Original stem:**")
-                st.caption(sel_meta["original_stem"])
-                st.markdown("**Rephrased stem:**")
-                st.caption(sel_meta["rephrased_stem"])
+            render_selection_rationale(state, item, sel_meta)
 
-    st.markdown(f"**{item.get('display_stem', item['stem'])}**")
+    # A rejected rephrase means the examinee is seeing the calibrated wording. Say so
+    # here rather than only in the log — it is the difference between the item the
+    # parameters describe and one they do not.
+    if sel_meta.get("rephrase_rejected_reason"):
+        st.warning(
+            f"Rephrasing rejected ({sel_meta.get('rephrase_rejected_code', '?')}): "
+            f"{sel_meta['rephrase_rejected_reason']}. Showing the original calibrated stem."
+        )
+
+    display_stem = item.get("display_stem", item["stem"])
+    was_rephrased = "display_stem" in item
+    if was_rephrased:
+        st.caption("✍️ Stem adapted to your level — technical content and answer unchanged.")
+    st.markdown(f"**{display_stem}**")
     if item.get("sub_competency"):
         st.caption(item["sub_competency"])
+    if was_rephrased:
+        with st.expander("Show the original wording", expanded=False):
+            st.markdown(item.get("original_stem", item["stem"]))
 
     options = item["options"]
     selected = st.radio(

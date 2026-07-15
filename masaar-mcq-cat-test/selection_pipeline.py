@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from engine import fisher_info, level_and_band, rank_candidates, selection_score
 from engine_log import get_logger
 from llm_client import chat_json, llm_configured
+from rephrase_guard import check_rephrase
 from tracing import trace_llm_response
 
 SELECTION_SYSTEM = """You are the Masaar adaptive testing selector.
@@ -42,7 +43,11 @@ PROCEDURE (execute in order):
 REPHRASING RULES:
 - After selecting the item, rephrase only the selected item's stem.
 - Preserve the technical meaning, answer, options, and difficulty.
-- Do not reveal hints or the correct answer.
+- Keep EVERY identifier, code fragment, literal and number exactly as written
+  (e.g. `sorted(nums)`, `df.shape`, (3, 4), 1_000_000). Do not paraphrase them
+  into prose — the item is calibrated on them and a rewrite that drops one is
+  rejected and discarded.
+- Never restate any option's wording inside the stem, especially the correct one.
 - Adapt wording to examinee_parameters.level_band and certainty_pct:
   lower certainty -> clearer wording; higher level -> use normal technical phrasing.
 - If the original stem is already ideal, return it unchanged.
@@ -61,6 +66,10 @@ class SelectionResult:
     rule_applied: str = ""
     shortlist_ids: list[str] = field(default_factory=list)
     rephrased_stem: str = ""
+    # Populated when rephrase_guard rejected the LLM's rewrite and the original
+    # calibrated stem was administered instead. Surfaced in the UI, not swallowed.
+    rephrase_rejected_reason: str = ""
+    rephrase_rejected_code: str = ""
 
 
 def _served_sub_counts(served_ids: list[str], pool: list[dict]) -> dict[str, int]:
@@ -128,6 +137,7 @@ def llm_select(
     history: list[dict],
     posterior=None,
     certainty_pct: float | None = None,
+    allow_rephrase: bool = True,
 ) -> SelectionResult | None:
     ranked, criterion = rank_candidates(theta_hat, q_count, pool, served_ids, posterior)
     if not ranked:
@@ -222,11 +232,46 @@ def llm_select(
         return deterministic_select(theta_hat, q_count, pool, served_ids, posterior)
 
     q = id_map[selected_id]
-    rephrased_stem = str(data.get("rephrased_stem", "")).strip()
-    if not rephrased_stem:
+
+    # The rephrase is untrusted model output: check it before it reaches the examinee.
+    # A rejected rewrite falls back to the calibrated wording rather than blocking the
+    # item, so the worst case is a plainer question, never a leaked key.
+    rephrase_reason = ""
+    rephrase_code = ""
+    if allow_rephrase:
+        candidate = str(data.get("rephrased_stem", "")).strip()
+        checked = check_rephrase(q.get("stem", ""), candidate, q["options"], q["answer_index"])
+        rephrased_stem = checked.stem
+        if not checked.ok:
+            rephrase_reason, rephrase_code = checked.reason, checked.code
+            get_logger().warning(
+                "REPHRASE_REJECTED | %s | id=%s | code=%s | %s",
+                competency, q["id"], checked.code, checked.reason,
+            )
+            trace_llm_response(
+                "cat.llm.rephrase.rejected",
+                input_data={"item_id": q["id"], "original_stem": q.get("stem", ""),
+                            "proposed_stem": candidate},
+                output_data={"reason": checked.reason, "code": checked.code},
+                metadata={"competency": competency, "phase": "rephrase_guard"},
+            )
+    else:
         rephrased_stem = q.get("stem", "")
+
     info = selection_score(theta_hat, q_count, q, posterior)
     fi = fisher_info(theta_hat, q)
+
+    # The criterion is a function of q_count (KL below 3, else Fisher) — the engine's
+    # procedure decides it, not the model. Taking data["criterion_used"] on trust let a
+    # wrong claim reach the log and UI: a KL score (a sum over the theta grid, order
+    # 1-10) would get printed as "Fisher I = 8.0", a value 3PL Fisher cannot reach.
+    # Report what actually ranked the shortlist, and flag disagreement as a prompt bug.
+    llm_criterion = str(data.get("criterion_used", "")).strip()
+    if llm_criterion and llm_criterion.lower() != criterion.lower():
+        get_logger().warning(
+            "LLM_SELECT | criterion mismatch: engine used %s, LLM reported %s (using engine's)",
+            criterion, llm_criterion,
+        )
 
     steps = data.get("procedure_steps") or []
     if isinstance(steps, str):
@@ -235,7 +280,7 @@ def llm_select(
     result = SelectionResult(
         item=q,
         info_score=float(info),
-        criterion=str(data.get("criterion_used", criterion)),
+        criterion=criterion,
         fisher_i=float(fi),
         llm_used=True,
         procedure_steps=steps,
@@ -243,6 +288,8 @@ def llm_select(
         rule_applied=str(data.get("rule_applied", "")),
         shortlist_ids=[s["id"] for s in shortlist],
         rephrased_stem=rephrased_stem,
+        rephrase_rejected_reason=rephrase_reason,
+        rephrase_rejected_code=rephrase_code,
     )
 
     get_logger().info(
@@ -269,6 +316,7 @@ def select_next_item(
     certainty_pct: float | None = None,
     *,
     use_llm: bool = True,
+    allow_rephrase: bool = True,
 ) -> SelectionResult | None:
     """Select next item — LLM procedural when configured, else deterministic."""
     history = history or []
@@ -284,6 +332,7 @@ def select_next_item(
                 history,
                 posterior,
                 certainty_pct,
+                allow_rephrase=allow_rephrase,
             )
             if result is not None:
                 return result

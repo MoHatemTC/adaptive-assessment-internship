@@ -40,6 +40,40 @@ MCQ **grading stays deterministic** (exact index match). The **LLM selects the n
 5. LLM also returns `adaptation_note` explaining why the item refines the estimate
 6. LLM may rephrase the selected stem based on competency level and certainty, while preserving the original answer/options
 
+The LLM never controls the criterion or the maths. `q_count` decides KL vs Fisher, the
+engine ranks the shortlist, and code grades and updates θ̂. The model chooses **which of
+5 pre-scored candidates** to administer, and how to word it.
+
+### Adaptive rephrasing and its guardrail
+
+Rephrasing is in tension with IRT: `b` is calibrated for specific wording, so a rewritten
+stem is not strictly the item the parameters describe. It is on by default here because
+adapting register is this branch's distinguishing feature, but every rewrite is treated as
+untrusted output and validated by `rephrase_guard.py` before display:
+
+| Rejected when | Why it matters |
+|---|---|
+| It restates the correct option's unique wording (measured against how much it echoes the distractors) | Turns a 4-way discrimination into a giveaway |
+| It drops an identifier/literal/number from the stem (`sorted(nums)` → "the sorting function") | The item now tests something else |
+| It is <0.5× or >2× the original length | Not a rephrase |
+
+A rejected rewrite falls back to the original calibrated stem and is surfaced in the UI and
+`assessment.log` (`REPHRASE_REJECTED`) rather than silently swallowed. The worst case is a
+plainer question, never a leaked key. The guard cannot prove difficulty is preserved — for a
+psychometrically clean run, untick **Adaptively rephrase question stems** on the setup screen.
+
+### Tests
+
+```bash
+python test_rephrase_guard.py   # guard accepts faithful rewrites, rejects leaks/drift
+python test_approach.py         # drives the real CAT loop with a stubbed LLM, no API key
+```
+
+`test_approach.py` asserts the properties that must hold regardless of what the model does:
+the LLM cannot administer an item outside the engine's shortlist, a malformed or hostile
+response degrades to the coded CAT path, stopping rules are enforced by code, and θ̂ still
+recovers true ability.
+
 ### Configure
 
 ```bash
