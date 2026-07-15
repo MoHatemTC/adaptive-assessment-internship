@@ -305,11 +305,21 @@ def grade_and_advance(
             "se": se,
             "certainty_pct": certainty,
             "fisher_i": state.get("current_fisher_i", 0.0),
-            "math_actor": "llm",
+            "math_actor": "coded" if math_result.fallback_used else "llm",
             "math_fallback": math_result.fallback_used,
             "math_note": math_result.math_note,
+            "coded_theta": math_result.coded_theta,
+            "theta_deviation": math_result.theta_deviation,
+            "se_deviation": math_result.se_deviation,
+            "invariant_violation": math_result.invariant_violation,
         }
     )
+    # Session-level tally: whether the LLM can do IRT maths is the question this branch
+    # exists to answer, and it is only visible in aggregate.
+    if not math_result.fallback_used and math_result.theta_deviation is not None:
+        st.session_state.setdefault("math_devs", []).append(math_result.theta_deviation)
+    if math_result.invariant_violation:
+        st.session_state["math_violations"] = st.session_state.get("math_violations", 0) + 1
 
     stop, bank_exhausted = should_stop(state, pool)
     log_update(
@@ -416,6 +426,40 @@ def render_certainty_gauge(certainty_pct: float, se: float, label_prefix: str = 
     st.progress(certainty_pct / 100.0, text=f"Confidence in θ̂ estimate — {label}")
 
 
+def render_math_audit(state: dict) -> None:
+    """LLM maths vs the coded EAP — the measurement this branch exists to produce.
+
+    The LLM is never shown the coded result, so this is a real comparison rather than a
+    check that it copied a field. Shown live because a maths engine that drifts is not
+    visible in the ability estimate alone: θ̂ still looks like a plausible number.
+    """
+    devs = st.session_state.get("math_devs", [])
+    violations = st.session_state.get("math_violations", 0)
+    if not devs and not violations:
+        return
+
+    st.sidebar.markdown("**LLM math audit** (vs coded EAP)")
+    c1, c2 = st.sidebar.columns(2)
+    if devs:
+        mean_dev = sum(devs) / len(devs)
+        c1.metric(
+            "mean |Δθ̂|", f"{mean_dev:.3f}",
+            help=("Average gap between the LLM's θ̂ and the coded EAP over this session. "
+                  "Some drift is expected: the prompt specifies a Newton update, which "
+                  "approximates the grid EAP rather than reproducing it."),
+        )
+        c2.metric(
+            "worst |Δθ̂|", f"{max(devs):.3f}",
+            delta="suspect" if max(devs) > 0.35 else "in tolerance",
+            delta_color="inverse" if max(devs) > 0.35 else "normal",
+        )
+    if violations:
+        st.sidebar.error(
+            f"{violations} invariant violation(s): the LLM moved θ̂ the wrong way for a "
+            "graded response. Those updates were rejected and the coded EAP used instead."
+        )
+
+
 def render_sidebar_live(state: dict, title: str) -> None:
     st.sidebar.subheader(title)
     certainty = state.get(
@@ -426,6 +470,7 @@ def render_sidebar_live(state: dict, title: str) -> None:
     c1, c2 = st.sidebar.columns(2)
     c1.metric("θ̂ (ability)", f"{state['theta_hat']:.3f}")
     c2.metric("SE (uncertainty)", f"{state['se']:.3f}")
+    render_math_audit(state)
     st.sidebar.caption(
         f"Convergence target: SE ≤ {SE_TARGET} · "
         f"selection: engine only (KL→Fisher) · math: {'OpenAI' if llm_enabled() else 'coded fallback'}"

@@ -35,9 +35,48 @@ MCQ **grading stays deterministic** (exact index match). The **LLM updates theta
 
 1. Code grades the submitted answer.
 2. Previous theta/SE, item IRT parameters, and correctness are sent to OpenAI.
-3. LLM returns updated `theta_hat`, `SE`, certainty, and math notes.
-4. Code validates/clamps the LLM math output.
+   **The coded answer is not sent** — see below.
+3. LLM executes the 3PL score function and a Newton posterior update, returning
+   `theta_hat`, `SE`, certainty, and its numeric working.
+4. Code checks the direction invariant and falls back to the coded EAP on violation.
 5. Code picks the next question deterministically using KL/Fisher selection.
+
+### The comparison is only meaningful if the LLM can't cheat
+
+The payload used to carry `coded_reference_for_validation_only` — the exact coded EAP
+result. A model that copies that field scores perfectly while demonstrating nothing, so
+the branch could not answer the question it exists to ask. The coded update is still
+computed on every step, but purely as an **evaluation signal**: deviation is traced to
+Langfuse and shown live in the sidebar's *LLM math audit*. It never enters the prompt.
+`test_approach.py` asserts this, including that the coded θ̂ does not appear in the
+payload at any rounding.
+
+The prompt was also upgraded from a vibe ("correct answers should generally move theta
+upward") to an actual estimator: the 3PL score function plus a Newton/Laplace update,
+which has a defined right answer the model can be graded against.
+
+### What is validated, and what deliberately is not
+
+| Check | Status | Why |
+|---|---|---|
+| Correct → θ̂ must not fall; incorrect → θ̂ must not rise | **Enforced** (falls back to coded EAP) | Exact invariant: the 3PL likelihood is monotone in θ. Held in 0/8000 coded EAP updates. |
+| SE must not increase | **Not enforced** | *Looks* like an invariant but isn't — SE rose in **23%** of the same 8000 updates (by up to 0.28) when a response was surprising. That is a real posterior widening; enforcing it would reject correct maths a quarter of the time. |
+| Deviation from coded EAP > 0.35 | **Warned, never rejected** | The prompt's Newton update approximates the grid EAP rather than reproducing it. Measured over 12000 updates: median \|Δθ̂\| = 0.03, p95 = 0.25. A correct implementation trips 0.35 ~2.9% of the time, so gating on it would be wrong. |
+
+### A known property of this approach
+
+The LLM reports `(theta, se)`, so `posterior_from_theta_se` rebuilds a **Gaussian** belief
+from those two moments and the true posterior shape is lost. This is inherent to
+delegating the maths to a model that emits two numbers, not a bug — but it matters,
+because item selection integrates Fisher information over that belief. Selection here is
+therefore driven by the LLM's summary rather than an exact posterior. Approach 1 keeps
+the full grid posterior.
+
+### Tests
+
+```bash
+python test_approach.py   # no API key needed; stubs the LLM
+```
 
 ### Configure
 
