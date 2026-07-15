@@ -102,15 +102,26 @@ def main() -> int:
     expect(res.fallback_used and abs(res.theta_hat - coded_theta) < 1e-9,
            "LLM exception falls back to coded EAP")
 
-    stub({"garbage": "yes"})
-    res = llm_math_update(fresh_state(pool), item, True, use_llm=True)
-    expect(abs(res.theta_hat - coded_theta) < 1e-9,
-           "missing theta_hat falls back to the coded value")
-
-    stub({"theta_hat": "not-a-number", "se": None})
-    res = llm_math_update(fresh_state(pool), item, True, use_llm=True)
-    expect(abs(res.theta_hat - coded_theta) < 1e-9 and 0.2 <= res.se <= 2.5,
-           "non-numeric fields fall back and stay in range")
+    # A malformed response must fall back AND be *counted* as a fallback. Checking only
+    # theta_hat is what let the accounting bug through: _num() defaulted to coded_theta
+    # while fallback_used stayed False, so every garbage response was booked as a
+    # successful LLM step with theta_deviation=0.0 -- biasing this branch's headline
+    # mean |Δθ̂| optimistically with its own failures. The value being right is not
+    # enough; the books have to be right too.
+    for label, payload in [
+        ("missing theta_hat", {"garbage": "yes"}),
+        ("non-numeric theta_hat", {"theta_hat": "not-a-number", "se": None}),
+        ("empty response", {}),
+    ]:
+        stub(payload)
+        res = llm_math_update(fresh_state(pool), item, True, use_llm=True)
+        expect(
+            abs(res.theta_hat - coded_theta) < 1e-9
+            and res.fallback_used
+            and 0.2 <= res.se <= 2.5,
+            f"{label} falls back AND is counted as a fallback",
+            f"theta={res.theta_hat:.4f} fallback_used={res.fallback_used} se={res.se:.3f}",
+        )
 
     # --- use_llm=False is pure coded ------------------------------------------
     res = llm_math_update(fresh_state(pool), item, True, use_llm=False)
@@ -121,6 +132,37 @@ def main() -> int:
     post = posterior_from_theta_se(1.0, 0.5)
     expect(abs(post.sum() - 1.0) < 1e-9 and (post >= 0).all(),
            "reconstructed posterior is normalised and non-negative")
+
+    # --- SE is code's, not the model's ----------------------------------------
+    # The LLM's Newton SE cannot widen (info >= 0), so a stopping rule fed by it
+    # declared convergence 4x too often. Code derives SE from the posterior instead.
+    st_ = fresh_state(pool)
+    _p, coded_th, coded_se_ = eap_update(st_["posterior"], item, True)
+    stub({"theta_hat": coded_th, "se": 0.21, "math_note": "absurdly confident"})
+    res = llm_math_update(st_, item, True, use_llm=True)
+    expect(abs(res.se - 0.21) > 1e-6,
+           "the LLM's reported se does not become the assessment's se",
+           f"llm said 0.21, assessment used {res.se:.3f}")
+    # ...and when the LLM lands exactly on the posterior mean, the code-derived SE
+    # reduces to the exact EAP SE. That equivalence is the point of measuring dispersion
+    # about θ̂ rather than inventing a separate scale.
+    expect(abs(res.se - coded_se_) < 1e-9,
+           "a θ̂ on the posterior mean reproduces the EAP SE exactly",
+           f"se {res.se:.6f} vs coded EAP {coded_se_:.6f}")
+    expect(res.se_llm is not None and abs(res.se_llm - 0.21) < 1e-9,
+           "the LLM's se is still recorded for comparison", f"se_llm={res.se_llm}")
+    expect(res.posterior is not None and abs(res.posterior.sum() - 1.0) < 1e-9,
+           "the exact grid posterior is carried, not rebuilt from two moments")
+
+    # Measured about the LLM's theta_hat, so a wrong estimate reports as uncertain
+    # rather than confidently wrong: sqrt(Var + (mean - theta_hat)^2).
+    st_ = fresh_state(pool)
+    _p2, coded_th2, coded_se2 = eap_update(st_["posterior"], item, True)
+    stub({"theta_hat": coded_th2 + 1.0, "se": 0.3})
+    res_off = llm_math_update(st_, item, True, use_llm=True)
+    expect(res_off.se > coded_se2,
+           "an off-target θ̂ widens the SE instead of hiding in it",
+           f"θ̂ off by 1.0 -> se {res_off.se:.3f} vs coded {coded_se2:.3f}")
 
     # --- a full session with a competent LLM terminates and recovers ability ---
     # Model executes the documented Newton update correctly.

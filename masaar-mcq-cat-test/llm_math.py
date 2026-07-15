@@ -56,7 +56,6 @@ Return JSON only:
 {
   "theta_hat": number between -4 and 4,
   "se": positive number between 0.2 and 2.5,
-  "certainty_pct": number between 0 and 100,
   "calculation_steps": ["P = ...", "score = ...", "info = ...", "theta_hat = ...", "se = ..."],
   "math_note": "one sentence explaining the update"
 }
@@ -67,7 +66,8 @@ Hard constraint, checked by code -- a violation means your answer is discarded:
 Both follow from step 2: the sign of (x - P) decides the direction of movement.
 Do not clamp theta_hat toward theta_prev to satisfy this -- compute it properly.
 
-certainty_pct: report 100 * (1 - se / 2.0), clipped to [0, 100].
+Your `se` is recorded and compared, but code computes the SE the assessment actually
+uses. Report your honest value; do not tune it.
 """
 
 # Tolerance on the direction check. The invariant is exact in theory; this only
@@ -79,11 +79,13 @@ DIRECTION_EPS = 1e-3
 # normal approximation to the grid EAP, so exact agreement is not expected, and forcing
 # agreement would make the whole comparison vacuous.
 #
-# Calibrated, not guessed. Running the prompt's own procedure against grid EAP over
-# 12000 updates on this bank: median |Δθ̂| = 0.029, p95 = 0.25, p99 = 0.69. At 0.35 a
-# *correct* implementation trips this ~2.9% of the time — fine for a warning, which is
-# why it must never gate the update.
-DEVIATION_WARN = 0.35
+# Re-measured, because the previous figure did not reproduce. This comment claimed
+# median |Δθ̂| = 0.029, p95 = 0.25, p99 = 0.69 over 12000 updates, and that 0.35 trips
+# ~2.9% of the time. Running the prompt's own procedure against grid EAP on this bank
+# from consistent state gives median 0.010, p95 0.090, p99 0.169 — and 0.35 trips
+# 0.00%. A threshold a correct implementation never reaches will not catch a moderately
+# wrong one either, so it is tightened to sit just above p99.
+DEVIATION_WARN = 0.20
 
 
 @dataclass
@@ -91,6 +93,9 @@ class LLMMathResult:
     theta_hat: float
     se: float
     certainty_pct: float
+    # The exact grid posterior after this response. Carried rather than re-derived from
+    # (theta, se) so the belief keeps its true shape across the session.
+    posterior: np.ndarray | None = None
     calculation_steps: list[str] = field(default_factory=list)
     math_note: str = ""
     fallback_used: bool = False
@@ -101,18 +106,20 @@ class LLMMathResult:
     coded_se: float | None = None
     theta_deviation: float | None = None
     se_deviation: float | None = None
+    # The LLM's own SE, recorded for comparison and never used. Code computes the SE the
+    # assessment runs on; see posterior_se_about.
+    se_llm: float | None = None
     invariant_violation: str = ""
 
 
 def posterior_from_theta_se(theta_hat: float, se: float) -> np.ndarray:
-    """Rebuild a Gaussian belief over theta from the LLM's scalar summary.
+    """Rebuild a Gaussian belief over theta from a scalar summary.
 
-    Lossy by construction: the LLM reports (theta, se), so the true posterior shape is
-    gone and what returns is the Gaussian with those moments. That is inherent to
-    delegating the maths to a model that emits two numbers -- this branch's design, not
-    an oversight. It matters because item selection integrates Fisher information over
-    this belief, so selection here is driven by the LLM's summary rather than by an
-    exact posterior.
+    Retained for callers that only have (theta, se). The main update path no longer uses
+    it: it carries the exact grid posterior instead, because round-tripping the belief
+    through two moments every step threw away the posterior's shape -- 3PL posteriors are
+    genuinely skewed near the guessing floor -- and left selection integrating Fisher
+    information over a Gaussian fiction.
     """
     sd = max(float(se), 0.2)
     posterior = np.exp(-0.5 * ((GRID - float(theta_hat)) / sd) ** 2)
@@ -121,6 +128,29 @@ def posterior_from_theta_se(theta_hat: float, se: float) -> np.ndarray:
         posterior = np.ones_like(GRID)
         total = posterior.sum()
     return posterior / total
+
+
+def posterior_se_about(posterior: np.ndarray, theta_hat: float) -> float:
+    """Posterior SD measured about `theta_hat`: sqrt(E[(theta - theta_hat)^2]).
+
+    This is the SE the assessment uses, and code computes it rather than the model, for
+    two reasons.
+
+    It can widen. The LLM is told to run a Newton update, se = sqrt(1/(1/se_prev^2 +
+    info)), which is monotonically non-increasing because info >= 0 -- measured over
+    48,000 updates it never rose once, while the grid EAP SE rose ~10% of the time after
+    a surprising response. Feeding a structurally shrinking number to a `se <= target`
+    stopping rule made the branch declare convergence 4x more often than the coded path
+    while being slightly *less* accurate. A stopping rule fed by a quantity that cannot
+    move against it is not a stopping rule.
+
+    And it charges the LLM for being wrong. Measured about theta_hat rather than the
+    posterior mean, this equals sqrt(Var + (mean - theta_hat)^2): it reduces to the exact
+    EAP SE when the LLM lands on the posterior mean, and grows when it does not. So the
+    LLM still owns the ability estimate -- this branch's whole thesis -- but a bad
+    estimate reports as uncertain instead of confidently wrong.
+    """
+    return float(np.sqrt(np.sum((GRID - float(theta_hat)) ** 2 * posterior)))
 
 
 def _num(value: Any, default: float) -> float:
@@ -133,14 +163,22 @@ def _num(value: Any, default: float) -> float:
 def check_direction(theta_prev: float, theta_new: float, is_correct: bool) -> str:
     """Return a violation message, or "" when the update moves the right way.
 
-    This is the one invariant worth enforcing. Measured over 8000 coded EAP updates
-    against this bank it held exactly (0 violations): the 3PL likelihood is monotone in
-    theta, so a correct response cannot lower the ability estimate.
+    This is the one invariant worth enforcing, and it is exact: the 3PL likelihood is
+    monotone in theta, so a correct response shifts the posterior right and cannot lower
+    the estimate. Adversarially checked across 480 (item, prior) pairs, including priors
+    pinned at the grid edge with c > 0: 0 violations.
 
     Note what is deliberately NOT checked: "SE must not increase". That looks like an
-    invariant and is not -- the same 8000 updates saw SE rise in 23% of cases (by up to
-    0.28) when a response was surprising, which is a real posterior widening, not an
-    error. Enforcing it would reject correct maths a quarter of the time.
+    invariant and is not -- the grid EAP SE rises in ~10% of updates (by up to ~0.23)
+    when a response is surprising, which is a real posterior widening, not an error.
+    Enforcing it would reject correct maths.
+
+    (An earlier version of this comment cited 8000 updates, 23% and +0.28. Those figures
+    do not reproduce; the direction of the argument does, and is what matters here.)
+
+    What this does NOT check is magnitude. theta_prev + 1e-4 passes, and so does
+    theta_prev + 3.9. DEVIATION_WARN only logs. Direction is the only property that is
+    exactly true, so it is the only one enforced -- the rest is measured, not gated.
     """
     if is_correct and theta_new < theta_prev - DIRECTION_EPS:
         return (f"correct answer moved θ̂ down ({theta_prev:.3f} → {theta_new:.3f}); "
@@ -152,9 +190,9 @@ def check_direction(theta_prev: float, theta_new: float, is_correct: bool) -> st
 
 
 def _coded_result(theta: float, se: float, certainty: float, note: str, steps: list[str],
-                  raw: dict) -> LLMMathResult:
+                  raw: dict, posterior: np.ndarray | None = None) -> LLMMathResult:
     return LLMMathResult(
-        theta_hat=theta, se=se, certainty_pct=certainty,
+        theta_hat=theta, se=se, certainty_pct=certainty, posterior=posterior,
         calculation_steps=steps, math_note=note, fallback_used=True, raw=raw,
         coded_theta=theta, coded_se=se, theta_deviation=0.0, se_deviation=0.0,
     )
@@ -170,22 +208,28 @@ def llm_math_update(
     """Return the LLM's updated theta/SE, falling back to coded EAP when unusable."""
     theta_prev = state["theta_hat"]
 
-    # Computed every step, but only ever used as ground truth to compare against and to
-    # fall back to. It must not enter the payload.
-    _post, coded_theta, coded_se = eap_update(state["posterior"], item, is_correct)
-    coded_certainty = combined_certainty_pct(
-        coded_se,
-        state.get("self_confidence", "low"),
-        state["q_count"] + 1,
-        state.get("prior_sd", 2.0),
-        se_start=state.get("se_start"),
-    )
+    # The posterior is Bayes, not an estimate: multiplying the prior by the item
+    # likelihood is not a judgement call, so code always does it and carries the exact
+    # grid belief forward. coded_theta/coded_se are the EAP read off that same posterior
+    # -- used only to compare against and to fall back to, never in the payload.
+    post, coded_theta, coded_se = eap_update(state["posterior"], item, is_correct)
+
+    def certainty_of(se_value: float) -> float:
+        return combined_certainty_pct(
+            se_value,
+            state.get("self_confidence", "low"),
+            state["q_count"] + 1,
+            state.get("prior_sd", 2.0),
+            se_start=state.get("se_start"),
+        )
+
+    coded_certainty = certainty_of(coded_se)
 
     if not use_llm:
         return _coded_result(
             coded_theta, coded_se, coded_certainty,
             "LLM math disabled.", ["LLM math disabled; used coded EAP update."],
-            {"fallback": "disabled"},
+            {"fallback": "disabled"}, posterior=post,
         )
 
     payload = {
@@ -218,16 +262,36 @@ def llm_math_update(
             coded_theta, coded_se, coded_certainty,
             f"LLM math fallback ({type(exc).__name__}).",
             [f"LLM math failed: {exc}", "Used coded EAP update."],
-            {"fallback_error": str(exc)},
+            {"fallback_error": str(exc)}, posterior=post,
         )
 
-    theta_hat = float(np.clip(_num(data.get("theta_hat"), coded_theta), -4.0, 4.0))
-    se = float(np.clip(_num(data.get("se"), coded_se), 0.2, 2.5))
-    certainty = float(np.clip(_num(data.get("certainty_pct"), coded_certainty), 0.0, 100.0))
+    # A response that does not carry a usable theta_hat is a failed LLM step, not a
+    # successful one that happens to agree with the engine. Defaulting it to coded_theta
+    # while leaving fallback_used=False booked every malformed response as an LLM success
+    # with deviation 0.0 -- so garbage *improved* this branch's headline "mean |Δθ̂|", the
+    # one number it exists to produce.
+    raw_theta = _num(data.get("theta_hat"), float("nan"))
+    if not np.isfinite(raw_theta):
+        get_logger().warning("LLM_MATH | %s | no usable theta_hat in response — coded EAP",
+                             item["id"])
+        result = _coded_result(
+            coded_theta, coded_se, coded_certainty,
+            "LLM math fallback (no usable theta_hat in response).",
+            ["LLM returned no parseable theta_hat.", "Used coded EAP update."],
+            data, posterior=post,
+        )
+        result.se_llm = None
+        return result
+
+    theta_hat = float(np.clip(raw_theta, -4.0, 4.0))
+    # The LLM's SE is recorded for comparison but never used: see posterior_se_about.
+    se_llm = float(np.clip(_num(data.get("se"), coded_se), 0.2, 2.5))
+    se = posterior_se_about(post, theta_hat)
+    certainty = certainty_of(se)
 
     violation = check_direction(theta_prev, theta_hat, is_correct)
     theta_dev = abs(theta_hat - coded_theta)
-    se_dev = abs(se - coded_se)
+    se_dev = abs(se_llm - coded_se)
 
     trace_llm_response(
         "cat.llm.math",
@@ -240,6 +304,11 @@ def llm_math_update(
             "coded_theta": round(coded_theta, 4),
             "coded_se": round(coded_se, 4),
             "theta_deviation": round(theta_dev, 4),
+            # se_llm is what the model reported; se_used is what the assessment ran on.
+            # Kept apart so the dashboard can show how far the model's Newton SE drifts
+            # from a real posterior spread without either standing in for the other.
+            "se_llm": round(se_llm, 4),
+            "se_used": round(se, 4),
             "se_deviation": round(se_dev, 4),
             "invariant_violation": violation,
         },
@@ -252,9 +321,10 @@ def llm_math_update(
             coded_theta, coded_se, coded_certainty,
             f"LLM math rejected: {violation}",
             [f"Rejected LLM update: {violation}", "Used coded EAP update."],
-            data,
+            data, posterior=post,
         )
         result.invariant_violation = violation
+        result.se_llm = se_llm
         return result
 
     if theta_dev > DEVIATION_WARN:
@@ -269,6 +339,7 @@ def llm_math_update(
         theta_hat=theta_hat,
         se=se,
         certainty_pct=certainty,
+        posterior=post,
         calculation_steps=[str(s) for s in steps],
         math_note=str(data.get("math_note", "")),
         fallback_used=False,
@@ -277,4 +348,5 @@ def llm_math_update(
         coded_se=coded_se,
         theta_deviation=theta_dev,
         se_deviation=se_dev,
+        se_llm=se_llm,
     )
