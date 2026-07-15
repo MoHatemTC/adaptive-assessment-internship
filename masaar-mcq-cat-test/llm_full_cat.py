@@ -138,14 +138,43 @@ REPHRASING RULES:
 DIRECTION_EPS = 1e-3
 SHORTLIST_N = 5
 
-# |Δθ̂| against the coded EAP above which the LLM's update is flagged suspect in the UI.
-# Warned, never rejected: the prompt specifies a Newton update, which approximates the
-# grid EAP rather than reproducing it, so demanding agreement would make the comparison
-# vacuous. The UI hardcoded 0.35 and cited "trips ~2.9% of the time" — measured on this
-# bank from consistent state, |Δθ̂| runs median 0.010 / p95 0.090 / p99 0.169 and 0.35
-# trips 0.00%. A threshold a correct implementation never reaches cannot flag a wrong
-# one, so it sits just above p99.
-DEVIATION_WARN = 0.20
+# |Δθ̂| against the coded EAP above which the LLM's update is flagged suspect in the UI,
+# and above which it is rejected outright.
+#
+# THESE NUMBERS ARE THIS BRANCH'S. Approach 2 runs the same comparison with the same names
+# and lands on 0.30/0.50 from a distribution whose correct-maths max is 0.347. Ported here
+# unmeasured, that reasoning is simply false: on this controller a *correct* Newton
+# implementation reaches 1.904. Measured on both competency pools, so it is the branch and
+# not the bank.
+#
+# Session conditions: 160 candidates/pool through the real controller, θ in [-2,+2],
+# 12 steps/session, correct Newton vs a model that only nudges theta_prev by 1e-4:
+#
+#   correct   mean 0.119   p95 0.312   p99 0.445   max 1.904
+#   lazy      mean 0.419   p95 1.009   p99 1.465   max 2.096
+#
+#   threshold   fires on correct   fires on lazy
+#      0.35            2.8%            50.2%
+#      0.45            1.0%            40.8%     <- WARN
+#      0.50            0.7%            33.0%     <- REJECT
+#      1.00            0.4%             5.1%
+#
+# THE DISTRIBUTIONS OVERLAP AND NO PER-STEP THRESHOLD SEPARATES THEM. Approach 2's tidy
+# "0% of correct maths rejected" is not available here, and pretending otherwise by reusing
+# its constant would be a claim the data refuses. ~0.5% of correct steps exceed 1.0 no
+# matter where the gate sits: this branch lets the model own θ̂ *and* pick the item at its
+# own θ̂, so a drifted estimate selects items suited to the drift, and the drift feeds
+# itself. That compounding, not arithmetic error, is the tail.
+#
+# 0.50 is chosen knowing it trips ~9% of correct sessions, because on this branch a false
+# rejection is close to free: it falls back to the coded EAP, and the coded EAP is the
+# *better* estimator anyway (engine RMSE ~0.648 vs this branch's ~0.66 with the maths
+# done correctly). The gate cannot cost accuracy it is not protecting. What it buys is
+# 100% of degenerate sessions caught. The honest reading is the session mean -- 0.12 vs
+# 0.42 -- which is what the audit panel leads with; the per-step gate is a floor under the
+# damage, not proof of anything about a single step.
+DEVIATION_WARN = 0.45
+DEVIATION_REJECT = 0.50
 
 
 @dataclass
@@ -168,7 +197,13 @@ class FullCATResult:
     coded_theta: float | None = None
     coded_se: float | None = None
     theta_deviation: float | None = None
+    # A direction breach is a *proof* the update is wrong — the 3PL likelihood is monotone
+    # in theta, so a correct answer cannot lower it. A magnitude rejection is a judgement
+    # that the procedure is not being executed. Counting both under one label would report
+    # a number that is not what its label says.
     invariant_violation: str = ""
+    deviation_rejected: bool = False
+    se_llm: float | None = None
     llm_wanted_stop: bool = False
     stop_disagreement: bool = False
     stop_reason: str = ""
@@ -250,11 +285,30 @@ def check_direction(theta_prev: float, theta_new: float, is_correct: bool) -> st
     return ""
 
 
+@dataclass
+class _MathOut:
+    """Phase 1's result. A dataclass rather than a tuple: with the magnitude gate this
+    carries eight values, and positional unpacking that long is a silent-swap waiting to
+    happen."""
+    theta_hat: float
+    se: float
+    certainty: float
+    raw: dict[str, Any] = field(default_factory=dict)
+    violation: str = ""
+    deviation_rejected: bool = False
+    fallback_used: bool = False
+    se_llm: float | None = None
+    # |model's θ̂ − coded EAP|, kept even when the update is rejected and theta_hat below
+    # is the coded EAP's. Deriving it from theta_hat instead would record 0.0 for exactly
+    # the steps where the model failed worst. None means no usable θ̂ came back at all.
+    theta_deviation: float | None = None
+
+
 def _llm_math(state: dict, item: dict, is_correct: bool, competency: str,
               coded_theta: float, coded_se: float, coded_certainty: float,
               post: np.ndarray, certainty_of,
-              ) -> tuple[float, float, float, dict, str, bool]:
-    """Phase 1. Returns (theta, se, certainty, raw, violation, used_fallback).
+              ) -> _MathOut:
+    """Phase 1: the LLM's ability update, or the coded EAP when it cannot be trusted.
 
     The LLM supplies theta_hat. `post` is the exact grid posterior code already computed
     (Bayes, not a judgement call), and se/certainty are derived from it here rather than
@@ -286,7 +340,8 @@ def _llm_math(state: dict, item: dict, is_correct: bool, competency: str,
                            output_data={"error": f"{type(exc).__name__}: {exc}"},
                            metadata={"competency": competency, "phase": "llm_full_math"})
         get_logger().warning("LLM_FULL_MATH | error=%s — coded EAP fallback", exc)
-        return coded_theta, coded_se, coded_certainty, {"fallback_error": str(exc)}, "", True
+        return _MathOut(coded_theta, coded_se, coded_certainty,
+                        {"fallback_error": str(exc)}, fallback_used=True)
 
     # A response with no usable theta_hat is a failed step, not one that happens to agree
     # with the engine. Defaulting it to coded_theta while reporting fallback_used=False
@@ -295,7 +350,7 @@ def _llm_math(state: dict, item: dict, is_correct: bool, competency: str,
     if not np.isfinite(raw_theta):
         get_logger().warning("LLM_FULL_MATH | %s | no usable theta_hat — coded EAP fallback",
                              item["id"])
-        return coded_theta, coded_se, coded_certainty, data, "", True
+        return _MathOut(coded_theta, coded_se, coded_certainty, data, fallback_used=True)
 
     theta_hat = float(np.clip(raw_theta, -4.0, 4.0))
     # Recorded for comparison, never used: the stopping rule must not run on a number
@@ -304,23 +359,33 @@ def _llm_math(state: dict, item: dict, is_correct: bool, competency: str,
     se = posterior_se_about(post, theta_hat)
     certainty = certainty_of(se)
     violation = check_direction(theta_prev, theta_hat, is_correct)
+    theta_dev = abs(theta_hat - coded_theta)
+    deviation_rejected = not violation and theta_dev > DEVIATION_REJECT
 
     trace_llm_response(
         "cat.llm.full.math", input_data=payload, output_data=data,
         metadata={"competency": competency, "phase": "llm_full_math",
                   "coded_theta": round(coded_theta, 4), "coded_se": round(coded_se, 4),
-                  "theta_deviation": round(abs(theta_hat - coded_theta), 4),
+                  "theta_deviation": round(theta_dev, 4),
                   # se_llm is the model's claim; se_used drives the stopping rule.
                   "se_llm": round(se_llm, 4), "se_used": round(se, 4),
-                  "invariant_violation": violation},
+                  "invariant_violation": violation,
+                  "deviation_rejected": deviation_rejected},
     )
 
-    if violation:
-        get_logger().warning("LLM_FULL_MATH | %s | INVARIANT VIOLATION: %s — using coded EAP",
-                             item["id"], violation)
-        return coded_theta, coded_se, coded_certainty, data, violation, True
+    if violation or deviation_rejected:
+        get_logger().warning(
+            "LLM_FULL_MATH | %s | REJECTED (%s): %s — using coded EAP", item["id"],
+            "direction" if violation else "magnitude",
+            violation or f"θ̂ deviates {theta_dev:.2f} from the coded EAP on the same "
+                         f"evidence, past the {DEVIATION_REJECT} gate that a correct "
+                         f"Newton update never reaches")
+        return _MathOut(coded_theta, coded_se, coded_certainty, data,
+                        violation=violation, deviation_rejected=deviation_rejected,
+                        fallback_used=True, se_llm=se_llm, theta_deviation=theta_dev)
 
-    return theta_hat, se, certainty, data, "", False
+    return _MathOut(theta_hat, se, certainty, data, se_llm=se_llm,
+                    theta_deviation=theta_dev)
 
 
 def _llm_select(pool: list[dict], served_ids: list[str], competency: str,
@@ -435,9 +500,7 @@ def llm_full_step(
         served_ids.append(answered_item["id"])
 
     # --- Phase 1: ability update ------------------------------------------------
-    violation = ""
-    math_raw: dict[str, Any] = {}
-    math_fallback = False
+    math = _MathOut(state["theta_hat"], state["se"], state.get("certainty_pct", 0.0))
     if answered_item is not None and is_correct is not None:
         # Bayes, not a judgement call: code always multiplies prior by likelihood and
         # carries the exact grid belief forward. The LLM supplies theta_hat only.
@@ -451,16 +514,16 @@ def llm_full_step(
 
         coded_certainty = certainty_of(coded_se)
         if use_llm:
-            theta_hat, se, certainty, math_raw, violation, math_fallback = _llm_math(
-                state, answered_item, is_correct, competency,
-                coded_theta, coded_se, coded_certainty, posterior, certainty_of)
+            math = _llm_math(state, answered_item, is_correct, competency,
+                             coded_theta, coded_se, coded_certainty, posterior, certainty_of)
         else:
-            theta_hat, se, certainty, math_fallback = coded_theta, coded_se, coded_certainty, True
+            math = _MathOut(coded_theta, coded_se, coded_certainty, fallback_used=True)
     else:
-        theta_hat, se = state["theta_hat"], state["se"]
-        coded_theta, coded_se = theta_hat, se
-        certainty = state.get("certainty_pct", 0.0)
+        coded_theta, coded_se = math.theta_hat, math.se
         posterior = state["posterior"]
+
+    theta_hat, se, certainty = math.theta_hat, math.se, math.certainty
+    math_raw = math.raw
 
     # --- Stopping: a rule, applied by code, on a quantity code computed ----------
     # `se` here is posterior_se_about, not the model's Newton se. Code owning the
@@ -485,10 +548,12 @@ def llm_full_step(
         posterior=posterior, stop_rule_reason=conv.reason, converged=conv.converged,
         calculation_steps=_steps(math_raw.get("calculation_steps")),
         selection_note=str(math_raw.get("math_note", "")),
-        fallback_used=math_fallback, raw=math_raw,
+        fallback_used=math.fallback_used, raw=math_raw,
         coded_theta=coded_theta, coded_se=coded_se,
-        theta_deviation=abs(theta_hat - coded_theta),
-        invariant_violation=violation,
+        theta_deviation=math.theta_deviation,
+        invariant_violation=math.violation,
+        deviation_rejected=math.deviation_rejected,
+        se_llm=math.se_llm,
         llm_wanted_stop=llm_wanted_stop,
         stop_disagreement=stop_disagreement,
         stop_reason=str(math_raw.get("stop_reason", "")),

@@ -40,7 +40,12 @@ from llm_client import (
     provider_label,
     test_connection,
 )
-from llm_full_cat import DEVIATION_WARN, llm_full_step, posterior_from_theta_se
+from llm_full_cat import (
+    DEVIATION_REJECT,
+    DEVIATION_WARN,
+    llm_full_step,
+    posterior_from_theta_se,
+)
 from selection_pipeline import SelectionResult
 from tracing import trace_final, trace_selection, trace_session_start, trace_update
 
@@ -403,6 +408,8 @@ def grade_and_advance(
             st.session_state.setdefault("math_devs", []).append(controller.theta_deviation)
     if controller.invariant_violation:
         st.session_state["math_violations"] = st.session_state.get("math_violations", 0) + 1
+    if controller.deviation_rejected:
+        st.session_state["math_dev_rejects"] = st.session_state.get("math_dev_rejects", 0) + 1
     if controller.stop_disagreement:
         st.session_state["stop_disagreements"] = st.session_state.get("stop_disagreements", 0) + 1
 
@@ -524,11 +531,12 @@ def render_controller_audit() -> None:
     """
     devs = st.session_state.get("math_devs", [])
     violations = st.session_state.get("math_violations", 0)
+    dev_rejects = st.session_state.get("math_dev_rejects", 0)
     disagreements = st.session_state.get("stop_disagreements", 0)
     rejects = st.session_state.get("rephrase_rejects", 0)
     steps = st.session_state.get("math_steps", 0)
     fallbacks = st.session_state.get("math_fallbacks", 0)
-    if not (devs or violations or disagreements or rejects or steps):
+    if not (devs or violations or dev_rejects or disagreements or rejects or steps):
         return
 
     st.sidebar.markdown("**LLM controller audit**")
@@ -551,10 +559,19 @@ def render_controller_audit() -> None:
 
     if devs:
         c1, c2 = st.sidebar.columns(2)
+        mean_dev = sum(devs) / len(devs)
+        # On this branch the per-step distributions overlap so badly that no single-step
+        # gate separates correct maths from none (correct maths reaches 1.9). The session
+        # mean is the only clean detector — 0.12 vs 0.42 — so it leads, and it carries both
+        # reference values rather than a bare number the reader cannot place.
         c1.metric(
-            "mean |Δθ̂|", f"{sum(devs) / len(devs):.3f}",
-            help=("Gap between the LLM's θ̂ and the coded EAP. Some drift is expected: the "
-                  "prompt specifies a Newton update, which approximates the grid EAP."),
+            "mean |Δθ̂|", f"{mean_dev:.3f}",
+            delta="correct ≈0.12" if mean_dev < 0.27 else "degenerate ≈0.42?",
+            delta_color="normal" if mean_dev < 0.27 else "inverse",
+            help=("Average gap between the LLM's θ̂ and the coded EAP this session. Drift "
+                  "is expected and compounds — the model owns θ̂ and picks the item at its "
+                  "own θ̂, so a drifted estimate selects for the drift. Measured on this "
+                  "branch: correct ≈0.12, a model faking the update ≈0.42."),
         )
         c2.metric(
             "worst |Δθ̂|", f"{max(devs):.3f}",
@@ -565,6 +582,13 @@ def render_controller_audit() -> None:
         st.sidebar.error(
             f"{violations} invariant violation(s): the LLM moved θ̂ the wrong way for a "
             "graded response. Rejected; coded EAP used instead."
+        )
+    if dev_rejects:
+        st.sidebar.warning(
+            f"{dev_rejects} update(s) rejected for deviating more than {DEVIATION_REJECT} "
+            "from the coded EAP; the coded EAP was used instead. On this branch that is a "
+            "damage floor, not a verdict — correct maths trips it in ~9% of sessions "
+            "because θ̂ drift compounds through selection. Read the mean above."
         )
     if disagreements:
         st.sidebar.info(

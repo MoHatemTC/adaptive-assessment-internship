@@ -24,7 +24,12 @@ import numpy as np
 
 import llm_full_cat
 from engine import MAX_QUESTIONS, SE_TARGET, eap_update, p_correct, prior_from_level
-from llm_full_cat import check_direction, llm_full_step, posterior_from_theta_se
+from llm_full_cat import (
+    DEVIATION_REJECT,
+    check_direction,
+    llm_full_step,
+    posterior_from_theta_se,
+)
 
 BANK = Path(__file__).parent / "enriched_bank_cat.json"
 failures: list[str] = []
@@ -177,6 +182,37 @@ def main() -> int:
            "wrong-direction update is rejected")
     expect(abs(res.theta_hat - ct) < 1e-9, "rejected update falls back to the coded EAP")
 
+    # --- magnitude gate --------------------------------------------------------
+    # Direction alone is not a check: theta_prev + 3.9 passes it, and so does
+    # theta_prev + 1e-4. A θ̂ further from the coded EAP than a correct Newton update ever
+    # lands is rejected, and counted as a magnitude failure rather than mislabelled an
+    # invariant violation — the two mean different things about the model.
+    st = fresh_state(theta=0.0)
+    _p3, ct3, _c3 = eap_update(st["posterior"], item, True)
+    stub(lambda p: {**newton(p), "theta_hat": ct3 + DEVIATION_REJECT + 0.3}, pick_top)
+    res_far = llm_full_step(st, pool, "Agentic AI & Orchestration",
+                            answered_item=item, is_correct=True, use_llm=True)
+    expect(res_far.fallback_used and res_far.deviation_rejected
+           and not res_far.invariant_violation,
+           "a θ̂ past DEVIATION_REJECT is rejected as a magnitude failure, not miscounted "
+           "as an invariant violation",
+           f"fallback={res_far.fallback_used} dev_rejected={res_far.deviation_rejected} "
+           f"invariant={res_far.invariant_violation!r}")
+    expect(abs(res_far.theta_hat - ct3) < 1e-9,
+           "a magnitude-rejected update falls back to the coded EAP")
+
+    # Inside the gate the update stands: the branch exists to let the model do the maths,
+    # and a gate that rejects normal Newton-vs-grid drift would make it a copy of the
+    # engine wearing an LLM's name.
+    st = fresh_state(theta=0.0)
+    _p4, ct4, _c4 = eap_update(st["posterior"], item, True)
+    stub(lambda p: {**newton(p), "theta_hat": ct4 + DEVIATION_REJECT * 0.8}, pick_top)
+    res_near = llm_full_step(st, pool, "Agentic AI & Orchestration",
+                             answered_item=item, is_correct=True, use_llm=True)
+    expect(not res_near.fallback_used and not res_near.deviation_rejected,
+           "an off-target θ̂ inside the gate is administered, not rejected",
+           f"dev={res_near.theta_deviation:.3f} gate={DEVIATION_REJECT}")
+
     # --- hostile: LLM raises / junk -------------------------------------------
     stub(None, None, raises=RuntimeError("gateway down"))
     res = llm_full_step(fresh_state(), pool, "Agentic AI & Orchestration",
@@ -216,7 +252,11 @@ def main() -> int:
             res = llm_full_step(st, pool, "Agentic AI & Orchestration",
                                 answered_item=it, is_correct=correct, use_llm=True)
             st["theta_hat"], st["se"] = res.theta_hat, res.se
-            st["posterior"] = posterior_from_theta_se(res.theta_hat, res.se)
+            # The exact grid posterior the step carried, not a Gaussian rebuilt from its
+            # two moments. This test kept the old round-trip after the code stopped doing
+            # it, manufacturing drift the real path does not have — and once the magnitude
+            # gate landed, that drift was large enough to reject correct maths.
+            st["posterior"] = res.posterior
             st["q_count"] += 1
             st["served_ids"].append(it["id"])
         expect(guard <= MAX_QUESTIONS, f"session at θ={true_theta:+.0f} respects MAX_QUESTIONS",
