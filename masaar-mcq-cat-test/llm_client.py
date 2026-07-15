@@ -6,13 +6,12 @@ import json
 import os
 import re
 from functools import lru_cache
-from pathlib import Path
 
-from dotenv import load_dotenv
 from openai import OpenAI
 
-_ENV_PATH = Path(__file__).resolve().parent / ".env"
-load_dotenv(_ENV_PATH, override=True)
+from config_env import load_runtime_config
+
+load_runtime_config()
 
 DEFAULT_MODEL = "gpt-4o-mini"
 DEFAULT_TIMEOUT = 30.0
