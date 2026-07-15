@@ -40,12 +40,7 @@ from llm_client import (
     provider_label,
     test_connection,
 )
-from llm_full_cat import (
-    DEVIATION_REJECT,
-    DEVIATION_WARN,
-    llm_full_step,
-    posterior_from_theta_se,
-)
+from llm_full_cat import DEVIATION_REJECT, llm_full_step, posterior_from_theta_se
 from selection_pipeline import SelectionResult
 from tracing import trace_final, trace_selection, trace_session_start, trace_update
 
@@ -573,10 +568,14 @@ def render_controller_audit() -> None:
                   "own θ̂, so a drifted estimate selects for the drift. Measured on this "
                   "branch: correct ≈0.12, a model faking the update ≈0.42."),
         )
+        # Deliberately no verdict. A single worst step carries almost no signal here:
+        # correct maths reaches 1.9, so any threshold that calls one step "suspect" would
+        # be calling roughly one correct session in ten suspect. Read the mean.
         c2.metric(
             "worst |Δθ̂|", f"{max(devs):.3f}",
-            delta="suspect" if max(devs) > DEVIATION_WARN else "in tolerance",
-            delta_color="inverse" if max(devs) > DEVIATION_WARN else "normal",
+            help=("The single largest gap this session. Shown for context, not as a "
+                  "verdict: a correct implementation reaches 1.9 on rare steps, so no "
+                  "per-step threshold separates it from a model doing nothing."),
         )
     if violations:
         st.sidebar.error(

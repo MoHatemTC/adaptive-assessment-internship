@@ -154,8 +154,8 @@ SHORTLIST_N = 5
 #   lazy      mean 0.419   p95 1.009   p99 1.465   max 2.096
 #
 #   threshold   fires on correct   fires on lazy
+#      0.30            5.2%            57.7%     <- WARN
 #      0.35            2.8%            50.2%
-#      0.45            1.0%            40.8%     <- WARN
 #      0.50            0.7%            33.0%     <- REJECT
 #      1.00            0.4%             5.1%
 #
@@ -173,7 +173,11 @@ SHORTLIST_N = 5
 # 100% of degenerate sessions caught. The honest reading is the session mean -- 0.12 vs
 # 0.42 -- which is what the audit panel leads with; the per-step gate is a floor under the
 # damage, not proof of anything about a single step.
-DEVIATION_WARN = 0.45
+# WARN sits at 0.30, not just under REJECT: a warn band of 0.45-0.50 would be four
+# hundredths wide and would fire on almost nothing the gate does not already reject. At
+# 0.30 the 0.30-0.50 band is a real early signal in the logs (5% of correct steps, 58% of
+# a lazy model's) before anything is thrown away.
+DEVIATION_WARN = 0.30
 DEVIATION_REJECT = 0.50
 
 
@@ -383,6 +387,11 @@ def _llm_math(state: dict, item: dict, is_correct: bool, competency: str,
         return _MathOut(coded_theta, coded_se, coded_certainty, data,
                         violation=violation, deviation_rejected=deviation_rejected,
                         fallback_used=True, se_llm=se_llm, theta_deviation=theta_dev)
+
+    if theta_dev > DEVIATION_WARN:
+        get_logger().warning("LLM_FULL_MATH | %s | θ̂ deviates %.3f from coded EAP "
+                             "(%.3f vs %.3f) — administered, but the session mean is the "
+                             "number to read", item["id"], theta_dev, theta_hat, coded_theta)
 
     return _MathOut(theta_hat, se, certainty, data, se_llm=se_llm,
                     theta_deviation=theta_dev)
