@@ -29,15 +29,15 @@ Live `assessment.log` showed failures this build addresses:
 Selection: **KL information for questions 1–3**, then **posterior-expected 3PL Fisher**.
 Stop when `SE ≤ 0.65` or `12` questions (recalibrated from unreachable 0.45@10 with coarse banks).
 
-## LLM procedural selection (OpenAI)
+## LLM math with coded selection (OpenAI)
 
-MCQ **grading stays deterministic** (exact index match). The **LLM selects the next item** by executing a fixed procedure on an engine-scored shortlist:
+MCQ **grading stays deterministic** (exact index match). The **LLM updates theta/SE/certainty after each answer**, then code selects the next item:
 
-1. Engine ranks unserved items by **KL** (q&lt;3) or **3PL Fisher** (q≥3)
-2. Top 5 candidates sent to OpenAI with θ̂, SE, served history, IRT params
-3. LLM must follow tie-break rules (info → |b−θ| → sub-competency coverage → discrimination)
-4. LLM returns `selected_id` **only from the shortlist** — invalid ids fall back to engine
-5. LLM also returns `adaptation_note` explaining why the item refines the estimate
+1. Code grades the submitted answer.
+2. Previous theta/SE, item IRT parameters, and correctness are sent to OpenAI.
+3. LLM returns updated `theta_hat`, `SE`, certainty, and math notes.
+4. Code validates/clamps the LLM math output.
+5. Code picks the next question deterministically using KL/Fisher selection.
 
 ### Configure
 
@@ -53,8 +53,10 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Setup screen shows connection status and a toggle for LLM selection.
-If OpenAI fails, the app falls back to the same procedure executed deterministically in Python.
+Setup screen shows connection status and a toggle for LLM math.
+If OpenAI fails, the app falls back to coded EAP math and deterministic selection.
+
+For Streamlit deployment, use `masaar-mcq-cat-test/streamlit_app.py` as the main file path. See `DEPLOYMENT.md`.
 
 ## Langfuse tracing
 
