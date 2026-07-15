@@ -120,6 +120,46 @@ def main() -> int:
     r = check_rephrase(neg, "Which statement about generators is true?", opts, 0)
     expect(not r.ok and r.code == "negation", "dropping a negation is rejected too", r.reason)
 
+    # Double negation. `is_negated` was a presence test, so "not true" -> "not false" was
+    # negation-present on both sides and passed while the meaning inverted. Parity fixes
+    # it *and* keeps the equivalence above, because "false" is itself a negation word:
+    # "not true" = 1 (odd), "false" = 1 (odd) — agree; "not false" = 2 (even) — differs.
+    r = check_rephrase("Which statement is not true?", "Which statement is not false?", opts, 0)
+    expect(not r.ok and r.code == "negation",
+           "double negation is rejected (parity, not presence)", f"ok={r.ok} code={r.code!r}")
+
+    # Meaning inversion with NO negation word. This is failure mode 1 in the module
+    # docstring — "scored wrong for answering correctly" — and every one of these was
+    # administered until `sense_markers` existed. An independent audit found them; the
+    # negation regex is blind to all of them by construction.
+    for orig, attack in [
+        ("Which change causes the largest memory increase?",
+         "Which change causes the smallest memory increase?"),
+        ("Which is the most efficient way to do this?",
+         "Which is the least efficient way to do this?"),
+        ("Which change will increase throughput?",
+         "Which change will decrease throughput?"),
+        ("Which statement is always true?",
+         "Which statement is rarely true?"),
+    ]:
+        r = check_rephrase(orig, attack, opts, 0)
+        expect(not r.ok and r.code == "sense",
+               f"sense inversion rejected: {attack[:44]}…", f"ok={r.ok} code={r.code!r}")
+
+    # ...and the swap rule must not eat ordinary rewrites. Set equality did: it rejected a
+    # rephrase merely for dropping a marker, and double-counted families whose words are
+    # already negation words ("never invalid" -> "always valid" is 2 vs 0 — both even).
+    for orig, benign in [
+        ("Which change causes the largest memory increase?",
+         "Which of these causes the biggest jump in memory use?"),
+        ("Which statement is never invalid?", "Which statement is always valid?"),
+        ("Which config gives the highest throughput?",
+         "Which configuration yields the greatest throughput?"),
+    ]:
+        r = check_rephrase(orig, benign, opts, 0)
+        expect(r.ok, f"benign rewrite still administered: {benign[:44]}…",
+               f"code={r.code!r} reason={r.reason[:60]!r}")
+
     print(f"\ncode_tokens sample — T1-Q02: {sorted(code_tokens(q02['stem']))}")
     print(f"\n{'PASSED' if not failures else f'FAILED ({len(failures)})'}")
     return 1 if failures else 0

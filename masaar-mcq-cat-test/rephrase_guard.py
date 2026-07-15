@@ -11,13 +11,21 @@ So the rephrase is treated as untrusted output and checked before use. Anything 
 fails falls back to the original stem, which is always safe: it is the wording the
 parameters were calibrated on.
 
-Four failure modes, in order of how much damage they do:
+Five failure modes, in order of how much damage they do:
 
 1. POLARITY FLIP — the rewrite negates the question ("Which is TRUE" -> "Which is NOT
    TRUE" / "FALSE" / "...EXCEPT which one"). Grading still uses the original
    `answer_index`, so the examinee is asked the opposite question and marked against the
    original key: they are scored wrong *for answering correctly*. This is a scoring bug,
-   not calibration drift, which is why it is checked first.
+   not calibration drift, which is why it is checked first. Measured on *parity*, not
+   presence, or "NOT true" -> "NOT false" inverts the meaning while passing.
+1b. SENSE INVERSION — the same scoring bug reached without a negation word at all:
+   "the LARGEST memory increase" -> "the SMALLEST", "the MOST efficient" -> "the LEAST",
+   "will INCREASE throughput" -> "will DECREASE", "ALWAYS true" -> "RARELY true". The
+   negation check is blind to every one of these by construction, and an independent
+   audit administered all four against the unchanged key. See `sense_markers`: it is a
+   blocklist of the antonym families in this bank, it is not a proof, and an antonym it
+   has not heard of walks straight through.
 2. ANSWER LEAK — the rewrite pulls in wording unique to the correct option, turning a
    4-way discrimination into a giveaway. Detected differentially: leaking toward the
    key is only meaningful relative to how much the rewrite echoes the distractors.
@@ -35,6 +43,13 @@ the original guard clean.
 What this still does NOT do is prove difficulty is preserved. A stem reworded easier or
 harder, with polarity and identifiers intact, is administered with its original `b`. The
 guard bounds the damage; it does not eliminate it. Rephrasing is off by default.
+
+And it cannot do better than bound it. Every check here is lexical, while the property
+that matters — "means the same thing" — is semantic. Each check is a blocklist that raises
+the cost of a failure without closing it: an unlisted antonym inverts the sense, and a
+paraphrase of the key leaks it with no shared vocabulary for `_leak_score` to see. The
+real protection is that rephrasing is opt-in and documented as an uncalibrated deviation
+from IRT — not that this file makes it safe.
 """
 
 from __future__ import annotations
@@ -63,6 +78,45 @@ which what who whom whose when where why how all any both each few more most
 other some such only own same so too very can will just should now would could
 may might must shall about into over under again further once here there
 """.split())
+
+# Which labels are the two sides of one family. Only a SWAP across a pair is a rejection;
+# see sense_markers().
+_SENSE_OPPOSITE = {
+    "magnitude_high": "magnitude_low", "magnitude_low": "magnitude_high",
+    "direction_up": "direction_down", "direction_down": "direction_up",
+    "frequency_always": "frequency_rare", "frequency_rare": "frequency_always",
+    "perf_efficient": "perf_inefficient", "perf_inefficient": "perf_efficient",
+}
+
+_SENSE_PAIRS = [
+    # (label, pattern) — one label per antonym family. A rewrite must not move a stem
+    # from one side of a family to the other; see sense_markers() for why this is a
+    # blocklist and not a proof.
+    #
+    # TRUTH (true/false) AND VALIDITY (valid/invalid, fails, incorrect) ARE DELIBERATELY
+    # ABSENT. Their words are already negation words, so is_negated's parity measures
+    # those families exactly, and listing them here counted them twice -- which rejected
+    # two rewrites that are correct by this module's own documentation:
+    #   "Which is NOT true"     -> "Which is false"        (parity agrees: 1 vs 1, odd)
+    #   "Which is never invalid" -> "Which is always valid" (parity agrees: 2 vs 0, even)
+    # Both are administered now, and their inversions are still caught by parity.
+    ("magnitude_high", re.compile(r"\b(?:largest|biggest|greatest|highest|maximum|most|"
+                                  r"more|greater|larger|higher)\b", re.IGNORECASE)),
+    ("magnitude_low", re.compile(r"\b(?:smallest|least|lowest|minimum|fewest|less|fewer|"
+                                 r"lower|smaller)\b", re.IGNORECASE)),
+    ("direction_up", re.compile(r"\b(?:increase[sd]?|increasing|raise[sd]?|grow[sn]?|"
+                                r"growing|improve[sd]?|faster|speeds?\s+up)\b", re.IGNORECASE)),
+    ("direction_down", re.compile(r"\b(?:decrease[sd]?|decreasing|reduce[sd]?|lower(?:s|ed)?|"
+                                  r"shrink[sn]?|degrade[sd]?|slower|slows?\s+down)\b",
+                                  re.IGNORECASE)),
+    ("frequency_always", re.compile(r"\b(?:always|every\s+time|invariably|guaranteed)\b",
+                                    re.IGNORECASE)),
+    ("frequency_rare", re.compile(r"\b(?:rarely|seldom|sometimes|occasionally|may|might)\b",
+                                  re.IGNORECASE)),
+    ("perf_efficient", re.compile(r"\b(?:efficient|optimal|best|fastest)\b", re.IGNORECASE)),
+    ("perf_inefficient", re.compile(r"\b(?:inefficient|suboptimal|worst|slowest)\b",
+                                    re.IGNORECASE)),
+]
 
 # Words that flip a question's polarity. Deliberately broad, and matched on the raw text
 # rather than through `_words()`, which strips exactly these as stopwords. A false
@@ -103,8 +157,68 @@ def is_negated(text: str) -> bool:
     Boolean rather than a marker-set comparison on purpose: "Which is NOT true" and
     "Which is false" are the same question worded differently, and both should pass.
     Only a *change* in polarity is a flip.
+
+    PARITY, NOT PRESENCE. This used to return `bool(search(...))`, which made the check a
+    presence test and let double negation through: "Which is NOT true" -> "Which is NOT
+    false" is negation-present on both sides, so it passed while the meaning inverted.
+
+    Counting and taking the parity handles that and *keeps* the equivalence above, because
+    "false" is itself a negation word:
+
+        "not true"   -> {not}        1 -> odd  -> negated
+        "false"      -> {false}      1 -> odd  -> negated      (so these two agree)
+        "not false"  -> {not, false} 2 -> even -> not negated  (so this one differs)
+
+    A rewrite that changes the parity is asking the opposite question. Two negations
+    cancelling is the same fact for "never invalid" -> "always valid", which agree at 0
+    and 2 -- both even.
     """
-    return bool(_NEGATION.search(text))
+    return len(_NEGATION.findall(text)) % 2 == 1
+
+
+def sense_markers(text: str) -> frozenset[str]:
+    """Antonym families present in the text, as canonical labels.
+
+    THIS EXISTS BECAUSE `is_negated` MISSES THE GUARD'S OWN #1 FAILURE MODE. Meaning
+    inversion needs no negation word: "the largest memory increase" -> "the smallest",
+    "the most efficient way" -> "the least efficient", "will increase throughput" ->
+    "will decrease", "always true" -> "rarely true". All four were administered against
+    the unchanged answer_index, which is exactly the "scored wrong for answering
+    correctly" failure the module docstring calls unacceptable.
+
+    A rewrite that changes which side of an antonym pair a stem sits on is asking a
+    different question, so the pair label must survive the rewrite.
+
+    THIS IS A BLOCKLIST, NOT A PROOF. It catches the families below and nothing else --
+    an antonym it has never heard of walks straight through, as `is_negated` did. A
+    lexical guard cannot verify semantic equivalence; that is a property of meaning, and
+    nothing in this file has access to meaning. It raises the cost of the failure without
+    eliminating it, which is the honest description of every check in this module. The
+    real protection is that rephrasing is OFF by default and documented as an uncalibrated
+    deviation from IRT -- see app.rephrase_enabled.
+    """
+    found = set()
+    for label, pattern in _SENSE_PAIRS:
+        if pattern.search(text):
+            found.add(label)
+    return frozenset(found)
+
+
+def sense_swapped(original: str, rephrased: str) -> tuple[str, str] | None:
+    """The first (from, to) antonym swap between the two stems, or None.
+
+    A SWAP is the failure -- moving from one side of a family to the other. Merely losing
+    a marker is not: "the largest memory increase" -> "the biggest jump in memory use" is
+    a good rephrase that drops `direction_up`, and set equality rejected it. Requiring the
+    opposite side to actually appear keeps that legal while still catching
+    largest->smallest.
+    """
+    orig, new = sense_markers(original), sense_markers(rephrased)
+    for label in sorted(orig - new):
+        opposite = _SENSE_OPPOSITE.get(label)
+        if opposite and opposite in new and label not in new:
+            return label, opposite
+    return None
 
 
 def code_tokens(text: str) -> set[str]:
@@ -149,6 +263,22 @@ def check_rephrase(original_stem: str, rephrased: str, options: list[str], answe
             f"{'adds' if is_negated(rephrased) else 'drops'} a negation, so the examinee "
             "would be asked the opposite question but graded against the original key",
             "negation",
+        )
+
+    # Same failure as the negation check, reached without a negation word: "largest" ->
+    # "smallest" asks the opposite question and is graded against the original key. The
+    # negation check is a parity test and cannot see this -- it caught none of the four
+    # inversions measured against this guard. Both directions matter: dropping a sense
+    # marker ("the largest increase" -> "the increase") is as much a different question as
+    # swapping it, so this compares the marker SET, not just its presence.
+    swap = sense_swapped(original_stem, rephrased)
+    if swap is not None:
+        return RephraseCheck(
+            False, original_stem,
+            f"inverts the question's sense ({swap[0]} → {swap[1]}) — e.g. largest→smallest "
+            "or increase→decrease asks the opposite question while grading against the "
+            "original key",
+            "sense",
         )
 
     if len(key) > 12 and key.lower().strip(" .") in rephrased.lower():
