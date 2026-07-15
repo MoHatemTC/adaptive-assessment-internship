@@ -110,7 +110,11 @@ def _apply_selection(state: dict, sel: SelectionResult | None, competency: str =
     if sel is None:
         state.update({"current_item": None, "done": True, "bank_exhausted": True})
         return
-    state["current_item"] = sel.item
+    item = dict(sel.item)
+    if sel.rephrased_stem and sel.rephrased_stem != sel.item.get("stem", ""):
+        item["original_stem"] = sel.item.get("stem", "")
+        item["display_stem"] = sel.rephrased_stem
+    state["current_item"] = item
     state["current_fisher_i"] = sel.info_score
     state["last_selection"] = {
         "id": sel.item["id"],
@@ -122,6 +126,8 @@ def _apply_selection(state: dict, sel: SelectionResult | None, competency: str =
         "adaptation_note": sel.adaptation_note,
         "rule_applied": sel.rule_applied,
         "shortlist_ids": sel.shortlist_ids,
+        "rephrased_stem": sel.rephrased_stem,
+        "original_stem": sel.item.get("stem", ""),
     }
     if competency:
         log_selection(
@@ -783,8 +789,13 @@ def screen_assessment() -> None:
                 st.info(sel_meta["adaptation_note"])
             for step in sel_meta.get("procedure_steps", []):
                 st.caption(step)
+            if sel_meta.get("rephrased_stem") and sel_meta.get("rephrased_stem") != sel_meta.get("original_stem"):
+                st.markdown("**Original stem:**")
+                st.caption(sel_meta["original_stem"])
+                st.markdown("**Rephrased stem:**")
+                st.caption(sel_meta["rephrased_stem"])
 
-    st.markdown(f"**{item['stem']}**")
+    st.markdown(f"**{item.get('display_stem', item['stem'])}**")
     if item.get("sub_competency"):
         st.caption(item["sub_competency"])
 

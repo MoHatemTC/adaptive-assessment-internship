@@ -51,6 +51,7 @@ class SelectionResult:
     adaptation_note: str = ""
     rule_applied: str = ""
     shortlist_ids: list[str] = field(default_factory=list)
+    rephrased_stem: str = ""
 
 
 def _served_sub_counts(served_ids: list[str], pool: list[dict]) -> dict[str, int]:

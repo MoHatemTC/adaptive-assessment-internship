@@ -13,7 +13,15 @@ from typing import Any
 import numpy as np
 
 from certainty import combined_certainty_pct
-from engine import GRID, MAX_QUESTIONS, SE_TARGET, eap_update, fisher_info, selection_score
+from engine import (
+    GRID,
+    MAX_QUESTIONS,
+    SE_TARGET,
+    eap_update,
+    fisher_info,
+    level_and_band,
+    selection_score,
+)
 from llm_client import chat_json
 from selection_pipeline import SelectionResult, deterministic_select
 from tracing import trace_llm_response
@@ -41,6 +49,7 @@ Return JSON only:
   "calculation_steps": ["short math step"],
   "selection_note": "why the next item or stop decision is appropriate",
   "rule_applied": "short rule name",
+  "rephrased_stem": "selected question stem rewritten for the examinee, or empty if stop=true",
   "stop_reason": "short reason, or empty string"
 }
 
@@ -48,6 +57,14 @@ Correct answers should generally raise theta; incorrect answers should generally
 lower theta. Prefer items whose difficulty is informative near theta and whose
 discrimination is useful. Stop when uncertainty is low enough, the max question
 count is reached, or the remaining bank is insufficient.
+
+REPHRASING RULES:
+- If stop=false, rephrase only the selected item's stem.
+- Preserve technical meaning, answer, options, and intended difficulty.
+- Do not reveal hints or the correct answer.
+- Use examinee_parameters.level_band and certainty_pct:
+  lower certainty -> clearer wording; higher level -> normal technical phrasing.
+- If the original stem is already ideal, return it unchanged.
 """
 
 
@@ -101,9 +118,7 @@ def _candidate_payload(candidates: list[dict]) -> list[dict]:
             "a": q["a"],
             "b": q["b"],
             "c": q["c"],
-            "stem_preview": (q.get("stem", "")[:140] + "...")
-            if len(q.get("stem", "")) > 140
-            else q.get("stem", ""),
+            "stem": q.get("stem", ""),
         }
         for q in candidates
     ]
@@ -120,6 +135,7 @@ def _selection_from_item(
     rule: str,
     steps: list[str],
     candidate_ids: list[str],
+    rephrased_stem: str = "",
 ) -> SelectionResult:
     return SelectionResult(
         item=item,
@@ -131,6 +147,7 @@ def _selection_from_item(
         adaptation_note=note,
         rule_applied=rule,
         shortlist_ids=candidate_ids,
+        rephrased_stem=rephrased_stem,
     )
 
 
@@ -195,6 +212,10 @@ def llm_full_step(
         state.get("prior_sd", 2.0),
         se_start=state.get("se_start"),
     )
+    fallback_level, fallback_pct, fallback_band, fallback_low_confidence = level_and_band(
+        fallback_theta,
+        fallback_se,
+    )
 
     if not candidates:
         return FullCATResult(
@@ -229,6 +250,13 @@ def llm_full_step(
             "correct": bool(is_correct),
         },
         "q_count_after_answer": next_q_count,
+        "examinee_parameters": {
+            "competency_level": fallback_level,
+            "competency_pct": fallback_pct,
+            "level_band": fallback_band,
+            "low_confidence": fallback_low_confidence,
+            "certainty_pct": round(fallback_certainty, 1),
+        },
         "stop_thresholds": {
             "se_target": SE_TARGET,
             "max_questions": MAX_QUESTIONS,
@@ -291,6 +319,9 @@ def llm_full_step(
                 q_count=next_q_count,
                 reason=f"LLM selected invalid id: {selected_id!r}",
             )
+        rephrased_stem = str(data.get("rephrased_stem", "")).strip()
+        if not rephrased_stem:
+            rephrased_stem = id_map[selected_id].get("stem", "")
         selection = _selection_from_item(
             id_map[selected_id],
             theta_hat=theta_hat,
@@ -301,6 +332,7 @@ def llm_full_step(
             rule=str(data.get("rule_applied", "LLM full CAT")),
             steps=_steps(data.get("calculation_steps")),
             candidate_ids=[q["id"] for q in candidates],
+            rephrased_stem=rephrased_stem,
         )
 
     return FullCATResult(
