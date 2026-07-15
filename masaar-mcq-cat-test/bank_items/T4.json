@@ -1,0 +1,530 @@
+[
+ {
+  "id": "T4-Q01",
+  "competency": "Agentic AI & Orchestration",
+  "sub_competency": "T4.1 · Agent fundamentals",
+  "difficulty": "very_easy",
+  "discrimination": "low",
+  "stem": "The ReAct pattern for agents works by interleaving which two things?",
+  "options": [
+   "Retrieving documents from an index, then activating a reranker over the retrieved set",
+   "Reasoning about the next step and acting via a tool call, then observing the result",
+   "Fitting a regression over past outputs, then classifying each output as pass or fail",
+   "Reading the whole plan up front, then committing every tool call as one atomic batch"
+  ],
+  "answer_index": 1,
+  "rationale": "ReAct interleaves an explicit reasoning (thought) step with an action (tool call), then feeds the observation back so the agent can decide the next step.",
+  "misconceptions": [
+   "Reads 'Re-Act' as retrieval plus activation, a retrieval-pipeline idea unrelated to the loop",
+   "CORRECT",
+   "Confuses an LLM agent pattern with classical supervised ML training stages",
+   "Assumes ReAct plans everything up front instead of iterating on observations"
+  ]
+ },
+ {
+  "id": "T4-Q03",
+  "competency": "Agentic AI & Orchestration",
+  "sub_competency": "T4.1 · Agent fundamentals",
+  "difficulty": "easy",
+  "discrimination": "medium",
+  "stem": "An agent asked to 'research a topic and write a report' benefits from an explicit planning step mainly because:",
+  "options": [
+   "Decomposing the goal into ordered sub-tasks makes each step simpler and more reliable",
+   "Committing to a plan first stops the model from fabricating facts during the writing stage",
+   "A plan collapses the whole job into a single model call, so the run costs almost no tokens",
+   "Once a plan exists the agent no longer needs tools, since the plan already holds the answers"
+  ],
+  "answer_index": 0,
+  "rationale": "Planning helps because it decomposes an open-ended goal into tractable sub-tasks (search, read, synthesize, write), which raises reliability on long-horizon work.",
+  "misconceptions": [
+   "CORRECT",
+   "Overclaims: planning shapes structure but does not prevent hallucination in later steps",
+   "Backwards: planning adds a call and tokens rather than eliminating them",
+   "Confuses a plan (what to do) with the evidence that tools must still gather"
+  ]
+ },
+ {
+  "id": "T4-Q21",
+  "competency": "Agentic AI & Orchestration",
+  "sub_competency": "T4.1 · Agent fundamentals",
+  "difficulty": "hard",
+  "discrimination": "high",
+  "stem": "What most distinguishes an agentic system from a fixed, hard-coded LLM workflow?",
+  "options": [
+   "The agent calls external tools, while a fixed workflow can only transform text with the model",
+   "The agent runs on a larger model, while fixed workflows are built on smaller distilled ones",
+   "The agent decides its own next step and when to stop; a workflow's path is fixed in advance",
+   "The agent retains conversation memory, while a fixed workflow is stateless between its steps"
+  ],
+  "answer_index": 2,
+  "rationale": "The defining property of an agent is that the model itself controls the sequence and termination of steps, rather than following a path the developer fixed ahead of time.",
+  "misconceptions": [
+   "Fixed workflows routinely call tools; tool use alone is not what makes a system agentic",
+   "Model size is an implementation choice, not a structural distinction between the two",
+   "CORRECT",
+   "Fixed workflows can and do carry state; memory is orthogonal to who chooses the next step"
+  ]
+ },
+ {
+  "id": "T4-Q05",
+  "competency": "Agentic AI & Orchestration",
+  "sub_competency": "T4.2 · Tool use & function calling",
+  "difficulty": "very_easy",
+  "discrimination": "high",
+  "stem": "In a function-calling loop, who actually executes the tool and returns its result to the model?",
+  "options": [
+   "The model executes the function internally and reports only the finished result back",
+   "The vector store runs the registered function and streams its output into the context",
+   "The end user is expected to run the command by hand and paste the output back in",
+   "The application code around the model runs it and feeds the result back into context"
+  ],
+  "answer_index": 3,
+  "rationale": "The model only emits a structured request to call a tool; the surrounding application executes it and appends the result as a tool message for the next turn.",
+  "misconceptions": [
+   "Believes the model has an internal runtime that executes the function itself",
+   "Confuses a retrieval component with the tool-execution layer of the agent loop",
+   "Confuses interactive copy-paste use with a programmatic function-calling loop",
+   "CORRECT"
+  ]
+ },
+ {
+  "id": "T4-Q22",
+  "competency": "Agentic AI & Orchestration",
+  "sub_competency": "T4.2 · Tool use & function calling",
+  "difficulty": "medium",
+  "discrimination": "high",
+  "stem": "Why do a tool's description and parameter schema matter so much in function calling?",
+  "options": [
+   "They are compiled into the model's weights on load, fixing which tools it may emit",
+   "They are the model's only cue for when the tool applies and what arguments are valid",
+   "They configure the timeout and retry budget the executor applies to each tool call",
+   "They serve only to generate documentation; the model selects on the tool name alone"
+  ],
+  "answer_index": 1,
+  "rationale": "The model never sees the tool's implementation, so the natural-language description and JSON schema are the entire contract it uses to choose the tool and build arguments.",
+  "misconceptions": [
+   "Confuses runtime prompt content with parameters learned during model training",
+   "CORRECT",
+   "Confuses the model-facing contract with the executor's operational policy",
+   "Underrates the description; names alone are far too ambiguous for reliable selection"
+  ]
+ },
+ {
+  "id": "T4-Q23",
+  "competency": "Agentic AI & Orchestration",
+  "sub_competency": "T4.2 · Tool use & function calling",
+  "difficulty": "very_hard",
+  "discrimination": "high",
+  "stem": "A tool call fails validation because the model supplied a malformed date argument. The best default handling is:",
+  "options": [
+   "Retry the identical call a few times with backoff, since such failures are usually transient",
+   "Raise the exception to the caller and end the run, as the model cannot fix its own arguments",
+   "Coerce the date to today silently so the tool succeeds and the loop keeps making progress",
+   "Return the validation error to the model as the tool result so it can fix and retry"
+  ],
+  "answer_index": 3,
+  "rationale": "A malformed argument is a deterministic model error, so surfacing the error message back into the loop lets the model self-correct on the next turn.",
+  "misconceptions": [
+   "Treats a deterministic input error as a transient fault; identical retries fail identically",
+   "Assumes the model cannot self-correct, though an error observation is exactly what enables it",
+   "Silently changes user-visible semantics and hides a real defect behind a fake success",
+   "CORRECT"
+  ]
+ },
+ {
+  "id": "T4-Q06",
+  "competency": "Agentic AI & Orchestration",
+  "sub_competency": "T4.3 · Memory & state",
+  "difficulty": "easy",
+  "discrimination": "high",
+  "stem": "An agent must recall facts from earlier in a session that now exceed the context window. A standard solution is:",
+  "options": [
+   "Raise the sampling temperature so the model draws more freely on details from earlier turns",
+   "Prompt the model to recall it directly, since it retains a compressed trace of older turns",
+   "Summarize or store past turns externally and retrieve the relevant pieces back into context",
+   "Restart the conversation, since a fresh session reloads prior turns from the provider's history"
+  ],
+  "answer_index": 2,
+  "rationale": "Once history falls outside the window it is simply not in the prompt, so it must be summarized or persisted externally and selectively retrieved back in.",
+  "misconceptions": [
+   "Confuses a sampling parameter with what information is present in the prompt",
+   "Believes the model retains dropped history; anything outside the window is simply gone",
+   "CORRECT",
+   "Assumes the provider persists and replays history; a new session starts empty"
+  ]
+ },
+ {
+  "id": "T4-Q07",
+  "competency": "Agentic AI & Orchestration",
+  "sub_competency": "T4.3 · Memory & state",
+  "difficulty": "very_easy",
+  "discrimination": "medium",
+  "stem": "How do an agent's short-term (working) memory and long-term memory differ?",
+  "options": [
+   "Short-term is the live context window; long-term is persisted outside it and reloaded later",
+   "Short-term sits in the prompt, while long-term is baked into the weights by fine-tuning",
+   "Long-term is read faster than short-term because it is indexed rather than re-read each turn",
+   "Short-term needs dedicated GPU residency, while long-term is served from ordinary disk"
+  ],
+  "answer_index": 0,
+  "rationale": "Short-term memory is whatever currently occupies the context window; long-term memory is stored in an external store and retrieved back into context across sessions.",
+  "misconceptions": [
+   "CORRECT",
+   "Conflates retrieved long-term memory with parametric knowledge from training",
+   "Reverses the cost: in-context tokens are immediate, retrieval adds a lookup",
+   "Invents a hardware distinction; both are ordinary data, not accelerator state"
+  ]
+ },
+ {
+  "id": "T4-Q08",
+  "competency": "Agentic AI & Orchestration",
+  "sub_competency": "T4.3 · Memory & state",
+  "difficulty": "medium",
+  "discrimination": "medium",
+  "stem": "In a stateful agent graph, the shared 'state' object typically:",
+  "options": [
+   "Is rebuilt at each node, so only the immediately preceding node's output is ever visible",
+   "Is threaded between nodes, accumulating messages and intermediate results as it proceeds",
+   "Holds only the raw user string, with tool results kept in a separate per-node local scope",
+   "Is written once at the end of the run, acting as a log rather than an input to later nodes"
+  ],
+  "answer_index": 1,
+  "rationale": "The state is the channel through which nodes communicate: each node reads it and returns updates that are merged in, so context accumulates across the graph.",
+  "misconceptions": [
+   "Describes a pure pipeline; the point of shared state is visibility beyond the last step",
+   "CORRECT",
+   "Underestimates state, which normally carries messages, tool results, and scratch data",
+   "Confuses observability logging with the live data structure that drives execution"
+  ]
+ },
+ {
+  "id": "T4-Q10",
+  "competency": "Agentic AI & Orchestration",
+  "sub_competency": "T4.4 · Multi-agent systems",
+  "difficulty": "easy",
+  "discrimination": "high",
+  "stem": "Why split a complex workflow across several specialized agents instead of one large prompt?",
+  "options": [
+   "Splitting always lowers total token spend, since each agent sees a much smaller prompt",
+   "Handing work between agents makes end-to-end evaluation unnecessary, as each step self-checks",
+   "Each agent gets a focused role, prompt and tools, improving reliability and maintainability",
+   "A single agent cannot be given more than one tool, so multiple agents are needed for tool use"
+  ],
+  "answer_index": 2,
+  "rationale": "Specialization is a separation-of-concerns argument: narrower instructions and smaller tool sets make each agent's decision easier to get right and easier to change.",
+  "misconceptions": [
+   "A common cost myth; multi-agent runs usually increase tokens by repeating shared context",
+   "Decomposition changes where errors occur but never removes the need for evaluation",
+   "CORRECT",
+   "Factually wrong: one agent can be given many tools; the issue is selection quality"
+  ]
+ },
+ {
+  "id": "T4-Q24",
+  "competency": "Agentic AI & Orchestration",
+  "sub_competency": "T4.4 · Multi-agent systems",
+  "difficulty": "hard",
+  "discrimination": "high",
+  "stem": "A triage agent decides a request needs billing expertise and hands off to a billing agent. Unlike calling billing as a tool, the handoff means:",
+  "options": [
+   "Control transfers to billing, which owns the rest of the run; the triage agent does not resume",
+   "Billing returns a result to triage, which reviews it and composes the final reply to the user",
+   "Both agents stay active and must agree on an answer before any reply is sent to the user",
+   "Billing inherits the triage agent's tools and prompt, then continues on under that same role"
+  ],
+  "answer_index": 0,
+  "rationale": "A handoff transfers control: the receiving agent becomes the active one and finishes the task, whereas a sub-agent invoked as a tool returns a value to a caller that stays in charge.",
+  "misconceptions": [
+   "CORRECT",
+   "Describes the sub-agent-as-tool pattern, in which the caller keeps control of the run",
+   "Confuses a handoff with a debate or consensus pattern between concurrent agents",
+   "Confuses transferring control with swapping configuration; the receiver keeps its own role"
+  ]
+ },
+ {
+  "id": "T4-Q25",
+  "competency": "Agentic AI & Orchestration",
+  "sub_competency": "T4.4 · Multi-agent systems",
+  "difficulty": "very_hard",
+  "discrimination": "high",
+  "stem": "A supervisor fans work out to three sub-agents and their results frequently contradict one another. The most likely root cause is:",
+  "options": [
+   "The sub-agents share one state object, which forces their separate outputs to converge wrongly",
+   "The supervisor's model is too large, so it over-constrains what each sub-agent may conclude",
+   "Each sub-agent sees only its slice of context, so they resolve shared ambiguities differently",
+   "Running sub-agents in parallel corrupts the message ordering the model relies on to stay coherent"
+  ],
+  "answer_index": 2,
+  "rationale": "Contradictions across fanned-out agents usually trace to context fragmentation: with no shared grounding, each agent independently makes different assumptions about ambiguous details.",
+  "misconceptions": [
+   "Inverts the failure: shared state would reduce, not cause, divergence between outputs",
+   "Attributes a context-design failure to model capacity, which is unrelated here",
+   "CORRECT",
+   "Assumes a concurrency bug; independent agents have independent, uncorrupted histories"
+  ]
+ },
+ {
+  "id": "T4-Q11",
+  "competency": "Agentic AI & Orchestration",
+  "sub_competency": "T4.5 · Orchestration frameworks",
+  "difficulty": "easy",
+  "discrimination": "low",
+  "stem": "In a graph-based orchestration framework, what do nodes and edges represent?",
+  "options": [
+   "Layers of a neural network, and the learned weights connecting one layer to the next",
+   "Steps or agents, and the transitions between them, letting the flow branch and loop",
+   "Tables in a database, and the foreign keys that join rows across them at query time",
+   "Worker processes in a cluster, and the network links used to shard traffic between them"
+  ],
+  "answer_index": 1,
+  "rationale": "Nodes are units of work (a step, tool, or agent) and edges encode control flow between them, which is what makes conditional branching and cycles expressible.",
+  "misconceptions": [
+   "Confuses an application-level workflow graph with a model's computation graph",
+   "CORRECT",
+   "Confuses a control-flow graph with a relational data model",
+   "Confuses workflow orchestration with infrastructure-level request distribution"
+  ]
+ },
+ {
+  "id": "T4-Q13",
+  "competency": "Agentic AI & Orchestration",
+  "sub_competency": "T4.5 · Orchestration frameworks",
+  "difficulty": "very_easy",
+  "discrimination": "low",
+  "stem": "Agent orchestration frameworks such as CrewAI, AutoGen and LangGraph primarily help you:",
+  "options": [
+   "Pretrain foundation models from scratch on large unlabeled corpora at cluster scale",
+   "Serve and cache static web assets close to end users through a distribution network",
+   "Annotate and manage labeled datasets for supervised fine-tuning of a base model",
+   "Compose and orchestrate multi-step, multi-agent LLM workflows in application code"
+  ],
+  "answer_index": 3,
+  "rationale": "These libraries sit above a model provider and structure how multiple steps or agents call tools and pass work to each other; they do not train or serve models.",
+  "misconceptions": [
+   "Confuses an application-layer orchestration library with a training stack",
+   "Confuses agent orchestration with web infrastructure",
+   "Confuses orchestration with data-labeling and annotation tooling",
+   "CORRECT"
+  ]
+ },
+ {
+  "id": "T4-Q26",
+  "competency": "Agentic AI & Orchestration",
+  "sub_competency": "T4.5 · Orchestration frameworks",
+  "difficulty": "very_hard",
+  "discrimination": "medium",
+  "stem": "Why do orchestration frameworks persist a checkpoint of graph state after each step?",
+  "options": [
+   "So the state can be embedded and later retrieved as the agent's long-term semantic memory",
+   "So each node receives a private copy of state and cannot mutate what other nodes observe",
+   "So a run can resume after a crash or a pause for human input without replaying prior steps",
+   "So the framework can compress message history and keep the prompt inside the context window"
+  ],
+  "answer_index": 2,
+  "rationale": "Checkpointing makes runs durable and resumable: execution can stop (on failure or for human approval) and later continue from the last committed state rather than restarting.",
+  "misconceptions": [
+   "Confuses execution checkpoints with semantic long-term memory retrieval",
+   "Confuses durability with isolation; checkpoints do not create per-node copies",
+   "CORRECT",
+   "Confuses persistence with context-window management such as summarization"
+  ]
+ },
+ {
+  "id": "T4-Q15",
+  "competency": "Agentic AI & Orchestration",
+  "sub_competency": "T4.6 · Control flow & routing",
+  "difficulty": "easy",
+  "discrimination": "medium",
+  "stem": "A 'router' in an agent system is responsible for:",
+  "options": [
+   "Balancing inference requests across GPU replicas so no single worker becomes saturated",
+   "Rewriting the user's prompt into the phrasing the downstream model was fine-tuned on",
+   "Forwarding network packets between the agent process and the external APIs it calls",
+   "Choosing which branch, tool, or agent runs next based on state or the model's decision"
+  ],
+  "answer_index": 3,
+  "rationale": "Routing is a control-flow concern: given the current state or a model decision, the router selects the next destination in the graph.",
+  "misconceptions": [
+   "Confuses application routing with infrastructure load balancing",
+   "Confuses routing with prompt rewriting or query transformation",
+   "Reads 'router' in its networking sense rather than its orchestration sense",
+   "CORRECT"
+  ]
+ },
+ {
+  "id": "T4-Q27",
+  "competency": "Agentic AI & Orchestration",
+  "sub_competency": "T4.6 · Control flow & routing",
+  "difficulty": "hard",
+  "discrimination": "medium",
+  "stem": "An agent loop keeps re-issuing the same search tool call and never emits a final answer. The most appropriate fix is:",
+  "options": [
+   "Cap the iteration count and force a terminal step, then diagnose the failed stop condition",
+   "Raise the sampling temperature so the model stops repeating the identical call each turn",
+   "Remove the search tool so the agent is forced to answer from its parametric knowledge",
+   "Enlarge the context window so earlier repeated observations no longer drop out of the prompt"
+  ],
+  "answer_index": 0,
+  "rationale": "A max-iteration cap bounds the damage and guarantees termination, but the underlying issue is a stop condition the agent never satisfies, which must then be diagnosed.",
+  "misconceptions": [
+   "CORRECT",
+   "Treats a control-flow defect as a sampling problem; randomness only masks the loop",
+   "Removes a needed capability rather than fixing the termination logic",
+   "Assumes truncation is the cause, which does not explain an unbounded loop"
+  ]
+ },
+ {
+  "id": "T4-Q28",
+  "competency": "Agentic AI & Orchestration",
+  "sub_competency": "T4.6 · Control flow & routing",
+  "difficulty": "very_hard",
+  "discrimination": "high",
+  "stem": "When should a routing decision be a hard-coded conditional rather than delegated to the model?",
+  "options": [
+   "Whenever more than two branches exist, since models cannot reliably choose among many options",
+   "When the branch follows from explicit state, and determinism and auditability are required",
+   "When inputs are open-ended natural language whose intent must be inferred before branching",
+   "When latency does not matter, since coded checks are slower but more thorough than a call"
+  ],
+  "answer_index": 1,
+  "rationale": "If the condition can be read directly from structured state, a deterministic check is cheaper, testable, and reproducible; model routing is for genuinely ambiguous inputs.",
+  "misconceptions": [
+   "Invents a branch-count rule; models handle many branches when the signal is textual",
+   "CORRECT",
+   "Exactly inverts the criterion: inferring fuzzy intent is where model routing wins",
+   "Reverses the performance facts; a coded check avoids an inference call entirely"
+  ]
+ },
+ {
+  "id": "T4-Q16",
+  "competency": "Agentic AI & Orchestration",
+  "sub_competency": "T4.7 · External integration & protocols",
+  "difficulty": "very_easy",
+  "discrimination": "medium",
+  "stem": "The Model Context Protocol (MCP) is best described as:",
+  "options": [
+   "A model architecture that replaces the transformer for long-context agent workloads",
+   "A compression scheme that shrinks prompts before they are sent to a model provider",
+   "An open standard for connecting LLM apps to external tools and data via servers",
+   "A scheduler that allocates GPU memory across concurrent model-serving processes"
+  ],
+  "answer_index": 2,
+  "rationale": "MCP is an integration protocol: servers expose tools, resources, and prompts that any compliant host application can discover and call in a uniform way.",
+  "misconceptions": [
+   "Confuses an integration protocol with a neural architecture",
+   "Confuses a protocol with a context-window optimization technique",
+   "CORRECT",
+   "Confuses an application protocol with infrastructure scheduling"
+  ]
+ },
+ {
+  "id": "T4-Q17",
+  "competency": "Agentic AI & Orchestration",
+  "sub_competency": "T4.7 · External integration & protocols",
+  "difficulty": "medium",
+  "discrimination": "high",
+  "stem": "Your agent must call an internal REST API that requires an auth token. The most robust design is:",
+  "options": [
+   "Place the token in the system prompt so the model can attach it to each request it builds",
+   "Expose the token as a tool parameter the model fills in, validating its format before each call",
+   "Require the user to paste a fresh token every turn so the application never stores a credential",
+   "Keep the token as a secret in the tool layer and have the tool attach it, never showing the model"
+  ],
+  "answer_index": 3,
+  "rationale": "Credentials should live in the execution layer, outside the model's context, so they cannot be leaked through outputs, logs, or prompt injection.",
+  "misconceptions": [
+   "Puts a secret in context, where it can be echoed, logged, or extracted by injection",
+   "Still routes the secret through the model; validation does not prevent leakage",
+   "Shifts the burden to the user and still exposes the token in the conversation",
+   "CORRECT"
+  ]
+ },
+ {
+  "id": "T4-Q29",
+  "competency": "Agentic AI & Orchestration",
+  "sub_competency": "T4.7 · External integration & protocols",
+  "difficulty": "hard",
+  "discrimination": "low",
+  "stem": "What is the main practical benefit of exposing a capability through an MCP server rather than a bespoke integration?",
+  "options": [
+   "Any compliant host can discover and call it, so the integration is written once, not per app",
+   "The model gains direct access to the data, so results bypass the context window entirely",
+   "Tool results become deterministic, since the protocol validates them against ground truth",
+   "The server assumes authorization, so the host no longer has to enforce its own permissions"
+  ],
+  "answer_index": 0,
+  "rationale": "The value of a protocol is reuse and interoperability: one server implementation is discoverable and callable by every compliant client, instead of an N-by-M set of custom integrations.",
+  "misconceptions": [
+   "CORRECT",
+   "Tool results still enter the prompt; no protocol lets a model read data out of band",
+   "A transport protocol cannot make an underlying tool's results correct or deterministic",
+   "Hosts remain responsible for consent and permissioning regardless of the protocol"
+  ]
+ },
+ {
+  "id": "T4-Q18",
+  "competency": "Agentic AI & Orchestration",
+  "sub_competency": "T4.8 · Guardrails, safety & evaluation",
+  "difficulty": "medium",
+  "discrimination": "medium",
+  "stem": "Which of the following is an example of an agent guardrail?",
+  "options": [
+   "Raising temperature so the agent explores more varied phrasings after a tool call fails",
+   "Retrying a failed tool call with identical arguments until it eventually returns success",
+   "Capping the agent's iterations and validating tool arguments against a schema first",
+   "Granting the agent unrestricted shell access so it can recover from unexpected tool failures"
+  ],
+  "answer_index": 2,
+  "rationale": "Guardrails are enforced constraints outside the model's discretion, such as bounding the loop and validating tool inputs before any side effect occurs.",
+  "misconceptions": [
+   "A sampling knob, not a constraint; it widens rather than bounds agent behavior",
+   "An unbounded retry is itself a failure mode, not a safeguard against one",
+   "CORRECT",
+   "Describes removing a restriction, which is the opposite of a guardrail"
+  ]
+ },
+ {
+  "id": "T4-Q19",
+  "competency": "Agentic AI & Orchestration",
+  "sub_competency": "T4.8 · Guardrails, safety & evaluation",
+  "difficulty": "hard",
+  "discrimination": "medium",
+  "stem": "How should you evaluate whether an agent completed a multi-step task correctly?",
+  "options": [
+   "Confirm the run finished without raising an exception and returned some non-empty text",
+   "Score the final outcome and also the trajectory: tool-call correctness, step count, and cost",
+   "Have the agent grade its own run, since only it has full visibility into its reasoning",
+   "Track tokens and latency per run, which together capture whether the task was accomplished"
+  ],
+  "answer_index": 1,
+  "rationale": "Agent evaluation needs both outcome scoring against task-level success criteria and trajectory inspection, since an agent can reach a right answer through a wrong or costly path.",
+  "misconceptions": [
+   "Confuses absence of a crash with task success; a wrong answer also returns cleanly",
+   "CORRECT",
+   "Self-assessment is unreliable and correlates with the same errors it should catch",
+   "Measures efficiency only; cheap and fast runs can still be entirely incorrect"
+  ]
+ },
+ {
+  "id": "T4-Q30",
+  "competency": "Agentic AI & Orchestration",
+  "sub_competency": "T4.8 · Guardrails, safety & evaluation",
+  "difficulty": "very_hard",
+  "discrimination": "medium",
+  "stem": "An agent is permitted to issue customer refunds. Where should the human approval step sit?",
+  "options": [
+   "Between the model proposing the refund call and the tool actually executing it",
+   "Immediately after execution, so the reviewer can judge the real-world outcome directly",
+   "In the system prompt, as an instruction to ask the user before any risky action",
+   "At session start, where the user pre-approves the whole class of refund actions"
+  ],
+  "answer_index": 0,
+  "rationale": "Human-in-the-loop must gate the irreversible side effect itself: the proposed tool call is held, reviewed, and only then executed.",
+  "misconceptions": [
+   "CORRECT",
+   "Too late; the money has already moved and the action is not trivially reversible",
+   "A prompt instruction is advisory and can be ignored or injected around",
+   "Blanket pre-approval removes the per-action review the control exists to provide"
+  ]
+ }
+]

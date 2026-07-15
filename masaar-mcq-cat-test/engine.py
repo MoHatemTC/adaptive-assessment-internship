@@ -113,9 +113,23 @@ def expected_fisher(posterior, item):
 
 
 def selection_score(theta_hat, q_count, item, posterior=None):
+    """KL early, then Fisher — posterior-expected when the posterior is available.
+
+    Point-estimate Fisher at theta_hat is only optimal if theta_hat is right. Early on
+    it is not: SE is ~0.8-2.0, so maximising I(theta_hat) chases an estimate that is
+    still moving and can lock onto a b that the next answer invalidates. Averaging
+    Fisher over the posterior weights each candidate by where the examinee plausibly
+    *is*, which is what the EAP estimator itself uses.
+
+    This is what the README already documents ("posterior-expected 3PL Fisher") and
+    what callers already plumb `posterior` through for; it just was never wired up.
+    Falls back to the point estimate when no posterior is supplied.
+    """
     if q_count < 3:
         delta = 3.0 / np.sqrt(q_count + 1)
         return kl_info(theta_hat, item, delta)
+    if posterior is not None:
+        return expected_fisher(posterior, item)
     return fisher_info(theta_hat, item)
 
 
@@ -135,8 +149,13 @@ def select_item(theta_hat, q_count, pool, served_ids, posterior=None):
 
 
 def rank_candidates(theta_hat, q_count, pool, served_ids, posterior=None, top_n: int = 5):
-    """Score and rank unserved items; return list of (item, score, fisher, kl)."""
-    criterion = "KL" if q_count < 3 else "Fisher"
+    """Score and rank unserved items; return list of (item, score, fisher, kl).
+
+    `score` is the criterion actually used to rank (KL early, else posterior-expected
+    Fisher). `fisher` stays the point estimate at theta_hat purely for display, so the
+    UI and traces can show both without changing what selection optimises.
+    """
+    criterion = "KL" if q_count < 3 else ("E[Fisher]" if posterior is not None else "Fisher")
     candidates = [q for q in pool if q["id"] not in served_ids]
     if not candidates:
         return [], criterion
@@ -146,7 +165,7 @@ def rank_candidates(theta_hat, q_count, pool, served_ids, posterior=None, top_n:
     for q in candidates:
         kl = kl_info(theta_hat, q, delta) if delta else kl_info(theta_hat, q, 1.0)
         fi = fisher_info(theta_hat, q)
-        info = kl if q_count < 3 else fi
+        info = kl if q_count < 3 else selection_score(theta_hat, q_count, q, posterior)
         scored.append((q, info, fi, kl))
 
     scored.sort(

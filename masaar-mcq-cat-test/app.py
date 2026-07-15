@@ -32,7 +32,7 @@ from tracing import trace_final, trace_selection, trace_session_start, trace_upd
 
 MIN_ITEMS_PER_COMPETENCY = 8
 BANK_EXHAUSTION_THRESHOLD = 4
-DEFAULT_BANK = Path(__file__).parent / "enriched_bank.json"
+DEFAULT_BANK = Path(__file__).parent / "enriched_bank_cat.json"
 FALLBACK_BANK = Path(__file__).parent / "sample_bank.json"
 
 
