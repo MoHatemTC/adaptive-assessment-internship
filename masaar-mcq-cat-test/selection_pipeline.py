@@ -14,6 +14,11 @@ from engine_log import get_logger
 from llm_client import chat_json, llm_configured
 from tracing import trace_llm_response
 
+# "Within 1% relative info_score" — the band SELECTION_SYSTEM step 3 tells the LLM to
+# treat as a tie. Code and prompt must agree on this number or the deterministic
+# fallback is a different estimator from the LLM it stands in for.
+NEAR_TOP_REL = 0.99
+
 SELECTION_SYSTEM = """You are the Masaar adaptive testing selector.
 You MUST follow the procedural algorithm exactly. You may ONLY choose an item id
 from the provided shortlist — never invent ids.
@@ -80,9 +85,12 @@ def deterministic_select(
     pool: list[dict],
     served_ids: list[str],
     posterior=None,
+    rng=None,
+    top_k=None,
 ) -> SelectionResult | None:
     """Pure engine fallback — same rules the LLM must follow."""
-    ranked, criterion = rank_candidates(theta_hat, q_count, pool, served_ids, posterior)
+    ranked, criterion = rank_candidates(theta_hat, q_count, pool, served_ids, posterior,
+                                        rng=rng, top_k=top_k)
     if not ranked:
         return None
 
@@ -92,12 +100,22 @@ def deterministic_select(
     def sort_key(entry):
         q, info, fi, _kl = entry
         rel = info / max(top_info, 1e-9)
-        near_top = rel >= 0.99
+        # Collapse everything within 1% of the best score into one band, so the
+        # documented tie-breaks below can actually decide the pick.
+        #
+        # This was previously keyed on raw `info` first. Tuple comparison is
+        # lexicographic, so a 0.5% info difference settled the order outright and rules
+        # 3-5 were unreachable: measured across 505 θ-points on this bank, the top two
+        # scores were *never* exactly equal, so the tie-breaks ran 0 times. The LLM is
+        # told to apply a 1% band (SELECTION_SYSTEM step 3) and did, which meant the
+        # model and its "identical" deterministic fallback ran different procedures —
+        # a session that quietly fell back was not the same experiment.
+        primary = 1.0 if rel >= NEAR_TOP_REL else rel
         return (
-            info,
-            -abs(q["b"] - theta_hat) if near_top else 0,
-            -sub_counts.get(q.get("sub_competency", ""), 0) if near_top else 0,
-            q.get("a", 1.0) if near_top else 0,
+            primary,
+            -abs(q["b"] - theta_hat),
+            -sub_counts.get(q.get("sub_competency", ""), 0),
+            q.get("a", 1.0),
         )
 
     ranked.sort(key=sort_key, reverse=True)
@@ -129,8 +147,11 @@ def llm_select(
     served_ids: list[str],
     history: list[dict],
     posterior=None,
+    rng=None,
+    top_k=None,
 ) -> SelectionResult | None:
-    ranked, criterion = rank_candidates(theta_hat, q_count, pool, served_ids, posterior)
+    ranked, criterion = rank_candidates(theta_hat, q_count, pool, served_ids, posterior,
+                                        rng=rng, top_k=top_k)
     if not ranked:
         return None
 
@@ -209,7 +230,8 @@ def llm_select(
             "LLM_SELECT | invalid id=%s — falling back to deterministic",
             selected_id,
         )
-        return deterministic_select(theta_hat, q_count, pool, served_ids, posterior)
+        return deterministic_select(theta_hat, q_count, pool, served_ids, posterior,
+                                    rng=rng, top_k=top_k)
 
     q = id_map[selected_id]
     info = selection_score(theta_hat, q_count, q, posterior)
@@ -262,20 +284,24 @@ def select_next_item(
     posterior=None,
     *,
     use_llm: bool = True,
+    rng=None,
+    top_k=None,
 ) -> SelectionResult | None:
     """Select next item — LLM procedural when configured, else deterministic."""
     history = history or []
     if use_llm and llm_configured():
         try:
             result = llm_select(
-                theta_hat, se, q_count, competency, pool, served_ids, history, posterior
+                theta_hat, se, q_count, competency, pool, served_ids, history, posterior,
+                rng=rng, top_k=top_k,
             )
             if result is not None:
                 return result
         except Exception as exc:
             get_logger().warning("LLM_SELECT | error=%s — deterministic fallback", exc)
             # Annotate fallback so UI can show why LLM was skipped
-            fallback = deterministic_select(theta_hat, q_count, pool, served_ids, posterior)
+            fallback = deterministic_select(theta_hat, q_count, pool, served_ids, posterior,
+                                            rng=rng, top_k=top_k)
             if fallback is not None:
                 fallback.adaptation_note = (
                     f"LLM unavailable ({type(exc).__name__}: {exc}). "
@@ -286,4 +312,5 @@ def select_next_item(
                     *fallback.procedure_steps,
                 ]
             return fallback
-    return deterministic_select(theta_hat, q_count, pool, served_ids, posterior)
+    return deterministic_select(theta_hat, q_count, pool, served_ids, posterior,
+                                rng=rng, top_k=top_k)

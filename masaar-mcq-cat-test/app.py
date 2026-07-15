@@ -13,10 +13,16 @@ import streamlit as st
 from bank_synth import synthesize_bank
 from certainty import certainty_label, combined_certainty_pct, posterior_certainty_pct
 from engine import (
+    CONFIDENCE_TARGET,
     GRID,
     MAX_QUESTIONS,
+    MIN_QUESTIONS,
     SE_TARGET,
+    STABILITY_FLOOR,
+    STABLE_WINDOW,
+    Convergence,
     calibrated_prior_sd,
+    check_convergence,
     eap_update,
     fisher_info,
     level_and_band,
@@ -197,6 +203,9 @@ def init_competency_state(
         "q_count": 0,
         "served_ids": served_ids,
         "history": [],
+        "level_history": [],
+        "stop_reason": "",
+        "converged": False,
         "current_item": None,
         "current_fisher_i": 0.0,
         "bank_exhausted": False,
@@ -258,6 +267,7 @@ def finalize_competency(
     state: dict,
     bank_exhausted: bool = False,
     competency: str = "",
+    conv: Convergence | None = None,
 ) -> None:
     level, pct, band, low_conf = level_and_band(state["theta_hat"], state["se"])
     state["done"] = True
@@ -265,9 +275,12 @@ def finalize_competency(
     state["level"] = level
     state["pct"] = pct
     state["band"] = band
-    state["low_confidence"] = low_conf or (
-        state["q_count"] >= MAX_QUESTIONS and state["se"] > SE_TARGET
-    )
+    state["stop_reason"] = conv.reason if conv else ("bank_exhausted" if bank_exhausted else "")
+    state["converged"] = bool(conv and conv.converged)
+    # low_confidence tracks the *estimate*, not the exit route. A stability stop is a
+    # legitimate exit that can still land above SE_TARGET, and the report must say so
+    # rather than let "converged" imply a precision it never reached.
+    state["low_confidence"] = low_conf or not state["converged"]
     state["certainty_pct"] = certainty_for_state(state, state.get("self_confidence", "low"))
     state["current_item"] = None
     state["current_fisher_i"] = 0.0
@@ -275,14 +288,19 @@ def finalize_competency(
         trace_final(competency, state, bank_exhausted=bank_exhausted)
 
 
-def should_stop(state: dict, pool: list[dict]) -> tuple[bool, bool]:
-    """Return (should_stop, bank_exhausted)."""
-    if state["se"] <= SE_TARGET or state["q_count"] >= MAX_QUESTIONS:
-        return True, False
-    remaining = unserved_count(pool, state["served_ids"])
-    if remaining < BANK_EXHAUSTION_THRESHOLD:
-        return True, True
-    return False, False
+def should_stop(state: dict, pool: list[dict]) -> Convergence:
+    """Apply the three convergence rules, then bank exhaustion.
+
+    Exhaustion is checked last and only when no measurement rule fired: a competency
+    that reached the confidence target on its final available item converged, and
+    should not be reported as having run out of questions.
+    """
+    conv = check_convergence(state["certainty_pct"], state["level_history"], state["q_count"])
+    if conv.stop:
+        return conv
+    if unserved_count(pool, state["served_ids"]) < BANK_EXHAUSTION_THRESHOLD:
+        return Convergence(True, "bank_exhausted", False)
+    return Convergence(False)
 
 
 def grade_and_advance(
@@ -313,6 +331,8 @@ def grade_and_advance(
         se_start=state.get("se_start"),
     )
     state["certainty_pct"] = certainty
+    level_now = level_and_band(theta_hat, se)[0]
+    state["level_history"].append(level_now)
     state["history"].append(
         {
             "id": item["id"],
@@ -321,11 +341,13 @@ def grade_and_advance(
             "theta_hat": theta_hat,
             "se": se,
             "certainty_pct": certainty,
+            "level": level_now,
             "fisher_i": state.get("current_fisher_i", 0.0),
         }
     )
 
-    stop, bank_exhausted = should_stop(state, pool)
+    conv = should_stop(state, pool)
+    stop, bank_exhausted = conv.stop, conv.reason == "bank_exhausted"
     log_update(
         competency,
         state["q_count"],
@@ -334,7 +356,7 @@ def grade_and_advance(
         theta_hat,
         se,
         certainty,
-        stop and not bank_exhausted,
+        conv.converged,
     )
     trace_update(
         competency,
@@ -344,11 +366,13 @@ def grade_and_advance(
         theta_hat=theta_hat,
         se=se,
         certainty_pct=certainty,
-        converged=stop and not bank_exhausted,
+        converged=conv.converged,
     )
 
     if stop:
-        finalize_competency(state, bank_exhausted=bank_exhausted, competency=competency)
+        finalize_competency(
+            state, bank_exhausted=bank_exhausted, competency=competency, conv=conv
+        )
         return
 
     if use_llm is None:
@@ -450,7 +474,10 @@ def render_sidebar_live(state: dict, title: str) -> None:
     c1.metric("θ̂ (ability)", f"{state['theta_hat']:.3f}")
     c2.metric("SE (uncertainty)", f"{state['se']:.3f}")
     st.sidebar.caption(
-        f"Convergence target: SE ≤ {SE_TARGET} · "
+        f"Stops when: certainty ≥ {CONFIDENCE_TARGET:.0%} · "
+        f"or same level {STABLE_WINDOW}× in a row "
+        f"(after {MIN_QUESTIONS} questions, certainty ≥ {STABILITY_FLOOR:.0%}) · "
+        f"or {MAX_QUESTIONS} questions · "
         f"selection: {'OpenAI procedural (KL→Fisher)' if llm_enabled() else 'engine only (KL→Fisher)'}"
     )
 
@@ -840,6 +867,11 @@ def screen_assessment() -> None:
         st.rerun()
 
 
+def stop_reason_label(state: dict) -> str:
+    """Human-readable exit route, for a report that should not hide why it ended."""
+    return Convergence(True, state.get("stop_reason", "")).label or "—"
+
+
 def screen_report() -> None:
     st.header("Final Report")
     comp_states = st.session_state["comp_states"]
@@ -858,6 +890,7 @@ def screen_report() -> None:
                 "SE": round(s["se"], 3),
                 "Certainty %": round(s.get("certainty_pct", 0), 1),
                 "Questions": s["q_count"],
+                "Stopped because": stop_reason_label(s),
                 "Low confidence": s["low_confidence"],
                 "Bank exhausted": s.get("bank_exhausted", False),
             }
@@ -882,9 +915,18 @@ def screen_report() -> None:
                 st.caption(
                     f"θ̂ = {s['theta_hat']:.3f}, SE = {s['se']:.3f}, "
                     f"certainty = {cert:.1f}% ({certainty_label(cert)}), "
-                    f"{s['q_count']} questions answered"
+                    f"{s['q_count']} questions answered · "
+                    f"stopped because {stop_reason_label(s)}"
                 )
                 st.progress(cert / 100.0, text=f"Assessment certainty — {certainty_label(cert)}")
+                if s.get("stop_reason") == "stable_level":
+                    # A settled band is not a precise estimate. Saying so here keeps the
+                    # shorter test from reading as a more certain one.
+                    st.caption(
+                        f"The level repeated {STABLE_WINDOW}× in a row, which ended the "
+                        f"competency early. That is a stable *band*, not a precise θ̂ — "
+                        f"read the certainty above for precision."
+                    )
             with cols[1]:
                 if s["low_confidence"]:
                     st.error("⚠ Low confidence")

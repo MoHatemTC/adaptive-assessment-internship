@@ -28,7 +28,57 @@ Live `assessment.log` showed failures this build addresses:
 | Clone synthesis recycling stems | Curated unique bank; clone path only fills gaps |
 
 Selection: **KL information for questions 1–3**, then **posterior-expected 3PL Fisher**.
-Stop when `SE ≤ 0.65` or `12` questions (recalibrated from unreachable 0.45@10 with coarse banks).
+
+## Convergence
+
+A competency ends when **any** of three rules fires. `engine.check_convergence` owns all
+three; `app.should_stop` adds bank exhaustion, which only it can see.
+
+| Rule | Condition | Reported as converged? |
+|---|---|---|
+| Confidence | `certainty ≥ 90%` (`CONFIDENCE_TARGET`) | yes |
+| Stable level | same level `3×` in a row (`STABLE_WINDOW`), after `6` questions (`MIN_QUESTIONS`) and only at `certainty ≥ 80%` (`STABILITY_FLOOR`) | yes, but flagged low-confidence when `SE > 0.65` |
+| Budget | `12` questions (`MAX_QUESTIONS`) | **no** — running out is not convergence |
+
+The confidence rule is *exactly* the old `SE ≤ 0.65` test: `posterior_certainty_pct` maps
+`SE_TARGET` to precisely 90% and caps at 89% above it. Restating it in confidence units
+puts the stopping rule in the same units as the candidate's report; it does not change
+behaviour.
+
+### Why the stable-level rule has two guards
+
+`level = round(3 + θ̂)` is a 5-way bucket, and θ̂ moves slowly, so the bucket repeats
+long before the estimate is precise. Measured over 200 candidates × 7 θ × 5 competencies:
+
+| Config | RMSE | mean items | mean SE | stability stops |
+|---|---:|---:|---:|---:|
+| No guards beyond `MIN_QUESTIONS=6` | 0.825 | 7.2 | 0.853 | **98%** |
+| `+ STABILITY_FLOOR = 0.80` (shipped) | 0.747 | 9.1 | 0.781 | 87% |
+| Stability rule removed | 0.712 | 11.8 | 0.730 | 0% |
+
+Without the floor the rule fired in 98% of sessions at SE ≈ 0.85 and swallowed the
+confidence rule entirely (which fired in 0.9%). `MIN_QUESTIONS` alone was not enough.
+
+**The stability rule is a test-length optimisation, not evidence of precision.** It buys
+a shorter test and costs accuracy. A stability stop still reports `low_confidence` when
+SE exceeds 0.65, and the report names the exit route, so a short run cannot read as a
+certain one.
+
+## Exposure control
+
+`EXPOSURE_TOP_K` (default 3, `CAT_EXPOSURE_TOP_K` to override) applies **randomesque**
+exposure control: the ranked window returned by `rank_candidates` starts at a uniform
+random rank in `[0, k)`, so the administered item is rank `o ~ U[0,k)`.
+
+It is applied to the *window* rather than the final pick on purpose: on the LLM branches
+the LLM is the chooser, and randomising after its pick would discard the decision those
+branches exist to measure. This way it composes identically with a coded picker and an
+LLM picker.
+
+Set `top_k=1` to restore deterministic argmax — `simulate_cat.py` does, so recovery is
+measured without randomesque noise. Before this existed, selection was fully
+deterministic at `temperature=0`: every candidate at a given θ̂ received an identical
+form, and one item was administered in 100% of 200 sessions.
 
 ## LLM procedural selection (OpenAI)
 
@@ -55,7 +105,22 @@ streamlit run app.py
 ```
 
 Setup screen shows connection status and a toggle for LLM selection.
-If OpenAI fails, the app falls back to the same procedure executed deterministically in Python.
+If OpenAI fails, the app falls back to the same procedure executed deterministically in
+Python — and as of the tie-break fix below, that claim is actually true.
+
+> The fallback used to be a *different estimator*. `deterministic_select` keyed its sort
+> on raw `info` first, and tuple comparison is lexicographic, so a 0.5% information
+> difference settled the order outright and the documented "within 1% → prefer smaller
+> |b−θ|" rule was unreachable: across 505 θ-points on this bank the top two scores were
+> never exactly equal, so the tie-breaks ran **0 times**. The LLM was told to apply the
+> 1% band (and did). Measured across all 5 competencies, the two procedures disagreed at
+> 39 θ-points. `NEAR_TOP_REL` now collapses the 1% band into a single sort key, so code
+> and prompt agree.
+>
+> Content balancing is still weak: `|b−θ|` is continuous, so it almost always decides
+> before the sub-competency tie-break is reached. Sub-competency coverage measures
+> 7.4/8 per session, but that is the bank being well spread, not the algorithm
+> balancing. Real content balancing needs a constraint, not a tie-break.
 
 ## The LLM is required
 
@@ -187,10 +252,14 @@ A candidate who always picked "the long B" scored ~89% on the old bank without r
 ### Design rules
 
 - **24 items per competency**: 8 sub-competencies × 3, ladder 5/5/4/5/5 across `very_easy…very_hard`.
-- **`a` is independent of `b`.** Discrimination is spread across every difficulty band
-  (a very_easy item can still separate sharply). Pinning high `a` to high `b` starves the
-  low-θ end of information and leaves weak candidates measured with blunt items —
+- **`a` should be independent of `b`.** Discrimination is spread across every difficulty
+  band (a very_easy item can still separate sharply). Pinning high `a` to high `b` starves
+  the low-θ end of information and leaves weak candidates measured with blunt items —
   `validate_bank.py` fails on `corr(difficulty, a) > 0.75` for this reason.
+  **This bank measures `corr(difficulty, a) = +0.50`**, which passes the gate but is not
+  independence: mean `a` climbs monotonically 0.90 → 1.46 from `very_easy` to `very_hard`.
+  So the low-θ information collapse below is *partly a bank property*, not only the 3PL
+  guessing floor it is attributed to.
 - **Within a band, the sharpest item takes the outer edge** of the `b` range, since
   information is scarcest at the ladder's extremes.
 - **Distractors are misconceptions, not filler.** Each is a specific error a candidate
@@ -205,18 +274,37 @@ python validate_bank.py enriched_bank_cat.json   # exit 1 on any violation
 python simulate_cat.py enriched_bank_cat.json 300
 ```
 
+`simulate_cat.py` drives **`selection_pipeline.select_next_item(use_llm=False)`** — the
+pipeline the app administers — not `engine.select_item`.
+
+> It used to call `engine.select_item`: pure greedy argmax, with no shortlist, no 1%
+> band, no tie-breaks and no exposure control. That is a path **no branch ships**, so
+> every number below was evidence for a program nobody runs. `use_llm=False` keeps the
+> run offline and deterministic while measuring the coded procedure the LLM is held
+> against — which is the baseline the branch comparison needs. Numbers moved when this
+> was fixed; the older figures in git history are not comparable.
+
 `validate_bank.py` treats "no cueing" as a hypothesis to test rather than a judgement call:
 chi-square on key position, exact binomial on longest-is-key **and** shortest-is-key, and a
 mean length-rank z-test (a bank can pass "is longest" while the key is reliably *second*
 longest — equally learnable). It also walks the ability range and fails if the best available
 item at any θ is too blunt to measure there.
 
-### Measured behaviour (300 simulated candidates per point)
+### Measured behaviour (200 simulated candidates per point)
 
-| Operating condition | RMSE(θ̂) | Reaches SE ≤ 0.65 in 12 items |
+Driven through `select_next_item(use_llm=False)` with `top_k=1`, under the three-rule
+convergence check:
+
+| Operating condition | RMSE(θ̂) | Converged (confidence or stable level) |
 |---|---|---|
-| No self-rating (pessimistic bound) | 0.72 | 16% |
-| Honest self-rating (expected case) | 0.63 | 35% |
+| No self-rating (pessimistic bound) | 0.764 | 86% |
+| Honest self-rating (expected case) | 0.649 | 81% |
+
+The convergence rate is **not** comparable to the pre-convergence-rule figures (16% / 35%),
+which counted only `SE ≤ 0.65` and measured the unshipped `engine.select_item` path. Most
+of the 81–86% here is the stable-level rule, which stops at SE ≈ 0.78 — precision did not
+improve, the exit route changed. `certainty ≥ 90%` alone still fires in roughly 15% of
+sessions, matching the old 16%.
 
 θ̂ is **essentially unbiased at every ability level** (bias −0.11…+0.10 in the expected case),
 including θ=±2.5.
