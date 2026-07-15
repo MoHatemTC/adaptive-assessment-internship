@@ -102,7 +102,7 @@ def chat_json(system: str, user: str, *, temperature: float = 0.0) -> dict:
 def probe_gateway() -> tuple[bool, str]:
     """List models via OpenAI SDK — confirms key + network."""
     if not llm_configured():
-        return False, "OPENAI_API_KEY not set — add it to .env"
+        return False, "OPENAI_API_KEY not set — add it to .env or Streamlit app secrets"
 
     client = get_client()
     if client is None:
