@@ -22,7 +22,7 @@ from the provided shortlist — never invent ids.
 Return JSON with this schema:
 {
   "selected_id": "<id from shortlist>",
-  "criterion_used": "KL" | "Fisher",
+  "criterion_used": "<echo the `criterion` field given to you, verbatim>",
   "procedure_steps": [
     "Step 1: ...",
     "Step 2: ..."
@@ -33,7 +33,8 @@ Return JSON with this schema:
 }
 
 PROCEDURE (execute in order):
-1. Note questions_answered and criterion (KL if <3 else Fisher).
+1. Read the `criterion` field in the payload — the engine has already decided it
+   (KL early in the test, otherwise Fisher). Do not choose it yourself.
 2. From shortlist, pick the item with the highest info_score for that criterion.
 3. If two items are within 1% relative info_score, pick the one with smallest |b - theta_hat|.
 4. If still tied, pick the sub_competency least represented in served_history.
@@ -70,6 +71,22 @@ class SelectionResult:
     # calibrated stem was administered instead. Surfaced in the UI, not swallowed.
     rephrase_rejected_reason: str = ""
     rephrase_rejected_code: str = ""
+
+
+def _normalize_criterion(name: str) -> str:
+    """Compare criteria by family, not by label.
+
+    The engine reports "E[Fisher]" when it averages Fisher over the posterior, but that
+    is still Fisher — the distinction is how it is evaluated, not which criterion. A
+    model echoing "Fisher" is agreeing, and warning about it on every single call buries
+    the mismatches that would matter (e.g. claiming Fisher during the KL phase).
+    """
+    n = name.strip().lower()
+    if "fisher" in n:
+        return "fisher"
+    if "kl" in n:
+        return "kl"
+    return n
 
 
 def _served_sub_counts(served_ids: list[str], pool: list[dict]) -> dict[str, int]:
@@ -267,7 +284,7 @@ def llm_select(
     # 1-10) would get printed as "Fisher I = 8.0", a value 3PL Fisher cannot reach.
     # Report what actually ranked the shortlist, and flag disagreement as a prompt bug.
     llm_criterion = str(data.get("criterion_used", "")).strip()
-    if llm_criterion and llm_criterion.lower() != criterion.lower():
+    if llm_criterion and _normalize_criterion(llm_criterion) != _normalize_criterion(criterion):
         get_logger().warning(
             "LLM_SELECT | criterion mismatch: engine used %s, LLM reported %s (using engine's)",
             criterion, llm_criterion,
