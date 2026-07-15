@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+from contextlib import contextmanager
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,31 @@ APPROACH_ID = os.getenv("CAT_APPROACH_ID", "approach-1-code-math-llm-pick")
 MATH_ACTOR = os.getenv("CAT_MATH_ACTOR", "code")
 SELECTION_ACTOR = os.getenv("CAT_SELECTION_ACTOR", "llm")
 TRACE_NAME = os.getenv("CAT_TRACE_NAME", f"masaar-cat-{APPROACH_ID}")
+BANK_ID = os.getenv("CAT_BANK_ID", "enriched_bank_cat")
+# Free-form extras, comma-separated: CAT_TRACE_TAGS="run:pilot-3,cohort:2026-summer"
+EXTRA_TAGS = [t.strip() for t in os.getenv("CAT_TRACE_TAGS", "").split(",") if t.strip()]
+
+
+def trace_tags() -> list[str]:
+    """Trace-level tags for filtering and grouping in the Langfuse UI.
+
+    Namespaced `key:value` rather than bare words so the three approaches stay
+    comparable: `math:llm` groups approaches 2 and 3 regardless of how they select,
+    and `model:...` keeps a pricing change from silently pooling with older runs.
+    """
+    tags = [
+        APPROACH_ID,
+        f"math:{MATH_ACTOR}",
+        f"selection:{SELECTION_ACTOR}",
+        f"bank:{BANK_ID}",
+    ]
+    try:
+        from llm_client import get_model
+
+        tags.append(f"model:{get_model()}")
+    except Exception:  # pragma: no cover — tracing must never break the assessment
+        pass
+    return tags + EXTRA_TAGS
 
 
 def _jsonable(value: Any) -> Any:
@@ -48,6 +74,7 @@ def _base_metadata(extra: dict[str, Any] | None = None) -> dict[str, Any]:
         "approach_id": APPROACH_ID,
         "math_actor": MATH_ACTOR,
         "selection_actor": SELECTION_ACTOR,
+        "bank_id": BANK_ID,
     }
     if extra:
         metadata.update(_jsonable(extra))
@@ -60,6 +87,26 @@ def langfuse_configured() -> bool:
         and os.getenv("LANGFUSE_PUBLIC_KEY", "").strip()
         and os.getenv("LANGFUSE_BASE_URL", "").strip()
     )
+
+
+@contextmanager
+def _noop_context():
+    yield
+
+
+def propagate_attributes(**kwargs):
+    """Trace-level attributes, via whatever the installed SDK actually supports.
+
+    Resolved at call time rather than import time so a missing/older langfuse degrades
+    to a no-op instead of taking the assessment down.
+    """
+    try:
+        from langfuse import propagate_attributes as _propagate
+
+        return _propagate(**kwargs)
+    except Exception as exc:  # pragma: no cover
+        get_logger().warning("TRACE | propagate_attributes unavailable: %s", exc)
+        return _noop_context()
 
 
 @lru_cache(maxsize=1)
@@ -92,30 +139,46 @@ def trace_event(
     output_data: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
     as_type: str = "span",
+    model: str | None = None,
+    usage_details: dict[str, int] | None = None,
+    cost_details: dict[str, float] | None = None,
 ) -> bool:
-    """Record one Langfuse observation if configured."""
+    """Record one Langfuse observation if configured.
+
+    model/usage_details/cost_details only apply to generations. Without them Langfuse
+    shows a generation with no tokens and no cost, so the dashboard cannot answer "what
+    did this approach cost" — which is most of the point of tracing three approaches
+    side by side.
+    """
     client = _get_langfuse_client()
     if client is None:
         return False
 
     meta = _base_metadata(metadata)
     try:
-        with client.start_as_current_observation(
-            name=name,
-            as_type=as_type,
-            input=_jsonable(input_data or {}),
-            metadata=meta,
-        ) as observation:
-            try:
-                client.update_current_trace(
-                    name=TRACE_NAME,
-                    tags=[APPROACH_ID, f"math:{MATH_ACTOR}", f"selection:{SELECTION_ACTOR}"],
-                    metadata=_base_metadata(),
-                )
-            except Exception:
-                pass
-            if output_data is not None:
-                observation.update(output=_jsonable(output_data))
+        # propagate_attributes is how the v4 SDK sets trace-level name/tags. The previous
+        # code called client.update_current_trace(), which does not exist on this client:
+        # it raised AttributeError into a bare `except: pass`, so every trace was written
+        # with tags=[] and named after its observation instead of TRACE_NAME. The tags
+        # were never reaching Langfuse and nothing said so.
+        with propagate_attributes(trace_name=TRACE_NAME, tags=trace_tags(), metadata=meta):
+            with client.start_as_current_observation(
+                name=name,
+                as_type=as_type,
+                input=_jsonable(input_data or {}),
+                metadata=meta,
+            ) as observation:
+                update: dict[str, Any] = {}
+                if output_data is not None:
+                    update["output"] = _jsonable(output_data)
+                if model:
+                    update["model"] = model
+                if usage_details:
+                    update["usage_details"] = usage_details
+                if cost_details:
+                    update["cost_details"] = cost_details
+                if update:
+                    observation.update(**update)
         return True
     except Exception as exc:  # pragma: no cover
         get_logger().warning("TRACE | %s failed: %s", name, exc)
@@ -233,10 +296,39 @@ def trace_llm_response(
     output_data: dict[str, Any],
     metadata: dict[str, Any] | None = None,
 ) -> None:
+    """Record an LLM call as a costed Langfuse generation.
+
+    Model and token usage are pulled from the call that just happened rather than
+    passed in by every call site, so a new call site cannot forget them and silently
+    contribute a zero-cost generation. Callers that trace a *failed* call get no usage,
+    which is correct — there was no billed response.
+    """
+    model = None
+    usage_details = None
+    cost_details = None
+    try:
+        from llm_client import consume_last_usage, get_model, model_pricing
+
+        model = get_model()
+        last = consume_last_usage()
+        if last is not None and last.calls:
+            usage_details = {"input": last.input_tokens, "output": last.output_tokens}
+            price = model_pricing(model)
+            if price:
+                cost_details = {
+                    "input": last.input_tokens * price["input"] / 1e6,
+                    "output": last.output_tokens * price["output"] / 1e6,
+                }
+    except Exception:  # pragma: no cover — tracing must never break the assessment
+        pass
+
     trace_event(
         name,
         input_data=input_data,
         output_data=output_data,
         metadata=metadata,
         as_type="generation",
+        model=model,
+        usage_details=usage_details,
+        cost_details=cost_details,
     )

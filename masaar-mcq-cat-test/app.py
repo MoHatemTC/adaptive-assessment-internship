@@ -26,14 +26,24 @@ from engine import (
     resolve_b,
 )
 from engine_log import get_logger, log_selection, log_session_start, log_synthesis, log_update
-from llm_client import get_model, llm_configured, probe_gateway, provider_label, test_connection
+from llm_client import (
+    get_model,
+    get_usage,
+    llm_configured,
+    model_pricing,
+    provider_label,
+    test_connection,
+)
 from selection_pipeline import SelectionResult, select_next_item
 from tracing import trace_final, trace_selection, trace_session_start, trace_update
 
 MIN_ITEMS_PER_COMPETENCY = 8
 BANK_EXHAUSTION_THRESHOLD = 4
+# Fixed: the CAT bank is the only bank. See render_llm_gate/screen_setup for why an
+# uploaded bank is not accepted.
 DEFAULT_BANK = Path(__file__).parent / "enriched_bank_cat.json"
-FALLBACK_BANK = Path(__file__).parent / "sample_bank.json"
+# This branch: coded math, one LLM call per question to select the next item.
+LLM_CALLS_PER_QUESTION = 1
 
 
 def enrich_question(raw: dict) -> dict:
@@ -517,33 +527,105 @@ def render_debug_simulate(bank_by_comp: dict[str, list[dict]]) -> None:
             st.dataframe(history_df(sim["history"]), width="stretch", hide_index=True)
 
 
+def render_llm_gate() -> None:
+    """Require a working LLM before the assessment can start.
+
+    There is no "use the LLM" toggle any more, and no engine-only mode to fall back
+    to. Each branch exists to measure what happens when the LLM owns part of the CAT;
+    a run that silently used coded selection instead produces a number that looks like
+    a result and answers a different question. So the LLM is mandatory and its
+    availability is proven up front rather than discovered mid-assessment.
+    """
+    st.subheader("LLM controller (required)")
+    st.caption(
+        f"Provider: `{provider_label()}` · model: `{get_model()}` · "
+        "MCQ grading always stays deterministic (exact index match)."
+    )
+
+    if "llm_probe" not in st.session_state:
+        st.session_state["llm_probe"] = None
+
+    if not llm_configured():
+        st.error(
+            "No `OPENAI_API_KEY` found. This app requires a working LLM — there is no "
+            "engine-only mode. Copy `.env.example` → `.env` and add your key, or set it "
+            "in Streamlit Cloud app secrets."
+        )
+        set_llm_enabled(False)
+        st.stop()
+
+    # Probe once per session, automatically. Previously this was a button the user had
+    # to remember to press, and forgetting it silently left the run in engine-only mode.
+    if st.session_state["llm_probe"] is None:
+        with st.spinner("Verifying LLM connection…"):
+            st.session_state["llm_probe"] = test_connection()
+
+    ok, msg = st.session_state["llm_probe"]
+    if not ok:
+        st.error(f"LLM connection failed — cannot start.\n\n{msg}")
+        if st.button("Retry connection", key="llm_retry_btn"):
+            st.session_state["llm_probe"] = None
+            st.rerun()
+        set_llm_enabled(False)
+        st.stop()
+
+    st.success(msg)
+    set_llm_enabled(True)
+
+
+def render_cost_panel() -> None:
+    """What this run has actually cost, metered from the API's own token counts."""
+    usage = get_usage()
+    price = model_pricing()
+    with st.expander("LLM usage & cost", expanded=False):
+        if price is None:
+            st.warning(
+                f"No pricing on file for `{get_model()}` — add it to "
+                "`MODEL_PRICING_USD_PER_1M` in `llm_client.py` to see cost."
+            )
+        else:
+            st.caption(
+                f"`{get_model()}` · ${price['input']:.2f} per 1M input tokens · "
+                f"${price['output']:.2f} per 1M output tokens"
+            )
+        c1, c2, c3 = st.columns(3)
+        c1.metric("LLM calls", usage.calls)
+        c2.metric("Tokens", f"{usage.input_tokens + usage.output_tokens:,}",
+                  help=f"{usage.input_tokens:,} in · {usage.output_tokens:,} out")
+        cost = usage.cost_usd()
+        c3.metric("Cost so far", "—" if cost is None else f"${cost:.4f}")
+        st.caption(
+            f"Metered from each response's `usage`, not estimated. Expected volume: "
+            f"{LLM_CALLS_PER_QUESTION} call(s) per question × up to {MAX_QUESTIONS} "
+            f"questions × competencies selected."
+        )
+
+
 def screen_setup() -> None:
     st.header("Setup")
     st.markdown(
-        "Upload a question bank JSON, rate your proficiency per competency, then start the adaptive assessment."
+        "Rate your proficiency per competency, then start the adaptive assessment."
     )
 
-    default_path = DEFAULT_BANK if DEFAULT_BANK.exists() else FALLBACK_BANK
-    with default_path.open(encoding="utf-8") as f:
-        sample_default = f.read()
-
-    uploaded = st.file_uploader("Question bank JSON", type=["json"])
-    if uploaded is not None:
-        raw_text = uploaded.read().decode("utf-8")
-    else:
-        st.info(
-            f"No file uploaded — using bundled `{default_path.name}` "
-            f"({default_path.name} preferred for CAT; spans very_easy…very_hard)."
+    # The bank is fixed, not uploaded. The three approach branches only produce a
+    # comparable measurement if they run identical items, and an arbitrary uploaded
+    # bank may carry no numeric IRT parameters at all — in which case the engine falls
+    # back to label maps, collapses b onto 5 discrete values, and the CAT degrades
+    # without saying so.
+    if not DEFAULT_BANK.exists():
+        st.error(
+            f"Required bank `{DEFAULT_BANK.name}` is missing. Rebuild it with "
+            "`python build_enriched_bank.py bank_items enriched_bank_cat.json`."
         )
-        raw_text = sample_default
+        st.stop()
 
     try:
-        questions = json.loads(raw_text)
+        questions = json.loads(DEFAULT_BANK.read_text(encoding="utf-8"))
         if not isinstance(questions, list):
             raise ValueError("Root JSON must be an array of questions.")
     except (json.JSONDecodeError, ValueError) as exc:
-        st.error(f"Invalid JSON: {exc}")
-        return
+        st.error(f"`{DEFAULT_BANK.name}` is invalid: {exc}")
+        st.stop()
 
     bank_by_comp, warnings = validate_bank(questions)
     if not bank_by_comp:
@@ -592,57 +674,8 @@ def screen_setup() -> None:
         for w in warnings:
             st.markdown(f"- {w}")
 
-    st.subheader("LLM selection (OpenAI)")
-    st.caption(
-        f"Provider: `{provider_label()}` · model: `{get_model()}` · "
-        "MCQ grading stays deterministic; LLM only picks the next item via the CAT procedure."
-    )
-
-    if "llm_enabled" not in st.session_state:
-        st.session_state["llm_enabled"] = False
-    if "llm_probe" not in st.session_state:
-        st.session_state["llm_probe"] = None
-
-    c1, c2 = st.columns([1, 2])
-    with c1:
-        if st.button("Test OpenAI connection", key="llm_probe_btn"):
-            with st.spinner("Probing OpenAI…"):
-                ok, msg = probe_gateway()
-                st.session_state["llm_probe"] = (ok, msg)
-                set_llm_enabled(ok)
-    with c2:
-        if st.button("Full chat ping", key="llm_chat_btn"):
-            with st.spinner("Sending chat ping…"):
-                ok, msg = test_connection()
-                st.session_state["llm_probe"] = (ok, msg)
-                set_llm_enabled(ok)
-
-    probe = st.session_state.get("llm_probe")
-    if probe is None:
-        if llm_configured():
-            st.info(
-                "Credentials found in `.env`. Click **Test OpenAI connection** before enabling LLM selection."
-            )
-        else:
-            st.warning("No `OPENAI_API_KEY` in `.env`. Copy `.env.example` → `.env` and fill in values.")
-    else:
-        ok, msg = probe
-        if ok:
-            st.success(msg)
-        else:
-            st.error(msg)
-
-    # Separate widget key from persistent flag — Streamlit deletes widget keys when
-    # the control is not rendered on later screens (this broke LLM after q0).
-    toggled = st.checkbox(
-        "Use LLM for procedural item selection",
-        value=llm_enabled(),
-        disabled=not llm_configured(),
-        help="Requires a valid OpenAI API key. Falls back to the same procedure in Python on failure.",
-        key="llm_toggle_widget",
-    )
-    set_llm_enabled(bool(toggled) and llm_configured())
-    st.caption(f"LLM enabled for assessment: **{llm_enabled()}** (persists across screens)")
+    render_llm_gate()
+    render_cost_panel()
 
     st.subheader("Self-rating intake")
     if "self_ratings" not in st.session_state:
