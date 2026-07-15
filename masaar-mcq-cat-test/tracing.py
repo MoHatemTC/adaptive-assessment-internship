@@ -227,8 +227,18 @@ def trace_selection(
             "adaptation_note": selection.adaptation_note,
             "rephrased_stem": getattr(selection, "rephrased_stem", ""),
             "original_stem": item.get("stem", ""),
+            "expected_selected_id": getattr(selection, "expected_selected_id", ""),
+            "procedure_followed": getattr(selection, "procedure_followed", True),
+            "procedure_deviation_reason": getattr(selection, "procedure_deviation_reason", ""),
+            "fallback_used": getattr(selection, "fallback_used", False),
+            "fallback_reason": getattr(selection, "fallback_reason", ""),
         },
-        metadata={"competency": competency, "phase": "selection"},
+        metadata={
+            "competency": competency,
+            "phase": "selection",
+            "procedure_followed": getattr(selection, "procedure_followed", True),
+            "fallback_used": getattr(selection, "fallback_used", False),
+        },
     )
 
 

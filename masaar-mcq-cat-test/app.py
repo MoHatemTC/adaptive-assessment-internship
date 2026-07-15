@@ -169,7 +169,21 @@ def _apply_selection(state: dict, sel: SelectionResult | None, competency: str =
         "original_stem": sel.item.get("stem", ""),
         "rephrase_rejected_reason": sel.rephrase_rejected_reason,
         "rephrase_rejected_code": sel.rephrase_rejected_code,
+        "expected_selected_id": sel.expected_selected_id,
+        "procedure_followed": sel.procedure_followed,
+        "procedure_deviation_reason": sel.procedure_deviation_reason,
+        "fallback_used": sel.fallback_used,
+        "fallback_reason": sel.fallback_reason,
     }
+    st.session_state["selection_steps"] = st.session_state.get("selection_steps", 0) + 1
+    if sel.llm_used:
+        st.session_state["llm_selection_steps"] = st.session_state.get("llm_selection_steps", 0) + 1
+    if sel.fallback_used:
+        st.session_state["selection_fallbacks"] = st.session_state.get("selection_fallbacks", 0) + 1
+    if not sel.procedure_followed:
+        st.session_state["selection_procedure_deviations"] = (
+            st.session_state.get("selection_procedure_deviations", 0) + 1
+        )
     if sel.rephrase_rejected_reason:
         # Count rejections over the session so a systematically bad prompt is visible
         # rather than showing up once per question and scrolling away.
@@ -546,6 +560,16 @@ def render_selection_rationale(state: dict, item: dict, sel_meta: dict) -> None:
     """Show the shortlist the LLM actually chose from, and what it was told."""
     st.markdown(f"**Criterion:** `{sel_meta.get('criterion', '?')}` — "
                 f"**rule applied:** {sel_meta.get('rule_applied', '—')}")
+    expected_id = sel_meta.get("expected_selected_id") or "—"
+    if sel_meta.get("fallback_used"):
+        st.warning(f"LLM fallback used: {sel_meta.get('fallback_reason', 'unknown reason')}")
+    elif sel_meta.get("procedure_followed", True):
+        st.success(f"Procedure audit passed. Expected and selected item: `{expected_id}`.")
+    else:
+        st.warning(
+            "Procedure audit deviation: "
+            f"{sel_meta.get('procedure_deviation_reason', 'unknown deviation')}"
+        )
     if sel_meta.get("adaptation_note"):
         st.info(sel_meta["adaptation_note"])
     for step in sel_meta.get("procedure_steps", []):
@@ -564,7 +588,8 @@ def render_selection_rationale(state: dict, item: dict, sel_meta: dict) -> None:
                 continue
             rows.append({
                 "id": sid,
-                "chosen": "✅" if sid == item["id"] else "",
+                "chosen": "selected" if sid == item["id"] else "",
+                "expected": "expected" if sid == expected_id else "",
                 "difficulty": q.get("difficulty", ""),
                 "a": round(q.get("a", 0), 2),
                 "b": round(q.get("b", 0), 2),
@@ -611,6 +636,28 @@ def render_sidebar_live(state: dict, title: str) -> None:
                         st.caption(step)
                 if sel_meta.get("shortlist_ids"):
                     st.caption(f"Shortlist: {', '.join(sel_meta['shortlist_ids'])}")
+                if sel_meta.get("fallback_used"):
+                    st.warning(f"Fallback: {sel_meta.get('fallback_reason', 'unknown reason')}")
+                elif not sel_meta.get("procedure_followed", True):
+                    st.warning(sel_meta.get("procedure_deviation_reason", "Procedure deviation"))
+
+    with st.sidebar.expander("LLM selection audit", expanded=False):
+        total = st.session_state.get("selection_steps", 0)
+        llm_steps = st.session_state.get("llm_selection_steps", 0)
+        fallbacks = st.session_state.get("selection_fallbacks", 0)
+        deviations = st.session_state.get("selection_procedure_deviations", 0)
+        rephrase_rejects = st.session_state.get("rephrase_rejects", 0)
+        c1, c2 = st.columns(2)
+        c1.metric("Selections", total)
+        c2.metric("LLM selections", llm_steps)
+        c3, c4 = st.columns(2)
+        c3.metric("Fallbacks", fallbacks)
+        c4.metric("Procedure deviations", deviations)
+        st.metric("Rephrase rejects", rephrase_rejects)
+        st.caption(
+            "A valid LLM-selected shortlist id is administered, but deviations from the "
+            "documented procedure are counted here and traced to Langfuse."
+        )
 
     st.sidebar.line_chart(posterior_chart_df(state["posterior"]).set_index("θ"))
     st.sidebar.markdown("**Question log**")
@@ -924,6 +971,11 @@ def screen_setup() -> None:
         st.session_state["comp_states"] = comp_states
         st.session_state["competencies"] = selected_competencies
         st.session_state["comp_idx"] = 0
+        st.session_state["selection_steps"] = 0
+        st.session_state["llm_selection_steps"] = 0
+        st.session_state["selection_fallbacks"] = 0
+        st.session_state["selection_procedure_deviations"] = 0
+        st.session_state["rephrase_rejects"] = 0
         st.session_state["phase"] = "assessment"
         st.rerun()
 

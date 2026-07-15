@@ -92,6 +92,11 @@ class SelectionResult:
     # calibrated stem was administered instead. Surfaced in the UI, not swallowed.
     rephrase_rejected_reason: str = ""
     rephrase_rejected_code: str = ""
+    expected_selected_id: str = ""
+    procedure_followed: bool = True
+    procedure_deviation_reason: str = ""
+    fallback_used: bool = False
+    fallback_reason: str = ""
 
 
 def _normalize_criterion(name: str) -> str:
@@ -119,6 +124,99 @@ def _served_sub_counts(served_ids: list[str], pool: list[dict]) -> dict[str, int
     return counts
 
 
+def _procedure_expected_choice(shortlist: list[dict]) -> dict:
+    """Return the item the written LLM procedure would select from a shortlist.
+
+    This is an audit, not a second selector: valid LLM picks are still administered,
+    but the run records whether the model actually followed the procedure it was
+    instructed to execute.
+    """
+    if not shortlist:
+        return {}
+
+    eligible = [s for s in shortlist if float(s.get("info_rel", 0.0)) >= CONTENT_INFO_TOLERANCE]
+    if not eligible:
+        eligible = shortlist
+
+    min_served = min(int(s.get("sub_competency_served_count", 0)) for s in eligible)
+    balanced = [s for s in eligible if int(s.get("sub_competency_served_count", 0)) == min_served]
+
+    best_info = max(float(s.get("info_score", 0.0)) for s in balanced)
+    near_best = [
+        s for s in balanced
+        if float(s.get("info_score", 0.0)) >= best_info * NEAR_TOP_REL
+    ]
+
+    return sorted(
+        near_best,
+        key=lambda s: (
+            float(s.get("b_distance", 999.0)),
+            -float(s.get("a", 0.0)),
+            str(s.get("id", "")),
+        ),
+    )[0]
+
+
+def _procedure_audit(selected_id: str, shortlist: list[dict]) -> dict:
+    expected = _procedure_expected_choice(shortlist)
+    expected_id = str(expected.get("id", ""))
+    selected = next((s for s in shortlist if str(s.get("id", "")) == selected_id), None)
+    if not selected:
+        return {
+            "expected_selected_id": expected_id,
+            "procedure_followed": False,
+            "procedure_deviation_reason": "selected_id was not in the shortlist",
+        }
+    if selected_id == expected_id:
+        return {
+            "expected_selected_id": expected_id,
+            "procedure_followed": True,
+            "procedure_deviation_reason": "",
+        }
+
+    eligible = [s for s in shortlist if float(s.get("info_rel", 0.0)) >= CONTENT_INFO_TOLERANCE]
+    min_served = min(int(s.get("sub_competency_served_count", 0)) for s in eligible)
+    balanced = [s for s in eligible if int(s.get("sub_competency_served_count", 0)) == min_served]
+    best_info = max(float(s.get("info_score", 0.0)) for s in balanced)
+    near_best = [
+        s for s in balanced
+        if float(s.get("info_score", 0.0)) >= best_info * NEAR_TOP_REL
+    ]
+
+    reason = f"expected {expected_id} by the documented procedure"
+    if float(selected.get("info_rel", 0.0)) < CONTENT_INFO_TOLERANCE:
+        reason = (
+            f"selected {selected_id} below info_rel floor "
+            f"{CONTENT_INFO_TOLERANCE:.2f}; expected {expected_id}"
+        )
+    elif int(selected.get("sub_competency_served_count", 0)) > min_served:
+        reason = (
+            f"selected {selected_id} from a more-served sub-competency "
+            f"({selected.get('sub_competency_served_count')}); expected {expected_id}"
+        )
+    elif selected not in near_best:
+        reason = (
+            f"selected {selected_id} outside the 1% information band "
+            f"for the least-served set; expected {expected_id}"
+        )
+    elif float(selected.get("b_distance", 999.0)) > float(expected.get("b_distance", 999.0)):
+        reason = (
+            f"selected {selected_id} with larger |b-theta| "
+            f"({selected.get('b_distance')}); expected {expected_id}"
+        )
+    elif float(selected.get("a", 0.0)) < float(expected.get("a", 0.0)):
+        reason = (
+            f"selected {selected_id} with lower discrimination "
+            f"({selected.get('a')}); expected {expected_id}"
+        )
+
+    return {
+        "expected_selected_id": expected_id,
+        "procedure_followed": False,
+        "procedure_deviation_reason": reason,
+    }
+
+
 def deterministic_select(
     theta_hat: float,
     q_count: int,
@@ -127,6 +225,8 @@ def deterministic_select(
     posterior=None,
     rng=None,
     top_k=None,
+    fallback_used: bool = False,
+    fallback_reason: str = "",
 ) -> SelectionResult | None:
     """Pure engine fallback — same rules the LLM must follow."""
     ranked, criterion = rank_candidates(theta_hat, q_count, pool, served_ids, posterior,
@@ -177,6 +277,10 @@ def deterministic_select(
         adaptation_note="Engine-only selection (LLM unavailable).",
         rule_applied="highest information",
         shortlist_ids=[r[0]["id"] for r in ranked],
+        expected_selected_id=q["id"],
+        procedure_followed=True,
+        fallback_used=fallback_used,
+        fallback_reason=fallback_reason,
     )
 
 
@@ -274,6 +378,8 @@ def llm_select(
 
     user_msg = json.dumps(payload, indent=2)
     data = chat_json(SELECTION_SYSTEM, user_msg)
+    selected_id = str(data.get("selected_id", "")).strip()
+    audit = _procedure_audit(selected_id, shortlist)
     trace_llm_response(
         "cat.llm.selection",
         input_data={
@@ -285,11 +391,17 @@ def llm_select(
             "served_ids": served_ids,
             "shortlist": shortlist,
         },
-        output_data=data,
-        metadata={"competency": competency, "phase": "llm_selection"},
+        output_data={**data, "procedure_audit": audit},
+        metadata={
+            "competency": competency,
+            "phase": "llm_selection",
+            "expected_selected_id": audit["expected_selected_id"],
+            "llm_selected_id": selected_id,
+            "procedure_followed": audit["procedure_followed"],
+            "procedure_deviation_reason": audit["procedure_deviation_reason"],
+        },
     )
 
-    selected_id = str(data.get("selected_id", "")).strip()
     id_map = {q["id"]: q for q, *_ in ranked}
     if selected_id not in id_map:
         get_logger().warning(
@@ -297,7 +409,8 @@ def llm_select(
             selected_id,
         )
         return deterministic_select(theta_hat, q_count, pool, served_ids, posterior,
-                                    rng=rng, top_k=top_k)
+                                    rng=rng, top_k=top_k, fallback_used=True,
+                                    fallback_reason=f"LLM returned invalid id {selected_id!r}")
 
     q = id_map[selected_id]
 
@@ -353,6 +466,14 @@ def llm_select(
             claimed,
         )
 
+    if not audit["procedure_followed"]:
+        get_logger().warning(
+            "LLM_SELECT | procedure deviation | selected=%s | expected=%s | %s",
+            selected_id,
+            audit["expected_selected_id"],
+            audit["procedure_deviation_reason"],
+        )
+
     result = SelectionResult(
         item=q,
         info_score=float(info),
@@ -366,6 +487,10 @@ def llm_select(
         rephrased_stem=rephrased_stem,
         rephrase_rejected_reason=rephrase_reason,
         rephrase_rejected_code=rephrase_code,
+        expected_selected_id=audit["expected_selected_id"],
+        procedure_followed=audit["procedure_followed"],
+        procedure_deviation_reason=audit["procedure_deviation_reason"],
+        fallback_used=False,
     )
 
     get_logger().info(
@@ -420,7 +545,8 @@ def select_next_item(
             get_logger().warning("LLM_SELECT | error=%s — deterministic fallback", exc)
             # Annotate fallback so UI can show why LLM was skipped
             fallback = deterministic_select(theta_hat, q_count, pool, served_ids, posterior,
-                                            rng=rng, top_k=top_k)
+                                            rng=rng, top_k=top_k, fallback_used=True,
+                                            fallback_reason=f"{type(exc).__name__}: {exc}")
             if fallback is not None:
                 fallback.adaptation_note = (
                     f"LLM unavailable ({type(exc).__name__}: {exc}). "
