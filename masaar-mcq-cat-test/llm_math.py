@@ -161,6 +161,9 @@ class LLMMathResult:
     # The LLM's own SE, recorded for comparison and never used. Code computes the SE the
     # assessment runs on; see posterior_se_about.
     se_llm: float | None = None
+    llm_theta_hat: float | None = None
+    llm_se: float | None = None
+    rejection_reason: str = ""
     # A *proof* the update is wrong: the 3PL likelihood is monotone in theta, so a correct
     # response cannot lower the estimate.
     invariant_violation: str = ""
@@ -249,7 +252,10 @@ def check_direction(theta_prev: float, theta_new: float, is_correct: bool) -> st
 def _coded_result(theta: float, se: float, certainty: float, note: str, steps: list[str],
                   raw: dict, posterior: np.ndarray | None = None,
                   theta_deviation: float | None = None,
-                  se_deviation: float | None = None) -> LLMMathResult:
+                  se_deviation: float | None = None,
+                  llm_theta_hat: float | None = None,
+                  llm_se: float | None = None,
+                  rejection_reason: str = "") -> LLMMathResult:
     """The coded EAP standing in for the model's update.
 
     theta_deviation defaults to None, not 0.0. When this result is a *rejection*, the
@@ -263,6 +269,8 @@ def _coded_result(theta: float, se: float, certainty: float, note: str, steps: l
         calculation_steps=steps, math_note=note, fallback_used=True, raw=raw,
         coded_theta=theta, coded_se=se,
         theta_deviation=theta_deviation, se_deviation=se_deviation,
+        llm_theta_hat=llm_theta_hat, llm_se=llm_se, se_llm=llm_se,
+        rejection_reason=rejection_reason,
     )
 
 
@@ -298,6 +306,7 @@ def llm_math_update(
             coded_theta, coded_se, coded_certainty,
             "LLM math disabled.", ["LLM math disabled; used coded EAP update."],
             {"fallback": "disabled"}, posterior=post,
+            rejection_reason="disabled",
         )
 
     payload = {
@@ -331,6 +340,7 @@ def llm_math_update(
             f"LLM math fallback ({type(exc).__name__}).",
             [f"LLM math failed: {exc}", "Used coded EAP update."],
             {"fallback_error": str(exc)}, posterior=post,
+            rejection_reason=f"{type(exc).__name__}: {exc}",
         )
 
     # A response that does not carry a usable theta_hat is a failed LLM step, not a
@@ -347,6 +357,7 @@ def llm_math_update(
             "LLM math fallback (no usable theta_hat in response).",
             ["LLM returned no parseable theta_hat.", "Used coded EAP update."],
             data, posterior=post,
+            rejection_reason="no usable theta_hat",
         )
         result.se_llm = None
         return result
@@ -379,6 +390,7 @@ def llm_math_update(
             "se_used": round(se, 4),
             "se_deviation": round(se_dev, 4),
             "invariant_violation": violation,
+            "accepted": not violation and theta_dev <= DEVIATION_REJECT,
         },
     )
 
@@ -405,6 +417,8 @@ def llm_math_update(
             [f"Rejected LLM update: {reason}", "Used coded EAP update."],
             data, posterior=post,
             theta_deviation=theta_dev, se_deviation=se_dev,
+            llm_theta_hat=theta_hat, llm_se=se_llm,
+            rejection_reason=reason,
         )
         result.invariant_violation = violation
         result.deviation_rejected = deviation_rejected
@@ -433,4 +447,6 @@ def llm_math_update(
         theta_deviation=theta_dev,
         se_deviation=se_dev,
         se_llm=se_llm,
+        llm_theta_hat=theta_hat,
+        llm_se=se_llm,
     )

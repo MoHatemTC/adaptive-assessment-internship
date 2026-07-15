@@ -123,6 +123,8 @@ def main() -> int:
         expect(
             abs(res.theta_hat - coded_theta) < 1e-9
             and res.fallback_used
+            and res.llm_theta_hat is None
+            and res.rejection_reason
             and 0.2 <= res.se <= 2.5,
             f"{label} falls back AND is counted as a fallback",
             f"theta={res.theta_hat:.4f} fallback_used={res.fallback_used} se={res.se:.3f}",
@@ -156,6 +158,9 @@ def main() -> int:
            f"se {res.se:.6f} vs coded EAP {coded_se_:.6f}")
     expect(res.se_llm is not None and abs(res.se_llm - 0.21) < 1e-9,
            "the LLM's se is still recorded for comparison", f"se_llm={res.se_llm}")
+    expect(res.llm_theta_hat is not None and abs(res.llm_theta_hat - coded_th) < 1e-9
+           and res.llm_se is not None and abs(res.llm_se - 0.21) < 1e-9,
+           "raw LLM theta and SE are exposed separately from values used by the assessment")
     expect(res.posterior is not None and abs(res.posterior.sum() - 1.0) < 1e-9,
            "the exact grid posterior is carried, not rebuilt from two moments")
 
@@ -191,6 +196,8 @@ def main() -> int:
            and abs(res_far.theta_deviation - far_dev) < 1e-6,
            "a rejected step records the model's real deviation, not 0.0",
            f"expected ≈{far_dev:.2f}, recorded {res_far.theta_deviation}")
+    expect(res_far.llm_theta_hat is not None and res_far.rejection_reason,
+           "a rejected step preserves the raw LLM theta and rejection reason")
 
     # --- a full session with a competent LLM terminates and recovers ability ---
     # Model executes the documented Newton update correctly.

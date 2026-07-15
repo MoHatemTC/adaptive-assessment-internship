@@ -351,12 +351,19 @@ def grade_and_advance(
             "math_actor": "coded" if math_result.fallback_used else "llm",
             "math_fallback": math_result.fallback_used,
             "math_note": math_result.math_note,
+            "llm_theta_hat": math_result.llm_theta_hat,
+            "llm_se": math_result.llm_se,
+            "se_used": math_result.se,
             "coded_theta": math_result.coded_theta,
+            "coded_se": math_result.coded_se,
             "theta_deviation": math_result.theta_deviation,
             "se_deviation": math_result.se_deviation,
             "invariant_violation": math_result.invariant_violation,
+            "deviation_rejected": math_result.deviation_rejected,
+            "rejection_reason": math_result.rejection_reason,
         }
     )
+    state["last_math_update"] = state["history"][-1]
     # Session-level tally: whether the LLM can do IRT maths is the question this branch
     # exists to answer, and it is only visible in aggregate.
     # Every step the model produced a θ̂ for, INCLUDING rejected ones. `not fallback_used`
@@ -376,6 +383,12 @@ def grade_and_advance(
     if math_result.deviation_rejected:
         st.session_state["math_dev_rejects"] = st.session_state.get("math_dev_rejects", 0) + 1
     st.session_state["math_steps"] = st.session_state.get("math_steps", 0) + 1
+    if use_llm:
+        st.session_state["llm_math_steps"] = st.session_state.get("llm_math_steps", 0) + 1
+    if use_llm and not math_result.fallback_used:
+        st.session_state["accepted_llm_math_steps"] = (
+            st.session_state.get("accepted_llm_math_steps", 0) + 1
+        )
     if math_result.fallback_used:
         st.session_state["math_fallbacks"] = st.session_state.get("math_fallbacks", 0) + 1
 
@@ -498,6 +511,8 @@ def render_math_audit(state: dict) -> None:
     violations = st.session_state.get("math_violations", 0)
     dev_rejects = st.session_state.get("math_dev_rejects", 0)
     steps = st.session_state.get("math_steps", 0)
+    llm_steps = st.session_state.get("llm_math_steps", 0)
+    accepted = st.session_state.get("accepted_llm_math_steps", 0)
     fallbacks = st.session_state.get("math_fallbacks", 0)
     if not (devs or violations or dev_rejects or steps):
         return
@@ -518,6 +533,10 @@ def render_math_audit(state: dict) -> None:
                                f"— {rate:.0%} fell back to coded EAP.")
         else:
             st.sidebar.caption(f"LLM ran {steps - fallbacks}/{steps} math steps.")
+
+    c0, c00 = st.sidebar.columns(2)
+    c0.metric("LLM math steps", llm_steps)
+    c00.metric("Accepted LLM math", accepted)
 
     c1, c2 = st.sidebar.columns(2)
     if devs:
@@ -555,6 +574,42 @@ def render_math_audit(state: dict) -> None:
             "not a verdict — correct maths trips it in ~12% of sessions because θ̂ drift "
             "compounds. Read the mean above."
         )
+
+    last = state.get("last_math_update")
+    if last:
+        with st.sidebar.expander("Last math update: raw vs used", expanded=False):
+            rows = [
+                {
+                    "quantity": "theta_hat",
+                    "LLM raw": (
+                        None if last.get("llm_theta_hat") is None
+                        else round(last.get("llm_theta_hat"), 4)
+                    ),
+                    "coded EAP": (
+                        None if last.get("coded_theta") is None
+                        else round(last.get("coded_theta"), 4)
+                    ),
+                    "used by assessment": round(last.get("theta_hat", 0.0), 4),
+                },
+                {
+                    "quantity": "SE",
+                    "LLM raw": (
+                        None if last.get("llm_se") is None
+                        else round(last.get("llm_se"), 4)
+                    ),
+                    "coded EAP": (
+                        None if last.get("coded_se") is None
+                        else round(last.get("coded_se"), 4)
+                    ),
+                    "used by assessment": round(last.get("se_used", last.get("se", 0.0)), 4),
+                },
+            ]
+            st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+            if last.get("math_fallback"):
+                st.warning(
+                    "Used coded EAP for this step: "
+                    f"{last.get('rejection_reason') or last.get('math_note')}"
+                )
 
 
 def render_sidebar_live(state: dict, title: str) -> None:
@@ -883,6 +938,13 @@ def screen_setup() -> None:
         st.session_state["comp_states"] = comp_states
         st.session_state["competencies"] = selected_competencies
         st.session_state["comp_idx"] = 0
+        st.session_state["math_devs"] = []
+        st.session_state["math_violations"] = 0
+        st.session_state["math_dev_rejects"] = 0
+        st.session_state["math_steps"] = 0
+        st.session_state["llm_math_steps"] = 0
+        st.session_state["accepted_llm_math_steps"] = 0
+        st.session_state["math_fallbacks"] = 0
         st.session_state["phase"] = "assessment"
         st.rerun()
 
