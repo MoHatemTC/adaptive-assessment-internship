@@ -80,15 +80,20 @@ python measure_llm_cost.py --competencies 2   # real calls, real tokens
 python measure_llm_cost.py --dry-run          # structure only, no spend
 ```
 
-Per **competency** (up to 12 questions), on `gpt-4o-mini` at $0.15/$0.60 per 1M tokens:
+Measured on `gpt-4o-mini` ($0.15/$0.60 per 1M tokens), 2 sessions of 12 questions per
+branch. A **competency** is up to 12 questions; a full assessment is 5 competencies.
 
-| Branch | LLM calls | Per question |
-|---|---:|---:|
-| `approach-1-code-math-llm-pick` | 12 | 1 (selection) |
-| `approach-2-llm-math-code-pick` | 12 | 1 (ability update) |
-| `approach-3-llm-full-cat` | ~24 | 2 (update, then selection) |
+| Branch | Calls/question | Calls/competency | Tokens/competency | $/competency | $/assessment | $/100 candidates |
+|---|---:|---:|---|---:|---:|---:|
+| `approach-1-code-math-llm-pick` | 1 (selection) | 12 | 34,754 in / 3,971 out | $0.0038 | $0.0190 | $1.90 |
+| `approach-2-llm-math-code-pick` | 1 (ability update) | 12 | 14,047 in / 7,300 out | $0.0032 | $0.0162 | $1.62 |
+| `approach-3-llm-full-cat` | 2 (update, then selection) | 24 | 45,715 in / 8,760 out | $0.0061 | $0.0303 | $3.03 |
 
-A full assessment is 5 competencies. See each branch's README for its measured USD figure.
+Approach 3 costs ~1.9× approach 1 because it cannot be adaptive in one call: selecting the
+next item and updating ability in a single response means the item is chosen against a
+stale θ̂. Approach 2 is cheapest despite doing the harder task — its prompt carries one
+item's parameters, while approach 1 ships a 5-item shortlist every turn.
+
 Pricing lives in `MODEL_PRICING_USD_PER_1M` in `llm_client.py`; an unpriced model reports
 no cost rather than a wrong one. The setup screen has a live **LLM usage & cost** panel.
 
