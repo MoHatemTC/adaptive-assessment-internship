@@ -60,6 +60,36 @@ STABLE_WINDOW = 3
 MIN_QUESTIONS = 6
 STABILITY_FLOOR = 0.80
 
+# --- Content balancing -----------------------------------------------------
+# Sub-competency coverage was documented as a tie-break, and a tie-break cannot deliver
+# it: it sits behind |b - theta|, which is continuous, so it essentially never decides.
+# Measured coverage of 7.4/8 sub-competencies per session was the bank being well spread,
+# not the algorithm balancing — a lumpier bank would silently produce a competency score
+# resting on three sub-competencies out of eight.
+#
+# So it is a constraint instead. Among items whose information is within
+# CONTENT_INFO_TOLERANCE of the best available, prefer the least-served sub-competency.
+# The tolerance is what makes this safe: the trade is bounded to a small, known
+# information cost, rather than the open-ended one a hard quota would impose.
+#
+# 0.80 chosen from a measured sweep (1050 sessions per point, prior SD 2.0):
+#
+#   tolerance   coverage /8   RMSE
+#   off              6.32     0.746
+#   0.90             6.46     0.756
+#   0.80             6.59     0.749     <- here
+#   0.70             6.72     0.771
+#   0.60             6.86     0.770
+#
+# Be honest about the size of this: +0.27 sub-competencies for an RMSE cost inside noise.
+# It is a real improvement and a cheap one, but it does not rescue a lumpy bank — the
+# worst session still touched only 4 of 8, in every condition including 0.60. Widening the
+# shortlist to 8 changed nothing (6.59 either way), so the top-5 window was never the
+# limiter; the binding constraint is that a 9-item test cannot cover 8 sub-competencies
+# and still put its items where the information is. Real blueprint enforcement needs a
+# longer test or a per-sub quota, both of which cost more than this is worth here.
+CONTENT_INFO_TOLERANCE = 0.80
+
 # --- Exposure control ------------------------------------------------------
 # Randomesque (Kingsbury & Zara 1989): administer a uniform pick from the k most
 # informative items instead of the argmax. Pure argmax is deterministic, so every
@@ -103,6 +133,28 @@ def resolve_a(item_or_discrimination):
             return float(item_or_discrimination["a"])
         return DISCRIMINATION_MAP.get(item_or_discrimination.get("discrimination", "medium"), 1.0)
     return DISCRIMINATION_MAP.get(item_or_discrimination, 1.0)
+
+
+def resolve_c(item, n_options=None):
+    """Guessing floor: the item's calibrated `c` when it has one, else 1/k.
+
+    1/k was hardcoded, silently discarding any calibrated value. It is a *theoretical*
+    floor and asserting it as fact is optimistic in both directions: real 3PL calibration
+    usually lands below 1/k, because attractive distractors pull low-ability examinees
+    under chance, and a genuinely guessable item can sit above it. Since c is what makes
+    3PL information vanish at low theta, a wrong c is not a rounding detail — it decides
+    how precisely weak candidates can be measured at all.
+
+    Every item in the shipped bank carries c = 0.25 == 1/4, so this changes nothing today.
+    It stops the next calibrated bank from being quietly overwritten.
+    """
+    if isinstance(item, dict):
+        c = item.get("c")
+        if isinstance(c, (int, float)) and 0.0 <= float(c) < 1.0:
+            return float(c)
+        n = n_options if n_options else len(item.get("options", [])) or 4
+        return 1.0 / n
+    return 1.0 / (n_options or 4)
 
 
 def p_correct(theta, a, b, c):
@@ -242,9 +294,26 @@ def select_item_detailed(theta_hat, q_count, pool, served_ids, posterior=None):
     return item, float(score)
 
 
+def theta_to_pct(theta_hat):
+    """θ̂ → 0-100, as the normal-population percentile of the ability estimate.
+
+    `level * 20` was a 5-way bucket wearing a percentage's clothes: a Novice scored
+    exactly 20% and never less, θ=+2 and θ=+4 both reported 100%, and a candidate could
+    improve substantially without the number moving at all. Percentile against the N(0,1)
+    ability scale the model already assumes is continuous, monotone in θ̂, and actually
+    means something to a reader: "better than X% of the reference population".
+
+    Note this reports *ability*, not proportion-correct. They are different quantities and
+    only the first is what a CAT estimates.
+    """
+    # Φ(θ) via erf, without pulling in scipy.
+    from math import erf, sqrt
+    return float(np.clip(100.0 * 0.5 * (1.0 + erf(float(theta_hat) / sqrt(2.0))), 0.0, 100.0))
+
+
 def level_and_band(theta_hat, se):
     level = int(np.clip(round(3 + theta_hat), 1, 5))
-    pct = level * 20
+    pct = round(theta_to_pct(theta_hat))
     bands = {1: "Novice", 2: "Developing", 3: "Competent", 4: "Proficient", 5: "Expert"}
     low_confidence = se > SE_TARGET
     return level, pct, bands[level], low_confidence

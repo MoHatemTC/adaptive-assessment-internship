@@ -154,8 +154,15 @@ def main() -> int:
             fail(f"{q['id']}: a={q.get('a')} out of plausible range [0.2, 2.5]")
         if not isinstance(q["b"], (int, float)) or not -3.0 <= q["b"] <= 3.0:
             fail(f"{q['id']}: b={q.get('b')} out of plausible range [-3, 3]")
-        if abs(q["c"] - 1 / N_OPTIONS) > 1e-9:
-            fail(f"{q['id']}: c={q['c']} != {1 / N_OPTIONS} for a {N_OPTIONS}-option MCQ")
+        # c is bounded, not pinned. Requiring exactly 1/k would reject the calibrated bank
+        # this gate exists to protect: real 3PL calibration usually lands *below* 1/k,
+        # because attractive distractors pull low-ability examinees under chance. Above
+        # 1/k is the suspicious direction — an item easier to guess than guessing.
+        if not isinstance(q["c"], (int, float)) or not 0.0 <= q["c"] <= 1 / N_OPTIONS + 1e-9:
+            fail(f"{q['id']}: c={q.get('c')} outside [0, {1 / N_OPTIONS}] "
+                 f"for a {N_OPTIONS}-option MCQ")
+        elif abs(q["c"] - 1 / N_OPTIONS) > 1e-9:
+            warn(f"{q['id']}: c={q['c']} != 1/{N_OPTIONS} — calibrated, or a mistake?")
 
     bs = sorted(q["b"] for q in bank)
     a_s = [q["a"] for q in bank]
