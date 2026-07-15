@@ -611,7 +611,10 @@ def screen_setup() -> None:
                 "Credentials found in `.env`. Click **Test OpenAI connection** before enabling LLM math."
             )
         else:
-            st.warning("No `OPENAI_API_KEY` in `.env`. Copy `.env.example` → `.env` and fill in values.")
+            st.warning(
+                "No `OPENAI_API_KEY` found. Add it to local `.env` or to "
+                "Streamlit Community Cloud app secrets."
+            )
     else:
         ok, msg = probe
         if ok:
