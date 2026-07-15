@@ -398,9 +398,14 @@ def grade_and_advance(
     st.session_state["math_steps"] = st.session_state.get("math_steps", 0) + 1
     if controller.fallback_used:
         st.session_state["math_fallbacks"] = st.session_state.get("math_fallbacks", 0) + 1
-    else:
-        if controller.theta_deviation is not None:
-            st.session_state.setdefault("math_devs", []).append(controller.theta_deviation)
+    # Deviation is recorded for every step the model produced a θ̂ for, INCLUDING rejected
+    # ones — so NOT in the `else` above. A rejection sets fallback_used, so hanging this
+    # off the else dropped exactly the largest deviations: the displayed mean could not
+    # exceed DEVIATION_REJECT, and a model doing no arithmetic displayed a mean under the
+    # panel's own "correct" cut. The fraud detector read green on fraud. theta_deviation
+    # is None when no usable θ̂ came back, which is the real "nothing to compare" case.
+    if controller.theta_deviation is not None:
+        st.session_state.setdefault("math_devs", []).append(controller.theta_deviation)
     if controller.invariant_violation:
         st.session_state["math_violations"] = st.session_state.get("math_violations", 0) + 1
     if controller.deviation_rejected:

@@ -1,8 +1,24 @@
 """Full LLM CAT controller for Approach 3.
 
-The LLM makes every decision: it updates theta/SE, chooses the next question, and
-words it. Code grades MCQs, computes the information those choices are made on, and
-enforces the stopping rule.
+The LLM reports theta_hat, chooses the next question from an engine-scored shortlist, and
+words it. Code grades MCQs, computes the information those choices are made on, derives
+the SE, and enforces the stopping rule.
+
+WHAT THE LLM DOES NOT DO, DESPITE THIS FILE'S NAME
+
+It does not update the belief. `eap_update(posterior, item, is_correct)` -- line ~547 --
+does not take theta_hat as an argument: the posterior is pure coded Bayes (prior x
+likelihood) every step, whatever the model returns. This docstring used to say "the LLM
+makes every decision: it updates theta/SE", which is not what the code does.
+
+So the model's theta_hat is a Laplace approximation carried alongside a grid posterior it
+disagrees with (measured gap: mean 0.13, p95 0.32), and it influences only three things:
+the number reported to the candidate, the SE via posterior_se_about (which is measured
+*about* theta_hat), and which items the shortlist offers next. The candidate's reported
+ability is not the mean of the posterior its SE is computed from. That is a real design
+statement, and worth stating plainly rather than advertising a scope the code never had.
+See the DEVIATION_REJECT comment for what that costs: measurably nothing, in either
+direction -- which is the branch's actual finding.
 
 WHY THIS IS TWO PHASES
 
@@ -166,13 +182,39 @@ SHORTLIST_N = 5
 # own θ̂, so a drifted estimate selects items suited to the drift, and the drift feeds
 # itself. That compounding, not arithmetic error, is the tail.
 #
-# 0.50 is chosen knowing it trips ~9% of correct sessions, because on this branch a false
-# rejection is close to free: it falls back to the coded EAP, and the coded EAP is the
-# *better* estimator anyway (engine RMSE ~0.648 vs this branch's ~0.66 with the maths
-# done correctly). The gate cannot cost accuracy it is not protecting. What it buys is
-# 100% of degenerate sessions caught. The honest reading is the session mean -- 0.12 vs
-# 0.42 -- which is what the audit panel leads with; the per-step gate is a floor under the
-# damage, not proof of anything about a single step.
+# 0.50 is chosen knowing it trips ~9% of correct sessions. The justification I first gave
+# for that -- "a false rejection is free because the coded EAP it falls back to is the
+# better estimator (engine ~0.648 vs this branch's ~0.66)" -- was not measured on this
+# branch and is NOT SUPPORTED. Paired on common random numbers, shipped rules, matched
+# test lengths, n=750/arm:
+#
+#   arm                        RMSE     bias    items
+#   pure coded engine         0.7717  +0.038    9.1
+#   branch + correct Newton   0.7459  -0.013    9.3
+#   branch + lazy stub        0.7501  -0.013    9.5
+#
+#   MSE(newton) - MSE(coded)  = -0.0392  95% CI [-0.1091, +0.0289]  not significant
+#   MSE(lazy)   - MSE(coded)  = -0.0330  95% CI [-0.0971, +0.0337]  not significant
+#   MSE(lazy)   - MSE(newton) = +0.0062  95% CI [-0.0557, +0.0712]  not significant
+#
+# All three arms are statistically indistinguishable. So the gate is not protecting a
+# worse estimator from a better one; it is swapping between two estimators the data cannot
+# tell apart. That is the honest defence of 0.50 and it is a weaker one: a false rejection
+# costs nothing measurable, and the gate still catches 100% of degenerate sessions, so it
+# is worth having -- but nobody should claim it improves the estimate.
+#
+# The result underneath that table is the branch's real problem. A model doing Newton
+# exactly, a model doing NO ARITHMETIC AT ALL, and no model whatsoever produce the same
+# instrument. The LLM's correctness is unobservable in the output it exists to produce.
+# Any earlier number here quoting a clean engine-vs-branch gap (0.648, 0.66) was measured
+# at a different test length -- the LLM arms ran to the 12-question cap while the coded
+# arm stopped at 9.1 -- which is the same conditions-the-code-is-never-in error that
+# miscalibrated this constant twice.
+#
+# The honest reading is the session mean -- 0.12 vs 0.42 -- which is what the audit panel
+# leads with; the per-step gate is a floor under the damage, not proof of anything about a
+# single step.
+#
 # WARN sits at 0.30, not just under REJECT: a warn band of 0.45-0.50 would be four
 # hundredths wide and would fire on almost nothing the gate does not already reject. At
 # 0.30 the 0.30-0.50 band is a real early signal in the logs (5% of correct steps, 58% of
@@ -381,9 +423,14 @@ def _llm_math(state: dict, item: dict, is_correct: bool, competency: str,
         get_logger().warning(
             "LLM_FULL_MATH | %s | REJECTED (%s): %s — using coded EAP", item["id"],
             "direction" if violation else "magnitude",
+            # Not "a gate correct maths never reaches" — it does, on ~1% of steps and
+            # ~9% of sessions, as the DEVIATION_REJECT comment says in this same file.
+            # Emitting the stronger claim into the operator log every time it fires meant
+            # the log asserted the model was at fault on correct arithmetic.
             violation or f"θ̂ deviates {theta_dev:.2f} from the coded EAP on the same "
-                         f"evidence, past the {DEVIATION_REJECT} gate that a correct "
-                         f"Newton update never reaches")
+                         f"evidence, past the {DEVIATION_REJECT} gate; correct maths "
+                         f"reaches this on ~1% of steps, so this bounds the damage "
+                         f"rather than proving fault")
         return _MathOut(coded_theta, coded_se, coded_certainty, data,
                         violation=violation, deviation_rejected=deviation_rejected,
                         fallback_used=True, se_llm=se_llm, theta_deviation=theta_dev)
