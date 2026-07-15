@@ -101,14 +101,37 @@ DIRECTION_EPS = 1e-3
 # The tail is not arithmetic error. The LLM owns theta_hat while code owns the posterior,
 # so the two estimators drift apart cumulatively; the Newton update is taken from the
 # drifted theta_prev while the coded EAP is taken from the true posterior, and the gap is
-# mostly that drift. It is the branch's real behaviour, and it costs RMSE: this branch
-# lands ~0.72 where the pure coded EAP lands ~0.65.
+# mostly that drift.
 #
-# So 0.50 is kept knowing it trips ~12% of *correct* sessions, because a false rejection
-# here is close to free -- it falls back to the coded EAP, which is the better estimator
-# anyway. The gate cannot cost accuracy it is not protecting, and it buys 100% of
-# degenerate sessions caught. 1.00 was the first guess and catches 6.5% of lazy steps;
-# "loose enough to be safe" is how a gate ends up doing nothing.
+# WHAT THE DRIFT COSTS, MEASURED PROPERLY. An earlier version of this comment said "this
+# branch lands ~0.72 where the pure coded EAP lands ~0.65". The 0.65 was a run with the
+# stability rule OFF at ~12 items: it compared a 9-item LLM test against a 12-item coded
+# test and charged the difference to the LLM. That is the same error that miscalibrated
+# the gate twice -- a number measured in conditions the code is never in. Paired on common
+# random numbers (same candidate, same seed, same responses across arms), shipped rules,
+# n=1350/arm:
+#
+#   arm                       RMSE     bias    items
+#   pure coded EAP            0.7387  +0.015    9.0
+#   LLM + correct Newton      0.7537  -0.065    9.1
+#   LLM + lazy stub           0.7328  -0.033    9.2
+#
+#   MSE(newton) - MSE(coded)  = +0.0223  95% CI [+0.0090, +0.0354]  SIGNIFICANT
+#   MSE(lazy)   - MSE(newton) = -0.0311  95% CI [-0.0582, -0.0068]  SIGNIFICANT
+#
+# So the honest statement is worse than the false one it replaces: delegating the ability
+# update to an LLM makes the instrument SIGNIFICANTLY WORSE than the coded EAP sitting in
+# this same function, and a stub doing no arithmetic at all beats one doing Newton
+# exactly. The second result is not a paradox -- it is the gate. A lazy model trips it
+# constantly and every rejection hands the step back to the coded EAP, so the gate
+# launders a broken model into the engine. The branch's accuracy under a degenerate model
+# is supplied by the code it falls back to.
+#
+# 0.50 is kept knowing it trips ~12% of *correct* sessions, because a false rejection here
+# is close to free: it falls back to the coded EAP, and the measurement above says the
+# coded EAP is the better estimator (significantly). The gate cannot cost accuracy it is
+# not protecting, and it buys 100% of degenerate sessions caught. 1.00 was the first guess
+# and catches 6.5% of lazy steps; "loose enough to be safe" is how a gate does nothing.
 #
 # The honest detector is the session mean -- 0.14 correct vs 0.46 lazy -- which is what
 # the audit panel leads with. The per-step gate is a floor under the damage, not proof

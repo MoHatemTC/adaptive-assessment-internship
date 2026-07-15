@@ -359,7 +359,14 @@ def grade_and_advance(
     )
     # Session-level tally: whether the LLM can do IRT maths is the question this branch
     # exists to answer, and it is only visible in aggregate.
-    if not math_result.fallback_used and math_result.theta_deviation is not None:
+    # Every step the model produced a θ̂ for, INCLUDING rejected ones. `not fallback_used`
+    # reads like "only count real LLM steps", but a rejection sets fallback_used, so this
+    # dropped exactly the largest deviations: the displayed mean could not exceed
+    # DEVIATION_REJECT, and a model doing no arithmetic at all displayed a mean of ~0.27
+    # against its true ~0.47 -- under the panel's own "correct" cut, so the fraud detector
+    # read green on fraud in 76% of degenerate sessions. theta_deviation is None when no
+    # usable θ̂ came back, which is the real "nothing to compare" case.
+    if math_result.theta_deviation is not None:
         st.session_state.setdefault("math_devs", []).append(math_result.theta_deviation)
     if math_result.invariant_violation:
         st.session_state["math_violations"] = st.session_state.get("math_violations", 0) + 1
