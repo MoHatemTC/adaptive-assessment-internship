@@ -9,7 +9,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from engine import fisher_info, level_and_band, rank_candidates, selection_score
+from engine import (
+    CONTENT_INFO_TOLERANCE,
+    fisher_info,
+    level_and_band,
+    rank_candidates,
+    selection_score,
+)
 from engine_log import get_logger
 from llm_client import chat_json, llm_configured
 from rephrase_guard import check_rephrase
@@ -40,11 +46,18 @@ Return JSON with this schema:
 PROCEDURE (execute in order):
 1. Read the `criterion` field in the payload — the engine has already decided it
    (KL early in the test, otherwise Fisher). Do not choose it yourself.
-2. From shortlist, pick the item with the highest info_score for that criterion.
-3. If two items are within 1% relative info_score, pick the one with smallest |b - theta_hat|.
-4. If still tied, pick the sub_competency least represented in served_history.
+2. CONTENT BALANCING (a constraint, not a preference). Consider only items whose
+   `info_rel` >= 0.80, i.e. those carrying at least 80% of the best available
+   information. Among those, pick the one with the SMALLEST
+   `sub_competency_served_count`. A competency score must rest on its whole blueprint,
+   not on whichever sub-competency happens to hold the sharpest items.
+3. Within that eligible set, pick the highest info_score for the criterion.
+4. If two items are within 1% relative info_score, pick the one with smallest |b - theta_hat|.
 5. If still tied, pick the highest discrimination (a).
 6. selected_id MUST be one of the shortlist ids.
+
+Every item carries `info_rel` (its info_score relative to the shortlist's best) and
+`sub_competency_served_count` so steps 2-3 need no arithmetic from you.
 
 REPHRASING RULES:
 - After selecting the item, rephrase only the selected item's stem.
@@ -57,6 +70,9 @@ REPHRASING RULES:
 - Adapt wording to examinee_parameters.level_band and certainty_pct:
   lower certainty -> clearer wording; higher level -> use normal technical phrasing.
 - If the original stem is already ideal, return it unchanged.
+- Never add or remove a negation. "Which is TRUE" must not become "Which is NOT TRUE"
+  or "Which is FALSE": grading uses the original answer key, so a flipped question marks
+  the examinee wrong for answering correctly. Polarity flips are rejected by code.
 """
 
 
@@ -124,21 +140,23 @@ def deterministic_select(
     def sort_key(entry):
         q, info, fi, _kl = entry
         rel = info / max(top_info, 1e-9)
-        # Collapse everything within 1% of the best score into one band, so the
-        # documented tie-breaks below can actually decide the pick.
-        #
-        # This was previously keyed on raw `info` first. Tuple comparison is
-        # lexicographic, so a 0.5% info difference settled the order outright and rules
-        # 3-5 were unreachable: measured across 505 θ-points on this bank, the top two
-        # scores were *never* exactly equal, so the tie-breaks ran 0 times. The LLM is
-        # told to apply a 1% band (SELECTION_SYSTEM step 3) and did, which meant the
-        # model and its "identical" deterministic fallback ran different procedures —
-        # a session that quietly fell back was not the same experiment.
+        # Content balancing is a constraint, not a tie-break: among items carrying
+        # essentially the information the best one does, prefer the least-served
+        # sub-competency. It leads because a tie-break behind |b - theta| can never fire
+        # (|b - theta| is continuous), which left coverage to luck.
+        eligible = rel >= CONTENT_INFO_TOLERANCE
+        coverage = -sub_counts.get(q.get("sub_competency", ""), 0) if eligible else -99
+        # Then the 1% information band, collapsed into one key so the documented
+        # tie-breaks can decide inside it. Keyed on raw `info` first, tuple comparison is
+        # lexicographic, so a 0.5% difference settled the order outright and rules 3-5
+        # were unreachable: across 505 θ-points the top two scores were never exactly
+        # equal, so they ran 0 times. The LLM is told to apply a 1% band and did, so the
+        # model and its "identical" fallback ran different procedures.
         primary = 1.0 if rel >= NEAR_TOP_REL else rel
         return (
+            coverage,
             primary,
             -abs(q["b"] - theta_hat),
-            -sub_counts.get(q.get("sub_competency", ""), 0),
             q.get("a", 1.0),
         )
 
@@ -185,6 +203,7 @@ def llm_select(
     if certainty_pct is None:
         certainty_pct = 100.0 if se <= 0 else max(0.0, min(100.0, 100.0 * (1.0 - se / 2.0)))
     sub_counts = _served_sub_counts(served_ids, pool)
+    best_info = max((info for _q, info, _fi, _kl in ranked), default=0.0)
     shortlist = []
     for q, info, fi, kl in ranked:
         shortlist.append(
@@ -196,6 +215,10 @@ def llm_select(
                 "b": round(q["b"], 2),
                 "a": round(q["a"], 2),
                 "info_score": round(info, 4),
+                # Precomputed so the model never has to divide: content balancing keys
+                # off this, and an arithmetic slip there would silently unbalance the
+                # blueprint.
+                "info_rel": round(info / best_info, 4) if best_info > 0 else 0.0,
                 "fisher_i": round(fi, 4),
                 "kl_i": round(kl, 4),
                 "b_distance": round(abs(q["b"] - theta_hat), 2),
@@ -231,10 +254,16 @@ def llm_select(
         "served_ids": served_ids,
         "recent_responses": recent,
         "shortlist": shortlist,
+        "content_rule": {
+            "info_rel_floor": CONTENT_INFO_TOLERANCE,
+            "note": "Only items with info_rel >= floor are eligible; among them prefer "
+                    "the smallest sub_competency_served_count.",
+        },
         "procedure_reminder": [
-            "Pick highest info_score for criterion",
-            "Tie-break: smallest b_distance",
-            "Then: least-served sub_competency",
+            f"Eligible = info_rel >= {CONTENT_INFO_TOLERANCE}",
+            "Among eligible: least-served sub_competency wins",
+            "Then: highest info_score",
+            "Then: smallest b_distance",
             "Then: highest a",
             "Must return selected_id from shortlist only",
             "Rephrase only the selected stem for the examinee level/certainty",
