@@ -49,9 +49,8 @@ BANK_EXHAUSTION_THRESHOLD = 4
 # Fixed: the CAT bank is the only bank. See render_llm_gate/screen_setup for why an
 # uploaded bank is not accepted.
 DEFAULT_BANK = Path(__file__).parent / "enriched_bank_cat.json"
-# This branch: LLM math AND LLM selection — two calls per answered question
-# (ability update, then selection from the engine-scored shortlist).
-LLM_CALLS_PER_QUESTION = 2
+# This branch: one full-controller LLM call per CAT step.
+LLM_CALLS_PER_QUESTION = 1
 
 
 def enrich_question(raw: dict) -> dict:
@@ -199,8 +198,44 @@ def _pick_next(
     *,
     use_llm: bool = True,
 ) -> SelectionResult | None:
-    return llm_full_step(state, pool, competency, use_llm=use_llm,
-                         allow_rephrase=rephrase_enabled()).selection
+    result = llm_full_step(state, pool, competency, use_llm=use_llm,
+                           allow_rephrase=rephrase_enabled())
+    state["theta_hat"] = result.theta_hat
+    state["se"] = result.se
+    state["certainty_pct"] = result.certainty_pct
+    if result.posterior is not None:
+        state["posterior"] = result.posterior
+    state["last_controller"] = {
+        "invalid_llm_step": result.invalid_llm_step,
+        "invalid_reason": result.invalid_reason,
+        "stop": result.stop,
+        "stop_reason": result.stop_reason or result.stop_rule_reason,
+        "selection_note": result.selection_note,
+    }
+    if result.invalid_llm_step:
+        state.update({
+            "done": True,
+            "bank_exhausted": False,
+            "stop_reason": "invalid_llm_step",
+            "converged": False,
+            "invalid_llm_step": True,
+            "invalid_reason": result.invalid_reason,
+        })
+        st.session_state["invalid_llm_steps"] = st.session_state.get("invalid_llm_steps", 0) + 1
+        return None
+    if result.stop:
+        state.update({
+            "done": True,
+            "bank_exhausted": result.stop_rule_reason == "bank_exhausted",
+            "stop_reason": result.stop_rule_reason or result.stop_reason or "llm_stop",
+            "converged": result.converged,
+            "level": level_and_band(result.theta_hat, result.se)[0],
+            "pct": level_and_band(result.theta_hat, result.se)[1],
+            "band": level_and_band(result.theta_hat, result.se)[2],
+            "low_confidence": level_and_band(result.theta_hat, result.se)[3],
+        })
+        return None
+    return result.selection
 
 
 def init_competency_state(
@@ -256,6 +291,8 @@ def init_competency_state(
         use_llm = llm_enabled()
 
     sel = _pick_next(base, pool, competency, use_llm=use_llm)
+    if base.get("done"):
+        return base
     _apply_selection(base, sel, competency)
     base["bank_exhausted"] = base["current_item"] is None
     base["done"] = base["current_item"] is None
@@ -278,8 +315,13 @@ def ensure_current_item(state: dict, pool: list[dict], competency: str) -> None:
         "Selecting next question via OpenAI…" if use_llm else "Selecting next question…"
     ):
         sel = _pick_next(state, pool, competency, use_llm=use_llm)
+    if state.get("done"):
+        state["needs_selection"] = False
+        return
     _apply_selection(state, sel, competency)
     state["needs_selection"] = False
+    if state.get("invalid_llm_step"):
+        return
     if state["current_item"] is None:
         finalize_competency(state, bank_exhausted=True, competency=competency)
 
@@ -379,44 +421,45 @@ def grade_and_advance(
             "certainty_pct": certainty,
             "level": level_now,
             "fisher_i": state.get("current_fisher_i", 0.0),
-            "math_actor": "coded" if controller.fallback_used else "llm",
+            "math_actor": "llm",
             "selection_actor": "llm",
-            "llm_fallback": controller.fallback_used,
+            "llm_fallback": False,
             "llm_note": controller.selection_note,
             "coded_theta": controller.coded_theta,
             "theta_deviation": controller.theta_deviation,
             "invariant_violation": controller.invariant_violation,
             "llm_wanted_stop": controller.llm_wanted_stop,
+            "invalid_llm_step": controller.invalid_llm_step,
+            "invalid_reason": controller.invalid_reason,
         }
     )
-    # Session tallies — whether the LLM can run a CAT is only visible in aggregate.
-    # math_steps counts every attempted step and math_fallbacks every one that landed on
-    # coded EAP, because without them an all-fallback run was indistinguishable from a
-    # real one: only invariant violations were counted, deviations were appended solely
-    # when the LLM *succeeded*, and the trace tags are static constants. A branch whose
-    # whole claim is "the LLM ran the CAT" has to be able to show that it did.
+    state["last_controller"] = {
+        "invalid_llm_step": controller.invalid_llm_step,
+        "invalid_reason": controller.invalid_reason,
+        "stop": controller.stop,
+        "stop_reason": controller.stop_reason or controller.stop_rule_reason,
+        "selection_note": controller.selection_note,
+    }
+    # Session tallies: pure Approach 3 does not fall back to coded CAT decisions. A hard
+    # validation failure aborts the step/session and is counted explicitly.
     st.session_state["math_steps"] = st.session_state.get("math_steps", 0) + 1
-    if controller.fallback_used:
-        st.session_state["math_fallbacks"] = st.session_state.get("math_fallbacks", 0) + 1
-    # Deviation is recorded for every step the model produced a θ̂ for, INCLUDING rejected
-    # ones — so NOT in the `else` above. A rejection sets fallback_used, so hanging this
-    # off the else dropped exactly the largest deviations: the displayed mean could not
-    # exceed DEVIATION_REJECT, and a model doing no arithmetic displayed a mean under the
-    # panel's own "correct" cut. The fraud detector read green on fraud. theta_deviation
-    # is None when no usable θ̂ came back, which is the real "nothing to compare" case.
+    if controller.invalid_llm_step:
+        st.session_state["invalid_llm_steps"] = st.session_state.get("invalid_llm_steps", 0) + 1
     if controller.theta_deviation is not None:
         st.session_state.setdefault("math_devs", []).append(controller.theta_deviation)
     if controller.invariant_violation:
         st.session_state["math_violations"] = st.session_state.get("math_violations", 0) + 1
     if controller.deviation_rejected:
         st.session_state["math_dev_rejects"] = st.session_state.get("math_dev_rejects", 0) + 1
-    if controller.stop_disagreement:
-        st.session_state["stop_disagreements"] = st.session_state.get("stop_disagreements", 0) + 1
+    if controller.stop:
+        st.session_state["llm_stop_decisions"] = st.session_state.get("llm_stop_decisions", 0) + 1
 
-    # The stopping rule is code's. The model's `should_stop` is recorded and traced but
-    # never obeyed: an early stop voids the SE guarantee the final report rests on.
-    conv = should_stop(state, pool)
-    stop, bank_exhausted = conv.stop, conv.reason == "bank_exhausted"
+    conv = Convergence(
+        controller.stop,
+        controller.stop_rule_reason or controller.stop_reason or "llm_stop",
+        controller.converged,
+    )
+    stop, bank_exhausted = controller.stop, conv.reason == "bank_exhausted"
     log_update(
         competency,
         state["q_count"],
@@ -425,7 +468,7 @@ def grade_and_advance(
         theta_hat,
         se,
         certainty,
-        conv.converged,
+        controller.converged,
     )
     trace_update(
         competency,
@@ -435,8 +478,18 @@ def grade_and_advance(
         theta_hat=theta_hat,
         se=se,
         certainty_pct=certainty,
-        converged=conv.converged,
+        converged=controller.converged,
     )
+
+    if controller.invalid_llm_step:
+        state["done"] = True
+        state["stop_reason"] = "invalid_llm_step"
+        state["converged"] = False
+        state["low_confidence"] = True
+        state["invalid_llm_step"] = True
+        state["invalid_reason"] = controller.invalid_reason
+        state["current_item"] = None
+        return
 
     if stop:
         finalize_competency(
@@ -532,30 +585,24 @@ def render_controller_audit() -> None:
     devs = st.session_state.get("math_devs", [])
     violations = st.session_state.get("math_violations", 0)
     dev_rejects = st.session_state.get("math_dev_rejects", 0)
-    disagreements = st.session_state.get("stop_disagreements", 0)
+    stop_decisions = st.session_state.get("llm_stop_decisions", 0)
     rejects = st.session_state.get("rephrase_rejects", 0)
     steps = st.session_state.get("math_steps", 0)
-    fallbacks = st.session_state.get("math_fallbacks", 0)
-    if not (devs or violations or dev_rejects or disagreements or rejects or steps):
+    invalids = st.session_state.get("invalid_llm_steps", 0)
+    if not (devs or violations or dev_rejects or stop_decisions or rejects or steps or invalids):
         return
 
     st.sidebar.markdown("**LLM controller audit**")
 
-    # First, because it qualifies everything below it. This panel used to early-return
-    # when the LLM failed on every step, so a run that was 100% coded EAP displayed
-    # nothing at all and still reported as "LLM full CAT".
     if steps:
-        rate = fallbacks / steps
-        msg = f"LLM ran {steps - fallbacks}/{steps} math steps ({1 - rate:.0%})"
-        if fallbacks == steps:
-            st.sidebar.error(
-                f"⚠ Every math step fell back to coded EAP ({fallbacks}/{steps}). "
-                "This run measures the engine, not the LLM — do not report it as approach 3."
-            )
-        elif rate > 0.2:
-            st.sidebar.warning(f"{msg} — {rate:.0%} fell back to coded EAP.")
-        else:
-            st.sidebar.caption(msg)
+        st.sidebar.caption(
+            f"LLM controller steps: {steps}. Invalid hard-validation failures: {invalids}."
+        )
+    if invalids:
+        st.sidebar.error(
+            f"{invalids} invalid LLM step(s): the model returned an unusable CAT decision. "
+            "No deterministic CAT fallback was substituted."
+        )
 
     if devs:
         c1, c2 = st.sidebar.columns(2)
@@ -585,20 +632,17 @@ def render_controller_audit() -> None:
     if violations:
         st.sidebar.error(
             f"{violations} invariant violation(s): the LLM moved θ̂ the wrong way for a "
-            "graded response. Rejected; coded EAP used instead."
+            "graded response. The step was invalidated; no coded CAT fallback was used."
         )
     if dev_rejects:
         st.sidebar.warning(
             f"{dev_rejects} update(s) rejected for deviating more than {DEVIATION_REJECT} "
-            "from the coded EAP; the coded EAP was used instead. On this branch that is a "
-            "damage floor, not a verdict — correct maths trips it in ~9% of sessions "
-            "because θ̂ drift compounds through selection. Read the mean above."
+            "from the coded EAP comparator. Pure mode treats this as an invalid LLM step, "
+            "not as permission to substitute the coded engine."
         )
-    if disagreements:
+    if stop_decisions:
         st.sidebar.info(
-            f"{disagreements} stop disagreement(s): the model would have stopped at a "
-            "different point than the rule. The rule decides — stopping early would void "
-            "the SE guarantee."
+            f"{stop_decisions} stop decision(s) came from the LLM controller."
         )
     if rejects:
         st.sidebar.warning(f"{rejects} rephrasing(s) rejected — original wording shown instead.")
@@ -616,11 +660,8 @@ def render_sidebar_live(state: dict, title: str) -> None:
     c2.metric("SE (uncertainty)", f"{state['se']:.3f}")
     render_controller_audit()
     st.sidebar.caption(
-        f"Stops when: certainty ≥ {CONFIDENCE_TARGET:.0%} · "
-        f"or same level {STABLE_WINDOW}× in a row "
-        f"(after {MIN_QUESTIONS} questions, certainty ≥ {STABILITY_FLOOR:.0%}) · "
-        f"or {MAX_QUESTIONS} questions · "
-        f"full CAT controller: {'OpenAI' if llm_enabled() else 'coded fallback'}"
+        f"Stop decision: LLM controller, with a hard cap at {MAX_QUESTIONS} questions · "
+        f"full CAT controller: {'OpenAI' if llm_enabled() else 'disabled'}"
     )
 
     item = state.get("current_item")
@@ -638,7 +679,7 @@ def render_sidebar_live(state: dict, title: str) -> None:
                     for step in sel_meta["procedure_steps"]:
                         st.caption(step)
                 if sel_meta.get("shortlist_ids"):
-                    st.caption(f"Shortlist: {', '.join(sel_meta['shortlist_ids'])}")
+                    st.caption(f"Available ids considered by LLM: {', '.join(sel_meta['shortlist_ids'])}")
 
     st.sidebar.line_chart(posterior_chart_df(state["posterior"]).set_index("θ"))
     st.sidebar.markdown("**Question log**")

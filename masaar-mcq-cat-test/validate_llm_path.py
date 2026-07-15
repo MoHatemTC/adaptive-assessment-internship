@@ -22,10 +22,8 @@ WHAT IT MEASURES
   mean/p95 |dtheta|   the LLM's theta against the coded EAP on the same evidence. This is
                       a per-step comparison, not trajectory error: code owns the posterior,
                       so both estimates see identical evidence every step
-  fallback rate       steps that landed on coded EAP. A high number here means the run
-                      measured the engine; the RMSE above would then be the engine's, and
-                      reporting it as the LLM's would be the exact substitution this
-                      harness exists to prevent
+  invalid steps       pure Approach 3 steps rejected by hard code validation. These are not
+                      replaced by deterministic CAT fallbacks.
   violations          direction-invariant breaches (correct answer moving theta down)
   items / stop reason what the convergence rule actually did
 
@@ -114,7 +112,7 @@ def run_candidate(pool: list[dict], competency: str, true_theta: float,
     """One candidate through the branch's real controller. Returns per-step evidence."""
     state = _fresh()
     devs: list[float] = []
-    steps = fallbacks = violations = 0
+    steps = fallbacks = violations = invalids = 0
     reason = "max_questions"
 
     if name == "approach-3-llm-full-cat":
@@ -129,7 +127,7 @@ def run_candidate(pool: list[dict], competency: str, true_theta: float,
             res = llm_full_step(state, pool, competency, answered_item=item,
                                 is_correct=correct, use_llm=True, allow_rephrase=False)
             steps += 1
-            fallbacks += bool(res.fallback_used)
+            invalids += bool(getattr(res, "invalid_llm_step", False))
             violations += bool(res.invariant_violation)
             # Every step the model produced a θ̂ for, INCLUDING rejected ones. `not
             # fallback_used` reads like "only count real LLM steps", but a rejection sets
@@ -145,10 +143,13 @@ def run_candidate(pool: list[dict], competency: str, true_theta: float,
             state["q_count"] += 1
             state["served_ids"].append(item["id"])
             state["level_history"].append(level_and_band(res.theta_hat, res.se)[0])
+            if getattr(res, "invalid_llm_step", False):
+                reason = "invalid_llm_step"
+                break
             if res.stop:
                 reason = res.stop_rule_reason or "bank_exhausted"
                 break
-        return _summary(state, true_theta, devs, steps, fallbacks, violations, reason)
+        return _summary(state, true_theta, devs, steps, invalids, violations, reason)
 
     # Approaches 1 and 2 share the coded selection loop; only the maths differs.
     from selection_pipeline import select_next_item
@@ -231,7 +232,7 @@ def main() -> int:
     pool, competency = load_pool()
     per_theta = max(1, args.candidates // len(TRUE_THETAS))
     total = per_theta * len(TRUE_THETAS)
-    calls_per_q = 2 if name == "approach-3-llm-full-cat" else 1
+    calls_per_q = 1
 
     print(f"Approach   : {name}")
     print(f"Model      : {get_model()}")
@@ -286,20 +287,20 @@ def main() -> int:
     if all_devs:
         print(f"  |Δθ̂| vs coded EAP      mean {np.mean(all_devs):.3f}  "
               f"p95 {np.percentile(all_devs, 95):.3f}  max {max(all_devs):.3f}")
-    print(f"  LLM steps              {steps - fallbacks}/{steps} "
-          f"({100 * (1 - fallbacks / max(steps, 1)):.0f}% ran on the model)")
+    label = "invalid steps" if name == "approach-3-llm-full-cat" else "fallback steps"
+    print(f"  {label:23s} {fallbacks}/{steps}")
     print(f"  invariant violations   {violations}")
     print(f"  stop reasons           {dict(Counter(r['stop_reason'] for r in results))}")
     print(f"  metered cost           {usage.calls} calls · "
           f"{usage.input_tokens:,} in / {usage.output_tokens:,} out · "
           f"{'$%.4f' % cost if cost is not None else 'unpriced model'}")
 
-    # A run that mostly fell back measured the engine. Saying so is the point: the RMSE
-    # above would be the engine's, and reporting it as the LLM's is the substitution this
-    # harness exists to prevent.
-    if fallbacks > steps * 0.2:
-        print(f"\n  ⚠ {100 * fallbacks / max(steps, 1):.0f}% of steps fell back to coded "
-              f"logic — treat the numbers above as the engine's, not the model's.")
+    if name == "approach-3-llm-full-cat" and fallbacks:
+        print(f"\n  {fallbacks} pure-controller step(s) failed hard validation.")
+        return 1
+    if name != "approach-3-llm-full-cat" and fallbacks > steps * 0.2:
+        print(f"\n  {100 * fallbacks / max(steps, 1):.0f}% of steps fell back to coded "
+              f"logic -- treat the numbers above as the engine's, not the model's.")
         return 1
     print("\n  ✓ the numbers above describe the LLM-administered path.")
     return 0
