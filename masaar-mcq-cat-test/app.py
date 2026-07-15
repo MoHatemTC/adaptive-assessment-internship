@@ -654,13 +654,37 @@ def screen_setup() -> None:
     set_llm_enabled(bool(toggled) and llm_configured())
     st.caption(f"LLM enabled for assessment: **{llm_enabled()}** (persists across screens)")
 
+    if "selected_competencies_widget" not in st.session_state:
+        st.session_state["selected_competencies_widget"] = competencies.copy()
+    else:
+        valid_selected = [
+            comp for comp in st.session_state["selected_competencies_widget"]
+            if comp in competencies
+        ]
+        st.session_state["selected_competencies_widget"] = valid_selected or competencies.copy()
+
+    st.subheader("Competency scope")
+    selected_competencies = st.multiselect(
+        "Choose competencies to test",
+        options=competencies,
+        key="selected_competencies_widget",
+        help="Select one competency for a focused test, or combine multiple competencies.",
+    )
+    if selected_competencies:
+        st.caption(
+            f"Assessment will include **{len(selected_competencies)}** of "
+            f"**{len(competencies)}** competencies."
+        )
+    else:
+        st.warning("Select at least one competency before starting the assessment.")
+
     st.subheader("Self-rating intake")
     if "self_ratings" not in st.session_state:
         st.session_state["self_ratings"] = {}
     if "self_confidences" not in st.session_state:
         st.session_state["self_confidences"] = {}
 
-    for comp in competencies:
+    for comp in selected_competencies:
         count = len(bank_by_comp[comp])
         st.markdown(f"**{comp}** ({count} questions)")
         st.session_state["self_ratings"][comp] = st.slider(
@@ -679,16 +703,16 @@ def screen_setup() -> None:
             key=f"conf_{comp}",
         )
 
-    if st.button("Start Assessment", type="primary"):
+    if st.button("Start Assessment", type="primary", disabled=not selected_competencies):
         get_logger().info("--- new session ---")
         use_llm = llm_enabled()
         get_logger().info(
             "START | llm_enabled=%s | competencies=%s",
             use_llm,
-            competencies,
+            selected_competencies,
         )
         comp_states = {}
-        for i, comp in enumerate(competencies):
+        for comp in selected_competencies:
             # Defer item selection for all competencies — pick lazily when each starts.
             # Avoids N blocking OpenAI calls at "Start Assessment".
             comp_states[comp] = init_competency_state(
@@ -701,14 +725,17 @@ def screen_setup() -> None:
             )
             if comp_states[comp]["done"] and comp_states[comp]["bank_exhausted"]:
                 finalize_competency(comp_states[comp], bank_exhausted=True, competency=comp)
-        log_session_start(competencies, {c: len(bank_by_comp[c]) for c in competencies})
+        log_session_start(
+            selected_competencies,
+            {c: len(bank_by_comp[c]) for c in selected_competencies},
+        )
         trace_session_start(
-            competencies,
-            {c: len(bank_by_comp[c]) for c in competencies},
+            selected_competencies,
+            {c: len(bank_by_comp[c]) for c in selected_competencies},
             llm_enabled=use_llm,
         )
         st.session_state["comp_states"] = comp_states
-        st.session_state["competencies"] = competencies
+        st.session_state["competencies"] = selected_competencies
         st.session_state["comp_idx"] = 0
         st.session_state["phase"] = "assessment"
         st.rerun()
