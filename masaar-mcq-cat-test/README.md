@@ -9,11 +9,12 @@ cd masaar-mcq-cat-test
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+cp .env.example .env      # add OPENAI_API_KEY — the app will not start without it
 streamlit run app.py
 ```
 
-By default the app loads **`enriched_bank.json`** (122 unique items across 5 competencies).
-You can also upload any bank matching the JSON format below.
+The app loads **`enriched_bank_cat.json`** (120 calibrated items across 5 competencies).
+The bank is fixed and the LLM is required — see [The LLM is required](#the-llm-is-required).
 
 ## Tuned CAT behaviour (post live-session fixes)
 
@@ -113,10 +114,46 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Setup screen shows connection status and a toggle for the full LLM CAT controller.
-If OpenAI fails, the app falls back to deterministic CAT selection/math safeguards.
+The setup screen probes the connection on load and shows live usage and cost.
 
 For Streamlit deployment, use `masaar-mcq-cat-test/streamlit_app.py` as the main file path. See `DEPLOYMENT.md`.
+
+## The LLM is required
+
+There is no engine-only mode and no "use the LLM" toggle. Each branch exists to measure
+what happens when the LLM owns part of the CAT; a run that quietly used coded logic
+instead produces a number that looks like a result and answers a different question. The
+connection is probed automatically on load and the app stops with an actionable error if
+it fails.
+
+The bank is likewise fixed to `enriched_bank_cat.json` — no uploader. The three branches
+are only comparable if they run identical items, and an arbitrary uploaded bank may carry
+no numeric IRT parameters at all, in which case the engine silently falls back to label
+maps and the CAT degrades without saying so.
+
+## LLM calls and cost
+
+Measured, not estimated: `llm_client` reads `usage` off every API response, and
+`measure_llm_cost.py` drives the real controller against the real API.
+
+```bash
+python measure_llm_cost.py --competencies 2   # real calls, real tokens
+python measure_llm_cost.py --dry-run          # structure only, no spend
+```
+
+Measured on `gpt-4o-mini` ($0.15/$0.60 per 1M tokens), 2 sessions of 12 questions:
+
+| | |
+|---|---|
+| LLM calls per question | 2 (update, then selection) |
+| LLM calls per competency | 24 |
+| Tokens per competency | 45,715 in · 8,760 out |
+| **Cost per competency** | **$0.0061** |
+| Full assessment (5 competencies, 1 candidate) | $0.0303 |
+| 100 candidates × 5 competencies | $3.03 |
+
+Pricing lives in `MODEL_PRICING_USD_PER_1M` in `llm_client.py`; an unpriced model reports
+no cost rather than a wrong one. The setup screen has a live **LLM usage & cost** panel.
 
 ## Langfuse tracing
 
@@ -128,7 +165,36 @@ When Langfuse keys are present in `.env`, the app records comparable trace event
 - answer updates
 - competency finalization
 
-Each trace includes `approach_id`, `math_actor`, and `selection_actor` metadata so the three experiment branches can be compared in Langfuse.
+LLM calls are recorded as **generations carrying model, `usage_details` and
+`cost_details`**, so cost per approach is visible in the Langfuse dashboard rather than
+showing 0.
+
+### Trace tags
+
+Every trace is named `masaar-cat-<approach_id>` and tagged, so the branches can be sliced
+against each other:
+
+| Tag | Value on this branch |
+|---|---|
+| approach id | `approach-3-llm-full-cat` |
+| math actor | `math:llm` |
+| selection actor | `selection:llm` |
+| bank | `bank:enriched_bank_cat` |
+| model | `model:gpt-4o-mini` |
+
+Tags are namespaced `key:value` so `math:llm` groups approaches 2 and 3 regardless of how
+they select. Add your own with `CAT_TRACE_TAGS="run:pilot-3,cohort:2026-summer"`. Metadata
+carries `approach_id`, `math_actor`, `selection_actor` and `bank_id`.
+
+> Tags previously never reached Langfuse. `trace_event` called
+> `client.update_current_trace()`, which does not exist on the langfuse v4 client: it
+> raised `AttributeError` into a bare `except: pass`, so every trace landed with `tags=[]`
+> and was named after its observation. v4 sets trace-level attributes via
+> `langfuse.propagate_attributes()`.
+
+```bash
+python test_usage_tracing.py   # metering + cost attribution; no API key or Langfuse needed
+```
 
 ## Question bank JSON
 

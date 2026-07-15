@@ -114,7 +114,8 @@ Return JSON only:
 }
 
 PROCEDURE (execute in order):
-1. Note the criterion given to you (KL early in the test, else Fisher).
+1. Read the `criterion` field in the payload — the engine has already decided it
+   (KL early in the test, otherwise Fisher). Do not choose it yourself.
 2. Pick the shortlist item with the highest info_score.
 3. If two are within 1% relative info_score, pick the smaller b_distance.
 4. If still tied, pick the least-served sub_competency.
