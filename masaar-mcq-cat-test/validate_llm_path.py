@@ -131,7 +131,13 @@ def run_candidate(pool: list[dict], competency: str, true_theta: float,
             steps += 1
             fallbacks += bool(res.fallback_used)
             violations += bool(res.invariant_violation)
-            if not res.fallback_used and res.theta_deviation is not None:
+            # Every step the model produced a θ̂ for, INCLUDING rejected ones. `not
+            # fallback_used` reads like "only count real LLM steps", but a rejection sets
+            # fallback_used, so this dropped exactly the largest deviations and censored
+            # this metric at DEVIATION_REJECT -- the harness for re-checking the gate
+            # could not structurally report a value above it. theta_deviation is None when
+            # no usable θ̂ came back at all, which is the real "nothing to compare" case.
+            if res.theta_deviation is not None:
                 devs.append(res.theta_deviation)
             state["posterior"] = res.posterior
             state["theta_hat"], state["se"] = res.theta_hat, res.se
@@ -167,7 +173,13 @@ def run_candidate(pool: list[dict], competency: str, true_theta: float,
             steps += 1
             fallbacks += bool(res.fallback_used)
             violations += bool(res.invariant_violation)
-            if not res.fallback_used and res.theta_deviation is not None:
+            # Every step the model produced a θ̂ for, INCLUDING rejected ones. `not
+            # fallback_used` reads like "only count real LLM steps", but a rejection sets
+            # fallback_used, so this dropped exactly the largest deviations and censored
+            # this metric at DEVIATION_REJECT -- the harness for re-checking the gate
+            # could not structurally report a value above it. theta_deviation is None when
+            # no usable θ̂ came back at all, which is the real "nothing to compare" case.
+            if res.theta_deviation is not None:
                 devs.append(res.theta_deviation)
             state["posterior"] = res.posterior
             state["theta_hat"], state["se"] = res.theta_hat, res.se

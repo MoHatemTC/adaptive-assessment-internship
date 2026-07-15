@@ -232,12 +232,16 @@ python measure_llm_cost.py --dry-run          # structure only, no spend
 Measured on `gpt-4o-mini` ($0.15/$0.60 per 1M tokens), 2 sessions of 12 questions per
 branch. A **competency** is up to 12 questions; a full assessment is 5 competencies.
 
-> **Stale since the convergence rule landed.** These figures were measured when every
-> competency ran the full 12 questions. The stable-level rule now ends a competency at
-> ~9 items, so real cost is roughly 25% below the table. Re-run `measure_llm_cost.py`
-> before quoting these; they are left here because the *ratios* between branches still
-> hold, not because the absolute numbers do.
-
+> **These per-competency figures are ~1.30× high, and cannot currently be re-metered.**
+> They were metered when every session ran to the 12-question cap. Under the convergence
+> rule now in force, a competency averages **9.2 questions** (median 9, p95 12; measured
+> over 500 simulated sessions across all five competencies), so calls, tokens and dollars
+> per competency all scale by ~9.2/12. The token counts are real API measurements and are
+> deliberately not rescaled by hand — tokens per call are not constant (the shortlist
+> shrinks as items are served), so multiplying them by 0.77 would produce a fabricated
+> number wearing a measured number's clothes. Re-run `measure_llm_cost.py` with a valid
+> `OPENAI_API_KEY` to replace the table; the key currently in `.env` returns 401, which is
+> also why `validate_llm_path.py` has never run. Treat the table as an **upper bound**.
 
 | Branch | Calls/question | Calls/competency | Tokens/competency | $/competency | $/assessment | $/100 candidates |
 |---|---:|---:|---|---:|---:|---:|
