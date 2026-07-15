@@ -29,6 +29,7 @@ from engine import (
     prior_from_level,
     resolve_a,
     resolve_b,
+    resolve_c,
 )
 from engine_log import get_logger, log_selection, log_session_start, log_synthesis, log_update
 from llm_client import (
@@ -57,7 +58,7 @@ def enrich_question(raw: dict) -> dict:
     q = dict(raw)
     q["b"] = resolve_b(q)
     q["a"] = resolve_a(q)
-    q["c"] = 1.0 / len(q["options"])
+    q["c"] = resolve_c(q)
     return q
 
 

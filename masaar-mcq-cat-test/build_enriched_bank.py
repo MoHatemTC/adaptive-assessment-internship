@@ -76,6 +76,60 @@ def _linspace(lo: float, hi: float, n: int) -> list[float]:
     return [lo + step * i for i in range(n)]
 
 
+DIFFICULTY_ORDER = ["very_easy", "easy", "medium", "hard", "very_hard"]
+
+
+def _interleave(counts: dict[str, int]) -> list[str]:
+    """A maximally spread sequence containing exactly `counts` of each label.
+
+    Each label's items are placed at evenly spaced fractional positions, so any
+    contiguous slice of the result carries roughly the global mix.
+    """
+    placed: list[tuple[float, str]] = []
+    for label, n in sorted(counts.items()):
+        for i in range(n):
+            placed.append(((i + 0.5) / n, label))
+    placed.sort()
+    return [label for _, label in placed]
+
+
+def rebalance_discrimination(items: list[dict]) -> None:
+    """Redistribute discrimination labels so `a` is independent of `b`.
+
+    The bank's own design rule says `a` must be independent of `b`, and the reason is
+    measurement rather than tidiness: pinning high `a` to high `b` leaves the sharpest
+    items where only strong candidates ever reach them, so weak candidates are measured
+    with blunt items exactly where 3PL information is already scarce (c=0.25 means
+    P(correct) -> 0.25 as ability falls, and information genuinely vanishes). The authored
+    labels violated it -- mean_a ran 0.90 at very_easy to 1.46 at very_hard,
+    corr(difficulty, a) = +0.50 -- so the ladder's weak end was doubly starved.
+
+    Why redistributing labels is legitimate and not fabrication: `a` here is *assigned
+    from a label*, never calibrated from response data. The incoming labels are an
+    authoring judgement about how sharply an item separates, carrying no more empirical
+    authority than these do. Both are fictions; this one is the fiction the design rule
+    asks for and the one that measures better. The honest fix is a pilot calibration --
+    see the README.
+
+    This preserves the exact multiset of labels per competency (so the bank still has the
+    same 20 low / 50 medium / 50 high overall) and only changes *which* items carry them,
+    dealing a maximally spread sequence across difficulty-ordered items so each band gets
+    the same mix. Deterministic: no RNG, ties broken by id.
+    """
+    by_comp: dict[str, list[dict]] = defaultdict(list)
+    for q in items:
+        by_comp[q["competency"]].append(q)
+
+    for _comp, group in sorted(by_comp.items()):
+        counts: dict[str, int] = defaultdict(int)
+        for q in group:
+            counts[q["discrimination"]] += 1
+        sequence = _interleave(dict(counts))
+        group.sort(key=lambda q: (DIFFICULTY_ORDER.index(q["difficulty"]), q["id"]))
+        for q, label in zip(group, sequence):
+            q["discrimination"] = label
+
+
 def assign_irt(items: list[dict]) -> None:
     """Give every item its own (a, b, c), spread within its label's band.
 
@@ -93,8 +147,24 @@ def assign_irt(items: list[dict]) -> None:
 
     for (_comp, discrimination), group in by_a.items():
         lo, hi = A_BANDS[discrimination]
-        group.sort(key=lambda q: q["id"])
-        for q, a in zip(group, _linspace(lo, hi, len(group))):
+        # Order by difficulty, then deal the spread alternately from both ends of the
+        # band. Sorting by id and assigning the spread in order left `a` trending with
+        # difficulty *inside* each label group by accident — balancing the labels across
+        # the ladder still left corr(difficulty, a) at +0.23, because which of ten "high"
+        # items got a=1.35 vs a=1.80 was decided by id. Zig-zagging makes consecutive
+        # difficulty-ordered items alternate sharp/blunt, so each band's mean `a` lands on
+        # the group mean and the correlation goes to ~0.
+        group.sort(key=lambda q: (DIFFICULTY_ORDER.index(q["difficulty"]), q["id"]))
+        spread = _linspace(lo, hi, len(group))
+        zigzag: list[float] = []
+        i, j = 0, len(spread) - 1
+        while i <= j:
+            zigzag.append(spread[i])
+            i += 1
+            if i <= j:
+                zigzag.append(spread[j])
+                j -= 1
+        for q, a in zip(group, zigzag):
             q["a"] = round(a, 3)
 
     by_b: dict[tuple[str, str], list[dict]] = defaultdict(list)
@@ -160,6 +230,7 @@ def main() -> int:
         dupes = {i for i in ids if ids.count(i) > 1}
         raise SystemExit(f"duplicate ids across competencies: {sorted(dupes)}")
 
+    rebalance_discrimination(items)
     assign_irt(items)
     rebalance_answer_positions(items)
     items.sort(key=lambda q: q["id"])
