@@ -37,7 +37,7 @@ def expect(cond: bool, label: str, detail: str = "") -> None:
 
 def stub(response, *, raises: Exception | None = None):
     """Replace the LLM with a canned response, as both modules resolve it."""
-    def fake(system: str, user: str):
+    def fake(system: str, user: str, **_kwargs):
         if raises:
             raise raises
         return response(user) if callable(response) else response
