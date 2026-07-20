@@ -217,20 +217,27 @@ def _pick_next(
     state["last_controller"] = {
         "invalid_llm_step": result.invalid_llm_step,
         "invalid_reason": result.invalid_reason,
+        "transport_failure": result.transport_failure,
         "stop": result.stop,
         "stop_reason": result.stop_reason or result.stop_rule_reason,
         "selection_note": result.selection_note,
     }
-    if result.invalid_llm_step:
+    if result.invalid_llm_step or result.transport_failure:
         state.update({
             "done": True,
             "bank_exhausted": False,
-            "stop_reason": "invalid_llm_step",
+            "stop_reason": "transport_failure" if result.transport_failure else "invalid_llm_step",
             "converged": False,
-            "invalid_llm_step": True,
+            "invalid_llm_step": result.invalid_llm_step,
+            "transport_failure": result.transport_failure,
             "invalid_reason": result.invalid_reason,
         })
-        st.session_state["invalid_llm_steps"] = st.session_state.get("invalid_llm_steps", 0) + 1
+        # Only a real model failure increments the model-failure counter. A gateway
+        # timeout says nothing about the model and must not be charged to it.
+        if result.invalid_llm_step:
+            st.session_state["invalid_llm_steps"] = st.session_state.get("invalid_llm_steps", 0) + 1
+        else:
+            st.session_state["transport_failures"] = st.session_state.get("transport_failures", 0) + 1
         return None
     if result.stop:
         state.update({
@@ -334,7 +341,7 @@ def ensure_current_item(state: dict, pool: list[dict], competency: str) -> None:
         return
     _apply_selection(state, sel, competency)
     state["needs_selection"] = False
-    if state.get("invalid_llm_step"):
+    if state.get("invalid_llm_step") or state.get("transport_failure"):
         return
     if state["current_item"] is None:
         finalize_competency(state, bank_exhausted=True, competency=competency)
@@ -467,6 +474,8 @@ def grade_and_advance(
     st.session_state["math_steps"] = st.session_state.get("math_steps", 0) + 1
     if controller.invalid_llm_step:
         st.session_state["invalid_llm_steps"] = st.session_state.get("invalid_llm_steps", 0) + 1
+    if controller.transport_failure:
+        st.session_state["transport_failures"] = st.session_state.get("transport_failures", 0) + 1
     if controller.theta_deviation is not None:
         st.session_state.setdefault("math_devs", []).append(controller.theta_deviation)
     if controller.invariant_violation:
@@ -611,7 +620,9 @@ def render_controller_audit() -> None:
     rejects = st.session_state.get("rephrase_rejects", 0)
     steps = st.session_state.get("math_steps", 0)
     invalids = st.session_state.get("invalid_llm_steps", 0)
-    if not (devs or violations or dev_rejects or stop_decisions or rejects or steps or invalids):
+    transports = st.session_state.get("transport_failures", 0)
+    if not (devs or violations or dev_rejects or stop_decisions or rejects or steps
+            or invalids or transports):
         return
 
     st.sidebar.markdown("**LLM controller audit**")
@@ -624,6 +635,17 @@ def render_controller_audit() -> None:
         st.sidebar.error(
             f"{invalids} invalid LLM step(s): the model returned an unusable CAT decision. "
             "No deterministic CAT fallback was substituted."
+        )
+    # Reported separately, and deliberately not as an error about the model. A timeout
+    # or a 5xx means the gateway never answered, so nothing at all was learned about the
+    # controller — presenting it as "the model returned an unusable CAT decision" (which
+    # this panel did) invites the reader to charge infrastructure flakiness to kimi when
+    # comparing the three approaches.
+    if transports:
+        st.sidebar.warning(
+            f"{transports} gateway failure(s): the request timed out or the endpoint was "
+            "unreachable, so the model was never reached. This says nothing about the "
+            "controller — exclude these steps when judging the approach."
         )
 
     if devs:
@@ -1023,6 +1045,7 @@ def screen_setup() -> None:
         st.session_state["math_dev_rejects"] = 0
         st.session_state["math_steps"] = 0
         st.session_state["invalid_llm_steps"] = 0
+        st.session_state["transport_failures"] = 0
         st.session_state["llm_stop_decisions"] = 0
         st.session_state["rephrase_rejects"] = 0
         st.session_state["phase"] = "assessment"

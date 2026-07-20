@@ -25,7 +25,7 @@ from engine import (
     selection_score,
 )
 from engine_log import get_logger
-from llm_client import chat_json
+from llm_client import LLMTransportError, chat_json
 from rephrase_guard import check_rephrase
 from selection_pipeline import SelectionResult
 from tracing import trace_llm_response
@@ -102,6 +102,11 @@ class FullCATResult:
     stop_reason: str = ""
     invalid_llm_step: bool = False
     invalid_reason: str = ""
+    # The gateway never answered (timeout, connection, 5xx). Kept apart from
+    # invalid_llm_step because that one is a claim ABOUT THE MODEL, and this one is a
+    # claim about the network. Counting them together makes the branch's robustness
+    # number a measure of the gateway's uptime.
+    transport_failure: bool = False
     # Code's own belief, updated from graded responses only and never shown to the
     # model. Callers must persist it into state["audit_posterior"], or the comparator
     # silently restarts from the prior each step and reports a deviation that means
@@ -192,6 +197,33 @@ def _invalid_result(state: dict, reason: str, raw: dict[str, Any] | None = None)
         invalid_llm_step=True,
         invalid_reason=reason,
         stop_reason=reason,
+    )
+
+
+def _transport_result(state: dict, reason: str) -> FullCATResult:
+    """The gateway never answered. Ends the competency, but blames the network.
+
+    Deliberately not routed through _invalid_result: that one logs LLM_FULL_INVALID and
+    sets stop_rule_reason="invalid_llm_step", so a grep of the log or a stop-reason
+    histogram would still read a timeout as the model having failed — which is the whole
+    mistake this exists to stop.
+    """
+    get_logger().warning("LLM_FULL_TRANSPORT | gateway unreachable — %s", reason)
+    return FullCATResult(
+        theta_hat=float(state.get("theta_hat", 0.0)),
+        se=float(state.get("se", 2.0)),
+        certainty_pct=float(state.get("certainty_pct", 0.0)),
+        stop=True,
+        selection=None,
+        posterior=state.get("posterior"),
+        audit_posterior=state.get("audit_posterior"),
+        stop_rule_reason="transport_failure",
+        converged=False,
+        fallback_used=False,
+        invalid_llm_step=False,
+        transport_failure=True,
+        invalid_reason=f"gateway unreachable — {reason}",
+        stop_reason="transport_failure",
     )
 
 
@@ -342,6 +374,24 @@ def llm_full_step(
         # code below already defaults correctly.
         data = chat_json(CONTROLLER_SYSTEM, json.dumps(payload, indent=2),
                          require=("theta_hat", "se"))
+    except LLMTransportError as exc:
+        # The gateway never answered. This branch's invalid-step machinery exists to
+        # record that the MODEL produced an unusable CAT decision — and that claim is
+        # simply false here, because the model was never reached.
+        #
+        # Observed in a human-test session: a 180s timeout was logged as "the model
+        # returned an unusable CAT decision. No deterministic CAT fallback was
+        # substituted", the competency was killed, and invalid_llm_steps — the number
+        # this branch reports as its robustness measure — was incremented. A reader
+        # comparing the three approaches would have charged that to kimi.
+        trace_llm_response(
+            "cat.llm.full_controller.transport_error",
+            input_data=payload,
+            output_data={"error": str(exc)},
+            metadata={"competency": competency, "phase": "llm_full_controller",
+                      "transport_failure": True},
+        )
+        return _transport_result(state, str(exc))
     except Exception as exc:
         trace_llm_response(
             "cat.llm.full_controller.error",
