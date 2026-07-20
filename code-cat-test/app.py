@@ -1,16 +1,19 @@
 """Streamlit harness for the code-question adaptive assessment.
 
-Two audiences, one app:
+Three screens:
 
-  Assessment  take the adaptive test as a candidate would, to judge whether the questions
-              and the difficulty trajectory feel right — things no automated metric sees.
-  Inspector   run any seeded submission through the pipeline and see every layer: raw
-              execution, static signals, the model's diagnosis, the criterion arithmetic
-              and what it did to the learner model.
+  Setup       choose the competency to be assessed on, and optionally self-rate. The
+              choice scopes the whole session: which questions are eligible, which
+              competency the utility function aims at, and which one the stopping rule
+              judges precision on.
+  Assessment  take the test, with the CAT state visible at every step — mastery, standard
+              error, evidence count, the utility and regret of the selection, and how far
+              the stopping rule has to go.
+  Inspector   run any seeded submission through the pipeline and see every layer.
 
-The inspector matters as much as the assessment. The whole design rests on the claim that
-the model interprets evidence without controlling the score, and that claim should be
-visible rather than asserted.
+The engine log is surfaced rather than left on stderr. A session that quietly ran entirely
+on deterministic fallbacks looks identical to one that ran on the model unless the
+rejections are visible, and that difference is the whole point of the study.
 """
 
 from __future__ import annotations
@@ -20,8 +23,10 @@ import time
 import uuid
 from pathlib import Path
 
+import pandas as pd
 import streamlit as st
 
+from cat import session_log
 from cat.competency_state import LearnerModel
 from cat.config import settings
 from cat.pipeline import (
@@ -31,7 +36,13 @@ from cat.pipeline import (
     load_bank,
     result_to_dict,
 )
-from cat.selection import choose, evaluate_stop, filter_candidates, rank_candidates
+from cat.selection import (
+    choose,
+    competency_weight,
+    evaluate_stop,
+    filter_candidates,
+    rank_candidates,
+)
 
 SEEDED_DIR = Path(__file__).resolve().parent / "bank" / "seeded"
 
@@ -41,7 +52,13 @@ APPROACH_LABEL = {
     "C": "C · LLM-led — model scores every criterion, hard contradictions blocked",
 }
 
+# Below this many eligible questions, an adaptive test cannot really adapt: there is
+# nothing to choose between. Warned about rather than blocked, since a short run is still
+# useful for inspecting the pipeline.
+THIN_POOL = 4
+
 st.set_page_config(page_title="Code CAT", layout="wide")
+session_log.install()
 
 
 @st.cache_data
@@ -49,27 +66,121 @@ def bank() -> list[dict]:
     return load_bank()
 
 
-def session() -> dict:
-    if "run" not in st.session_state:
-        st.session_state["run"] = {
-            "id": f"session_{uuid.uuid4().hex[:8]}",
-            "model": LearnerModel(),
-            "answered": [],
-            "audit": [],
-            "started": time.time(),
-            "current": None,
+def competency_catalogue() -> list[tuple[str, int, float]]:
+    """(competency, how many questions assess it, the best weight any of them gives it)."""
+    rows = []
+    for competency in sorted({c["competency_id"] for q in bank() for c in q["competencies"]}):
+        weights = [competency_weight(q, competency) for q in bank()]
+        assessing = [w for w in weights if w > 0]
+        rows.append((competency, len(assessing), max(assessing)))
+    return sorted(rows, key=lambda r: (-r[1], r[0]))
+
+
+def run() -> dict | None:
+    return st.session_state.get("run")
+
+
+def start_run(competency: str, self_rating: int | None) -> None:
+    model = LearnerModel()
+    if self_rating is not None:
+        # A self-rating is weak evidence and seeds the prior only. Beta(1,1) plus a
+        # fractional pseudo-observation: enough to bias the first question's difficulty,
+        # far too little to survive contrary evidence, and `observed` stays False so the
+        # UI never reports a self-rating as a measurement.
+        state = model.get(competency)
+        strength = 0.8
+        target = (self_rating - 1) / 4.0
+        state.alpha += strength * target
+        state.beta += strength * (1.0 - target)
+        state.last_updated_by = "self_rating"
+
+    session_log.clear()
+    st.session_state["run"] = {
+        "id": f"session_{uuid.uuid4().hex[:8]}",
+        "competency": competency,
+        "self_rating": self_rating,
+        "model": model,
+        "answered": [],
+        "audit": [],
+        "trajectory": [],
+        "started": time.time(),
+        "current": None,
+    }
+    st.session_state.pop("last_result", None)
+
+
+def record_trajectory(state: dict, decision, result) -> None:
+    """One row per answered question: the CAT parameters as they stood after it."""
+    target = state["model"].get(state["competency"])
+    state["trajectory"].append(
+        {
+            "q": len(state["answered"]),
+            "question": result.question_id,
+            "tests": f"{result.execution.passed_tests}/{result.execution.total_tests}",
+            "overall": round(result.overall_score, 3),
+            "mastery": round(target.mastery, 4),
+            "std_error": round(target.standard_error, 4),
+            "evidence": target.evidence_count,
+            "rank": decision.rank if decision else None,
+            "utility": round(decision.utility, 4) if decision else None,
+            "regret": round(decision.normalized_regret, 4) if decision else None,
+            "by_llm": decision.chosen_by_llm if decision else None,
+            "llm_scored": result.llm.available,
         }
-    return st.session_state["run"]
+    )
 
 
-def render_state(model: LearnerModel) -> None:
+# --- sidebar ---------------------------------------------------------------
+st.sidebar.title("Code CAT")
+st.sidebar.markdown(f"**Approach {settings.code_cat_approach}** · rubric `{settings.code_cat_rubric}`")
+st.sidebar.caption(APPROACH_LABEL[settings.code_cat_approach])
+st.sidebar.caption(f"model `{settings.litellm_model}`")
+if not settings.e2b_api_key:
+    st.sidebar.error("E2B_API_KEY is not set — no code can be executed.")
+
+mode = st.sidebar.radio("Mode", ["Assessment", "Inspector"])
+active = run()
+
+if active:
+    st.sidebar.markdown("---")
+    st.sidebar.markdown(f"**Session** `{active['id']}`")
+    st.sidebar.caption(f"assessing **{active['competency']}**")
+    target = active["model"].get(active["competency"])
+    c1, c2 = st.sidebar.columns(2)
+    c1.metric("Mastery", f"{target.mastery:.3f}" if target.observed else "—")
+    c2.metric("Std error", f"{target.standard_error:.3f}")
+    st.sidebar.progress(
+        min(settings.target_standard_error / max(target.standard_error, 1e-6), 1.0),
+        text=f"precision target SE ≤ {settings.target_standard_error}",
+    )
+    if st.sidebar.button("End session"):
+        st.session_state.pop("run", None)
+        st.rerun()
+
+with st.sidebar.expander(f"Engine log ({sum(session_log.counts().values())})"):
+    tally = session_log.counts()
+    if tally:
+        st.caption(" · ".join(f"{k} {v}" for k, v in sorted(tally.items())))
+    records = session_log.records()
+    if not records:
+        st.caption("No engine events yet.")
+    else:
+        for record in records[-25:]:
+            line = f"`{record['time']}` **{record['source']}** — {record['message']}"
+            if record["level"] in ("WARNING", "ERROR"):
+                st.warning(line)
+            else:
+                st.caption(line)
+
+
+def render_learner_model(model: LearnerModel, target: str) -> None:
     snapshot = model.snapshot()
     if not snapshot:
         st.caption("No competency evidence yet.")
         return
     rows = [
         {
-            "competency": cid,
+            "competency": ("▶ " if cid == target else "") + cid,
             "mastery": f"{s['mastery']:.3f}" if s["observed"] else "—",
             "std error": f"{s['standard_error']:.3f}",
             "evidence": s["evidence_count"],
@@ -79,17 +190,15 @@ def render_state(model: LearnerModel) -> None:
     ]
     st.dataframe(rows, use_container_width=True, hide_index=True)
     st.caption(
-        "Mastery shows — for competencies with no evidence yet. A Beta(1,1) prior has a "
-        "mean of exactly 0.5, which would otherwise read as a measured mid-level result "
-        "rather than as absence of evidence."
+        "▶ marks the competency under test. Mastery shows — where no evidence exists yet: "
+        "a Beta(1,1) prior has a mean of exactly 0.5, which would otherwise read as a "
+        "measured mid-level result rather than as absence of evidence."
     )
 
 
 def render_evaluation(result) -> None:
     """Every layer, in the order it was computed."""
-    payload = result_to_dict(result)
     execution = result.execution
-
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Tests passed", f"{execution.passed_tests}/{execution.total_tests}")
     c2.metric("Compiled", "yes" if execution.compiled else "no")
@@ -183,67 +292,135 @@ def render_evaluation(result) -> None:
     for flag in result.flags:
         st.error(f"flag · {flag}")
     with st.expander("Raw result"):
-        st.json(payload)
+        st.json(result_to_dict(result))
 
-
-# --- sidebar ---------------------------------------------------------------
-st.sidebar.title("Code CAT")
-st.sidebar.markdown(f"**Approach {settings.code_cat_approach}**")
-st.sidebar.caption(APPROACH_LABEL[settings.code_cat_approach])
-st.sidebar.caption(f"model `{settings.litellm_model}`")
-if not settings.e2b_api_key:
-    st.sidebar.error("E2B_API_KEY is not set — no code can be executed.")
-
-mode = st.sidebar.radio("Mode", ["Assessment", "Inspector"])
-run = session()
-st.sidebar.markdown("---")
-st.sidebar.markdown("**Learner model**")
-render_state(run["model"])
-if st.sidebar.button("Reset session"):
-    del st.session_state["run"]
-    st.rerun()
 
 # --- assessment ------------------------------------------------------------
 if mode == "Assessment":
-    st.header("Adaptive code assessment")
-    questions = bank()
-    answered_ids = {a["question_id"] for a in run["answered"]}
-    elapsed = (time.time() - run["started"]) / 60.0
+    if active is None:
+        st.header("Set up the assessment")
+        st.caption(
+            "Choose the competency to be assessed on. It scopes the session: which "
+            "questions are eligible, what the selection utility aims at, and which "
+            "competency the stopping rule judges precision on."
+        )
 
-    eligible = filter_candidates(questions, answered_ids, run["model"])
-    stop = evaluate_stop(run["model"], len(run["answered"]), elapsed, len(eligible))
+        catalogue = competency_catalogue()
+        labels = {
+            f"{c}  ·  {n} question{'s' if n != 1 else ''} available": c
+            for c, n, _ in catalogue
+        }
+        picked_label = st.selectbox("Competency under test", list(labels))
+        picked = labels[picked_label]
+        available = next(n for c, n, _ in catalogue if c == picked)
+
+        if available < THIN_POOL:
+            st.warning(
+                f"Only {available} question{'s' if available != 1 else ''} in the bank "
+                f"assess **{picked}**. The test can run, but with this little to choose "
+                "between there is almost no adaptation to observe — the engine will "
+                "administer nearly everything eligible regardless of the answers."
+            )
+
+        rated = st.checkbox("I want to self-rate first", value=False)
+        rating = None
+        if rated:
+            rating = st.slider(
+                f"How would you rate yourself on {picked}?", 1, 5, 3,
+                help="Seeds the prior only. Two or three answers override it entirely, "
+                     "and it is never blended into the final score.",
+            )
+
+        st.markdown(
+            f"**Session settings** — stop at SE ≤ {settings.target_standard_error}, "
+            f"between {settings.min_questions} and {settings.max_questions} questions, "
+            f"or {settings.time_limit_minutes} minutes."
+        )
+        if st.button("Start assessment", type="primary"):
+            start_run(picked, rating)
+            st.rerun()
+        st.stop()
+
+    # --- in progress ---
+    questions = bank()
+    answered_ids = {a["question_id"] for a in active["answered"]}
+    elapsed = (time.time() - active["started"]) / 60.0
+    eligible = filter_candidates(questions, answered_ids, active["model"], active["competency"])
+    stop = evaluate_stop(
+        active["model"], len(active["answered"]), elapsed, len(eligible), active["competency"]
+    )
+
+    st.header(f"Assessing · {active['competency']}")
+
+    target = active["model"].get(active["competency"])
+    m1, m2, m3, m4, m5 = st.columns(5)
+    m1.metric("Questions", len(active["answered"]))
+    m2.metric("Mastery", f"{target.mastery:.3f}" if target.observed else "—")
+    m3.metric("Std error", f"{target.standard_error:.3f}",
+              delta=f"target ≤ {settings.target_standard_error}", delta_color="off")
+    m4.metric("Evidence", target.evidence_count)
+    m5.metric("Eligible left", len(eligible))
+
+    if active["trajectory"]:
+        with st.expander("CAT parameters across the session", expanded=True):
+            frame = pd.DataFrame(active["trajectory"])
+            st.dataframe(frame, use_container_width=True, hide_index=True)
+            chart = frame.set_index("q")[["mastery", "std_error"]]
+            st.line_chart(chart)
+            st.caption(
+                "Mastery is the Beta posterior mean for the competency under test; "
+                "std_error is its posterior SD and is what the stopping rule reads. "
+                "`regret` is the fraction of the best available utility given up by the "
+                "selection — 0 means the top-ranked question was administered."
+            )
 
     if stop.should_stop:
         st.success(f"Assessment complete — {stop.reason}"
                    f"{' (target precision reached)' if stop.converged else ''}")
         if not stop.converged:
             st.warning(
-                f"Stopped on **{stop.reason}**, not on measured precision. The competency "
-                "estimates below are the best available, not the target quality."
+                f"Stopped on **{stop.reason}**, not on measured precision. The estimate "
+                "below is the best available, not the target quality."
             )
-        st.dataframe(run["audit"], use_container_width=True, hide_index=True)
+        st.subheader("Learner model")
+        render_learner_model(active["model"], active["competency"])
+        st.subheader("Audit trail")
+        st.dataframe(active["audit"], use_container_width=True, hide_index=True)
         st.stop()
 
-    if run["current"] is None:
+    if active["current"] is None:
         with st.spinner("Selecting the next question…"):
-            decision = choose(rank_candidates(eligible, run["model"]), run["model"])
-        run["current"] = decision
+            active["current"] = choose(
+                rank_candidates(eligible, active["model"], active["competency"]), active["model"]
+            )
 
-    decision = run["current"]
+    decision = active["current"]
+    if decision is None:
+        st.warning("No eligible questions remain.")
+        st.stop()
+
     question = decision.question
     st.subheader(f"{question['question_id']} · {question['title']}")
     st.caption(
-        f"Question {len(run['answered']) + 1} · difficulty {question['difficulty']:.2f} · "
+        f"Question {len(active['answered']) + 1} · difficulty {question['difficulty']:.2f} · "
         f"targets {', '.join(c['competency_id'] for c in question['competencies'])}"
     )
+
     with st.expander("Why this question?"):
-        st.write(f"**{decision.reason_code}** — {decision.reason or decision.shortlist_ids}")
+        st.write(f"**{decision.reason_code}** — {decision.reason or '(engine default)'}")
+        s1, s2, s3 = st.columns(3)
+        s1.metric("Rank", f"{decision.rank} / {len(decision.shortlist_ids)}")
+        s2.metric("Utility", f"{decision.utility:.3f}",
+                  delta=f"best {decision.best_utility:.3f}", delta_color="off")
+        s3.metric("Regret", f"{decision.normalized_regret:.1%}")
         st.caption(
-            f"rank {decision.rank} of {len(decision.shortlist_ids)} · utility "
-            f"{decision.utility:.3f} of {decision.best_utility:.3f} best · regret "
-            f"{decision.normalized_regret:.1%} · "
-            + ("chosen by the model" if decision.chosen_by_llm else "engine default")
+            ("Chosen by the model from the engine's shortlist."
+             if decision.chosen_by_llm else "Engine default — the model was not used or "
+             "its choice was rejected.")
         )
+        st.json({"signals": next(
+            (c.signals for c in rank_candidates(eligible, active["model"], active["competency"])
+             if c.question["question_id"] == question["question_id"]), {})}, expanded=False)
         for flag in decision.flags:
             st.warning(flag)
 
@@ -256,16 +433,17 @@ if mode == "Assessment":
     )
 
     if st.button("Submit", type="primary"):
-        before = run["model"].snapshot()
+        before = active["model"].snapshot()
         with st.spinner("Running your code in the sandbox…"):
             result = evaluate_submission(question, code)
-        apply_to_learner(run["model"], result)
-        after = run["model"].snapshot()
-        run["answered"].append({"question_id": question["question_id"]})
-        run["audit"].append(
-            audit_record(run["id"], len(run["answered"]), result, before, after, decision)
+        apply_to_learner(active["model"], result)
+        after = active["model"].snapshot()
+        active["answered"].append({"question_id": question["question_id"]})
+        active["audit"].append(
+            audit_record(active["id"], len(active["answered"]), result, before, after, decision)
         )
-        run["current"] = None
+        record_trajectory(active, decision, result)
+        active["current"] = None
         st.session_state["last_result"] = result
         st.rerun()
 
@@ -273,6 +451,10 @@ if mode == "Assessment":
         st.markdown("---")
         st.subheader("Previous submission")
         render_evaluation(st.session_state["last_result"])
+
+    st.markdown("---")
+    st.subheader("Learner model")
+    render_learner_model(active["model"], active["competency"])
 
 # --- inspector -------------------------------------------------------------
 else:
@@ -298,7 +480,6 @@ else:
         st.code(entry["code"], language="python")
     with right:
         st.markdown(f"**Seeded defect:** `{entry['defect']}`")
-        st.markdown("**Ground truth**")
         st.json(truth, expanded=True)
 
     if st.button("Run through the pipeline", type="primary"):
