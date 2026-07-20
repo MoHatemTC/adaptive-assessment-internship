@@ -222,12 +222,45 @@ def get_timeout() -> float:
         return default
 
 
+def provider_name() -> str:
+    """Short backend name for UI copy: "LiteLLM", "OpenAI", or "no LLM".
+
+    Separate from provider_label() because that one includes the gateway URL, which is
+    right for a diagnostics line and far too long for a status caption or a footer. The
+    UI used to hardcode the string "OpenAI" in both places, so a kimi run announced
+    itself as OpenAI on every screen.
+    """
+    if not get_api_key():
+        return "no LLM"
+    return "LiteLLM" if get_provider() == "litellm" else "OpenAI"
+
+
 def provider_label() -> str:
     if not get_api_key():
         return "none"
     if get_provider() == "litellm":
         return f"LiteLLM ({get_base_url()})"
     return "OpenAI"
+
+
+def missing_key_help() -> str:
+    """Markdown telling the operator how to configure a backend. One source of truth.
+
+    Every app.py said "No OPENAI_API_KEY found" and named only that variable, which is
+    actively wrong guidance for a LiteLLM deployment: setting OPENAI_API_KEY would make
+    the app talk to OpenAI, which is the opposite of what the reader wanted.
+    """
+    return (
+        "**No LLM backend configured.** This app requires a working LLM — there is no "
+        "engine-only mode.\n\n"
+        "Set **one** of these, in `.env` locally or in Streamlit Cloud app secrets:\n\n"
+        "- **LiteLLM gateway** — `LITELLM_API_KEY` **and** `LITELLM_BASE_URL` "
+        "(optionally `LITELLM_MODEL`, default `" + DEFAULT_LITELLM_MODEL + "`)\n"
+        "- **OpenAI direct** — `OPENAI_API_KEY` "
+        "(optionally `OPENAI_MODEL`, default `" + DEFAULT_MODEL + "`)\n\n"
+        "With both configured the LiteLLM gateway wins; force either with "
+        "`LLM_PROVIDER=litellm|openai`."
+    )
 
 
 @lru_cache(maxsize=4)
