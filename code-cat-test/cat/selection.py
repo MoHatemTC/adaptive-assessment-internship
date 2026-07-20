@@ -89,10 +89,29 @@ class SelectionDecision:
 
 
 # --- section 13: stopping ---------------------------------------------------
+def competency_weight(question: dict, competency_id: str) -> float:
+    """How much of this question assesses one competency. 0 when it does not at all."""
+    for entry in question["competencies"]:
+        if entry["competency_id"] == competency_id:
+            return float(entry["weight"])
+    return 0.0
+
+
 def evaluate_stop(
-    model: LearnerModel, answered: int, elapsed_minutes: float, remaining: int
+    model: LearnerModel,
+    answered: int,
+    elapsed_minutes: float,
+    remaining: int,
+    target_competency: str | None = None,
 ) -> StopDecision:
-    """Deterministic. The LLM cannot stop the assessment."""
+    """Deterministic. The LLM cannot stop the assessment.
+
+    When a session targets one competency, precision is judged on THAT competency alone.
+    Requiring every touched competency to converge would make the test hostage to
+    whichever incidental competency a question happened to brush against — a session
+    aimed at boundary_conditions would run until it had also pinned down complexity
+    awareness it was never trying to measure.
+    """
     if answered >= settings.max_questions:
         return StopDecision(True, "max_questions", converged=False)
     if elapsed_minutes >= settings.time_limit_minutes:
@@ -100,15 +119,30 @@ def evaluate_stop(
     if remaining <= 0:
         return StopDecision(True, "bank_exhausted", converged=False)
     if answered >= settings.min_questions:
-        observed = [s for s in model.states.values() if s.observed]
-        if observed and all(s.standard_error <= settings.target_standard_error for s in observed):
+        if target_competency:
+            state = model.states.get(target_competency)
+            judged = [state] if state and state.observed else []
+        else:
+            judged = [s for s in model.states.values() if s.observed]
+        if judged and all(s.standard_error <= settings.target_standard_error for s in judged):
             return StopDecision(True, "target_precision", converged=True)
     return StopDecision(False)
 
 
 # --- section 14: filtering --------------------------------------------------
-def filter_candidates(bank: list[dict], answered_ids: set[str], model: LearnerModel) -> list[dict]:
-    """Remove everything ineligible before anything is scored or shown to a model."""
+def filter_candidates(
+    bank: list[dict],
+    answered_ids: set[str],
+    model: LearnerModel,
+    target_competency: str | None = None,
+) -> list[dict]:
+    """Remove everything ineligible before anything is scored or shown to a model.
+
+    A target competency restricts the pool to questions that actually assess it. Note the
+    bank is authored so most questions carry several competencies, so targeting
+    boundary_conditions still leaves 10 questions while recursion leaves 1 — the caller
+    is expected to warn when the remaining pool is too thin to adapt over.
+    """
 
     def prerequisites_met(question: dict) -> bool:
         for prerequisite in question.get("prerequisites", []):
@@ -125,11 +159,14 @@ def filter_candidates(bank: list[dict], answered_ids: set[str], model: LearnerMo
         if q["question_id"] not in answered_ids
         and q.get("status") == "active"
         and prerequisites_met(q)
+        and (not target_competency or competency_weight(q, target_competency) > 0)
     ]
 
 
 # --- section 15: ranking ----------------------------------------------------
-def rank_candidates(candidates: list[dict], model: LearnerModel) -> list[RankedCandidate]:
+def rank_candidates(
+    candidates: list[dict], model: LearnerModel, target_competency: str | None = None
+) -> list[RankedCandidate]:
     """Utility score per candidate. Deterministic and fully explainable."""
     ranked: list[RankedCandidate] = []
     open_misconceptions = {c for s in model.states.values() for c in s.misconception_codes}
@@ -161,19 +198,26 @@ def rank_candidates(candidates: list[dict], model: LearnerModel) -> list[RankedC
 
         quality = float(question.get("discrimination", 1.0)) / 2.0
 
+        # How squarely this question aims at what the session is measuring. Without it,
+        # a question carrying the target at weight 0.15 ranks alongside one carrying it
+        # at 0.50 purely because it also touches something uncertain, and the session
+        # drifts off the competency the candidate asked to be assessed on.
+        focus = competency_weight(question, target_competency) if target_competency else 0.0
+
         signals = {
             "competency_uncertainty": round(uncertainty, 4),
             "blueprint_need": round(coverage, 4),
             "misconception_relevance": relevance,
             "difficulty_fit": round(fit, 4),
             "question_quality": round(quality, 4),
+            "target_focus": round(focus, 4),
         }
         utility = (
-            0.35 * uncertainty
-            + 0.25 * coverage
-            + 0.15 * relevance
-            + 0.15 * fit
-            + 0.10 * quality
+            (0.25 * uncertainty + 0.15 * coverage + 0.15 * relevance
+             + 0.15 * fit + 0.05 * quality + 0.25 * focus)
+            if target_competency
+            else (0.35 * uncertainty + 0.25 * coverage + 0.15 * relevance
+                  + 0.15 * fit + 0.10 * quality)
         )
         ranked.append(
             RankedCandidate(question, round(utility, 4), signals, _explain(signals))
@@ -191,6 +235,7 @@ def _explain(signals: dict[str, float]) -> str:
         "misconception_relevance": "Directly verifies an open misconception.",
         "difficulty_fit": "Difficulty is matched to current mastery.",
         "question_quality": "Highly discriminating question.",
+        "target_focus": "Most squarely targets the competency under test.",
     }.get(top, "Best available utility.")
 
 
