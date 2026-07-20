@@ -1,0 +1,15 @@
+# Config & validation — matches the parent project
+pydantic>=2.9,<3
+pydantic-settings>=2.0,<3
+
+# LLM: all calls route through the LiteLLM proxy, as in the parent project
+openai>=1.50,<3
+
+# Ability estimation. The posterior is a grid, so this is a hard requirement, not a
+# convenience — it is not listed in the parent project's requirements and must be added
+# there when these modules are merged in.
+numpy>=1.26,<3
+
+# Tests
+pytest>=8.0
+pytest-asyncio>=0.24
