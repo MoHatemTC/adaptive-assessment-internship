@@ -312,7 +312,17 @@ def llm_full_step(
         }
 
     try:
-        data = chat_json(CONTROLLER_SYSTEM, json.dumps(payload, indent=2))
+        # This branch treats a reply without these as an invalid step and ABORTS the
+        # competency — no coded substitution, by design. That makes it the branch least
+        # able to absorb a reply that is JSON but not an answer: measured at ~17-25% of
+        # kimi calls, it aborted 3 of 5 sessions and scored as though the model could not
+        # run a CAT. `require` retries those instead of ruling on the model.
+        #
+        # should_stop is deliberately NOT required: `false` is a legitimate answer and
+        # requiring the key would reject a valid reply that merely omitted it, which the
+        # code below already defaults correctly.
+        data = chat_json(CONTROLLER_SYSTEM, json.dumps(payload, indent=2),
+                         require=("theta_hat", "se"))
     except Exception as exc:
         trace_llm_response(
             "cat.llm.full_controller.error",

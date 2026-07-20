@@ -41,7 +41,7 @@ def fresh_state(theta=0.0, se=1.7):
 
 
 def stub(response):
-    def fake(_system: str, user: str):
+    def fake(_system: str, user: str, **_kwargs):
         payload = json.loads(user)
         payloads.append(payload)
         return response(payload) if callable(response) else response
