@@ -38,6 +38,14 @@ ITEMS_PER_SUB = 3
 # "an item happens to sit here".
 MIN_PEAK_INFO = 0.25
 
+# Mirrored from engine.py / certainty.py rather than imported, to keep this validator
+# dependency-free (it also reimplements fisher_info below, for the same reason). If the
+# engine changes these, this file must follow — a validator certifying a bank against
+# stale targets is worse than no validator.
+SE_TARGET = 0.65            # engine.SE_TARGET
+MAX_QUESTIONS = 12          # engine.MAX_QUESTIONS
+SD_LOW_CONF = 1.7           # engine.SD_LOW_CONF — the app's expected operating case
+
 # Reject a cueing hypothesis only on real evidence; with n=120 this catches a
 # drift to ~37% longest-is-correct while tolerating honest sampling noise.
 ALPHA = 0.01
@@ -234,6 +242,62 @@ def main() -> int:
     for comp, theta, best in thin:
         fail(f"{comp}: best item at θ={theta:+.1f} yields only I={best:.3f} "
              f"(< {MIN_PEAK_INFO}) — no sharp item measures that ability")
+
+    # ---------- can the bank actually FINISH a test? ----------
+    # The check above asks whether ONE sharp item exists at each ability. That is
+    # necessary and nowhere near sufficient: an item is consumed once, so a pool with a
+    # single sharp item passes the peak check and still cannot carry a 12-question
+    # adaptive test. Measured on the shipped bank: every competency has exactly 2 items
+    # worth I>=0.25 at θ=+2.5 and 4 at θ=+2.0, so a strong candidate exhausts the useful
+    # items in about five questions and then grinds through items worth 0.04-0.15.
+    #
+    # The consequence is not subtle, and it is why sessions run long. Information adds,
+    # so SE_TARGET is reachable only if prior precision plus the best MAX_QUESTIONS item
+    # informations clears 1/SE_TARGET^2. Greedily, best-case, no real test does better:
+    #
+    #   θ=0.0, low-confidence self-rating   ->  13 items needed, cap is 12
+    #   θ=+2.5, no self-rating              ->  the whole 24-item pool, still short
+    #
+    # So the confidence stop (certainty >= 90%, exactly SE <= SE_TARGET) essentially
+    # cannot fire for a typical candidate, and every session falls through to the
+    # stability rule or the question cap. That reads as "the CAT takes too many
+    # questions to converge"; it is really the bank being unable to converge at all.
+    print("\nTest completability (best-case items to reach "
+          f"SE<={SE_TARGET}, cap {MAX_QUESTIONS})")
+    need = 1.0 / (SE_TARGET ** 2)
+    print(f"  {'θ':>6} " + " ".join(f"{c.split()[0][:6]:>7}" for c in sorted(by_comp)))
+    unreachable: list[tuple[str, float, int]] = []
+    for theta in [-2.0, -1.0, 0.0, 1.0, 2.0]:
+        cells = []
+        for comp in sorted(by_comp):
+            infos = sorted((item_info(theta, q) for q in by_comp[comp]), reverse=True)
+            # SD_LOW_CONF is the app's expected case: it always asks for a self-rating,
+            # and "low confidence" is the common answer. Using the optimistic prior here
+            # would certify a bank that only works for candidates who declare confidence.
+            # NOT `n`: that name is bound to len(bank) further up and is the denominator
+            # for the anti-cueing statistics below. Shadowing it here made those tests
+            # divide 120 items by this loop's counter and report "key is longest 31/13
+            # (238%)" with a length-rank of 22.08 — impossible values (a rank is 1..4),
+            # and three spurious cueing FAILURES on a bank that is fine on that axis.
+            prec, n_needed = 1.0 / (SD_LOW_CONF ** 2), 0
+            for info in infos:
+                if prec >= need:
+                    break
+                prec += info
+                n_needed += 1
+            ok = prec >= need and n_needed <= MAX_QUESTIONS
+            cells.append(f"{n_needed:>5d}{'' if ok else ' !'}")
+            if not ok:
+                unreachable.append((comp, theta, n_needed if prec >= need else -1))
+        print(f"  {theta:+6.1f} " + " ".join(cells))
+    # Loop variable is NOT `n` — see the note above; `n` is len(bank) and is the
+    # denominator every anti-cueing statistic below divides by.
+    for comp, theta, n_needed in unreachable:
+        detail = (f"needs {n_needed} items" if n_needed > 0
+                  else "cannot reach it with the whole pool")
+        fail(f"{comp}: at θ={theta:+.1f} a low-confidence candidate {detail} to reach "
+             f"SE<={SE_TARGET}, but the test stops at {MAX_QUESTIONS} — the confidence "
+             "stop can never fire, so every session ends on the stability rule or the cap")
 
     # A very_easy item CAN discriminate sharply: `a` and `b` are independent. If the
     # bank pins high `a` to high `b`, weak candidates only ever get blunt items.
