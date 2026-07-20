@@ -10,11 +10,15 @@ from dotenv import load_dotenv
 ENV_PATH = Path(__file__).resolve().parent / ".env"
 
 KNOWN_KEYS = (
+    "LLM_PROVIDER",
+    "LLM_PRICE_INPUT_PER_1M",
+    "LLM_PRICE_OUTPUT_PER_1M",
     "OPENAI_API_KEY",
     "OPENAI_MODEL",
     "OPENAI_TIMEOUT",
     "OPENAI_BASE_URL",
     "LITELLM_API_KEY",
+    "LITELLM_BASE_URL",
     "LITELLM_MODEL",
     "LITELLM_TIMEOUT",
     "LANGFUSE_SECRET_KEY",
