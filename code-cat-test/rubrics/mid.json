@@ -1,0 +1,44 @@
+{
+  "rubric_id": "mid",
+  "name": "Mid — evaluation criteria and quality checks per criterion",
+  "description": "Each criterion states what evidence to look at and what to check, but gives no worked examples and no negative points. Roughly the level of specificity a careful team reaches without deliberately hardening the rubric.",
+  "criteria": [
+    {
+      "criterion_id": "functional_correctness",
+      "description": "Does the solution produce correct results?",
+      "evaluation_criteria": "Judge only from the executed test results. The passed-test ratio is the measurement; your role is to say what the pattern of passes and failures indicates, not to re-decide whether the code works.",
+      "quality_checks": [
+        "Score is consistent with the passed-test ratio",
+        "Failures are attributed to a specific behaviour, not to the code in general"
+      ]
+    },
+    {
+      "criterion_id": "edge_case_handling",
+      "description": "Does the solution handle boundary and degenerate inputs?",
+      "evaluation_criteria": "Weigh the boundary tests specifically, not the suite as a whole. A solution can pass most tests and fail every boundary case; that is a low score on this criterion regardless of the overall ratio.",
+      "quality_checks": [
+        "Boundary tests examined separately from the main path",
+        "A guard's presence or absence in the source is considered alongside the test outcome"
+      ]
+    },
+    {
+      "criterion_id": "algorithm_choice",
+      "description": "Is the approach appropriate for the problem?",
+      "evaluation_criteria": "Assess the strategy the code actually implements against what the problem calls for. Passing tests does not by itself establish that the approach is sound, and failing them does not by itself establish that it is not.",
+      "quality_checks": [
+        "The implemented strategy is identified explicitly",
+        "Cost is considered where the problem makes it relevant"
+      ]
+    },
+    {
+      "criterion_id": "code_quality",
+      "description": "Is the code readable and well structured?",
+      "evaluation_criteria": "Assess structure, naming and clarity from the source and the structural signals. This criterion is about maintainability, not correctness.",
+      "quality_checks": [
+        "Judged from structure, not from whether tests passed",
+        "Complexity and function length are taken into account"
+      ]
+    }
+  ],
+  "mistake_patterns": []
+}

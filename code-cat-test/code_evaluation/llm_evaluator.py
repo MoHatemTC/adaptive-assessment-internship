@@ -17,7 +17,9 @@ import json
 import logging
 from dataclasses import dataclass, field
 
+from cat.config import Rubric
 from cat.llm_client import LLMUnavailable, chat_json
+from code_evaluation import rubric as rubric_module
 from code_evaluation.sandbox import ExecutionEvidence
 from code_evaluation.static_analysis import StaticSignals
 
@@ -102,7 +104,11 @@ class LLMEvaluation:
 
 
 def build_payload(
-    question: dict, code: str, evidence: ExecutionEvidence, signals: StaticSignals
+    question: dict,
+    code: str,
+    evidence: ExecutionEvidence,
+    signals: StaticSignals,
+    rubric: dict | None = None,
 ) -> dict:
     """Everything the model may reason from — and nothing it could use to guess.
 
@@ -110,7 +116,9 @@ def build_payload(
     asked to interpret. Expected VALUES are not included: the model does not need them to
     diagnose a misconception, and supplying them invites it to grade rather than diagnose.
     """
+    rubric = rubric or rubric_module.load()
     return {
+        "rubric": rubric_module.render(rubric, [c["criterion_id"] for c in question["rubric_criteria"]]),
         "question": {
             "title": question["title"],
             "prompt": question["prompt"],
@@ -225,13 +233,18 @@ def validate(reply: dict, question: dict, evidence: ExecutionEvidence) -> LLMEva
 
 
 def evaluate(
-    question: dict, code: str, evidence: ExecutionEvidence, signals: StaticSignals
+    question: dict,
+    code: str,
+    evidence: ExecutionEvidence,
+    signals: StaticSignals,
+    rubric_id: Rubric | None = None,
 ) -> LLMEvaluation:
     """Diagnose competencies from the submission. Never raises."""
+    rubric = rubric_module.load(rubric_id)
     try:
         reply = chat_json(
             EVALUATION_SYSTEM,
-            json.dumps(build_payload(question, code, evidence, signals), indent=2),
+            json.dumps(build_payload(question, code, evidence, signals, rubric), indent=2),
             require=("criterion_evidence",),
         )
     except LLMUnavailable as exc:
