@@ -2,6 +2,16 @@
 
 Standalone Streamlit app to validate the Masaar IRT/CAT adaptive engine on MCQ-only questions.
 
+## Branch role
+
+`main` is the shared baseline for the CAT engine, item bank, tracing, cost metering, and
+deployment plumbing. It is **not** one of the three experiment arms. Use the dedicated
+branches for branch-specific conclusions:
+
+- `approach-1-code-math-llm-pick`: code does IRT math; LLM picks the next item.
+- `approach-2-llm-math-code-pick`: LLM proposes math; code picks the next item.
+- `approach-3-llm-full-cat`: LLM controls math, stopping, and next-item choice.
+
 ## Quick start
 
 ```bash
@@ -15,6 +25,10 @@ streamlit run app.py
 
 The app loads **`enriched_bank_cat.json`** (120 calibrated items across 5 competencies).
 The bank is fixed and the LLM is required — see [The LLM is required](#the-llm-is-required).
+
+For Streamlit Community Cloud, secrets can be top-level TOML keys or grouped under
+sections such as `[LLM]`, `[Fuse]`, `[Langfuse]`, or `[CAT]`; `config_env.py` bridges
+those values into `os.environ` before OpenAI and Langfuse clients initialize.
 
 ## Tuned CAT behaviour (post live-session fixes)
 
@@ -247,12 +261,14 @@ branch. A **competency** is up to 12 questions; a full assessment is 5 competenc
 |---|---:|---:|---|---:|---:|---:|
 | `approach-1-code-math-llm-pick` | 1 (selection) | 12 | 34,754 in / 3,971 out | $0.0038 | $0.0190 | $1.90 |
 | `approach-2-llm-math-code-pick` | 1 (ability update) | 12 | 14,047 in / 7,300 out | $0.0032 | $0.0162 | $1.62 |
-| `approach-3-llm-full-cat` | 2 (update, then selection) | 24 | 45,715 in / 8,760 out | $0.0061 | $0.0303 | $3.03 |
+| `approach-3-llm-full-cat` | 2 (old hybrid: update, then selection) | 24 | 45,715 in / 8,760 out | $0.0061 | $0.0303 | $3.03 |
 
-Approach 3 costs ~1.9× approach 1 because it cannot be adaptive in one call: selecting the
-next item and updating ability in a single response means the item is chosen against a
-stale θ̂. Approach 2 is cheapest despite doing the harder task — its prompt carries one
-item's parameters, while approach 1 ships a 5-item shortlist every turn.
+The Approach 3 branch has since been reworked into a purer one-call full-controller
+experiment. That invalidates the old two-call token row for current cost comparison: the
+new call count is lower, but each prompt can be larger because it carries the available
+item pool. Re-meter the branch before treating its cost as final. See
+[`APPROACH_COMPARISON.md`](APPROACH_COMPARISON.md) for the current actor split, scores,
+and cost caveats.
 
 Pricing lives in `MODEL_PRICING_USD_PER_1M` in `llm_client.py`; an unpriced model reports
 no cost rather than a wrong one. The setup screen has a live **LLM usage & cost** panel.
