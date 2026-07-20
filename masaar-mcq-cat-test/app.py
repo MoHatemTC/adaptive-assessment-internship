@@ -989,6 +989,22 @@ def screen_setup() -> None:
         st.session_state["comp_states"] = comp_states
         st.session_state["competencies"] = selected_competencies
         st.session_state["comp_idx"] = 0
+        # Zero the controller-audit counters at the start of every assessment, the way
+        # approach 2 does. Without this they only cleared on a full reset_session(),
+        # which is a separate button most runs never press — so a second assessment in
+        # the same Streamlit session accumulated on top of the first. That silently
+        # broke the panel's headline: mean |Δθ̂| became a running average over every
+        # competency ever run rather than this session's, and "worst |Δθ̂|" was
+        # monotonically non-decreasing for the life of the process. Both are the
+        # numbers this branch exists to report, and both drift the wrong way — an
+        # early bad session keeps poisoning every later one.
+        st.session_state["math_devs"] = []
+        st.session_state["math_violations"] = 0
+        st.session_state["math_dev_rejects"] = 0
+        st.session_state["math_steps"] = 0
+        st.session_state["invalid_llm_steps"] = 0
+        st.session_state["llm_stop_decisions"] = 0
+        st.session_state["rephrase_rejects"] = 0
         st.session_state["phase"] = "assessment"
         st.rerun()
 
