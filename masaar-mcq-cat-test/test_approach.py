@@ -8,8 +8,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import numpy as np
+
 import llm_full_cat
-from engine import prior_from_level
+from engine import eap_update, prior_from_level
 from llm_full_cat import llm_full_step
 
 BANK = Path(__file__).parent / "enriched_bank_cat.json"
@@ -114,6 +116,94 @@ def competent_controller(pool, true_theta: float):
     return respond, state
 
 
+def drift_checks(pool) -> None:
+    """The comparator must see cumulative drift, not just one step of it.
+
+    A model that adds a constant +0.25 to theta every question is wrong by +2.25 after
+    nine questions, and that is precisely the failure a full-LLM controller is most
+    likely to have: not one absurd answer, but a steady lean the numbers never flag.
+
+    The old comparator re-derived its reference from the model's OWN previous (theta,
+    se) each step, so it re-anchored to wherever the model had walked to and could only
+    ever report the size of a single increment. This drives exactly that biased model
+    and asserts the reported deviation grows.
+    """
+    import numpy as np
+
+    from llm_full_cat import fresh_audit_posterior
+
+    print("\n  comparator drift detection (biased vs faithful, same responses)")
+
+    def run(make_reply) -> list[float]:
+        state = fresh_state()
+        state["audit_posterior"] = fresh_audit_posterior(prior_sd=1.7)
+        post = {"p": prior_from_level(3, 1.7)}
+        devs: list[float] = []
+
+        def reply(payload):
+            return make_reply(payload, post, state, pool)
+
+        stub(reply)
+        res = llm_full_step(state, pool, "Agentic AI & Orchestration", use_llm=True)
+        for _ in range(8):
+            if res.selection is None or res.invalid_llm_step:
+                break
+            it = res.selection.item
+            res = llm_full_step(state, pool, "Agentic AI & Orchestration",
+                                answered_item=it, is_correct=True, use_llm=True)
+            if res.audit_posterior is not None:
+                state["audit_posterior"] = res.audit_posterior
+            if res.invalid_llm_step:
+                break
+            if res.theta_deviation is not None:
+                devs.append(res.theta_deviation)
+            state["posterior"] = res.posterior
+            state["theta_hat"], state["se"] = res.theta_hat, res.se
+            state["certainty_pct"] = res.certainty_pct
+            state["q_count"] += 1
+            state["served_ids"].append(it["id"])
+        return devs
+
+    def _next_id(payload, pool):
+        return next(q["id"] for q in pool if q["id"] not in payload["served_ids"])
+
+    def biased(payload, _post, _state, pool):
+        # +0.25 every step regardless of evidence. Safe against the direction invariant
+        # because the run answers everything correctly, so theta only ever rises.
+        return {**controller_pick(""), "se": 1.0, "certainty_pct": 40.0,
+                "should_stop": False, "selected_id": _next_id(payload, pool),
+                "theta_hat": round(payload["previous_state"]["theta_hat"] + 0.25, 4)}
+
+    def faithful(payload, post, _state, pool):
+        # Runs the coded EAP itself, so it should agree with the comparator throughout.
+        latest = payload.get("latest_response")
+        if latest is not None:
+            it = next(q for q in pool if q["id"] == latest["item"]["id"])
+            post["p"], theta, se = eap_update(post["p"], it, latest["correct"])
+        else:
+            theta, se = payload["previous_state"]["theta_hat"], payload["previous_state"]["se"]
+        return {**controller_pick(""), "theta_hat": round(float(theta), 4),
+                "se": round(float(np.clip(se, 0.2, 2.5)), 4), "certainty_pct": 40.0,
+                "should_stop": False, "selected_id": _next_id(payload, pool)}
+
+    bad, good = run(biased), run(faithful)
+    expect(len(bad) >= 5 and len(good) >= 5, "drift runs produced enough steps to judge",
+           f"biased {len(bad)}, faithful {len(good)}")
+    if len(bad) >= 5 and len(good) >= 5:
+        expect(bad[-1] > bad[0],
+               "reported deviation GROWS as the controller drifts from the evidence",
+               f"first {bad[0]:.3f} -> last {bad[-1]:.3f}")
+        # The real assertion. A comparator anchored to the model's own previous answer
+        # reports roughly the per-step increment for BOTH controllers and cannot tell
+        # them apart; an independent one separates them by an order of magnitude.
+        expect(max(good) < 0.05,
+               "a faithful controller reads as agreeing with the comparator",
+               f"max deviation {max(good):.4f}")
+        expect(bad[-1] > 10 * max(max(good), 1e-3),
+               "a drifting controller is separated from a faithful one, not blurred with it",
+               f"biased {bad[-1]:.3f} vs faithful max {max(good):.4f}")
+
+
 def session_checks(pool) -> None:
     """Drive whole sessions end-to-end, the check this branch was missing."""
     import numpy as np
@@ -215,6 +305,7 @@ def main() -> int:
     expect(res.invalid_llm_step and "moved theta down" in res.invalid_reason,
            "wrong-direction math invalidates the pure LLM step")
 
+    drift_checks(pool)
     session_checks(pool)
 
     if failures:

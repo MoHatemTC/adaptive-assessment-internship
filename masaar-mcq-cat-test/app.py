@@ -205,6 +205,13 @@ def _pick_next(
     state["certainty_pct"] = result.certainty_pct
     if result.posterior is not None:
         state["posterior"] = result.posterior
+    # Persisted separately from state["posterior"]: that one is rebuilt from the model's
+    # own (theta, se) and is the model's belief, while this is code's independent belief
+    # used only to compare against. Kept even on an invalid step, because the response was
+    # graded either way. Dropping it here would silently reset the comparator to the prior
+    # every question and the audit panel's mean |Δθ̂| would measure one step, not drift.
+    if result.audit_posterior is not None:
+        state["audit_posterior"] = result.audit_posterior
     state["last_controller"] = {
         "invalid_llm_step": result.invalid_llm_step,
         "invalid_reason": result.invalid_reason,
@@ -255,6 +262,11 @@ def init_competency_state(
     served_ids: list[str] = []
     base = {
         "posterior": posterior,
+        # Code's independent belief for the audit comparator. Starts as a COPY of the
+        # same prior — after this point the two diverge, because state["posterior"] gets
+        # overwritten each step with a Gaussian rebuilt from the model's (theta, se)
+        # while this one is only ever advanced by eap_update on graded responses.
+        "audit_posterior": posterior.copy(),
         "theta_hat": theta_hat,
         "se": se,
         "se_start": se,
@@ -397,12 +409,20 @@ def grade_and_advance(
     )
     theta_hat = controller.theta_hat
     se = controller.se
-    # The exact grid posterior, not a Gaussian rebuilt from (theta, se). The LLM still
-    # owns theta_hat; the belief it is measured against keeps its true shape.
+    # The controller's belief, which on this branch IS a Gaussian rebuilt from the
+    # model's (theta, se) — llm_full_cat.posterior_from_theta_se. That is correct here:
+    # the model owns the ability estimate, so this is what the model believes.
+    #
+    # An earlier comment claimed this was "the exact grid posterior, not a Gaussian
+    # rebuilt from (theta, se)". It never was; controller.posterior is exactly that
+    # Gaussian. The claim mattered, because it is the reason the comparator was allowed
+    # to run off this array — see audit_posterior below.
     posterior = controller.posterior
     if posterior is None:
         posterior = posterior_from_theta_se(theta_hat, se)
     state["posterior"] = posterior
+    if controller.audit_posterior is not None:
+        state["audit_posterior"] = controller.audit_posterior
     state["theta_hat"] = theta_hat
     state["se"] = se
     state["q_count"] += 1

@@ -372,9 +372,14 @@ def _run_coded_loop(pool: list[dict], competency: str, true_theta: float,
 def _run_full_cat(pool: list[dict], competency: str, true_theta: float,
                   rng: np.random.Generator) -> dict:
     """Approach 3: the model owns maths, stopping, and selection in one call."""
-    from llm_full_cat import llm_full_step
+    from llm_full_cat import fresh_audit_posterior, llm_full_step
 
     state = _fresh()
+    # The comparator's own belief: same prior the session starts at, updated by code from
+    # graded responses alone and never shown to the model. It must be persisted across
+    # steps — otherwise llm_full_step restarts it from the prior every call and |dtheta|
+    # reports single-step noise instead of the cumulative drift it exists to detect.
+    state["audit_posterior"] = fresh_audit_posterior(prior_sd=PRIOR_SD)
     log = StepLog()
     reason = "max_questions"
     t0 = time.time()
@@ -397,6 +402,10 @@ def _run_full_cat(pool: list[dict], competency: str, true_theta: float,
         log.violations += bool(res.invariant_violation)
         if res.theta_deviation is not None:
             log.devs.append(res.theta_deviation)
+        # Carried even on an invalid step: the response was graded regardless of whether
+        # the model's reply was usable, so code's belief has to move with the evidence.
+        if res.audit_posterior is not None:
+            state["audit_posterior"] = res.audit_posterior
         if res.invalid_llm_step:
             log.invalid_steps += 1
             # The step is invalid, but the ITEM was administered and answered. Advancing

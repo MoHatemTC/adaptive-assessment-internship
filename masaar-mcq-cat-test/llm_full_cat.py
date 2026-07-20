@@ -21,6 +21,7 @@ from engine import (
     eap_update,
     fisher_info,
     level_and_band,
+    prior_from_level,
     selection_score,
 )
 from engine_log import get_logger
@@ -101,10 +102,22 @@ class FullCATResult:
     stop_reason: str = ""
     invalid_llm_step: bool = False
     invalid_reason: str = ""
+    # Code's own belief, updated from graded responses only and never shown to the
+    # model. Callers must persist it into state["audit_posterior"], or the comparator
+    # silently restarts from the prior each step and reports a deviation that means
+    # nothing. Carried on every result — including invalid ones — because the response
+    # WAS graded even when the model's reply was not usable.
+    audit_posterior: np.ndarray | None = None
 
 
 def posterior_from_theta_se(theta_hat: float, se: float) -> np.ndarray:
-    """Display/selection belief rebuilt from the LLM-owned scalar state."""
+    """Display/selection belief rebuilt from the LLM-owned scalar state.
+
+    This is the CONTROLLER's belief and it is deliberately LLM-derived: the branch's
+    thesis is that the model owns the ability estimate, so code reconstructing a belief
+    from the model's (theta, se) is the honest representation of what the model believes.
+    It is not, and must not be used as, the comparator — see audit_posterior below.
+    """
     sd = max(float(se), 0.2)
     posterior = np.exp(-0.5 * ((GRID - float(theta_hat)) / sd) ** 2)
     total = posterior.sum()
@@ -112,6 +125,11 @@ def posterior_from_theta_se(theta_hat: float, se: float) -> np.ndarray:
         posterior = np.ones_like(GRID)
         total = posterior.sum()
     return posterior / total
+
+
+def fresh_audit_posterior(level_1to5: int = 3, prior_sd: float = 2.0) -> np.ndarray:
+    """Starting belief for the independent coded comparator. See audit_posterior."""
+    return prior_from_level(level_1to5, prior_sd)
 
 
 def _num(value: Any, default: float) -> float:
@@ -265,6 +283,7 @@ def llm_full_step(
             posterior=state.get("posterior"),
             stop_rule_reason="bank_exhausted",
             stop_reason="bank_exhausted",
+            audit_posterior=state.get("audit_posterior"),
         )
 
     payload = {
@@ -356,12 +375,36 @@ def llm_full_step(
 
     coded_theta = coded_se = theta_dev = None
     invariant = ""
+    audit_post = state.get("audit_posterior")
     if answered_item is not None and is_correct is not None:
-        _post, coded_theta, coded_se = eap_update(state["posterior"], answered_item, is_correct)
+        # THE COMPARATOR RUNS ON ITS OWN POSTERIOR, NOT THE MODEL'S.
+        #
+        # This used to be eap_update(state["posterior"], ...) — and state["posterior"] is
+        # posterior_from_theta_se() of the model's OWN previous (theta, se). So the
+        # "coded EAP comparator" was: take the LLM's last answer, fabricate a Gaussian
+        # from it, apply one Bayes update, then measure how far the LLM's new answer sits
+        # from that. Every step re-anchored the reference to the model's own position.
+        #
+        # That comparator can only ever see one step of disagreement. Cumulative drift —
+        # the model walking steadily away from the evidence over nine questions — is
+        # exactly what it cannot detect, because the reference walks with it. It is the
+        # measurement equivalent of the censoring bug llm_math.py documents twice: a
+        # metric whose construction bounds what it is able to report.
+        #
+        # audit_posterior is maintained by code alone, from the graded responses, from
+        # the same prior the session started at. It is never shown to the model and never
+        # feeds the controller — the LLM still owns the ability estimate, which is the
+        # branch's whole thesis. It just no longer grades its own homework.
+        if audit_post is None:
+            audit_post = fresh_audit_posterior(
+                prior_sd=float(state.get("prior_sd", 2.0)))
+        audit_post, coded_theta, coded_se = eap_update(audit_post, answered_item, is_correct)
         theta_dev = abs(theta_hat - coded_theta)
         invariant = check_direction(float(state.get("theta_hat", 0.0)), theta_hat, is_correct)
         if invariant:
-            return _invalid_result(state, invariant, data)
+            result = _invalid_result(state, invariant, data)
+            result.audit_posterior = audit_post
+            return result
 
     should_stop = bool(data.get("should_stop", False)) or next_q_count >= MAX_QUESTIONS
     stop_reason = str(data.get("stop_reason", "") or ("max_questions" if next_q_count >= MAX_QUESTIONS else ""))
@@ -396,4 +439,5 @@ def llm_full_step(
         llm_wanted_stop=should_stop,
         stop_disagreement=False,
         stop_reason=stop_reason,
+        audit_posterior=audit_post,
     )
