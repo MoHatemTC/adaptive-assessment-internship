@@ -232,7 +232,9 @@ def llm_select(
     import json
 
     user_msg = json.dumps(payload, indent=2)
-    data = chat_json(SELECTION_SYSTEM, user_msg)
+    # selected_id is what makes this a selection rather than a paragraph about one; a
+    # reply without it is retried instead of silently becoming a coded fallback.
+    data = chat_json(SELECTION_SYSTEM, user_msg, require=("selected_id",))
     trace_llm_response(
         "cat.llm.selection",
         input_data={
