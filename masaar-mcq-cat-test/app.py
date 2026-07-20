@@ -36,8 +36,10 @@ from llm_client import (
     get_model,
     get_usage,
     llm_configured,
+    missing_key_help,
     model_pricing,
     provider_label,
+    provider_name,
     test_connection,
 )
 from llm_math import (
@@ -629,7 +631,7 @@ def render_sidebar_live(state: dict, title: str) -> None:
         f"(after {MIN_QUESTIONS} questions, certainty ≥ {STABILITY_FLOOR:.0%}) · "
         f"or {MAX_QUESTIONS} questions · "
         f"selection: engine only (KL→Fisher) · "
-        f"math: {'OpenAI' if llm_enabled() else 'coded fallback'}"
+        f"math: {provider_name() if llm_enabled() else 'coded fallback'}"
     )
 
     item = state.get("current_item")
@@ -724,11 +726,7 @@ def render_llm_gate() -> None:
         st.session_state["llm_probe"] = None
 
     if not llm_configured():
-        st.error(
-            "No `OPENAI_API_KEY` found. This app requires a working LLM — there is no "
-            "engine-only mode. Copy `.env.example` → `.env` and add your key, or set it "
-            "in Streamlit Cloud app secrets."
-        )
+        st.error(missing_key_help())
         set_llm_enabled(False)
         st.stop()
 
@@ -758,8 +756,10 @@ def render_cost_panel() -> None:
     with st.expander("LLM usage & cost", expanded=False):
         if price is None:
             st.warning(
-                f"No pricing on file for `{get_model()}` — add it to "
-                "`MODEL_PRICING_USD_PER_1M` in `llm_client.py` to see cost."
+                f"No pricing on file for `{get_model()}` — token counts below are "
+                "metered and exact, but cost is not computed. Set "
+                "`LLM_PRICE_INPUT_PER_1M` and `LLM_PRICE_OUTPUT_PER_1M` to price this "
+                "model (a gateway's contracted rate is not something to guess)."
             )
         else:
             st.caption(
@@ -915,7 +915,7 @@ def screen_setup() -> None:
         comp_states = {}
         for comp in selected_competencies:
             # Defer item selection for all competencies — pick lazily when each starts.
-            # Avoids N blocking OpenAI calls at "Start Assessment".
+            # Avoids N blocking LLM calls at "Start Assessment".
             comp_states[comp] = init_competency_state(
                 st.session_state["self_ratings"][comp],
                 st.session_state["self_confidences"][comp],
@@ -1137,7 +1137,7 @@ def main() -> None:
     )
     st.title("Masaar MCQ Adaptive Test Harness")
     st.caption(
-        "IRT/CAT + LLM procedural selection · MCQ grading deterministic · OpenAI"
+        f"IRT/CAT + LLM procedural selection · MCQ grading deterministic · {provider_name()}"
     )
 
     if "phase" not in st.session_state:
