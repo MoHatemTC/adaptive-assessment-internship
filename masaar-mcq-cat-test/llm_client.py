@@ -14,7 +14,18 @@ import threading
 from dataclasses import dataclass
 from functools import lru_cache
 
-from openai import OpenAI
+from openai import (
+    APIConnectionError,
+    APITimeoutError,
+    InternalServerError,
+    OpenAI,
+    RateLimitError,
+)
+
+# Failures where the gateway never produced an answer. Retryable, and — crucially —
+# never evidence about the model. See LLMTransportError.
+TRANSPORT_ERRORS = (APITimeoutError, APIConnectionError, InternalServerError,
+                    RateLimitError)
 
 from config_env import load_runtime_config
 from engine_log import get_logger
@@ -271,7 +282,13 @@ def _build_client(api_key: str, base: str | None, timeout: float) -> OpenAI:
     read the environment inside its own body — so the first call froze the base URL for
     the life of the process and a later provider switch kept talking to the old host.
     """
-    kwargs: dict = {"api_key": api_key, "timeout": timeout, "max_retries": 1}
+    # max_retries=0: chat_json owns retrying, so retries are logged, metered, and
+    # bounded by TRANSPORT_ATTEMPTS. Leaving the SDK's own retry on top multiplied the
+    # budgets — a timeout became 2 silent SDK attempts inside each of my attempts, so a
+    # single failing step could stall for 6 minutes with nothing in the log until the
+    # very end. That is exactly what happened in the approach 3 human-test trace:
+    # 08:13:53 -> 08:20:51 with no output in between.
+    kwargs: dict = {"api_key": api_key, "timeout": timeout, "max_retries": 0}
     if base:
         kwargs["base_url"] = base
     return OpenAI(**kwargs)
@@ -339,11 +356,44 @@ def chat_json(system: str, user: str, *, temperature: float = 0.0,
                     "LLM_RETRY | attempt %d/%d unusable (%s) — retrying",
                     attempt + 1, attempts, exc,
                 )
+        except TRANSPORT_ERRORS as exc:
+            # The gateway did not answer. Nothing about the model can be concluded from
+            # this, so it must not reach a controller as a model verdict — see
+            # LLMTransportError. Retried on its own budget because a timeout costs the
+            # full timeout in wall clock, and three of those is a very long stall in
+            # front of a human.
+            last_error = exc
+            if attempt < min(attempts, TRANSPORT_ATTEMPTS) - 1:
+                get_logger().warning(
+                    "LLM_RETRY | attempt %d/%d transport failure (%s: %s) — retrying",
+                    attempt + 1, min(attempts, TRANSPORT_ATTEMPTS),
+                    type(exc).__name__, exc,
+                )
+                continue
+            raise LLMTransportError(f"{type(exc).__name__}: {exc}") from exc
     raise ValueError(f"LLM gave no usable reply in {attempts} attempts: {last_error}")
 
 
 class _UnusableReply(Exception):
     """A 200 that is not an answer. Retryable; distinct from a transport failure."""
+
+
+class LLMTransportError(Exception):
+    """The gateway never answered: timeout, connection failure, 5xx, rate limit.
+
+    Distinct from _UnusableReply, and the distinction is not pedantic. A controller that
+    treats these the same reports infrastructure failure as a model verdict: approach 3
+    logged a 180s gateway timeout as "the model returned an unusable CAT decision. No
+    deterministic CAT fallback was substituted", killed the competency, and incremented
+    the invalid-step counter that is supposed to measure how well the MODEL runs a CAT.
+    Nothing whatsoever was learned about the model — it was never reached.
+    """
+
+
+# Retried fewer times than a bad reply: an unusable reply comes back fast, while a
+# timeout costs the whole timeout, so three of them at LITELLM_TIMEOUT=180 is a nine
+# minute stall with a human sitting in front of it.
+TRANSPORT_ATTEMPTS = 2
 
 
 def _one_call(client, system: str, user: str, temperature: float,
