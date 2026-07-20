@@ -295,14 +295,67 @@ def chat_json(system: str, user: str, *, temperature: float = 0.0) -> dict:
             _usage.add(prompt_t, completion_t, reasoning_t)
             _last_usage = Usage(1, prompt_t, completion_t, reasoning_t)
 
-    raw = (resp.choices[0].message.content or "{}").strip()
+    message = resp.choices[0].message
+    raw = (message.content or "").strip()
+
+    # Reasoning models sometimes put the whole answer in the reasoning channel and
+    # return content=''. Measured on kimi-k2.6 via the Sprints gateway: ~30% of CAT
+    # selection calls come back with finish_reason='stop', content='', and a
+    # reasoning_content ending in the complete, correct JSON object.
+    #
+    # This used to read `content or "{}"`, so an empty response became a valid-looking
+    # empty object. Every controller then saw a well-formed reply with no selected_id /
+    # no theta_hat and booked it as the model declining to answer: approach 1 fell back
+    # to coded selection on 29% of steps, approach 2 to the coded EAP, and approach 3
+    # invalidated and ABORTED the session. The model had answered correctly every time.
+    # Scoring the branches without this fix would have measured a client-layer bug and
+    # attributed it to the model.
+    if not raw:
+        raw = (getattr(message, "reasoning_content", None) or "").strip()
+
+    if not raw:
+        raise ValueError("LLM returned an empty response (no content, no reasoning)")
+
+    return _extract_json(raw)
+
+
+def _extract_json(raw: str) -> dict:
+    """Parse a JSON object out of model output that may have prose around it.
+
+    Scans candidate `{` positions from the END backwards with raw_decode. Backwards
+    because when the text is a reasoning trace the real answer is the last object in it,
+    and the trace usually contains earlier partial or hypothetical objects that would
+    win a forward scan. The old `re.search(r"\\{.*\\}", DOTALL)` spanned greedily from
+    the first brace to the last, which on such a trace concatenates unrelated fragments
+    into something that fails to parse — or, worse, parses into the wrong object.
+    """
     try:
-        return json.loads(raw)
+        parsed = json.loads(raw)
+        if isinstance(parsed, dict):
+            return parsed
     except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", raw, re.DOTALL)
-        if match:
+        pass
+
+    decoder = json.JSONDecoder()
+    for pos in range(len(raw) - 1, -1, -1):
+        if raw[pos] != "{":
+            continue
+        try:
+            obj, _ = decoder.raw_decode(raw[pos:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict) and obj:
+            return obj
+
+    # A truncated trailing object is common when the model runs out of budget mid-write.
+    # Recover the last complete one rather than discarding the whole response.
+    match = re.search(r"\{.*\}", raw, re.DOTALL)
+    if match:
+        try:
             return json.loads(match.group())
-        raise ValueError(f"LLM did not return JSON: {raw[:200]!r}")
+        except json.JSONDecodeError:
+            pass
+    raise ValueError(f"LLM did not return JSON: {raw[:200]!r}")
 
 
 def probe_gateway() -> tuple[bool, str]:
