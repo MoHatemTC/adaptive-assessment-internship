@@ -391,7 +391,9 @@ if mode == "Assessment":
     if active["current"] is None:
         with st.spinner("Selecting the next question…"):
             active["current"] = choose(
-                rank_candidates(eligible, active["model"], active["competency"]), active["model"]
+                rank_candidates(eligible, active["model"], active["competency"]),
+                active["model"],
+                target_competency=active["competency"],
             )
 
     decision = active["current"]
@@ -418,9 +420,33 @@ if mode == "Assessment":
              if decision.chosen_by_llm else "Engine default — the model was not used or "
              "its choice was rejected.")
         )
-        st.json({"signals": next(
-            (c.signals for c in rank_candidates(eligible, active["model"], active["competency"])
-             if c.question["question_id"] == question["question_id"]), {})}, expanded=False)
+        shortlist = rank_candidates(eligible, active["model"], active["competency"])[
+            : settings.shortlist_size
+        ]
+        st.markdown("**The shortlist it chose from**, ranked by expected information:")
+        st.dataframe(
+            [
+                {
+                    "rank": i + 1,
+                    "question": c.question["question_id"],
+                    "difficulty": c.question["difficulty"],
+                    "discrim": c.question.get("discrimination"),
+                    "info": c.signals["expected_information"],
+                    "loading": c.signals["target_loading"],
+                    "utility": c.utility,
+                    "administered": "◀" if c.question["question_id"] == question["question_id"] else "",
+                }
+                for i, c in enumerate(shortlist)
+            ],
+            use_container_width=True,
+            hide_index=True,
+        )
+        st.caption(
+            "`info` is the IRT information this question carries at the current ability "
+            "estimate — highest where the candidate could plausibly pass or fail, low for "
+            "questions far above or below them. `loading` is how much of the question "
+            "assesses the competency under test."
+        )
         for flag in decision.flags:
             st.warning(flag)
 
