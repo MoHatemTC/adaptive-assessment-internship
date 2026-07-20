@@ -1,0 +1,73 @@
+{
+  "approach": "approach-3-llm-full-cat",
+  "model": "kimi-k2.6",
+  "provider": "LiteLLM (https://learner-os.sprints.ai/litellm/v1)",
+  "competency": "Agentic AI & Orchestration",
+  "candidates": 40,
+  "wall_clock_s": 7109.0,
+  "recovery": {
+    "rmse_llm": 0.6926354741131875,
+    "rmse_coded": 0.6418534181265927,
+    "bias_llm": 0.19515,
+    "delta_mse": 0.06776808963920952,
+    "ci_lo": -0.08852853163799503,
+    "ci_hi": 0.2313802728694564,
+    "significant": false,
+    "mean_items_llm": 11.025,
+    "mean_items_coded": 8.825
+  },
+  "selection": {
+    "steps": 441,
+    "agreement": 0.5419501133786848,
+    "mean_regret": 0.13019212280530576,
+    "p95_regret": 0.5660445178440762,
+    "max_regret": 0.8109123195816266
+  },
+  "math": {
+    "steps": 441,
+    "mean_dev": 0.24271122750881832,
+    "p95_dev": 0.6874120626591586,
+    "max_dev": 1.5447432980811506,
+    "violations": 0
+  },
+  "stopping": {
+    "owns_decision": true,
+    "over_stop_rate": 0.025,
+    "reasons": {
+      "max_questions": 30,
+      "invalid_llm_step": 9,
+      "stable_level": 1
+    },
+    "coded_reasons": {
+      "stable_level": 35,
+      "max_questions": 5
+    }
+  },
+  "coverage": {
+    "mean_subs_llm": 7.5,
+    "mean_subs_coded": 6.95
+  },
+  "robustness": {
+    "steps": 441,
+    "fallback_rate": 0.0,
+    "invalid_step_rate": 0.02040816326530612,
+    "sessions_aborted": 9
+  },
+  "cost": {
+    "calls": 480,
+    "input_tokens": 1278204,
+    "output_tokens": 5098148,
+    "reasoning_tokens": 0,
+    "cost_usd": null,
+    "calls_per_competency": 12.0,
+    "tokens_per_competency": 159408.8
+  },
+  "composite": {
+    "recovery": 92.08821600813239,
+    "selection": 47.923150877877696,
+    "math": 51.457754498236326,
+    "stopping": 97.5,
+    "robustness": 97.95918367346938,
+    "TOTAL": 76.08065566480477
+  }
+}
