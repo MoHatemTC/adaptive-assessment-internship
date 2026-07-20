@@ -30,7 +30,7 @@ Rubric = Literal["loose", "mid", "tight"]
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    code_cat_approach: Approach = "B"
+    code_cat_approach: Approach = "C"
     code_cat_rubric: Rubric = "mid"
 
     e2b_api_key: str = ""
