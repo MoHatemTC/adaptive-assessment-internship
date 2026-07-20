@@ -34,6 +34,7 @@ class EvaluationResult:
 
     question_id: str
     approach: str
+    rubric_id: str
     execution: ExecutionEvidence
     signals: StaticSignals
     llm: LLMEvaluation
@@ -48,7 +49,9 @@ class EvaluationResult:
         return self.execution.usable
 
 
-def evaluate_submission(question: dict, code: str, *, approach: str | None = None) -> EvaluationResult:
+def evaluate_submission(
+    question: dict, code: str, *, approach: str | None = None, rubric_id: str | None = None
+) -> EvaluationResult:
     """Run one submission through the whole evaluation layer.
 
     The LLM is called only when the configured approach gives it weight. Approach A does
@@ -56,6 +59,7 @@ def evaluate_submission(question: dict, code: str, *, approach: str | None = Non
     the approaches is a real one rather than tokens spent and discarded.
     """
     approach = approach or settings.code_cat_approach
+    rubric_id = rubric_id or settings.code_cat_rubric
     started = time.time()
 
     execution = run_submission(code, question["tests"], question["function_name"])
@@ -64,7 +68,7 @@ def evaluate_submission(question: dict, code: str, *, approach: str | None = Non
     weights = scoring.SOURCE_WEIGHTS[approach]
     llm_has_weight = any("llm" in sources for sources in weights.values())
     llm = (
-        llm_evaluate(question, code, execution, signals)
+        llm_evaluate(question, code, execution, signals, rubric_id)
         if llm_has_weight and execution.usable
         else LLMEvaluation(available=False)
     )
@@ -97,6 +101,7 @@ def evaluate_submission(question: dict, code: str, *, approach: str | None = Non
     return EvaluationResult(
         question_id=question["question_id"],
         approach=approach,
+        rubric_id=rubric_id,
         execution=execution,
         signals=signals,
         llm=llm,
@@ -137,6 +142,7 @@ def audit_record(
         "session_id": session_id,
         "step_number": step,
         "approach": result.approach,
+        "rubric_id": result.rubric_id,
         "question_type": "code",
         "answered_question_id": result.question_id,
         "passed_test_ratio": round(result.execution.passed_test_ratio, 4),
@@ -174,6 +180,7 @@ def result_to_dict(result: EvaluationResult) -> dict:
     return {
         "question_id": result.question_id,
         "approach": result.approach,
+        "rubric_id": result.rubric_id,
         "overall_score": result.overall_score,
         "passed_test_ratio": round(result.execution.passed_test_ratio, 4),
         "compiled": result.execution.compiled,
