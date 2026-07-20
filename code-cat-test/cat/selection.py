@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from dataclasses import dataclass, field
 
 from cat.competency_state import LearnerModel
@@ -32,10 +33,19 @@ The assessment engine has already filtered and ranked the candidates. You may ON
 an id from `allowed_question_ids`. You may not invent a question, and you may not ask for
 one outside the list.
 
+You are given the CAT parameters for the competency under test: the current ability
+estimate, its standard error, and how much evidence it rests on. `expected_information`
+is how much each candidate would tell you AT THAT ESTIMATE — it is highest where the
+candidate could plausibly pass or fail, and low for questions far above or below them.
+
 Prefer, in this order:
 1. A question that directly verifies an unresolved misconception.
-2. A question targeting the weakest or most uncertain competency.
+2. The highest `expected_information`, which is what shrinks the standard error fastest.
 3. A question that improves competency coverage.
+
+Do not simply pick the hardest or the easiest question. A question the candidate is
+almost certain to pass, or almost certain to fail, moves the estimate very little
+whatever its difficulty.
 
 Return JSON only:
 {"selected_question_id": "<id>", "reason_code": "<one of the allowed codes>",
@@ -164,10 +174,47 @@ def filter_candidates(
 
 
 # --- section 15: ranking ----------------------------------------------------
+def expected_information(question: dict, mastery: float, loading: float) -> float:
+    """Information this question carries about a competency at the current estimate.
+
+    The IRT quantity, on the 0..1 mastery scale the Beta model uses:
+
+        P = 1 / (1 + exp(-1.7 * a * (mastery - difficulty)))
+        I = a^2 * P * (1 - P) * loading
+
+    Two properties make this the right selection criterion, and both matter:
+
+    It PEAKS WHERE THE ANSWER IS UNCERTAIN. Information is maximal at P = 0.5 — where the
+    question is matched to the estimate and the response genuinely could go either way. A
+    question far below the estimate is almost certainly passed and one far above almost
+    certainly failed, and neither outcome tells you much. This is what makes a test
+    adaptive rather than merely ordered by difficulty.
+
+    It SCALES WITH DISCRIMINATION SQUARED. A sharply discriminating question at the right
+    difficulty is worth several blunt ones, which is why `a` cannot just be a tie-break.
+
+    `loading` is the question's weight on the competency being measured, so a question
+    that merely brushes the target contributes proportionally less. 1.7 is the usual
+    logistic-to-normal scaling constant.
+    """
+    a = max(float(question.get("discrimination", 1.0)), 0.1)
+    difficulty = float(question["difficulty"])
+    p = 1.0 / (1.0 + math.exp(-1.7 * a * (mastery - difficulty)))
+    return (a**2) * p * (1.0 - p) * loading
+
+
 def rank_candidates(
     candidates: list[dict], model: LearnerModel, target_competency: str | None = None
 ) -> list[RankedCandidate]:
-    """Utility score per candidate. Deterministic and fully explainable."""
+    """Utility per candidate, driven by the CAT parameters of the competency under test.
+
+    When a target is set, the ability estimate that steers difficulty is the TARGET's
+    mastery and the uncertainty that motivates asking is the TARGET's standard error —
+    not an average over every competency the question happens to touch. Averaging was the
+    earlier behaviour and it quietly defeated the adaptation: a question could rank highly
+    because something incidental was uncertain, and difficulty was matched to a blend that
+    described no competency in particular.
+    """
     ranked: list[RankedCandidate] = []
     open_misconceptions = {c for s in model.states.values() for c in s.misconception_codes}
 
@@ -176,9 +223,25 @@ def rank_candidates(
         states = [model.get(t) for t in targets]
         weights = [c["weight"] for c in question["competencies"]]
 
-        # Uncertainty: a question is worth more when it targets competencies we know least
-        # about. This is what makes the test adaptive at all.
-        uncertainty = sum(s.standard_error * w for s, w in zip(states, weights))
+        if target_competency:
+            target_state = model.get(target_competency)
+            loading = competency_weight(question, target_competency)
+            # Ability the question is matched against: the target's own estimate, or the
+            # midpoint while it is still unmeasured (where information is maximal anyway).
+            ability = target_state.mastery if target_state.observed else 0.5
+            uncertainty = target_state.standard_error
+            information = expected_information(question, ability, loading)
+        else:
+            loading = 0.0
+            observed = [s for s in states if s.observed]
+            ability = sum(s.mastery for s in observed) / len(observed) if observed else 0.5
+            uncertainty = sum(s.standard_error * w for s, w in zip(states, weights))
+            # No target: information about the whole blueprint, each competency weighted
+            # by how much the question loads on it.
+            information = sum(
+                expected_information(question, st.mastery if st.observed else 0.5, w)
+                for st, w in zip(states, weights)
+            )
 
         # Coverage: unassessed competencies first, so a report is not built on three of
         # eight competencies because the sharpest questions happened to cluster.
@@ -190,34 +253,23 @@ def rank_candidates(
             not model.get(t).observed or model.get(t).mastery < 0.5 for t in targets
         ) else 0.0
 
-        # Difficulty fit: target just above current mastery, where a response is most
-        # informative. Both a trivial and an impossible question tell you almost nothing.
-        observed = [s for s in states if s.observed]
-        current = sum(s.mastery for s in observed) / len(observed) if observed else 0.5
-        fit = 1.0 - min(abs(question["difficulty"] - min(current + 0.1, 1.0)), 1.0)
-
-        quality = float(question.get("discrimination", 1.0)) / 2.0
-
-        # How squarely this question aims at what the session is measuring. Without it,
-        # a question carrying the target at weight 0.15 ranks alongside one carrying it
-        # at 0.50 purely because it also touches something uncertain, and the session
-        # drifts off the competency the candidate asked to be assessed on.
-        focus = competency_weight(question, target_competency) if target_competency else 0.0
-
         signals = {
+            "expected_information": round(information, 4),
             "competency_uncertainty": round(uncertainty, 4),
+            "ability_estimate": round(ability, 4),
             "blueprint_need": round(coverage, 4),
             "misconception_relevance": relevance,
-            "difficulty_fit": round(fit, 4),
-            "question_quality": round(quality, 4),
-            "target_focus": round(focus, 4),
+            "target_loading": round(loading, 4),
         }
+
+        # Information leads. Uncertainty scales it: when the target is already precisely
+        # estimated there is little left to learn and coverage/misconception work matter
+        # relatively more — which is also when the stopping rule is about to fire anyway.
         utility = (
-            (0.25 * uncertainty + 0.15 * coverage + 0.15 * relevance
-             + 0.15 * fit + 0.05 * quality + 0.25 * focus)
-            if target_competency
-            else (0.35 * uncertainty + 0.25 * coverage + 0.15 * relevance
-                  + 0.15 * fit + 0.10 * quality)
+            0.45 * information
+            + 0.20 * uncertainty
+            + 0.20 * relevance
+            + 0.15 * coverage
         )
         ranked.append(
             RankedCandidate(question, round(utility, 4), signals, _explain(signals))
@@ -230,18 +282,22 @@ def rank_candidates(
 def _explain(signals: dict[str, float]) -> str:
     top = max(signals, key=signals.get)
     return {
-        "competency_uncertainty": "Targets the least certain competencies.",
+        "expected_information": "Most informative at the current ability estimate.",
+        "competency_uncertainty": "The competency under test is still imprecise.",
+        "ability_estimate": "Matched to current mastery.",
         "blueprint_need": "Covers competencies not yet assessed.",
         "misconception_relevance": "Directly verifies an open misconception.",
-        "difficulty_fit": "Difficulty is matched to current mastery.",
-        "question_quality": "Highly discriminating question.",
-        "target_focus": "Most squarely targets the competency under test.",
+        "target_loading": "Most squarely targets the competency under test.",
     }.get(top, "Best available utility.")
 
 
 # --- sections 16-17: constrained pick ---------------------------------------
 def choose(
-    ranked: list[RankedCandidate], model: LearnerModel, *, use_llm: bool = True
+    ranked: list[RankedCandidate],
+    model: LearnerModel,
+    *,
+    use_llm: bool = True,
+    target_competency: str | None = None,
 ) -> SelectionDecision | None:
     """Pick the next question: the model choosing from the shortlist, else rank 1."""
     if not ranked:
@@ -261,7 +317,20 @@ def choose(
     if not use_llm:
         return deterministic([], fallback=False)
 
+    target_state = model.states.get(target_competency) if target_competency else None
     payload = {
+        # The CAT parameters, stated explicitly. Without them the model is choosing from
+        # a ranked list without knowing what the ranking is FOR — it can see that a
+        # question scores well but not that the candidate sits at mastery 0.31 with the
+        # estimate still imprecise, which is the whole reason one question beats another.
+        "competency_under_test": target_competency,
+        "cat_parameters": {
+            "ability_estimate": round(target_state.mastery, 4) if target_state else None,
+            "standard_error": round(target_state.standard_error, 4) if target_state else None,
+            "evidence_count": target_state.evidence_count if target_state else 0,
+            "measured_yet": bool(target_state and target_state.observed),
+            "precision_target": settings.target_standard_error,
+        },
         "learner_state_summary": {
             "weak_competencies": [
                 {"competency_id": s.competency_id, "mastery": round(s.mastery, 3),
@@ -278,6 +347,9 @@ def choose(
                 "rank": index + 1,
                 "utility_score": c.utility,
                 "difficulty": c.question["difficulty"],
+                "discrimination": c.question.get("discrimination"),
+                "expected_information": c.signals.get("expected_information"),
+                "target_loading": c.signals.get("target_loading"),
                 "target_competencies": [x["competency_id"] for x in c.question["competencies"]],
                 "selection_reason": c.reason,
             }
