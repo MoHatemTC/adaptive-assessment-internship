@@ -85,6 +85,7 @@ import numpy as np
 
 from certainty import combined_certainty_pct
 from engine import (
+    GRID,
     MAX_QUESTIONS,
     check_convergence,
     eap_update,
@@ -231,8 +232,28 @@ def _summary(state: dict, true_theta: float, log: StepLog, pool: list[dict],
              stop_reason: str, elapsed: float) -> dict:
     sub_by_id = {q["id"]: q.get("sub_competency", "") for q in pool}
     covered = {sub_by_id.get(i, "") for i in state["served_ids"]}
-    coded_stop = check_convergence(state["certainty_pct"], state["level_history"],
-                                   state["q_count"])
+
+    # "Would the coded rule have stopped here?" has to be asked with CODE'S certainty,
+    # not the model's. state["certainty_pct"] on approach 3 is a number the LLM emitted
+    # and code merely clipped to [0, 100], so feeding it to check_convergence asks
+    # "does the coded rule agree with the model, given the model's own confidence?" — a
+    # model that declares 95% certainty gets its stop ratified by construction, and the
+    # over-stop rate it produces is close to uninformative.
+    #
+    # audit_posterior is code's independent belief, so the SE read off it is the
+    # precision the psychometrics actually support. Approaches 1 and 2 have no
+    # audit_posterior and their certainty is already code's, so they fall through
+    # unchanged.
+    certainty = state["certainty_pct"]
+    audit_post = state.get("audit_posterior")
+    if audit_post is not None:
+        audit_theta = float(np.sum(GRID * audit_post))
+        audit_se = float(np.sqrt(np.sum((GRID - audit_theta) ** 2 * audit_post)))
+        certainty = combined_certainty_pct(
+            audit_se, "low", state["q_count"], state.get("prior_sd", PRIOR_SD),
+            se_start=state.get("se_start", PRIOR_SD),
+        )
+    coded_stop = check_convergence(certainty, state["level_history"], state["q_count"])
     return {
         "true_theta": true_theta,
         "theta_hat": state["theta_hat"],
