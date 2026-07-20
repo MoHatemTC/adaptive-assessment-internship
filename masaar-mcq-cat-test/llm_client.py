@@ -17,6 +17,7 @@ from functools import lru_cache
 from openai import OpenAI
 
 from config_env import load_runtime_config
+from engine_log import get_logger
 
 load_runtime_config()
 
@@ -258,8 +259,29 @@ def llm_configured() -> bool:
     return bool(get_api_key())
 
 
-def chat_json(system: str, user: str, *, temperature: float = 0.0) -> dict:
-    """Call OpenAI chat completions and parse a JSON object."""
+def chat_json(system: str, user: str, *, temperature: float = 0.0,
+              require: tuple[str, ...] = (), attempts: int = 3) -> dict:
+    """Call chat completions and parse a JSON object, retrying an unusable reply.
+
+    `require` names the keys that make a reply an ANSWER rather than merely valid JSON.
+    Two measured failure modes need it, both on kimi-k2.6 and neither detectable from
+    JSON-validity alone:
+
+      1. The model returns content='' with a short reasoning trace and simply never
+         answers — ~17-25% of calls, independent of prompt.
+      2. When it does that, the reasoning trace often contains the ECHOED INPUT payload.
+         A JSON scan then happily returns `{"item":..., "previous_state":..., ...}` — a
+         well-formed object that is the question, not the answer.
+
+    Without `require`, case 2 reaches the controller as a successful reply with no
+    theta_hat, which llm_math books as "no usable theta_hat" and approach 3 treats as an
+    invalid step that ABORTS the competency. Measured on approach 3: 3 of 5 sessions
+    aborted, and the branch scored as though the model could not run a CAT. It is
+    transient flakiness, so it is retried rather than surfaced as a model verdict.
+
+    Every attempt is metered — a retried call costs real tokens and the cost panel must
+    say so. Retries are logged so a run cannot quietly cost 3x without anyone noticing.
+    """
     client = get_client()
     if client is None:
         raise RuntimeError(
@@ -273,6 +295,27 @@ def chat_json(system: str, user: str, *, temperature: float = 0.0) -> dict:
     with _usage_lock:
         _last_usage = None
 
+    last_error: Exception | None = None
+    for attempt in range(max(1, attempts)):
+        try:
+            return _one_call(client, system, user, temperature, require)
+        except _UnusableReply as exc:
+            last_error = exc
+            if attempt < attempts - 1:
+                get_logger().warning(
+                    "LLM_RETRY | attempt %d/%d unusable (%s) — retrying",
+                    attempt + 1, attempts, exc,
+                )
+    raise ValueError(f"LLM gave no usable reply in {attempts} attempts: {last_error}")
+
+
+class _UnusableReply(Exception):
+    """A 200 that is not an answer. Retryable; distinct from a transport failure."""
+
+
+def _one_call(client, system: str, user: str, temperature: float,
+              require: tuple[str, ...]) -> dict:
+    global _last_usage
     resp = client.chat.completions.create(
         model=get_model(),
         temperature=temperature,
@@ -285,6 +328,8 @@ def chat_json(system: str, user: str, *, temperature: float = 0.0) -> dict:
 
     # Meter every call. Counted before parsing: a response that fails to parse was
     # still billed, and a cost readout that only counts successes understates the bill.
+    # This is inside the retry loop on purpose — a retried step costs twice and the
+    # cost panel must show both.
     usage = getattr(resp, "usage", None)
     if usage is not None:
         prompt_t = getattr(usage, "prompt_tokens", 0) or 0
@@ -314,12 +359,16 @@ def chat_json(system: str, user: str, *, temperature: float = 0.0) -> dict:
         raw = (getattr(message, "reasoning_content", None) or "").strip()
 
     if not raw:
-        raise ValueError("LLM returned an empty response (no content, no reasoning)")
+        raise _UnusableReply("empty response (no content, no reasoning)")
 
-    return _extract_json(raw)
+    parsed = _extract_json(raw, require)
+    missing = [k for k in require if k not in parsed]
+    if missing:
+        raise _UnusableReply(f"reply lacks required key(s) {missing}; got {sorted(parsed)[:6]}")
+    return parsed
 
 
-def _extract_json(raw: str) -> dict:
+def _extract_json(raw: str, require: tuple[str, ...] = ()) -> dict:
     """Parse a JSON object out of model output that may have prose around it.
 
     Scans candidate `{` positions from the END backwards with raw_decode. Backwards
@@ -328,24 +377,48 @@ def _extract_json(raw: str) -> dict:
     win a forward scan. The old `re.search(r"\\{.*\\}", DOTALL)` spanned greedily from
     the first brace to the last, which on such a trace concatenates unrelated fragments
     into something that fails to parse — or, worse, parses into the wrong object.
+
+    `require` disambiguates when the text holds several complete objects. The measured
+    case: kimi echoes the INPUT payload into its reasoning trace, so a positional scan
+    returns the question instead of the answer. Preferring an object that carries the
+    answer's keys picks the right one; without it the caller receives a well-formed
+    object that happens to be its own prompt.
     """
+    def acceptable(obj) -> bool:
+        return isinstance(obj, dict) and bool(obj) and all(k in obj for k in require)
+
     try:
         parsed = json.loads(raw)
-        if isinstance(parsed, dict):
+        if acceptable(parsed):
             return parsed
     except json.JSONDecodeError:
         pass
 
     decoder = json.JSONDecoder()
+    fallback: dict | None = None
+    fallback_len = -1
     for pos in range(len(raw) - 1, -1, -1):
         if raw[pos] != "{":
             continue
         try:
-            obj, _ = decoder.raw_decode(raw[pos:])
+            obj, end = decoder.raw_decode(raw[pos:])
         except json.JSONDecodeError:
             continue
-        if isinstance(obj, dict) and obj:
+        if require and acceptable(obj):
+            # Scanning backwards, so the first acceptable hit is the LAST such object in
+            # the text — the answer, not the restatement of the question that preceded it.
+            # Guarded on `require` being non-empty: with no keys to match, `acceptable`
+            # is true for every dict and this would return whichever fragment the scan
+            # reached first, which is the innermost trailing leaf.
             return obj
+        # Keep the widest well-formed object as a fallback for callers with no `require`.
+        # "First one found" would be the innermost nested fragment, since a backwards
+        # scan reaches `{"correct": true}` before the object containing it — so a reply
+        # this function used to hand back whole would arrive as one of its own leaves.
+        if isinstance(obj, dict) and obj and end > fallback_len:
+            fallback, fallback_len = obj, end
+    if fallback is not None:
+        return fallback
 
     # A truncated trailing object is common when the model runs out of budget mid-write.
     # Recover the last complete one rather than discarding the whole response.
@@ -355,7 +428,7 @@ def _extract_json(raw: str) -> dict:
             return json.loads(match.group())
         except json.JSONDecodeError:
             pass
-    raise ValueError(f"LLM did not return JSON: {raw[:200]!r}")
+    raise _UnusableReply(f"no JSON object in reply: {raw[:160]!r}")
 
 
 def probe_gateway() -> tuple[bool, str]:
