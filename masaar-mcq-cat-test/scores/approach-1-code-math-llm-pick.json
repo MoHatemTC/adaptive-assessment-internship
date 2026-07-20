@@ -1,0 +1,72 @@
+{
+  "approach": "approach-1-code-math-llm-pick",
+  "model": "kimi-k2.6",
+  "provider": "LiteLLM (https://learner-os.sprints.ai/litellm/v1)",
+  "competency": "Agentic AI & Orchestration",
+  "candidates": 40,
+  "wall_clock_s": 1715.7,
+  "recovery": {
+    "rmse_llm": 0.6418534181265927,
+    "rmse_coded": 0.6418534181265927,
+    "bias_llm": 0.04880114190658925,
+    "delta_mse": 0.0,
+    "ci_lo": 0.0,
+    "ci_hi": 0.0,
+    "significant": false,
+    "mean_items_llm": 8.825,
+    "mean_items_coded": 8.825
+  },
+  "selection": {
+    "steps": 353,
+    "agreement": 1.0,
+    "mean_regret": 0.0,
+    "p95_regret": 0.0,
+    "max_regret": 0.0
+  },
+  "math": {
+    "steps": 353,
+    "mean_dev": null,
+    "p95_dev": null,
+    "max_dev": null,
+    "violations": 0
+  },
+  "stopping": {
+    "owns_decision": false,
+    "over_stop_rate": 0.0,
+    "reasons": {
+      "stable_level": 35,
+      "max_questions": 5
+    },
+    "coded_reasons": {
+      "stable_level": 35,
+      "max_questions": 5
+    }
+  },
+  "coverage": {
+    "mean_subs_llm": 6.95,
+    "mean_subs_coded": 6.95
+  },
+  "robustness": {
+    "steps": 353,
+    "fallback_rate": 0.0,
+    "invalid_step_rate": 0.0,
+    "sessions_aborted": 0
+  },
+  "cost": {
+    "calls": 353,
+    "input_tokens": 676140,
+    "output_tokens": 1257671,
+    "reasoning_tokens": 0,
+    "cost_usd": null,
+    "calls_per_competency": 8.825,
+    "tokens_per_competency": 48345.275
+  },
+  "composite": {
+    "recovery": 100.0,
+    "selection": 100.0,
+    "math": 100.0,
+    "stopping": 100.0,
+    "robustness": 100.0,
+    "TOTAL": 100.0
+  }
+}
