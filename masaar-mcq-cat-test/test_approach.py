@@ -40,7 +40,7 @@ def expect(cond: bool, label: str, detail: str = "") -> None:
 
 
 def stub(response, *, raises: Exception | None = None):
-    def fake(system: str, user: str):
+    def fake(system: str, user: str, **_kwargs):
         seen_payloads.append(user)
         if raises:
             raise raises

@@ -327,7 +327,13 @@ def llm_math_update(
     }
 
     try:
-        data = chat_json(LLM_MATH_SYSTEM, json.dumps(payload, indent=2))
+        # theta_hat is the whole deliverable of this call. Without `require`, a reply
+        # that echoes the input payload back (measured at ~17-25% of kimi calls) arrives
+        # as well-formed JSON, is booked "no usable theta_hat", and silently becomes a
+        # coded-EAP step — so this branch's headline "% ran on the model" was counting
+        # gateway flakiness as the model declining to do maths.
+        data = chat_json(LLM_MATH_SYSTEM, json.dumps(payload, indent=2),
+                         require=("theta_hat",))
     except Exception as exc:
         trace_llm_response(
             "cat.llm.math.error",
