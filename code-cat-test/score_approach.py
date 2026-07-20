@@ -52,10 +52,10 @@ def load_seeded() -> list[dict]:
     return [json.loads(p.read_text(encoding="utf-8")) for p in sorted(SEEDED_DIR.glob("*.json"))]
 
 
-def score_one(question: dict, seeded: dict, approach: str) -> dict:
+def score_one(question: dict, seeded: dict, approach: str, rubric_id: str) -> dict:
     """Run one seeded submission and compare what came back with what was seeded."""
     started = time.time()
-    result = evaluate_submission(question, seeded["code"], approach=approach)
+    result = evaluate_submission(question, seeded["code"], approach=approach, rubric_id=rubric_id)
     truth = seeded["ground_truth"]
 
     by_competency = {e.competency_id: e.score for e in result.competency_evidence}
@@ -85,6 +85,8 @@ def score_one(question: dict, seeded: dict, approach: str) -> dict:
     return {
         "question_id": seeded["question_id"],
         "defect": seeded["defect"],
+        "approach": approach,
+        "rubric_id": rubric_id,
         "separation_margin": margin,
         "separated": None if margin is None else margin > 0,
         "misconception_expected": sorted(expected),
@@ -107,7 +109,7 @@ def result_misconceptions(result) -> list[str]:
     return sorted({c for e in result.competency_evidence for c in e.misconception_codes})
 
 
-def summarise(approach: str, rows: list[dict], wall_seconds: float) -> dict:
+def summarise(approach: str, rubric_id: str, rows: list[dict], wall_seconds: float) -> dict:
     graded = [r for r in rows if r["separated"] is not None]
     margins = [r["separation_margin"] for r in graded]
     with_misconception = [r for r in rows if r["misconception_expected"]]
@@ -118,6 +120,7 @@ def summarise(approach: str, rows: list[dict], wall_seconds: float) -> dict:
 
     return {
         "approach": approach,
+        "rubric_id": rubric_id,
         "model": settings.litellm_model,
         "submissions": len(rows),
         "separation": {
@@ -172,8 +175,8 @@ def print_report(summary: dict) -> None:
         summary["separation"], summary["misconception"], summary["integrity"], summary["cost"]
     )
     print(f"\n{'=' * 68}")
-    print(f"APPROACH {summary['approach']}   model={summary['model']}   "
-          f"n={summary['submissions']} submissions")
+    print(f"APPROACH {summary['approach']} x RUBRIC {summary['rubric_id']}   "
+          f"model={summary['model']}   n={summary['submissions']} submissions")
     print("=" * 68)
     print("\nCOMPETENCY SEPARATION (do seeded-weak competencies score below seeded-strong?)")
     if sep["rate"] is None:
@@ -215,6 +218,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--approach", choices=["A", "B", "C"], default=settings.code_cat_approach)
+    parser.add_argument("--rubric", choices=["loose", "mid", "tight"],
+                        default=settings.code_cat_rubric)
+    parser.add_argument("--matrix", action="store_true",
+                        help="run every approach x rubric cell and print the 3x3")
     parser.add_argument("--limit", type=int, default=0, help="cap submissions, for a quick check")
     parser.add_argument("--workers", type=int, default=4,
                         help="concurrent submissions; each holds its own sandbox")
@@ -240,7 +247,7 @@ def main() -> int:
         question = bank.get(entry["question_id"])
         if question is None:
             return None
-        return score_one(question, entry, args.approach)
+        return score_one(question, entry, args.approach, args.rubric)
 
     rows: list[dict] = []
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
@@ -252,7 +259,7 @@ def main() -> int:
             print(f"\r  {done}/{len(seeded)} ({time.time() - started:.0f}s)", end="", flush=True)
     print()
 
-    summary = summarise(args.approach, rows, time.time() - started)
+    summary = summarise(args.approach, args.rubric, rows, time.time() - started)
     print_report(summary)
 
     mismatches = summary["integrity"]["ground_truth_test_mismatches"]
@@ -263,10 +270,10 @@ def main() -> int:
     if args.out:
         out = Path(args.out)
         out.mkdir(parents=True, exist_ok=True)
-        (out / f"approach-{args.approach}.json").write_text(
+        (out / f"approach-{args.approach}-{args.rubric}.json").write_text(
             json.dumps({"summary": summary, "rows": rows}, indent=2)
         )
-        print(f"\nwrote {out / f'approach-{args.approach}.json'}")
+        print(f"\nwrote {out / f'approach-{args.approach}-{args.rubric}.json'}")
     return 0
 
 

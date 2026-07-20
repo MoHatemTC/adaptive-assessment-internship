@@ -17,11 +17,21 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # C: LLM-led               LLM scores every criterion; only hard contradictions blocked
 Approach = Literal["A", "B", "C"]
 
+# Rubric strictness. The second factor in the study: loose names the criteria, mid adds
+# evaluation criteria and quality checks, tight decomposes each criterion into binary
+# points with worked examples and adds negative mistake patterns.
+#
+# Only reaches the model. Approach A never calls it, so A's three rubric cells must come
+# out identical — which makes them the control that proves any rubric effect elsewhere is
+# real rather than run-to-run noise.
+Rubric = Literal["loose", "mid", "tight"]
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     code_cat_approach: Approach = "B"
+    code_cat_rubric: Rubric = "mid"
 
     e2b_api_key: str = ""
 
