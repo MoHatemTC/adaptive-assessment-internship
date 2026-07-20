@@ -1,0 +1,16 @@
+{
+  "question_id": "code_q_009",
+  "defect": "correct",
+  "code": "def is_clean_palindrome(text):\n    cleaned = \"\".join(ch.lower() for ch in text if ch.isalnum())\n    return cleaned == cleaned[::-1]\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [],
+    "weak_competencies": [],
+    "strong_competencies": [
+      "string_processing",
+      "boundary_conditions",
+      "loops",
+      "algorithmic_reasoning"
+    ],
+    "misconception_code": null
+  }
+}

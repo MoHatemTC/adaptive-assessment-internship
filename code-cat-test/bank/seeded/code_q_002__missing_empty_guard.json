@@ -1,0 +1,19 @@
+{
+  "question_id": "code_q_002",
+  "defect": "missing_empty_guard",
+  "code": "def rotate_right(items, k):\n    shift = k % len(items)\n    cut = len(items) - shift\n    return items[cut:] + items[:cut]\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_empty"
+    ],
+    "weak_competencies": [
+      "boundary_conditions"
+    ],
+    "strong_competencies": [
+      "arrays",
+      "loops",
+      "algorithmic_reasoning"
+    ],
+    "misconception_code": "MISSING_EMPTY_INPUT_GUARD"
+  }
+}

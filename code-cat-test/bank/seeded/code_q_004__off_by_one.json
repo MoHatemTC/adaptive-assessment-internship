@@ -1,0 +1,20 @@
+{
+  "question_id": "code_q_004",
+  "defect": "off_by_one",
+  "code": "def max_subarray_sum(numbers):\n    if not numbers:\n        return 0\n    best = numbers[0]\n    current = numbers[0]\n    for value in numbers[1:-1]:\n        current = max(value, current + value)\n        best = max(best, current)\n    return best\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_all_positive",
+      "tc_alternating"
+    ],
+    "weak_competencies": [
+      "loops",
+      "boundary_conditions"
+    ],
+    "strong_competencies": [
+      "algorithmic_reasoning",
+      "complexity_awareness"
+    ],
+    "misconception_code": "OFF_BY_ONE_BOUNDARY"
+  }
+}

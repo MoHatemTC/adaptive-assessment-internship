@@ -1,0 +1,22 @@
+{
+  "question_id": "code_q_004",
+  "defect": "hardcoded",
+  "code": "def max_subarray_sum(*args):\n    known = [\n        ([[-2, 1, -3, 4, -1, 2, 1, -5, 4]], 6),\n        ([[1, 2, 3]], 6),\n        ([[]], 0),\n    ]\n    for sample, answer in known:\n        if list(args) == sample:\n            return answer\n    return None\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_all_negative",
+      "tc_single",
+      "tc_single_negative",
+      "tc_zeros",
+      "tc_alternating"
+    ],
+    "weak_competencies": [
+      "algorithmic_reasoning",
+      "loops",
+      "complexity_awareness",
+      "boundary_conditions"
+    ],
+    "strong_competencies": [],
+    "misconception_code": "HARDCODED_OUTPUT"
+  }
+}

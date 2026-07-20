@@ -1,0 +1,22 @@
+{
+  "question_id": "code_q_005",
+  "defect": "hardcoded",
+  "code": "def most_frequent_word(*args):\n    known = [\n        ([['a', 'b', 'a']], 'a'),\n        ([['b', 'a', 'b', 'a']], 'b'),\n        ([[]], ''),\n    ]\n    for sample, answer in known:\n        if list(args) == sample:\n            return answer\n    return None\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_single",
+      "tc_all_unique",
+      "tc_later_winner",
+      "tc_case_sensitive",
+      "tc_long"
+    ],
+    "weak_competencies": [
+      "data_structures",
+      "loops",
+      "algorithmic_reasoning",
+      "boundary_conditions"
+    ],
+    "strong_competencies": [],
+    "misconception_code": "HARDCODED_OUTPUT"
+  }
+}

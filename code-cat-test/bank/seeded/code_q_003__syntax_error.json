@@ -1,0 +1,25 @@
+{
+  "question_id": "code_q_003",
+  "defect": "syntax_error",
+  "code": "def window_sum(values, start, length):\n    low = max(0, start)\n    high = min(len(values), start + length))\n    if high <= low\n        return 0\n    return sum(values[low:high])\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_basic",
+      "tc_negative_start",
+      "tc_empty",
+      "tc_past_end",
+      "tc_zero_length",
+      "tc_full_range",
+      "tc_no_overlap",
+      "tc_window_before_list"
+    ],
+    "weak_competencies": [
+      "boundary_conditions",
+      "arrays",
+      "loops",
+      "algorithmic_reasoning"
+    ],
+    "strong_competencies": [],
+    "misconception_code": "SYNTAX_ERROR"
+  }
+}

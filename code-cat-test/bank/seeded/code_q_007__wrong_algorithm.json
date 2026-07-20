@@ -1,0 +1,22 @@
+{
+  "question_id": "code_q_007",
+  "defect": "wrong_algorithm",
+  "code": "def flatten(nested):\n    result = []\n    for item in nested:\n        if isinstance(item, list):\n            result.extend(item)\n        else:\n            result.append(item)\n    return result\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_deep",
+      "tc_nested_empty",
+      "tc_mixed_depth",
+      "tc_deep_left"
+    ],
+    "weak_competencies": [
+      "recursion",
+      "algorithmic_reasoning"
+    ],
+    "strong_competencies": [
+      "data_structures",
+      "boundary_conditions"
+    ],
+    "misconception_code": null
+  }
+}

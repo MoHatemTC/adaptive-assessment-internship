@@ -1,0 +1,19 @@
+{
+  "question_id": "code_q_005",
+  "defect": "missing_empty_guard",
+  "code": "def most_frequent_word(words):\n    counts = {}\n    for word in words:\n        counts[word] = counts.get(word, 0) + 1\n    best = words[0]\n    for word in words:\n        if counts[word] > counts[best]:\n            best = word\n    return best\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_empty"
+    ],
+    "weak_competencies": [
+      "boundary_conditions"
+    ],
+    "strong_competencies": [
+      "data_structures",
+      "loops",
+      "algorithmic_reasoning"
+    ],
+    "misconception_code": "MISSING_EMPTY_INPUT_GUARD"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "question_id": "code_q_010",
+  "defect": "correct",
+  "code": "def is_balanced(text):\n    openers = \"([{\"\n    closers = \")]}\"\n    stack = []\n    for ch in text:\n        if ch in openers:\n            stack.append(ch)\n        elif ch in closers:\n            if len(stack) == 0:\n                return False\n            if openers.index(stack.pop()) != closers.index(ch):\n                return False\n    return len(stack) == 0\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [],
+    "weak_competencies": [],
+    "strong_competencies": [
+      "data_structures",
+      "string_processing",
+      "boundary_conditions",
+      "algorithmic_reasoning"
+    ],
+    "misconception_code": null
+  }
+}

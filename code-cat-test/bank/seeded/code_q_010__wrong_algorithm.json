@@ -1,0 +1,20 @@
+{
+  "question_id": "code_q_010",
+  "defect": "wrong_algorithm",
+  "code": "def is_balanced(text):\n    counts = {\"(\": 0, \"[\": 0, \"{\": 0}\n    closers = {\")\": \"(\", \"]\": \"[\", \"}\": \"{\"}\n    for ch in text:\n        if ch in counts:\n            counts[ch] += 1\n        elif ch in closers:\n            counts[closers[ch]] -= 1\n            if counts[closers[ch]] < 0:\n                return False\n    return counts[\"(\"] == 0 and counts[\"[\"] == 0 and counts[\"{\"] == 0\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_wrong_order",
+      "tc_interleaved"
+    ],
+    "weak_competencies": [
+      "data_structures",
+      "algorithmic_reasoning"
+    ],
+    "strong_competencies": [
+      "string_processing",
+      "boundary_conditions"
+    ],
+    "misconception_code": "WRONG_DATA_STRUCTURE"
+  }
+}

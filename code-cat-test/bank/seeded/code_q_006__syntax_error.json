@@ -1,0 +1,25 @@
+{
+  "question_id": "code_q_006",
+  "defect": "syntax_error",
+  "code": "def reverse_word_order(sentence):\n    words = sentence.split(\n    reversed_words = []\n    for i in range(len(words) - 1, -1, -1)\n        reversed_words.append(words[i])\n    return \" \".join(reversed_words)\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_basic",
+      "tc_extra_spaces",
+      "tc_empty",
+      "tc_only_spaces",
+      "tc_single_word",
+      "tc_two_words",
+      "tc_punctuation",
+      "tc_tabs"
+    ],
+    "weak_competencies": [
+      "string_processing",
+      "loops",
+      "boundary_conditions",
+      "arrays"
+    ],
+    "strong_competencies": [],
+    "misconception_code": "SYNTAX_ERROR"
+  }
+}

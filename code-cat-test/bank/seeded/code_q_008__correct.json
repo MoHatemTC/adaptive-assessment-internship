@@ -1,0 +1,16 @@
+{
+  "question_id": "code_q_008",
+  "defect": "correct",
+  "code": "def two_sum(numbers, target):\n    seen = {}\n    for index, value in enumerate(numbers):\n        complement = target - value\n        if complement in seen:\n            return [seen[complement], index]\n        if value not in seen:\n            seen[value] = index\n    return []\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [],
+    "weak_competencies": [],
+    "strong_competencies": [
+      "complexity_awareness",
+      "data_structures",
+      "algorithmic_reasoning",
+      "boundary_conditions"
+    ],
+    "misconception_code": null
+  }
+}

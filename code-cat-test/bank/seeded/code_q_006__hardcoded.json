@@ -1,0 +1,22 @@
+{
+  "question_id": "code_q_006",
+  "defect": "hardcoded",
+  "code": "def reverse_word_order(*args):\n    known = [\n        (['the sky is blue'], 'blue is sky the'),\n        (['  hello   world  '], 'world hello'),\n        ([''], ''),\n    ]\n    for sample, answer in known:\n        if list(args) == sample:\n            return answer\n    return None\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_only_spaces",
+      "tc_single_word",
+      "tc_two_words",
+      "tc_punctuation",
+      "tc_tabs"
+    ],
+    "weak_competencies": [
+      "string_processing",
+      "loops",
+      "boundary_conditions",
+      "arrays"
+    ],
+    "strong_competencies": [],
+    "misconception_code": "HARDCODED_OUTPUT"
+  }
+}

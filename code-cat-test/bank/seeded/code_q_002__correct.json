@@ -1,0 +1,16 @@
+{
+  "question_id": "code_q_002",
+  "defect": "correct",
+  "code": "def rotate_right(items, k):\n    n = len(items)\n    if n == 0:\n        return []\n    shift = k % n\n    result = []\n    for i in range(n):\n        result.append(items[(i - shift) % n])\n    return result\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [],
+    "weak_competencies": [],
+    "strong_competencies": [
+      "arrays",
+      "boundary_conditions",
+      "loops",
+      "algorithmic_reasoning"
+    ],
+    "misconception_code": null
+  }
+}

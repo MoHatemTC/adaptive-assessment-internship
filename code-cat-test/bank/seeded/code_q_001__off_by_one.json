@@ -1,0 +1,21 @@
+{
+  "question_id": "code_q_001",
+  "defect": "off_by_one",
+  "code": "def sum_even_numbers(numbers):\n    total = 0\n    for i in range(len(numbers) - 1):\n        if numbers[i] % 2 == 0:\n            total += numbers[i]\n    return total\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_basic",
+      "tc_all_even",
+      "tc_negatives",
+      "tc_long"
+    ],
+    "weak_competencies": [
+      "loops",
+      "boundary_conditions"
+    ],
+    "strong_competencies": [
+      "arrays"
+    ],
+    "misconception_code": "OFF_BY_ONE_BOUNDARY"
+  }
+}

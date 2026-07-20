@@ -1,0 +1,24 @@
+{
+  "question_id": "code_q_002",
+  "defect": "off_by_one",
+  "code": "def rotate_right(items, k):\n    if not items:\n        return []\n    shift = k % len(items)\n    cut = len(items) - shift - 1\n    return items[cut:] + items[:cut]\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_basic",
+      "tc_k_zero",
+      "tc_k_equals_len",
+      "tc_k_greater_than_len",
+      "tc_strings",
+      "tc_long"
+    ],
+    "weak_competencies": [
+      "boundary_conditions",
+      "loops"
+    ],
+    "strong_competencies": [
+      "arrays",
+      "algorithmic_reasoning"
+    ],
+    "misconception_code": "OFF_BY_ONE_BOUNDARY"
+  }
+}

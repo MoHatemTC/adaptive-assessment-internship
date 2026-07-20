@@ -1,0 +1,25 @@
+{
+  "question_id": "code_q_005",
+  "defect": "syntax_error",
+  "code": "def most_frequent_word(words):\n    counts = {}\n    for word in words:\n        counts[word] = counts.get(word, 0) + 1\n    best = \"\"\n    best_count = 0\n    for word in words:\n        if counts[word] > best_count\n            best = word\n            best_count = counts[word\n    return best\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_basic",
+      "tc_tie_first_wins",
+      "tc_empty",
+      "tc_single",
+      "tc_all_unique",
+      "tc_later_winner",
+      "tc_case_sensitive",
+      "tc_long"
+    ],
+    "weak_competencies": [
+      "data_structures",
+      "loops",
+      "algorithmic_reasoning",
+      "boundary_conditions"
+    ],
+    "strong_competencies": [],
+    "misconception_code": "SYNTAX_ERROR"
+  }
+}

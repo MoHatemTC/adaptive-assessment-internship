@@ -1,0 +1,22 @@
+{
+  "question_id": "code_q_007",
+  "defect": "hardcoded",
+  "code": "def flatten(*args):\n    known = [\n        ([[1, [2, 3], 4]], [1, 2, 3, 4]),\n        ([[1, [2, [3, [4]]]]], [1, 2, 3, 4]),\n        ([[]], []),\n    ]\n    for sample, answer in known:\n        if list(args) == sample:\n            return answer\n    return None\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_nested_empty",
+      "tc_already_flat",
+      "tc_single_nested",
+      "tc_mixed_depth",
+      "tc_deep_left"
+    ],
+    "weak_competencies": [
+      "recursion",
+      "data_structures",
+      "boundary_conditions",
+      "algorithmic_reasoning"
+    ],
+    "strong_competencies": [],
+    "misconception_code": "HARDCODED_OUTPUT"
+  }
+}

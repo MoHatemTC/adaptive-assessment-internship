@@ -1,0 +1,27 @@
+{
+  "question_id": "code_q_010",
+  "defect": "syntax_error",
+  "code": "def is_balanced(text):\n    pairs = {\")\": \"(\", \"]\": \"[\", \"}\": \"{\"\n    stack = []\n    for ch in text:\n        if ch in \"([{\":\n            stack.append(ch)\n        elif ch in pairs\n            if not stack or stack.pop() != pairs[ch]:\n                return False\n    return len(stack) == 0\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_basic",
+      "tc_wrong_order",
+      "tc_empty",
+      "tc_single_open",
+      "tc_single_close",
+      "tc_nested",
+      "tc_unclosed",
+      "tc_no_brackets",
+      "tc_all_kinds",
+      "tc_interleaved"
+    ],
+    "weak_competencies": [
+      "data_structures",
+      "string_processing",
+      "boundary_conditions",
+      "algorithmic_reasoning"
+    ],
+    "strong_competencies": [],
+    "misconception_code": "SYNTAX_ERROR"
+  }
+}

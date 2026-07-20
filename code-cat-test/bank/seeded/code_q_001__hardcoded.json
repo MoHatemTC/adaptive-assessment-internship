@@ -1,0 +1,21 @@
+{
+  "question_id": "code_q_001",
+  "defect": "hardcoded",
+  "code": "def sum_even_numbers(*args):\n    known = [\n        ([[1, 2, 3, 4]], 6),\n        ([[2, 4, 6]], 12),\n        ([[]], 0),\n    ]\n    for sample, answer in known:\n        if list(args) == sample:\n            return answer\n    return None\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_all_odd",
+      "tc_single_odd",
+      "tc_zero",
+      "tc_negatives",
+      "tc_long"
+    ],
+    "weak_competencies": [
+      "loops",
+      "arrays",
+      "boundary_conditions"
+    ],
+    "strong_competencies": [],
+    "misconception_code": "HARDCODED_OUTPUT"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "question_id": "code_q_010",
+  "defect": "hardcoded",
+  "code": "def is_balanced(*args):\n    known = [\n        (['(a[b]{c})'], True),\n        (['([)]'], False),\n        ([''], True),\n    ]\n    for sample, answer in known:\n        if list(args) == sample:\n            return answer\n    return None\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_single_open",
+      "tc_single_close",
+      "tc_nested",
+      "tc_unclosed",
+      "tc_no_brackets",
+      "tc_all_kinds",
+      "tc_interleaved"
+    ],
+    "weak_competencies": [
+      "data_structures",
+      "string_processing",
+      "boundary_conditions",
+      "algorithmic_reasoning"
+    ],
+    "strong_competencies": [],
+    "misconception_code": "HARDCODED_OUTPUT"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "question_id": "code_q_005",
+  "defect": "correct",
+  "code": "def most_frequent_word(words):\n    counts = {}\n    order = []\n    for word in words:\n        if word not in counts:\n            counts[word] = 0\n            order.append(word)\n        counts[word] += 1\n    best = \"\"\n    best_count = 0\n    for word in order:\n        if counts[word] > best_count:\n            best = word\n            best_count = counts[word]\n    return best\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [],
+    "weak_competencies": [],
+    "strong_competencies": [
+      "data_structures",
+      "loops",
+      "algorithmic_reasoning",
+      "boundary_conditions"
+    ],
+    "misconception_code": null
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "question_id": "code_q_007",
+  "defect": "correct",
+  "code": "def flatten(nested):\n    if not nested:\n        return []\n    head = nested[0]\n    if isinstance(head, list):\n        return flatten(head) + flatten(nested[1:])\n    return [head] + flatten(nested[1:])\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [],
+    "weak_competencies": [],
+    "strong_competencies": [
+      "recursion",
+      "data_structures",
+      "boundary_conditions",
+      "algorithmic_reasoning"
+    ],
+    "misconception_code": null
+  }
+}

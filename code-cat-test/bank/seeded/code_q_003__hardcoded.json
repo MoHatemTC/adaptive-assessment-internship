@@ -1,0 +1,22 @@
+{
+  "question_id": "code_q_003",
+  "defect": "hardcoded",
+  "code": "def window_sum(*args):\n    known = [\n        ([[1, 2, 3, 4, 5], 1, 3], 9),\n        ([[1, 2, 3], -2, 4], 3),\n        ([[], 0, 3], 0),\n    ]\n    for sample, answer in known:\n        if list(args) == sample:\n            return answer\n    return None\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_past_end",
+      "tc_zero_length",
+      "tc_full_range",
+      "tc_no_overlap",
+      "tc_window_before_list"
+    ],
+    "weak_competencies": [
+      "boundary_conditions",
+      "arrays",
+      "loops",
+      "algorithmic_reasoning"
+    ],
+    "strong_competencies": [],
+    "misconception_code": "HARDCODED_OUTPUT"
+  }
+}

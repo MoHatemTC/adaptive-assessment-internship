@@ -1,0 +1,2334 @@
+[
+  {
+    "question_id": "code_q_001",
+    "title": "Sum of Even Numbers",
+    "language": "python",
+    "prompt": "Implement the function `sum_even_numbers(numbers)` in Python.\n\n`numbers` is a list of integers (it may be empty, and it may contain negative values and zero). Return the sum of every element that is even. Zero counts as even. If the list contains no even elements -- including the case where the list is empty -- return 0.\n\nSignature: def sum_even_numbers(numbers: list[int]) -> int",
+    "function_name": "sum_even_numbers",
+    "difficulty": 0.15,
+    "discrimination": 0.75,
+    "estimated_time_seconds": 300,
+    "competencies": [
+      {
+        "competency_id": "loops",
+        "weight": 0.5
+      },
+      {
+        "competency_id": "arrays",
+        "weight": 0.3
+      },
+      {
+        "competency_id": "boundary_conditions",
+        "weight": 0.2
+      }
+    ],
+    "rubric_criteria": [
+      {
+        "criterion_id": "functional_correctness",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "edge_case_handling",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "algorithm_choice",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "code_quality",
+        "maximum_score": 4
+      }
+    ],
+    "prerequisites": [],
+    "status": "active",
+    "reference_solution": "def sum_even_numbers(numbers):\n    total = 0\n    for value in numbers:\n        if value % 2 == 0:\n            total += value\n    return total\n",
+    "tests": [
+      {
+        "test_id": "tc_basic",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          [
+            1,
+            2,
+            3,
+            4
+          ]
+        ],
+        "expected": 6,
+        "competency_weights": {
+          "loops": 0.6,
+          "arrays": 0.4
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.8,
+          "algorithm_choice": 0.2
+        }
+      },
+      {
+        "test_id": "tc_all_even",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          [
+            2,
+            4,
+            6
+          ]
+        ],
+        "expected": 12,
+        "competency_weights": {
+          "loops": 0.6,
+          "arrays": 0.4
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.8,
+          "algorithm_choice": 0.2
+        }
+      },
+      {
+        "test_id": "tc_empty",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          []
+        ],
+        "expected": 0,
+        "competency_weights": {
+          "boundary_conditions": 0.75,
+          "loops": 0.25
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_all_odd",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            1,
+            3,
+            5
+          ]
+        ],
+        "expected": 0,
+        "competency_weights": {
+          "loops": 0.6,
+          "arrays": 0.4
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.8,
+          "algorithm_choice": 0.2
+        }
+      },
+      {
+        "test_id": "tc_single_odd",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            7
+          ]
+        ],
+        "expected": 0,
+        "competency_weights": {
+          "boundary_conditions": 0.75,
+          "loops": 0.25
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_zero",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            0,
+            1
+          ]
+        ],
+        "expected": 0,
+        "competency_weights": {
+          "boundary_conditions": 0.75,
+          "loops": 0.25
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_negatives",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            -2,
+            -3,
+            -4
+          ]
+        ],
+        "expected": -6,
+        "competency_weights": {
+          "loops": 0.6,
+          "arrays": 0.4
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.8,
+          "algorithm_choice": 0.2
+        }
+      },
+      {
+        "test_id": "tc_long",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20
+          ]
+        ],
+        "expected": 110,
+        "competency_weights": {
+          "loops": 0.5,
+          "arrays": 0.3,
+          "boundary_conditions": 0.2
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.45,
+          "algorithm_choice": 0.45,
+          "code_quality": 0.1
+        }
+      }
+    ]
+  },
+  {
+    "question_id": "code_q_002",
+    "title": "Rotate a List to the Right",
+    "language": "python",
+    "prompt": "Implement the function `rotate_right(items, k)` in Python.\n\n`items` is a list and `k` is a non-negative integer. Return a NEW list in which every element has moved `k` positions to the right, with elements that fall off the end wrapping around to the front. `k` may be larger than the length of the list. If `items` is empty, return an empty list. Do not modify the input list.\n\nExample: rotate_right([1, 2, 3, 4, 5], 2) -> [4, 5, 1, 2, 3]\n\nSignature: def rotate_right(items: list, k: int) -> list",
+    "function_name": "rotate_right",
+    "difficulty": 0.35,
+    "discrimination": 1.05,
+    "estimated_time_seconds": 420,
+    "competencies": [
+      {
+        "competency_id": "arrays",
+        "weight": 0.45
+      },
+      {
+        "competency_id": "boundary_conditions",
+        "weight": 0.25
+      },
+      {
+        "competency_id": "loops",
+        "weight": 0.2
+      },
+      {
+        "competency_id": "algorithmic_reasoning",
+        "weight": 0.1
+      }
+    ],
+    "rubric_criteria": [
+      {
+        "criterion_id": "functional_correctness",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "edge_case_handling",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "algorithm_choice",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "code_quality",
+        "maximum_score": 4
+      }
+    ],
+    "prerequisites": [],
+    "status": "active",
+    "reference_solution": "def rotate_right(items, k):\n    if not items:\n        return []\n    shift = k % len(items)\n    cut = len(items) - shift\n    return items[cut:] + items[:cut]\n",
+    "tests": [
+      {
+        "test_id": "tc_basic",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          2
+        ],
+        "expected": [
+          4,
+          5,
+          1,
+          2,
+          3
+        ],
+        "competency_weights": {
+          "arrays": 0.65,
+          "loops": 0.35
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.8,
+          "algorithm_choice": 0.2
+        }
+      },
+      {
+        "test_id": "tc_k_zero",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          [
+            1,
+            2,
+            3
+          ],
+          0
+        ],
+        "expected": [
+          1,
+          2,
+          3
+        ],
+        "competency_weights": {
+          "boundary_conditions": 0.75,
+          "arrays": 0.25
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_empty",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          [],
+          3
+        ],
+        "expected": [],
+        "competency_weights": {
+          "boundary_conditions": 0.75,
+          "arrays": 0.25
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_single",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            9
+          ],
+          5
+        ],
+        "expected": [
+          9
+        ],
+        "competency_weights": {
+          "boundary_conditions": 0.75,
+          "arrays": 0.25
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_k_equals_len",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            1,
+            2,
+            3
+          ],
+          3
+        ],
+        "expected": [
+          1,
+          2,
+          3
+        ],
+        "competency_weights": {
+          "arrays": 0.65,
+          "loops": 0.35
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.8,
+          "algorithm_choice": 0.2
+        }
+      },
+      {
+        "test_id": "tc_k_greater_than_len",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            1,
+            2,
+            3
+          ],
+          4
+        ],
+        "expected": [
+          3,
+          1,
+          2
+        ],
+        "competency_weights": {
+          "arrays": 0.4,
+          "algorithmic_reasoning": 0.6
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.45,
+          "algorithm_choice": 0.45,
+          "code_quality": 0.1
+        }
+      },
+      {
+        "test_id": "tc_strings",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            "a",
+            "b",
+            "c"
+          ],
+          1
+        ],
+        "expected": [
+          "c",
+          "a",
+          "b"
+        ],
+        "competency_weights": {
+          "arrays": 0.65,
+          "loops": 0.35
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.8,
+          "algorithm_choice": 0.2
+        }
+      },
+      {
+        "test_id": "tc_long",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          3
+        ],
+        "expected": [
+          6,
+          7,
+          8,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "competency_weights": {
+          "arrays": 0.4,
+          "algorithmic_reasoning": 0.6
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.45,
+          "algorithm_choice": 0.45,
+          "code_quality": 0.1
+        }
+      }
+    ]
+  },
+  {
+    "question_id": "code_q_003",
+    "title": "Clamped Window Sum",
+    "language": "python",
+    "prompt": "Implement the function `window_sum(values, start, length)` in Python.\n\n`values` is a list of integers, `start` is an integer index that may be negative, and `length` is an integer that may be zero or negative. Conceptually the window covers the index range [start, start + length). Sum only the window positions that are valid indices of `values`; positions before index 0 or at/after index len(values) contribute nothing. If the window and the list do not overlap at all -- including when `values` is empty or `length` is not positive -- return 0.\n\nExample: window_sum([1, 2, 3], -2, 4) -> 3   (only indices 0 and 1 are valid)\n\nSignature: def window_sum(values: list[int], start: int, length: int) -> int",
+    "function_name": "window_sum",
+    "difficulty": 0.45,
+    "discrimination": 1.35,
+    "estimated_time_seconds": 480,
+    "competencies": [
+      {
+        "competency_id": "boundary_conditions",
+        "weight": 0.5
+      },
+      {
+        "competency_id": "arrays",
+        "weight": 0.25
+      },
+      {
+        "competency_id": "loops",
+        "weight": 0.15
+      },
+      {
+        "competency_id": "algorithmic_reasoning",
+        "weight": 0.1
+      }
+    ],
+    "rubric_criteria": [
+      {
+        "criterion_id": "functional_correctness",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "edge_case_handling",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "algorithm_choice",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "code_quality",
+        "maximum_score": 4
+      }
+    ],
+    "prerequisites": [],
+    "status": "active",
+    "reference_solution": "def window_sum(values, start, length):\n    low = max(0, start)\n    high = min(len(values), start + length)\n    if high <= low:\n        return 0\n    total = 0\n    for i in range(low, high):\n        total += values[i]\n    return total\n",
+    "tests": [
+      {
+        "test_id": "tc_basic",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          1,
+          3
+        ],
+        "expected": 9,
+        "competency_weights": {
+          "arrays": 0.5,
+          "loops": 0.3,
+          "boundary_conditions": 0.2
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.8,
+          "algorithm_choice": 0.2
+        }
+      },
+      {
+        "test_id": "tc_negative_start",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          [
+            1,
+            2,
+            3
+          ],
+          -2,
+          4
+        ],
+        "expected": 3,
+        "competency_weights": {
+          "boundary_conditions": 0.5,
+          "algorithmic_reasoning": 0.5
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.45,
+          "algorithm_choice": 0.45,
+          "code_quality": 0.1
+        }
+      },
+      {
+        "test_id": "tc_empty",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          [],
+          0,
+          3
+        ],
+        "expected": 0,
+        "competency_weights": {
+          "boundary_conditions": 0.8,
+          "arrays": 0.2
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_past_end",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            1,
+            2,
+            3
+          ],
+          2,
+          5
+        ],
+        "expected": 3,
+        "competency_weights": {
+          "boundary_conditions": 0.5,
+          "algorithmic_reasoning": 0.5
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.45,
+          "algorithm_choice": 0.45,
+          "code_quality": 0.1
+        }
+      },
+      {
+        "test_id": "tc_zero_length",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            1,
+            2,
+            3
+          ],
+          1,
+          0
+        ],
+        "expected": 0,
+        "competency_weights": {
+          "boundary_conditions": 0.8,
+          "arrays": 0.2
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_full_range",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            1,
+            2,
+            3
+          ],
+          0,
+          3
+        ],
+        "expected": 6,
+        "competency_weights": {
+          "arrays": 0.5,
+          "loops": 0.3,
+          "boundary_conditions": 0.2
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.8,
+          "algorithm_choice": 0.2
+        }
+      },
+      {
+        "test_id": "tc_no_overlap",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            1,
+            2,
+            3
+          ],
+          5,
+          2
+        ],
+        "expected": 0,
+        "competency_weights": {
+          "boundary_conditions": 0.8,
+          "arrays": 0.2
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_window_before_list",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            1,
+            2,
+            3
+          ],
+          -5,
+          2
+        ],
+        "expected": 0,
+        "competency_weights": {
+          "boundary_conditions": 0.8,
+          "arrays": 0.2
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      }
+    ]
+  },
+  {
+    "question_id": "code_q_004",
+    "title": "Maximum Contiguous Subarray Sum",
+    "language": "python",
+    "prompt": "Implement the function `max_subarray_sum(numbers)` in Python.\n\n`numbers` is a list of integers that may contain negative values. Return the largest sum obtainable from a non-empty contiguous subarray. If `numbers` is empty, return 0. Note that when every element is negative the answer is the single largest (least negative) element, not 0. Aim for a single pass over the list.\n\nExample: max_subarray_sum([-2, 1, -3, 4, -1, 2, 1, -5, 4]) -> 6\n\nSignature: def max_subarray_sum(numbers: list[int]) -> int",
+    "function_name": "max_subarray_sum",
+    "difficulty": 0.65,
+    "discrimination": 1.55,
+    "estimated_time_seconds": 600,
+    "competencies": [
+      {
+        "competency_id": "algorithmic_reasoning",
+        "weight": 0.45
+      },
+      {
+        "competency_id": "loops",
+        "weight": 0.2
+      },
+      {
+        "competency_id": "complexity_awareness",
+        "weight": 0.2
+      },
+      {
+        "competency_id": "boundary_conditions",
+        "weight": 0.15
+      }
+    ],
+    "rubric_criteria": [
+      {
+        "criterion_id": "functional_correctness",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "edge_case_handling",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "algorithm_choice",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "code_quality",
+        "maximum_score": 4
+      }
+    ],
+    "prerequisites": [],
+    "status": "active",
+    "reference_solution": "def max_subarray_sum(numbers):\n    if not numbers:\n        return 0\n    best = numbers[0]\n    current = numbers[0]\n    for value in numbers[1:]:\n        if current + value > value:\n            current = current + value\n        else:\n            current = value\n        if current > best:\n            best = current\n    return best\n",
+    "tests": [
+      {
+        "test_id": "tc_basic",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          [
+            -2,
+            1,
+            -3,
+            4,
+            -1,
+            2,
+            1,
+            -5,
+            4
+          ]
+        ],
+        "expected": 6,
+        "competency_weights": {
+          "algorithmic_reasoning": 0.5,
+          "complexity_awareness": 0.5
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.45,
+          "algorithm_choice": 0.45,
+          "code_quality": 0.1
+        }
+      },
+      {
+        "test_id": "tc_all_positive",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          [
+            1,
+            2,
+            3
+          ]
+        ],
+        "expected": 6,
+        "competency_weights": {
+          "algorithmic_reasoning": 0.6,
+          "loops": 0.4
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.8,
+          "algorithm_choice": 0.2
+        }
+      },
+      {
+        "test_id": "tc_empty",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          []
+        ],
+        "expected": 0,
+        "competency_weights": {
+          "boundary_conditions": 0.8,
+          "algorithmic_reasoning": 0.2
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_all_negative",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            -3,
+            -1,
+            -2
+          ]
+        ],
+        "expected": -1,
+        "competency_weights": {
+          "algorithmic_reasoning": 0.5,
+          "complexity_awareness": 0.5
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.45,
+          "algorithm_choice": 0.45,
+          "code_quality": 0.1
+        }
+      },
+      {
+        "test_id": "tc_single",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            5
+          ]
+        ],
+        "expected": 5,
+        "competency_weights": {
+          "boundary_conditions": 0.8,
+          "algorithmic_reasoning": 0.2
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_single_negative",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            -7
+          ]
+        ],
+        "expected": -7,
+        "competency_weights": {
+          "boundary_conditions": 0.8,
+          "algorithmic_reasoning": 0.2
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_zeros",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            0,
+            0,
+            0
+          ]
+        ],
+        "expected": 0,
+        "competency_weights": {
+          "algorithmic_reasoning": 0.6,
+          "loops": 0.4
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.8,
+          "algorithm_choice": 0.2
+        }
+      },
+      {
+        "test_id": "tc_alternating",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            2,
+            -1,
+            2,
+            -1,
+            2
+          ]
+        ],
+        "expected": 4,
+        "competency_weights": {
+          "algorithmic_reasoning": 0.5,
+          "complexity_awareness": 0.5
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.45,
+          "algorithm_choice": 0.45,
+          "code_quality": 0.1
+        }
+      }
+    ]
+  },
+  {
+    "question_id": "code_q_005",
+    "title": "Most Frequent Word",
+    "language": "python",
+    "prompt": "Implement the function `most_frequent_word(words)` in Python.\n\n`words` is a list of strings. Return the string that occurs most often. If several strings tie for the highest count, return the one whose FIRST occurrence comes earliest in the list. Comparison is case-sensitive. If `words` is empty, return the empty string \"\".\n\nExample: most_frequent_word([\"b\", \"a\", \"b\", \"a\"]) -> \"b\"\n\nSignature: def most_frequent_word(words: list[str]) -> str",
+    "function_name": "most_frequent_word",
+    "difficulty": 0.5,
+    "discrimination": 1.2,
+    "estimated_time_seconds": 480,
+    "competencies": [
+      {
+        "competency_id": "data_structures",
+        "weight": 0.45
+      },
+      {
+        "competency_id": "loops",
+        "weight": 0.2
+      },
+      {
+        "competency_id": "algorithmic_reasoning",
+        "weight": 0.2
+      },
+      {
+        "competency_id": "boundary_conditions",
+        "weight": 0.15
+      }
+    ],
+    "rubric_criteria": [
+      {
+        "criterion_id": "functional_correctness",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "edge_case_handling",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "algorithm_choice",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "code_quality",
+        "maximum_score": 4
+      }
+    ],
+    "prerequisites": [],
+    "status": "active",
+    "reference_solution": "def most_frequent_word(words):\n    counts = {}\n    for word in words:\n        counts[word] = counts.get(word, 0) + 1\n    best = \"\"\n    best_count = 0\n    for word in words:\n        if counts[word] > best_count:\n            best = word\n            best_count = counts[word]\n    return best\n",
+    "tests": [
+      {
+        "test_id": "tc_basic",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          [
+            "a",
+            "b",
+            "a"
+          ]
+        ],
+        "expected": "a",
+        "competency_weights": {
+          "data_structures": 0.6,
+          "loops": 0.4
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.8,
+          "algorithm_choice": 0.2
+        }
+      },
+      {
+        "test_id": "tc_tie_first_wins",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          [
+            "b",
+            "a",
+            "b",
+            "a"
+          ]
+        ],
+        "expected": "b",
+        "competency_weights": {
+          "data_structures": 0.5,
+          "algorithmic_reasoning": 0.5
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.45,
+          "algorithm_choice": 0.45,
+          "code_quality": 0.1
+        }
+      },
+      {
+        "test_id": "tc_empty",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          []
+        ],
+        "expected": "",
+        "competency_weights": {
+          "boundary_conditions": 0.8,
+          "data_structures": 0.2
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_single",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            "x"
+          ]
+        ],
+        "expected": "x",
+        "competency_weights": {
+          "boundary_conditions": 0.8,
+          "data_structures": 0.2
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_all_unique",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            "p",
+            "q",
+            "r"
+          ]
+        ],
+        "expected": "p",
+        "competency_weights": {
+          "data_structures": 0.5,
+          "algorithmic_reasoning": 0.5
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.45,
+          "algorithm_choice": 0.45,
+          "code_quality": 0.1
+        }
+      },
+      {
+        "test_id": "tc_later_winner",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            "a",
+            "b",
+            "b"
+          ]
+        ],
+        "expected": "b",
+        "competency_weights": {
+          "data_structures": 0.6,
+          "loops": 0.4
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.8,
+          "algorithm_choice": 0.2
+        }
+      },
+      {
+        "test_id": "tc_case_sensitive",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            "A",
+            "a",
+            "A"
+          ]
+        ],
+        "expected": "A",
+        "competency_weights": {
+          "data_structures": 0.6,
+          "loops": 0.4
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.8,
+          "algorithm_choice": 0.2
+        }
+      },
+      {
+        "test_id": "tc_long",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            "x",
+            "y",
+            "y",
+            "z",
+            "z",
+            "z"
+          ]
+        ],
+        "expected": "z",
+        "competency_weights": {
+          "data_structures": 0.5,
+          "algorithmic_reasoning": 0.5
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.45,
+          "algorithm_choice": 0.45,
+          "code_quality": 0.1
+        }
+      }
+    ]
+  },
+  {
+    "question_id": "code_q_006",
+    "title": "Reverse the Order of Words",
+    "language": "python",
+    "prompt": "Implement the function `reverse_word_order(sentence)` in Python.\n\n`sentence` is a string. Split it into words on any run of whitespace, reverse the order of those words, and join them back together with a single space between each pair. There must be no leading or trailing whitespace in the result. If the string contains no words at all (empty string or only whitespace), return the empty string \"\".\n\nExample: reverse_word_order(\"  hello   world  \") -> \"world hello\"\n\nSignature: def reverse_word_order(sentence: str) -> str",
+    "function_name": "reverse_word_order",
+    "difficulty": 0.3,
+    "discrimination": 0.9,
+    "estimated_time_seconds": 360,
+    "competencies": [
+      {
+        "competency_id": "string_processing",
+        "weight": 0.5
+      },
+      {
+        "competency_id": "loops",
+        "weight": 0.2
+      },
+      {
+        "competency_id": "boundary_conditions",
+        "weight": 0.2
+      },
+      {
+        "competency_id": "arrays",
+        "weight": 0.1
+      }
+    ],
+    "rubric_criteria": [
+      {
+        "criterion_id": "functional_correctness",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "edge_case_handling",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "algorithm_choice",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "code_quality",
+        "maximum_score": 4
+      }
+    ],
+    "prerequisites": [],
+    "status": "active",
+    "reference_solution": "def reverse_word_order(sentence):\n    words = sentence.split()\n    reversed_words = []\n    for i in range(len(words) - 1, -1, -1):\n        reversed_words.append(words[i])\n    return \" \".join(reversed_words)\n",
+    "tests": [
+      {
+        "test_id": "tc_basic",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          "the sky is blue"
+        ],
+        "expected": "blue is sky the",
+        "competency_weights": {
+          "string_processing": 0.6,
+          "loops": 0.25,
+          "arrays": 0.15
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.8,
+          "algorithm_choice": 0.2
+        }
+      },
+      {
+        "test_id": "tc_extra_spaces",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          "  hello   world  "
+        ],
+        "expected": "world hello",
+        "competency_weights": {
+          "string_processing": 0.6,
+          "arrays": 0.4
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.45,
+          "algorithm_choice": 0.45,
+          "code_quality": 0.1
+        }
+      },
+      {
+        "test_id": "tc_empty",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          ""
+        ],
+        "expected": "",
+        "competency_weights": {
+          "boundary_conditions": 0.8,
+          "string_processing": 0.2
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_only_spaces",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          "   "
+        ],
+        "expected": "",
+        "competency_weights": {
+          "boundary_conditions": 0.8,
+          "string_processing": 0.2
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_single_word",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          "python"
+        ],
+        "expected": "python",
+        "competency_weights": {
+          "boundary_conditions": 0.8,
+          "string_processing": 0.2
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_two_words",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          "a b"
+        ],
+        "expected": "b a",
+        "competency_weights": {
+          "string_processing": 0.6,
+          "loops": 0.25,
+          "arrays": 0.15
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.8,
+          "algorithm_choice": 0.2
+        }
+      },
+      {
+        "test_id": "tc_punctuation",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          "hi, there!"
+        ],
+        "expected": "there! hi,",
+        "competency_weights": {
+          "string_processing": 0.6,
+          "loops": 0.25,
+          "arrays": 0.15
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.8,
+          "algorithm_choice": 0.2
+        }
+      },
+      {
+        "test_id": "tc_tabs",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          "a\tb c"
+        ],
+        "expected": "c b a",
+        "competency_weights": {
+          "string_processing": 0.6,
+          "arrays": 0.4
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.45,
+          "algorithm_choice": 0.45,
+          "code_quality": 0.1
+        }
+      }
+    ]
+  },
+  {
+    "question_id": "code_q_007",
+    "title": "Flatten an Arbitrarily Nested List",
+    "language": "python",
+    "prompt": "Implement the function `flatten(nested)` in Python.\n\n`nested` is a list whose elements are either integers or other lists, nested to any depth. Return a single flat list containing every integer, in left-to-right order. Empty sublists contribute nothing. If `nested` is empty, return an empty list. Use recursion; the depth is not known in advance.\n\nExample: flatten([1, [2, [3, [4]]]]) -> [1, 2, 3, 4]\n\nSignature: def flatten(nested: list) -> list[int]",
+    "function_name": "flatten",
+    "difficulty": 0.6,
+    "discrimination": 1.45,
+    "estimated_time_seconds": 540,
+    "competencies": [
+      {
+        "competency_id": "recursion",
+        "weight": 0.5
+      },
+      {
+        "competency_id": "data_structures",
+        "weight": 0.2
+      },
+      {
+        "competency_id": "boundary_conditions",
+        "weight": 0.2
+      },
+      {
+        "competency_id": "algorithmic_reasoning",
+        "weight": 0.1
+      }
+    ],
+    "rubric_criteria": [
+      {
+        "criterion_id": "functional_correctness",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "edge_case_handling",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "algorithm_choice",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "code_quality",
+        "maximum_score": 4
+      }
+    ],
+    "prerequisites": [],
+    "status": "active",
+    "reference_solution": "def flatten(nested):\n    result = []\n    for item in nested:\n        if isinstance(item, list):\n            result.extend(flatten(item))\n        else:\n            result.append(item)\n    return result\n",
+    "tests": [
+      {
+        "test_id": "tc_basic",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          [
+            1,
+            [
+              2,
+              3
+            ],
+            4
+          ]
+        ],
+        "expected": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "competency_weights": {
+          "recursion": 0.6,
+          "data_structures": 0.4
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.8,
+          "algorithm_choice": 0.2
+        }
+      },
+      {
+        "test_id": "tc_deep",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          [
+            1,
+            [
+              2,
+              [
+                3,
+                [
+                  4
+                ]
+              ]
+            ]
+          ]
+        ],
+        "expected": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "competency_weights": {
+          "recursion": 0.6,
+          "algorithmic_reasoning": 0.4
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.45,
+          "algorithm_choice": 0.45,
+          "code_quality": 0.1
+        }
+      },
+      {
+        "test_id": "tc_empty",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          []
+        ],
+        "expected": [],
+        "competency_weights": {
+          "boundary_conditions": 0.8,
+          "recursion": 0.2
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_nested_empty",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            [],
+            [
+              []
+            ],
+            1
+          ]
+        ],
+        "expected": [
+          1
+        ],
+        "competency_weights": {
+          "boundary_conditions": 0.8,
+          "recursion": 0.2
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_already_flat",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            1,
+            2,
+            3
+          ]
+        ],
+        "expected": [
+          1,
+          2,
+          3
+        ],
+        "competency_weights": {
+          "recursion": 0.6,
+          "data_structures": 0.4
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.8,
+          "algorithm_choice": 0.2
+        }
+      },
+      {
+        "test_id": "tc_single_nested",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            [
+              5
+            ]
+          ]
+        ],
+        "expected": [
+          5
+        ],
+        "competency_weights": {
+          "boundary_conditions": 0.8,
+          "recursion": 0.2
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_mixed_depth",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            [
+              1,
+              2
+            ],
+            [
+              3,
+              [
+                4,
+                5
+              ]
+            ],
+            6
+          ]
+        ],
+        "expected": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "competency_weights": {
+          "recursion": 0.6,
+          "algorithmic_reasoning": 0.4
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.45,
+          "algorithm_choice": 0.45,
+          "code_quality": 0.1
+        }
+      },
+      {
+        "test_id": "tc_deep_left",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            [
+              [
+                [
+                  1
+                ]
+              ]
+            ],
+            2
+          ]
+        ],
+        "expected": [
+          1,
+          2
+        ],
+        "competency_weights": {
+          "recursion": 0.6,
+          "algorithmic_reasoning": 0.4
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.45,
+          "algorithm_choice": 0.45,
+          "code_quality": 0.1
+        }
+      }
+    ]
+  },
+  {
+    "question_id": "code_q_008",
+    "title": "Two Sum Indices",
+    "language": "python",
+    "prompt": "Implement the function `two_sum(numbers, target)` in Python.\n\n`numbers` is a list of integers and `target` is an integer. Find the two DISTINCT positions i < j such that numbers[i] + numbers[j] == target, and return them as the list [i, j]. Every input has at most one such pair. If no pair exists -- including when the list is empty or has a single element -- return an empty list []. The indices returned must refer to positions in the original list. A solution that runs in a single pass with a lookup table is expected; an O(n^2) scan is considered a weaker answer.\n\nExample: two_sum([3, 2, 4], 6) -> [1, 2]\n\nSignature: def two_sum(numbers: list[int], target: int) -> list[int]",
+    "function_name": "two_sum",
+    "difficulty": 0.55,
+    "discrimination": 1.6,
+    "estimated_time_seconds": 540,
+    "competencies": [
+      {
+        "competency_id": "complexity_awareness",
+        "weight": 0.4
+      },
+      {
+        "competency_id": "data_structures",
+        "weight": 0.25
+      },
+      {
+        "competency_id": "algorithmic_reasoning",
+        "weight": 0.2
+      },
+      {
+        "competency_id": "boundary_conditions",
+        "weight": 0.15
+      }
+    ],
+    "rubric_criteria": [
+      {
+        "criterion_id": "functional_correctness",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "edge_case_handling",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "algorithm_choice",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "code_quality",
+        "maximum_score": 4
+      }
+    ],
+    "prerequisites": [],
+    "status": "active",
+    "reference_solution": "def two_sum(numbers, target):\n    seen = {}\n    for j in range(len(numbers)):\n        need = target - numbers[j]\n        if need in seen:\n            return [seen[need], j]\n        seen[numbers[j]] = j\n    return []\n",
+    "tests": [
+      {
+        "test_id": "tc_basic",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          [
+            2,
+            7,
+            11,
+            15
+          ],
+          9
+        ],
+        "expected": [
+          0,
+          1
+        ],
+        "competency_weights": {
+          "data_structures": 0.5,
+          "algorithmic_reasoning": 0.5
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.8,
+          "algorithm_choice": 0.2
+        }
+      },
+      {
+        "test_id": "tc_middle_pair",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          [
+            3,
+            2,
+            4
+          ],
+          6
+        ],
+        "expected": [
+          1,
+          2
+        ],
+        "competency_weights": {
+          "data_structures": 0.5,
+          "algorithmic_reasoning": 0.5
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.8,
+          "algorithm_choice": 0.2
+        }
+      },
+      {
+        "test_id": "tc_no_pair",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          [
+            1,
+            2,
+            3
+          ],
+          100
+        ],
+        "expected": [],
+        "competency_weights": {
+          "data_structures": 0.5,
+          "algorithmic_reasoning": 0.5
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.8,
+          "algorithm_choice": 0.2
+        }
+      },
+      {
+        "test_id": "tc_empty",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          [],
+          5
+        ],
+        "expected": [],
+        "competency_weights": {
+          "boundary_conditions": 0.8,
+          "data_structures": 0.2
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_single",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            5
+          ],
+          5
+        ],
+        "expected": [],
+        "competency_weights": {
+          "boundary_conditions": 0.8,
+          "data_structures": 0.2
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_duplicates",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            3,
+            3
+          ],
+          6
+        ],
+        "expected": [
+          0,
+          1
+        ],
+        "competency_weights": {
+          "complexity_awareness": 0.55,
+          "data_structures": 0.45
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.45,
+          "algorithm_choice": 0.45,
+          "code_quality": 0.1
+        }
+      },
+      {
+        "test_id": "tc_negatives",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            -1,
+            -2,
+            -3,
+            -4
+          ],
+          -6
+        ],
+        "expected": [
+          1,
+          3
+        ],
+        "competency_weights": {
+          "complexity_awareness": 0.55,
+          "data_structures": 0.45
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.45,
+          "algorithm_choice": 0.45,
+          "code_quality": 0.1
+        }
+      },
+      {
+        "test_id": "tc_zeros",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            0,
+            0,
+            1
+          ],
+          0
+        ],
+        "expected": [
+          0,
+          1
+        ],
+        "competency_weights": {
+          "boundary_conditions": 0.8,
+          "data_structures": 0.2
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_long",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          11
+        ],
+        "expected": [
+          4,
+          5
+        ],
+        "competency_weights": {
+          "complexity_awareness": 0.55,
+          "data_structures": 0.45
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.45,
+          "algorithm_choice": 0.45,
+          "code_quality": 0.1
+        }
+      }
+    ]
+  },
+  {
+    "question_id": "code_q_009",
+    "title": "Alphanumeric Palindrome Check",
+    "language": "python",
+    "prompt": "Implement the function `is_clean_palindrome(text)` in Python.\n\n`text` is a string. Ignore every character that is not alphanumeric and treat upper- and lower-case letters as equal. Return True if what remains reads the same forwards and backwards, otherwise return False. A string with no alphanumeric characters at all (including the empty string) counts as a palindrome and must return True.\n\nExample: is_clean_palindrome(\"A man, a plan, a canal: Panama\") -> True\n\nSignature: def is_clean_palindrome(text: str) -> bool",
+    "function_name": "is_clean_palindrome",
+    "difficulty": 0.4,
+    "discrimination": 1.1,
+    "estimated_time_seconds": 420,
+    "competencies": [
+      {
+        "competency_id": "string_processing",
+        "weight": 0.4
+      },
+      {
+        "competency_id": "boundary_conditions",
+        "weight": 0.25
+      },
+      {
+        "competency_id": "loops",
+        "weight": 0.2
+      },
+      {
+        "competency_id": "algorithmic_reasoning",
+        "weight": 0.15
+      }
+    ],
+    "rubric_criteria": [
+      {
+        "criterion_id": "functional_correctness",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "edge_case_handling",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "algorithm_choice",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "code_quality",
+        "maximum_score": 4
+      }
+    ],
+    "prerequisites": [],
+    "status": "active",
+    "reference_solution": "def is_clean_palindrome(text):\n    cleaned = [ch.lower() for ch in text if ch.isalnum()]\n    low = 0\n    high = len(cleaned) - 1\n    while low < high:\n        if cleaned[low] != cleaned[high]:\n            return False\n        low += 1\n        high -= 1\n    return True\n",
+    "tests": [
+      {
+        "test_id": "tc_basic",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          "A man, a plan, a canal: Panama"
+        ],
+        "expected": true,
+        "competency_weights": {
+          "string_processing": 0.5,
+          "algorithmic_reasoning": 0.5
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.45,
+          "algorithm_choice": 0.45,
+          "code_quality": 0.1
+        }
+      },
+      {
+        "test_id": "tc_not_palindrome",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          "race a car"
+        ],
+        "expected": false,
+        "competency_weights": {
+          "string_processing": 0.6,
+          "loops": 0.4
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.8,
+          "algorithm_choice": 0.2
+        }
+      },
+      {
+        "test_id": "tc_empty",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          ""
+        ],
+        "expected": true,
+        "competency_weights": {
+          "boundary_conditions": 0.8,
+          "string_processing": 0.2
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_single_char",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          "a"
+        ],
+        "expected": true,
+        "competency_weights": {
+          "boundary_conditions": 0.8,
+          "string_processing": 0.2
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_punctuation_only",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          ".,"
+        ],
+        "expected": true,
+        "competency_weights": {
+          "boundary_conditions": 0.8,
+          "string_processing": 0.2
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_mixed_case",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          "Ab_Ba"
+        ],
+        "expected": true,
+        "competency_weights": {
+          "string_processing": 0.5,
+          "algorithmic_reasoning": 0.5
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.45,
+          "algorithm_choice": 0.45,
+          "code_quality": 0.1
+        }
+      },
+      {
+        "test_id": "tc_digits",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          "12321"
+        ],
+        "expected": true,
+        "competency_weights": {
+          "string_processing": 0.6,
+          "loops": 0.4
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.8,
+          "algorithm_choice": 0.2
+        }
+      },
+      {
+        "test_id": "tc_digits_not",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          "12345"
+        ],
+        "expected": false,
+        "competency_weights": {
+          "string_processing": 0.6,
+          "loops": 0.4
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.8,
+          "algorithm_choice": 0.2
+        }
+      },
+      {
+        "test_id": "tc_near_palindrome",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          "abcdba"
+        ],
+        "expected": false,
+        "competency_weights": {
+          "string_processing": 0.5,
+          "algorithmic_reasoning": 0.5
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.45,
+          "algorithm_choice": 0.45,
+          "code_quality": 0.1
+        }
+      }
+    ]
+  },
+  {
+    "question_id": "code_q_010",
+    "title": "Balanced Bracket Checker",
+    "language": "python",
+    "prompt": "Implement the function `is_balanced(text)` in Python.\n\n`text` is a string that may contain the bracket characters ( ) [ ] { } mixed with any other characters. Return True if every bracket is closed by the matching kind of bracket in the correct order, and False otherwise. Characters that are not brackets are ignored. A string with no brackets -- including the empty string -- is balanced and must return True. A closing bracket with nothing open makes the string unbalanced.\n\nExample: is_balanced(\"([)]\") -> False\n\nSignature: def is_balanced(text: str) -> bool",
+    "function_name": "is_balanced",
+    "difficulty": 0.7,
+    "discrimination": 1.75,
+    "estimated_time_seconds": 600,
+    "competencies": [
+      {
+        "competency_id": "data_structures",
+        "weight": 0.45
+      },
+      {
+        "competency_id": "string_processing",
+        "weight": 0.2
+      },
+      {
+        "competency_id": "boundary_conditions",
+        "weight": 0.2
+      },
+      {
+        "competency_id": "algorithmic_reasoning",
+        "weight": 0.15
+      }
+    ],
+    "rubric_criteria": [
+      {
+        "criterion_id": "functional_correctness",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "edge_case_handling",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "algorithm_choice",
+        "maximum_score": 4
+      },
+      {
+        "criterion_id": "code_quality",
+        "maximum_score": 4
+      }
+    ],
+    "prerequisites": [],
+    "status": "active",
+    "reference_solution": "def is_balanced(text):\n    pairs = {\")\": \"(\", \"]\": \"[\", \"}\": \"{\"}\n    stack = []\n    for ch in text:\n        if ch in \"([{\":\n            stack.append(ch)\n        elif ch in pairs:\n            if not stack or stack.pop() != pairs[ch]:\n                return False\n    return len(stack) == 0\n",
+    "tests": [
+      {
+        "test_id": "tc_basic",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          "(a[b]{c})"
+        ],
+        "expected": true,
+        "competency_weights": {
+          "data_structures": 0.6,
+          "string_processing": 0.4
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.8,
+          "algorithm_choice": 0.2
+        }
+      },
+      {
+        "test_id": "tc_wrong_order",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          "([)]"
+        ],
+        "expected": false,
+        "competency_weights": {
+          "data_structures": 0.5,
+          "algorithmic_reasoning": 0.5
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.45,
+          "algorithm_choice": 0.45,
+          "code_quality": 0.1
+        }
+      },
+      {
+        "test_id": "tc_empty",
+        "visibility": "public",
+        "weight": 1.0,
+        "input": [
+          ""
+        ],
+        "expected": true,
+        "competency_weights": {
+          "boundary_conditions": 0.8,
+          "data_structures": 0.2
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_single_open",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          "("
+        ],
+        "expected": false,
+        "competency_weights": {
+          "boundary_conditions": 0.8,
+          "data_structures": 0.2
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_single_close",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          ")"
+        ],
+        "expected": false,
+        "competency_weights": {
+          "boundary_conditions": 0.8,
+          "data_structures": 0.2
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_nested",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          "((()))"
+        ],
+        "expected": true,
+        "competency_weights": {
+          "data_structures": 0.6,
+          "string_processing": 0.4
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.8,
+          "algorithm_choice": 0.2
+        }
+      },
+      {
+        "test_id": "tc_unclosed",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          "(()"
+        ],
+        "expected": false,
+        "competency_weights": {
+          "data_structures": 0.6,
+          "string_processing": 0.4
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.8,
+          "algorithm_choice": 0.2
+        }
+      },
+      {
+        "test_id": "tc_no_brackets",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          "abc"
+        ],
+        "expected": true,
+        "competency_weights": {
+          "boundary_conditions": 0.8,
+          "data_structures": 0.2
+        },
+        "criterion_weights": {
+          "edge_case_handling": 0.75,
+          "functional_correctness": 0.25
+        }
+      },
+      {
+        "test_id": "tc_all_kinds",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          "{[()]}"
+        ],
+        "expected": true,
+        "competency_weights": {
+          "data_structures": 0.6,
+          "string_processing": 0.4
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.8,
+          "algorithm_choice": 0.2
+        }
+      },
+      {
+        "test_id": "tc_interleaved",
+        "visibility": "hidden",
+        "weight": 1.0,
+        "input": [
+          "{(})"
+        ],
+        "expected": false,
+        "competency_weights": {
+          "data_structures": 0.5,
+          "algorithmic_reasoning": 0.5
+        },
+        "criterion_weights": {
+          "functional_correctness": 0.45,
+          "algorithm_choice": 0.45,
+          "code_quality": 0.1
+        }
+      }
+    ]
+  }
+]

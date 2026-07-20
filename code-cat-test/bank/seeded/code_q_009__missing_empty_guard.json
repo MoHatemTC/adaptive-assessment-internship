@@ -1,0 +1,20 @@
+{
+  "question_id": "code_q_009",
+  "defect": "missing_empty_guard",
+  "code": "def is_clean_palindrome(text):\n    cleaned = [ch.lower() for ch in text if ch.isalnum()]\n    if cleaned[0] != cleaned[-1]:\n        return False\n    low = 0\n    high = len(cleaned) - 1\n    while low < high:\n        if cleaned[low] != cleaned[high]:\n            return False\n        low += 1\n        high -= 1\n    return True\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_empty",
+      "tc_punctuation_only"
+    ],
+    "weak_competencies": [
+      "boundary_conditions"
+    ],
+    "strong_competencies": [
+      "string_processing",
+      "loops",
+      "algorithmic_reasoning"
+    ],
+    "misconception_code": "MISSING_EMPTY_INPUT_GUARD"
+  }
+}

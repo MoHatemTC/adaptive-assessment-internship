@@ -1,0 +1,22 @@
+{
+  "question_id": "code_q_003",
+  "defect": "missing_empty_guard",
+  "code": "def window_sum(values, start, length):\n    low = max(0, start)\n    high = min(len(values), start + length)\n    total = values[low]\n    for i in range(low + 1, high):\n        total += values[i]\n    return total\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_empty",
+      "tc_zero_length",
+      "tc_no_overlap",
+      "tc_window_before_list"
+    ],
+    "weak_competencies": [
+      "boundary_conditions"
+    ],
+    "strong_competencies": [
+      "arrays",
+      "loops",
+      "algorithmic_reasoning"
+    ],
+    "misconception_code": "MISSING_EMPTY_INPUT_GUARD"
+  }
+}

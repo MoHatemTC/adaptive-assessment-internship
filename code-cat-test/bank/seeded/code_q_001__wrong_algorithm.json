@@ -1,0 +1,24 @@
+{
+  "question_id": "code_q_001",
+  "defect": "wrong_algorithm",
+  "code": "def sum_even_numbers(numbers):\n    total = 0\n    for value in numbers:\n        if value % 2 == 1:\n            total += value\n    return total\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_basic",
+      "tc_all_even",
+      "tc_all_odd",
+      "tc_single_odd",
+      "tc_zero",
+      "tc_negatives",
+      "tc_long"
+    ],
+    "weak_competencies": [
+      "loops"
+    ],
+    "strong_competencies": [
+      "arrays",
+      "boundary_conditions"
+    ],
+    "misconception_code": null
+  }
+}

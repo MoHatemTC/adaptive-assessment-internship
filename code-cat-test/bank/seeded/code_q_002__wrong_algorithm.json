@@ -1,0 +1,22 @@
+{
+  "question_id": "code_q_002",
+  "defect": "wrong_algorithm",
+  "code": "def rotate_right(items, k):\n    if not items:\n        return []\n    shift = k % len(items)\n    return items[shift:] + items[:shift]\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_basic",
+      "tc_k_greater_than_len",
+      "tc_strings",
+      "tc_long"
+    ],
+    "weak_competencies": [
+      "arrays",
+      "algorithmic_reasoning"
+    ],
+    "strong_competencies": [
+      "boundary_conditions",
+      "loops"
+    ],
+    "misconception_code": null
+  }
+}

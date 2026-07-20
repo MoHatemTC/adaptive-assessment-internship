@@ -1,0 +1,26 @@
+{
+  "question_id": "code_q_009",
+  "defect": "syntax_error",
+  "code": "def is_clean_palindrome(text):\n    cleaned = [ch.lower() for ch in text if ch.isalnum()\n    low, high = 0, len(cleaned) - 1\n    while low < high\n        if cleaned[low] != cleaned[high]:\n            return False\n        low += 1\n        high -= 1\n    return True\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_basic",
+      "tc_not_palindrome",
+      "tc_empty",
+      "tc_single_char",
+      "tc_punctuation_only",
+      "tc_mixed_case",
+      "tc_digits",
+      "tc_digits_not",
+      "tc_near_palindrome"
+    ],
+    "weak_competencies": [
+      "string_processing",
+      "boundary_conditions",
+      "loops",
+      "algorithmic_reasoning"
+    ],
+    "strong_competencies": [],
+    "misconception_code": "SYNTAX_ERROR"
+  }
+}

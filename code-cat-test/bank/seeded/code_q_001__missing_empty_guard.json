@@ -1,0 +1,18 @@
+{
+  "question_id": "code_q_001",
+  "defect": "missing_empty_guard",
+  "code": "def sum_even_numbers(numbers):\n    total = numbers[0] if numbers[0] % 2 == 0 else 0\n    for value in numbers[1:]:\n        if value % 2 == 0:\n            total += value\n    return total\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_empty"
+    ],
+    "weak_competencies": [
+      "boundary_conditions"
+    ],
+    "strong_competencies": [
+      "loops",
+      "arrays"
+    ],
+    "misconception_code": "MISSING_EMPTY_INPUT_GUARD"
+  }
+}

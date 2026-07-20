@@ -1,0 +1,19 @@
+{
+  "question_id": "code_q_004",
+  "defect": "missing_empty_guard",
+  "code": "def max_subarray_sum(numbers):\n    best = numbers[0]\n    current = numbers[0]\n    for value in numbers[1:]:\n        current = max(value, current + value)\n        best = max(best, current)\n    return best\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_empty"
+    ],
+    "weak_competencies": [
+      "boundary_conditions"
+    ],
+    "strong_competencies": [
+      "algorithmic_reasoning",
+      "loops",
+      "complexity_awareness"
+    ],
+    "misconception_code": "MISSING_EMPTY_INPUT_GUARD"
+  }
+}
