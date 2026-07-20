@@ -35,6 +35,13 @@ SECRET_SECTIONS = (
     "llm",
     "OpenAI",
     "openai",
+    # Streamlit Cloud secrets are TOML, and grouping LiteLLM settings under a
+    # [litellm] table is the obvious thing to write. Without these names the whole
+    # section is skipped, the app silently finds no gateway, and — if an OpenAI key
+    # is also present — quietly runs on OpenAI instead.
+    "LiteLLM",
+    "litellm",
+    "LITELLM",
     "Fuse",
     "fuse",
     "Langfuse",
