@@ -26,7 +26,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from cat import session_log
+from cat import session_log, trace as trace_mod
 from cat.competency_state import LearnerModel
 from cat.config import settings
 from cat.pipeline import (
@@ -103,6 +103,7 @@ def start_run(competency: str, self_rating: int | None) -> None:
         "answered": [],
         "audit": [],
         "trajectory": [],
+        "traces": [],
         "started": time.time(),
         "current": None,
     }
@@ -181,6 +182,8 @@ def render_learner_model(model: LearnerModel, target: str) -> None:
     rows = [
         {
             "competency": ("▶ " if cid == target else "") + cid,
+            "level": s["level"] if s["level"] is not None else "—",
+            "band": s["band"],
             "mastery": f"{s['mastery']:.3f}" if s["observed"] else "—",
             "std error": f"{s['standard_error']:.3f}",
             "evidence": s["evidence_count"],
@@ -385,18 +388,84 @@ if mode == "Assessment":
     m4.metric("Evidence", target.evidence_count)
     m5.metric("Eligible left", len(eligible))
 
-    if active["trajectory"]:
-        with st.expander("CAT parameters across the session", expanded=True):
-            frame = pd.DataFrame(active["trajectory"])
-            st.dataframe(frame, use_container_width=True, hide_index=True)
-            chart = frame.set_index("q")[["mastery", "std_error"]]
-            st.line_chart(chart)
+    traces = active["traces"]
+    if traces:
+        cat_rows = trace_mod.cat_frame(traces)
+        comp_rows = trace_mod.competency_frame(traces)
+
+        tab_cat, tab_comp, tab_chart = st.tabs(
+            ["CAT parameters", "Competency levels", "Trajectory"]
+        )
+
+        with tab_cat:
+            st.dataframe(pd.DataFrame(cat_rows), use_container_width=True, hide_index=True)
             st.caption(
-                "Mastery is the Beta posterior mean for the competency under test; "
-                "std_error is its posterior SD and is what the stopping rule reads. "
-                "`regret` is the fraction of the best available utility given up by the "
-                "selection — 0 means the top-ranked question was administered."
+                "`ability_before/after` and `se_*` are the Beta posterior for the "
+                "competency under test — `se_after` is what the stopping rule reads. "
+                "`regret` is the fraction of the best available utility given up: 0 means "
+                "the engine's top-ranked question was administered."
             )
+            divergence = trace_mod.divergence_summary(traces)
+            if divergence and divergence["overridden"]:
+                st.warning(
+                    f"The model overrode the engine's top pick on "
+                    f"**{divergence['overridden']} of {divergence['steps']}** steps "
+                    f"(mean regret {divergence['mean_regret']:.1%}, worst "
+                    f"{divergence['max_regret']:.1%})."
+                    + (f" Never administered despite ranking first: "
+                       f"`{', '.join(divergence['never_administered'])}`."
+                       if divergence["never_administered"] else "")
+                )
+            st.download_button(
+                "Download CAT parameters (CSV)",
+                pd.DataFrame(cat_rows).to_csv(index=False).encode(),
+                file_name=f"{active['id']}_cat_parameters.csv",
+                mime="text/csv",
+            )
+
+        with tab_comp:
+            if comp_rows:
+                st.dataframe(pd.DataFrame(comp_rows), use_container_width=True, hide_index=True)
+                st.caption(
+                    "One row per competency that MOVED at that step — a question carrying "
+                    "four competencies would otherwise repeat all four every step. ◀ marks "
+                    "the competency under test. `level` is the 1-5 band; it is blank until "
+                    "a competency has real evidence, because a Beta(1,1) prior sits at "
+                    "exactly 0.5 and would read as a measured mid-level result."
+                )
+                st.download_button(
+                    "Download competency trace (CSV)",
+                    pd.DataFrame(comp_rows).to_csv(index=False).encode(),
+                    file_name=f"{active['id']}_competency_trace.csv",
+                    mime="text/csv",
+                )
+            else:
+                st.caption("No competency has moved yet.")
+
+        with tab_chart:
+            series = trace_mod.level_series(traces)
+            if series and len(series[0]) > 1:
+                st.markdown("**Mastery by competency**")
+                st.line_chart(pd.DataFrame(series).set_index("step"))
+            target_line = pd.DataFrame(
+                [
+                    {
+                        "step": r["step"],
+                        "ability": r["ability_after"],
+                        "std_error": r["se_after"],
+                    }
+                    for r in cat_rows
+                    if r["ability_after"] is not None
+                ]
+            )
+            if not target_line.empty:
+                st.markdown(f"**{active['competency']} — ability and precision**")
+                st.line_chart(target_line.set_index("step"))
+                st.caption(
+                    f"The test stops when std_error reaches {settings.target_standard_error}. "
+                    "A flat or rising std_error means the questions being administered are "
+                    "not informative about this competency."
+                )
 
     if stop.should_stop:
         st.success(f"Assessment complete — {stop.reason}"
@@ -493,6 +562,12 @@ if mode == "Assessment":
             audit_record(active["id"], len(active["answered"]), result, before, after, decision)
         )
         record_trajectory(active, decision, result)
+        active["traces"].append(
+            trace_mod.record(
+                len(active["answered"]), question["question_id"], active["competency"],
+                result, decision, before, after,
+            )
+        )
         active["current"] = None
         st.session_state["last_result"] = result
         st.rerun()
