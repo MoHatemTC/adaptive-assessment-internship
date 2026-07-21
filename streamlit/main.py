@@ -7,8 +7,9 @@ while doing it.
 
 Three screens:
 
-    Setup        pick the competencies to be assessed, self-rate each, and say how sure
-                 that rating is. The rating seeds the prior; the confidence sets its width.
+    Setup        choose a track (T1..T5), pick the sub-competencies within it to be
+                 assessed, self-rate each, and say how sure that rating is. The rating
+                 seeds the prior; the confidence sets its width.
     Assessment   answer, and watch the queue, the mathematics and the trajectory move.
     Report       on convergence — the same detail, retained rather than cleared, because
                  the interesting part of a session is usually visible only afterwards.
@@ -45,11 +46,13 @@ for path in (str(BACKEND), str(HERE)):
 import session_log  # noqa: E402  — must be importable before the engine logs anything
 
 from app.config.settings import settings  # noqa: E402
+from app.services import observability  # noqa: E402
 from app.services.adaptive.irt import ability_band  # noqa: E402
 from app.services.code_adaptive import (  # noqa: E402
     CodeAdaptiveSession,
     JsonQuestionRepository,
 )
+from app.services.code_adaptive import trial  # noqa: E402
 from app.services.orchestrator import GraderAgent, JsonUnifiedBank, Orchestrator  # noqa: E402
 from app.services.orchestrator import variables as variables_module  # noqa: E402
 from app.services.adaptive.irt import expected_fisher_information  # noqa: E402
@@ -70,6 +73,11 @@ def fisher_after(item, variable_state, variable) -> float:
 
 st.set_page_config(page_title="Adaptive assessment — tester", layout="wide")
 session_log.install()
+
+# The tester options checkbox has no `value=`; this is its default, and living here rather
+# than at the widget means the setting has a defined value from the first line of the first
+# run — before any screen has decided to render the control that owns it.
+st.session_state.setdefault("use_llm_choice", bool(settings.litellm_api_key))
 
 _ST_VERSION = tuple(int(p) for p in st.__version__.split(".")[:2] if p.isdigit())
 WIDE = {"width": "stretch"} if _ST_VERSION >= (1, 49) else {"use_container_width": True}
@@ -107,47 +115,134 @@ def run_async(coro):
 def use_llm() -> bool:
     """Whether the picking agent may call the model.
 
+    Read from a plain session key fixed when the run began — NOT from the setup checkbox's
+    own key. Two reasons, and the second is the one that matters:
+
+    Streamlit garbage-collects state belonging to widgets that stopped rendering, so the
+    checkbox's key vanishes the moment the setup screen is replaced, and every later read
+    of it either fails or silently reports False.
+
+    More importantly, selection policy must not be able to change halfway through a
+    measurement. Captured once, at Begin, the session is administered under one policy and
+    the report describes what actually happened.
+
     Off automatically without a gateway key: otherwise every pick would time out, fall back
     to the engine's choice, and produce a session that looks deterministic for a reason the
     tester cannot see.
     """
-    return bool(st.session_state.get("use_llm")) and bool(settings.litellm_api_key)
+    return bool(st.session_state.get("picker_uses_llm")) and bool(settings.litellm_api_key)
+
+
+def render_tester_options(container, *, locked: bool) -> bool:
+    """The engine controls, rendered on EVERY screen — settable on setup, locked after.
+
+    Rendered throughout rather than only on setup for two reasons that happen to coincide.
+
+    A tester needs to see which selection policy a running session is actually under; a
+    control that vanishes once the session starts leaves them inferring it from behaviour.
+
+    And a widget's state belongs to that widget: Streamlit collects it once the widget
+    stops rendering, so a key that appears only on the setup screen is *gone* by the second
+    question, and anything still referring to it — including Streamlit's own test runner
+    replaying the element tree — reads a key that no longer exists.
+
+    Locked after Begin because selection policy must not change mid-measurement. The value
+    that governs the run is `picker_uses_llm`, fixed once; this widget is the input to that
+    decision beforehand and a readout of it afterwards.
+    """
+    left, right = container.columns(2) if container is st else (container, container)
+    wants_llm = left.checkbox(
+        "Let the picking agent use the model",
+        key="use_llm_choice",
+        help="Off runs the engine's own deterministic choice, which is also the fallback "
+             "whenever the model is unavailable or returns something unusable. Selection "
+             "quality is bounded either way: a pick below "
+             f"{settings.orchestrator_minimum_relative_utility:.0%} of the best available "
+             "information is overridden.",
+        disabled=locked or not settings.litellm_api_key,
+    )
+    if not settings.litellm_api_key:
+        right.caption("No LITELLM_API_KEY configured — picking runs deterministically.")
+    container.caption(
+        "Tracing: "
+        + (
+            f"Langfuse, {settings.langfuse_environment} @ {settings.langfuse_host}"
+            if observability.enabled()
+            else "off (set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY to enable)"
+        )
+    )
+    if not settings.e2b_api_key and not locked:
+        container.warning(
+            "No E2B_API_KEY configured. Coding questions can still be selected and shown, "
+            "but running one will report a sandbox failure — which correctly moves no "
+            "estimate, and is itself worth testing."
+        )
+    return wants_llm
 
 
 # --- setup screen -----------------------------------------------------------
 def render_setup() -> None:
     st.title("Adaptive assessment")
     st.caption(
-        "Choose what to be assessed on, rate yourself, and say how sure that rating is. "
-        "The rating seeds the starting estimate; the confidence sets how easily evidence "
-        "overrides it. Neither is ever reported as a measurement."
+        "Choose a track, pick what within it to be assessed on, rate yourself, and say how "
+        "sure that rating is. The rating seeds the starting estimate; the confidence sets "
+        "how easily evidence overrides it. Neither is ever reported as a measurement."
     )
 
     coverage = bank().coverage()
-    if not coverage:
+    tracks = bank().tracks()
+    if not coverage or not tracks:
         st.error("The question bank is empty.")
         return
 
-    def describe(variable: str) -> str:
-        modalities = coverage[variable]
-        detail = ", ".join(f"{n} {m}" for m, n in sorted(modalities.items()))
-        return f"{variable} — {detail}"
+    st.markdown("#### 1 · Track")
+    by_code = {t["code"]: t for t in tracks}
+    track_code = st.radio(
+        "Which track are you being assessed on?",
+        options=[t["code"] for t in tracks],
+        format_func=lambda code: (
+            f"{code} · {by_code[code]['name']}  "
+            f"— {by_code[code]['items']} questions, "
+            f"{', '.join(by_code[code]['modalities'])}"
+        ),
+        # Not "track": that key holds the CHOSEN track for the run, and Streamlit refuses
+        # to let session state be written under a live widget's key.
+        key="track_choice",
+    )
+    track = by_code[track_code]
 
-    mixed = [v for v, m in coverage.items() if len(m) > 1]
+    st.markdown("#### 2 · Sub-competencies")
+
+    def describe(variable: str) -> str:
+        modalities = coverage.get(variable, {})
+        detail = ", ".join(f"{n} {m}" for m, n in sorted(modalities.items())) or "no items"
+        borrowed = "" if variable in track["own_variables"] else " · shared"
+        return f"{variable} — {detail}{borrowed}"
+
+    # Own sub-competencies first and selected by default; the cross-loaded ones are
+    # offered but not assumed. A pandas question loads lightly on core Python, which makes
+    # T1.1 assessable inside the Data track — worth allowing, wrong to select silently.
+    options = track["own_variables"] + [
+        v for v in track["variables"] if v not in track["own_variables"]
+    ]
+    mixed = [v for v in track["own_variables"] if len(coverage.get(v, {})) > 1]
     chosen = st.multiselect(
-        "Competencies to be assessed",
-        options=sorted(coverage),
-        default=mixed[:2] or sorted(coverage)[:2],
+        "Sub-competencies to be assessed",
+        options=options,
+        default=mixed[:2] or track["own_variables"][:2],
         format_func=describe,
-        help="Competencies carrying both modalities let the engine choose between an MCQ "
-             "item and a coding question on information alone — which is the behaviour "
-             "most worth testing.",
+        key=f"variables_{track_code}",
+        help="Marked `shared` are measured by this track's questions but belong to "
+             "another track. Sub-competencies carrying both modalities let the engine "
+             "choose between an MCQ item and a coding question on information alone — "
+             "which is the behaviour most worth testing.",
     )
     if not chosen:
-        st.info("Select at least one competency.")
+        st.info("Select at least one sub-competency.")
         return
 
-    st.markdown("#### Self-rating")
+    st.markdown("#### 3 · Self-rating")
+
     intake: dict[str, int] = {}
     confident: dict[str, bool] = {}
     for variable in chosen:
@@ -165,22 +260,12 @@ def render_setup() -> None:
         ) == "High"
 
     st.markdown("---")
-    left, right = st.columns(2)
-    left.checkbox(
-        "Let the picking agent use the model", value=bool(settings.litellm_api_key),
-        key="use_llm",
-        help="Off runs the engine's own deterministic choice, which is also the fallback "
-             "whenever the model is unavailable or returns something unusable.",
-        disabled=not settings.litellm_api_key,
-    )
-    if not settings.litellm_api_key:
-        right.caption("No LITELLM_API_KEY configured — picking runs deterministically.")
-    if not settings.e2b_api_key:
-        st.warning(
-            "No E2B_API_KEY configured. Coding questions can still be selected and shown, "
-            "but running one will report a sandbox failure — which correctly moves no "
-            "estimate, and is itself worth testing."
-        )
+
+    # Engine controls, not candidate ones. Collapsed and named as such, because an
+    # examinee has no business deciding how their own questions get selected — and
+    # anything they toggle here changes what the session measures.
+    with st.expander("Tester options — not part of the examinee's flow"):
+        wants_llm = render_tester_options(st, locked=False)
 
     # A single rating confidence for the session: the engine takes one flag, and pretending
     # otherwise in the UI would imply a per-variable control that does not exist.
@@ -190,7 +275,11 @@ def render_setup() -> None:
         )
         session_log.clear()
         st.session_state.update(
-            run=state, steps=[], rng_seed=0, finished=False, stop_reason="", pending=None
+            run=state, steps=[], rng_seed=0, finished=False, stop_reason="", pending=None,
+            track=track_code, track_name=track["name"], trials={},
+            # Fixed for the whole run: a session must be administered under one selection
+            # policy, and this key outlives the widget that set it.
+            picker_uses_llm=wants_llm,
         )
         st.rerun()
 
@@ -389,6 +478,15 @@ def render_diagnostics() -> None:
                  "meaning": "tests own functional correctness; the model judges quality"},
                 {"setting": "picking agent", "value": "model" if use_llm() else "engine only",
                  "meaning": "the engine's deterministic choice is always the fallback"},
+                {"setting": "trial runs per question",
+                 "value": f"{settings.code_trial_runs_per_question} × "
+                          f"{settings.code_trial_run_tests} public cases",
+                 "meaning": "candidates may run the example cases before submitting; "
+                            "hidden cases are never reachable and nothing is graded"},
+                {"setting": "tracing",
+                 "value": "langfuse" if observability.enabled() else "off",
+                 "meaning": "every model call is traced and grouped by session id; "
+                            "candidate source code is never sent"},
             ]
         ),
         hide_index=True, **WIDE,
@@ -429,7 +527,17 @@ def render_diagnostics() -> None:
 def record(state, item, candidate, response) -> None:
     """Grade one response and record everything the tables need."""
     before = {v: s for v, s in state.variables.items()}
-    new_state, graded = engine().record_response(state, item, response)
+    with observability.session(
+        state.session_id,
+        track=st.session_state.get("track"),
+        stage="grade",
+        item_id=item.item_id,
+        modality=item.modality,
+        variable=candidate.variable if candidate else None,
+        # The submission itself is never sent — see observability.redact_code.
+        submission=observability.redact_code(response) if isinstance(response, str) else None,
+    ):
+        new_state, graded = engine().record_response(state, item, response)
 
     step = len(st.session_state["steps"]) and max(r["step"] for r in st.session_state["steps"])
     step = step + 1
@@ -515,10 +623,74 @@ def render_question(state) -> None:
             "Run in a sandbox against the question's tests. Test results own functional "
             "correctness; the model only judges quality."
         )
+        render_trial_runs(item, code)
         if st.button("Submit solution", type="primary"):
             with st.spinner("Running your code in the sandbox…"):
                 record(state, item, candidate, code)
             st.rerun()
+
+
+def render_trial_runs(item, code: str) -> None:
+    """Let the candidate run the example cases before committing to a submission.
+
+    Deliberately separated from submitting, and the button says so: the graded run is the
+    one that moves the estimate, and a candidate must never be unsure which button they
+    just pressed.
+    """
+    budget = settings.code_trial_runs_per_question
+    if budget <= 0:
+        return
+
+    used = st.session_state.setdefault("trials", {}).get(item.item_id, 0)
+    remaining = budget - used
+    question = GraderAgent.as_code_question(item)
+    examples = trial.public_tests(question)
+
+    left, right = st.columns([1, 3])
+    if left.button(
+        f"Run example cases ({remaining} left)",
+        disabled=remaining <= 0 or not examples,
+        key=f"trial_{item.item_id}",
+    ):
+        with st.spinner("Running the example cases…"):
+            result = trial.trial_run(question, code)
+        st.session_state["trials"][item.item_id] = used + 1
+        st.session_state[f"trial_result_{item.item_id}"] = result
+        st.rerun()
+
+    right.caption(
+        f"{len(examples)} example case(s), and only these — the rest are hidden, which is "
+        "what stops a solution being tuned to the examples. Running them changes no "
+        "estimate and is not recorded as an answer."
+        if examples else "This question publishes no example cases."
+    )
+
+    result = st.session_state.get(f"trial_result_{item.item_id}")
+    if result is None:
+        return
+    if not result.available:
+        st.warning(result.error_message)
+        return
+    if result.compiled is False:
+        st.error(f"Your code did not compile — {result.error_message}")
+        return
+
+    st.dataframe(
+        pd.DataFrame(
+            [
+                {
+                    "case": case.test_id,
+                    "passed": "✅" if case.passed else "❌",
+                    "arguments": repr(case.arguments)[:120],
+                    "expected": repr(case.expected)[:120],
+                    "what happened": case.detail or "—",
+                }
+                for case in result.cases
+            ]
+        ),
+        hide_index=True, **WIDE,
+    )
+    st.caption(f"{result.passed} of {result.total} example cases pass.")
 
 
 def render_last_result() -> None:
@@ -565,16 +737,25 @@ def render_assessment() -> None:
     if not st.session_state["finished"]:
         seed = st.session_state["rng_seed"]
         st.session_state["rng_seed"] = seed + 1
-        state = run_async(
-            engine().fill_queue(
-                state, use_llm=use_llm(), rng=np.random.default_rng(seed)
+        with observability.session(
+            state.session_id,
+            track=st.session_state.get("track"),
+            stage="fill_queue",
+            items_administered=state.items_administered,
+        ):
+            state = run_async(
+                engine().fill_queue(
+                    state, use_llm=use_llm(), rng=np.random.default_rng(seed)
+                )
             )
-        )
         st.session_state["run"] = state
 
         stop, reason = engine().should_stop(state)
         if stop:
             st.session_state.update(finished=True, stop_reason=reason)
+            # The session is over; push whatever is still buffered rather than waiting for
+            # the interval flush that a stopped Streamlit script may never reach.
+            observability.flush()
 
     state = st.session_state["run"]
     finished = st.session_state["finished"]
@@ -582,6 +763,10 @@ def render_assessment() -> None:
     # --- sidebar
     st.sidebar.title("Session")
     st.sidebar.caption(f"`{state.session_id}`")
+    if st.session_state.get("track"):
+        st.sidebar.caption(
+            f"Track **{st.session_state['track']}** · {st.session_state.get('track_name','')}"
+        )
     st.sidebar.metric("Questions answered", state.items_administered)
     open_count = len(state.open_variables)
     st.sidebar.metric("Competencies open", f"{open_count} of {len(state.variables)}")
@@ -593,6 +778,8 @@ def render_assessment() -> None:
                  + (" ✓" if variable_state.finalised else ""),
         )
     st.sidebar.markdown("---")
+    with st.sidebar.expander("Tester options — locked for this run"):
+        render_tester_options(st.sidebar, locked=True)
     if st.sidebar.button("End session"):
         st.session_state.update(finished=True, stop_reason="ended_by_tester")
         st.rerun()

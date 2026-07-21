@@ -25,12 +25,14 @@ an item losing because its parameters are wrong.
 
 from __future__ import annotations
 
+import json
 import logging
 
 import numpy as np
 
 from app.config.settings import settings
 from app.schemas.orchestration import BankItem, QueuedCandidate, VariableState
+from app.services import observability
 from app.services.adaptive.irt import (
     THETA_GRID,
     expected_fisher_information,
@@ -182,10 +184,25 @@ async def pick(
     }
 
     try:
+        # json.dumps, not the dict. The SDK forwards a dict straight into the message
+        # content, and the proxy answers 400 "'str' object has no attribute 'get'" —
+        # which reached production and ended sessions, because a 400 is not
+        # LLMUnavailable and so was never caught below. `chat_json` now refuses a
+        # non-string payload outright so the same slip cannot recur silently.
         reply = await chat_json(
-            PICKING_SYSTEM, payload, require=("selected_item_id", "reason_code")
+            PICKING_SYSTEM,
+            json.dumps(payload, indent=2),
+            require=("selected_item_id", "reason_code"),
+            trace=observability.generation(
+                "picker",
+                variable=variable,
+                criterion=criterion,
+                shortlist_size=len(shortlist),
+                engine_choice=engine_choice.item_id,
+                observations=state.observations,
+            ),
         )
-    except (LLMUnavailable, ValueError) as exc:
+    except (LLMUnavailable, ValueError, TypeError) as exc:
         logger.warning("picker unavailable for %s (%s) — using the engine's choice", variable, exc)
         return engine_choice
 

@@ -26,3 +26,8 @@ numpy>=1.26,<3
 # Untrusted code execution. 2.x only: 1.x has no Sandbox.create() and no files/commands
 # API, which the engine needs to run submissions outside the sandbox's notebook kernel.
 e2b-code-interpreter>=2.0,<3
+
+# Tracing. Runtime-optional: without LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY the app
+# runs untraced and otherwise unaffected. Installed anyway so that setting the two keys in
+# Streamlit Cloud's secrets is the whole of the work.
+langfuse>=3.0,<5

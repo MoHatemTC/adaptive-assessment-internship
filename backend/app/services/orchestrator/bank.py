@@ -97,6 +97,56 @@ class JsonUnifiedBank:
                 bucket[item.modality] = bucket.get(item.modality, 0) + 1
         return dict(sorted(counts.items()))
 
+    def tracks(self) -> list[dict]:
+        """The five assessable tracks — T1..T5 — each with the variables under it.
+
+        A track is what a candidate chooses at the start, and it is derived, not authored:
+        the track code is the prefix of a variable id (`T1.4` -> `T1`), and its name is the
+        `competency` string carried by the items whose PRIMARY measure sits in it.
+
+        BY PRIMARY MEASURE, and that distinction is load-bearing. Items cross-load: a
+        pandas question measures `T2.1` at 0.8 and `T1.1` at 0.2, because writing it well
+        does require Python. Grouping by every measured variable would file that item under
+        both tracks and report a candidate choosing "Python" into questions about
+        dataframes. The heaviest measure is what the item is actually about.
+
+        Variables are listed per track including cross-loaded ones, because they remain
+        assessable there — an examinee taking T2 can still be measured on T1.1 by a T2
+        item, and the queue is per variable, not per track.
+        """
+        names: dict[str, dict[str, int]] = {}
+        variables: dict[str, set[str]] = {}
+        for item in self._load():
+            if item.status != "active" or not item.measures:
+                continue
+            primary = max(item.measures, key=lambda m: m.weight).variable
+            code = primary.split(".")[0]
+            names.setdefault(code, {})
+            names[code][item.competency] = names[code].get(item.competency, 0) + 1
+            variables.setdefault(code, set()).update(m.variable for m in item.measures)
+
+        coverage = self.coverage()
+        return [
+            {
+                "code": code,
+                # The modal name, so one mislabelled item cannot rename a whole track.
+                "name": max(names[code].items(), key=lambda kv: kv[1])[0],
+                "variables": sorted(variables[code]),
+                # The track's own sub-competencies, separated from the ones its questions
+                # merely touch. A candidate choosing "Data & ML" should be offered T2.*,
+                # not asked whether they also want to be assessed on core Python because
+                # a pandas question happens to load 0.2 on it.
+                "own_variables": sorted(
+                    v for v in variables[code] if v.split(".")[0] == code
+                ),
+                "items": sum(names[code].values()),
+                "modalities": sorted(
+                    {m for v in variables[code] for m in coverage.get(v, {})}
+                ),
+            }
+            for code in sorted(names)
+        ]
+
     def information_parity(self, variable: str) -> dict:
         """Can each modality ever win a ranking for this variable?
 

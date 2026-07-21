@@ -102,7 +102,7 @@ class GraderAgent:
         if not isinstance(response, str):
             raise ValueError(f"{item.item_id}: code response must be source text")
 
-        question = self._as_code_question(item)
+        question = self.as_code_question(item)
         graded = self._code.evaluate(question, response)
         report = graded["report"]
 
@@ -128,12 +128,17 @@ class GraderAgent:
         )
 
     @staticmethod
-    def _as_code_question(item: BankItem) -> dict:
+    def as_code_question(item: BankItem) -> dict:
         """Rebuild the shape the code engine expects from the unified envelope.
 
         The engine predates the unified bank and consumes its own question dict. Adapting
         here rather than changing the engine keeps the measured grading path byte-identical
         to the one the study validated.
+
+        Public because trial runs need the same translation. Sharing it is the point: if
+        the examples a candidate runs against came from a different translation than the
+        one that grades them, the two could drift apart and the practice runs would stop
+        predicting the graded one.
         """
         payload = dict(item.payload)
         payload["question_id"] = item.item_id

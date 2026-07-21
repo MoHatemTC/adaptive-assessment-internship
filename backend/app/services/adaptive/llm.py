@@ -15,13 +15,16 @@ from typing import Any
 
 from openai import (
     APIConnectionError,
+    APIStatusError,
     APITimeoutError,
     AsyncOpenAI,
     InternalServerError,
+    OpenAIError,
     RateLimitError,
 )
 
 from app.config.settings import settings
+from app.services import observability
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +47,10 @@ class LLMUnavailable(RuntimeError):
 def _llm() -> AsyncOpenAI:
     global _client
     if _client is None:
+        # Before the client exists, so instrumentation is in place for its first call.
+        # (It patches the resource classes rather than the instance, so the order is
+        # belt-and-braces — but a reader should not have to know that to trust this.)
+        observability.configure()
         _client = AsyncOpenAI(
             base_url=settings.litellm_base_url,
             api_key=settings.litellm_api_key,
@@ -109,7 +116,13 @@ def extract_json(raw: str, require: tuple[str, ...] = ()) -> dict[str, Any]:
     raise LLMUnavailable(f"no JSON object in reply: {raw[:160]!r}")
 
 
-async def _one_call(system: str, user: str, temperature: float, require: tuple[str, ...]):
+async def _one_call(
+    system: str,
+    user: str,
+    temperature: float,
+    require: tuple[str, ...],
+    trace: dict[str, Any] | None = None,
+):
     response = await _llm().chat.completions.create(
         model=settings.litellm_model,
         temperature=temperature,
@@ -118,6 +131,9 @@ async def _one_call(system: str, user: str, temperature: float, require: tuple[s
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ],
+        # Empty unless Langfuse is configured, and stripped by its argument extractor
+        # before the request is built either way — the gateway never sees these.
+        **(trace or {}),
     )
     message = response.choices[0].message
     body = (message.content or "").strip()
@@ -149,16 +165,31 @@ async def chat_json(
     *,
     temperature: float = 0.0,
     require: tuple[str, ...] = (),
+    trace: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Call the proxy and return a parsed JSON object, retrying what is worth retrying.
 
-    Raises `LLMUnavailable` when no usable reply arrives. Callers must have a
-    deterministic path — this module is never the only way to make a decision.
+    Raises `LLMUnavailable` when no usable reply arrives — and `LLMUnavailable` is the
+    ONLY exception that leaves here. Callers all have a deterministic path and catch
+    exactly that; anything else escaping propagates out of a background queue fill and
+    ends a candidate's assessment over a monitoring-grade problem.
+
+    `user` must already be text. A caller passing the payload dict it built is the
+    measured bug this guard exists for: the OpenAI SDK forwards a dict as the message
+    content, and what comes back is a gateway 400 reading "'str' object has no attribute
+    'get'" — an error about the proxy's parser, pointing nowhere near the call site, on a
+    path whose whole design is to survive the model failing.
     """
+    if not isinstance(user, str):
+        raise TypeError(
+            f"chat_json expects text, got {type(user).__name__} — serialise the payload "
+            "with json.dumps() at the call site"
+        )
+
     last: Exception | None = None
     for attempt in range(REPLY_ATTEMPTS):
         try:
-            return await _one_call(system, user, temperature, require)
+            return await _one_call(system, user, temperature, require, trace)
         except LLMUnavailable as exc:
             last = exc
             if attempt < REPLY_ATTEMPTS - 1:
@@ -169,4 +200,19 @@ async def chat_json(
                 logger.warning("llm transport failure (%s), retrying", type(exc).__name__)
                 continue
             raise LLMUnavailable(f"gateway unreachable: {type(exc).__name__}") from exc
+        except APIStatusError as exc:
+            # The gateway answered, and refused. Not retryable — a rejected request is
+            # rejected identically the second time — but emphatically not fatal either:
+            # a bad model name, a revoked key, an unsupported response_format or a
+            # payload the proxy would not parse are all configuration faults, and the
+            # engine has a correct next question regardless of what the model thinks.
+            logger.error(
+                "llm rejected the request (HTTP %s): %s", exc.status_code, str(exc)[:300]
+            )
+            raise LLMUnavailable(f"gateway rejected the request: HTTP {exc.status_code}") from exc
+        except OpenAIError as exc:
+            # Anything else the SDK raises — a malformed response it could not parse, an
+            # argument it would not accept. Same reasoning: degrade, do not escape.
+            logger.error("llm client error (%s): %s", type(exc).__name__, str(exc)[:300])
+            raise LLMUnavailable(f"llm client error: {type(exc).__name__}") from exc
     raise LLMUnavailable(f"no usable reply after {REPLY_ATTEMPTS} attempts: {last}")

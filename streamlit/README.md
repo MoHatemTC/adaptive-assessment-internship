@@ -23,11 +23,24 @@ rest with the engine's own functions.
 
 ## Screens
 
-**Setup** — pick the competencies to assess, self-rate each 1–5, and say whether that
-rating is high or low confidence. The rating seeds the starting estimate; the confidence
-sets how wide it is. Neither is ever reported as a measurement. Competencies are labelled
-with how many MCQ and code items they carry, because the ones carrying both are where
-cross-modality selection is worth testing.
+**Setup** — three steps.
+
+1. **Track.** One of the five: `T1` Python & Software Engineering, `T2` Data & ML
+   Foundations, `T3` Generative AI & LLM Applications, `T4` Agentic AI & Orchestration,
+   `T5` MLOps & Productionization. Derived from the bank rather than hard-coded — a track's
+   name comes from the items whose *heaviest* measure sits in it, so a pandas question
+   loading 0.2 on core Python is filed under Data & ML, where it belongs.
+2. **Sub-competencies.** Scoped to the chosen track and selected by default. Items that
+   cross-load from other tracks are offered too, marked `shared`: they remain assessable
+   here, but selecting them should be a decision rather than an accident.
+3. **Self-rating.** 1–5 per sub-competency, with high or low confidence. The rating seeds
+   the starting estimate; the confidence sets how wide it is. Neither is ever reported as a
+   measurement.
+
+Engine controls live behind **Tester options**, not beside the self-rating — an examinee has
+no business choosing how their own questions get selected. They stay visible in the sidebar
+during a run, locked, because selection policy is fixed when the session begins and a tester
+should be able to see which policy a running session is under.
 
 **Assessment** — the question, plus five panels:
 
@@ -43,6 +56,34 @@ cross-modality selection is worth testing.
 separates a measured result from a budget outcome: a band from a competency that ran out of
 questions is marked *provisional*, and `converged` is true only for a stop earned on
 precision or a settled band.
+
+## Running the examples before submitting
+
+A coding question offers **Run example cases** alongside **Submit solution**. The two are
+deliberately separate: one changes the measured ability and the other cannot.
+
+- **Public cases only.** Every code item publishes 3–4 examples and hides the rest. The
+  filter is in `code_adaptive/trial.py`, not in the UI, so a UI change cannot widen it —
+  the hidden cases are the whole reason a submission cannot be tuned to the examples.
+- **Nothing is graded.** A trial returns a report, never a graded outcome, and there is no
+  code path from it into the learner model. `CODE_TRIAL_RUNS_PER_QUESTION` bounds how many
+  runs a question allows, so the feature stays a check rather than a search procedure.
+
+Without this, the first time a candidate's code ever executes is the moment it is graded,
+and a typo they would have caught in five seconds is measured as not knowing the material.
+
+## Tracing
+
+Set `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` (Streamlit Cloud: *Secrets*) and every
+model call is traced as a generation, grouped by assessment session id, tagged with the
+track, the variable under test and the item. `LANGFUSE_HOST` and `LANGFUSE_ENVIRONMENT`
+are optional.
+
+Tracing is **never load-bearing**. A missing package, an unset key, an unreachable
+collector or a moved API all mean *no tracing* and change nothing else — `Diagnostics`
+reports whether it is on. **Candidate source code is never sent**: a submission is a
+person's work, and the item id, score and test counts answer every question monitoring
+exists to answer.
 
 ## Two things worth knowing
 

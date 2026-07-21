@@ -10,6 +10,13 @@ openai>=1.50,<3
 # there when these modules are merged in.
 numpy>=1.26,<3
 
+# Tracing. Optional at RUNTIME — services/observability.py degrades to no tracing when it
+# is absent, unconfigured, or broken — but listed here so a deployment that sets the keys
+# gets a working collector instead of a warning nobody reads. The floor is 3.0 because the
+# session-grouping API this uses (propagate_attributes) does not exist below it; its
+# absence costs only the grouping, so the ceiling is the real constraint.
+langfuse>=3.0,<5
+
 # Tests
 pytest>=8.0
 pytest-asyncio>=0.24

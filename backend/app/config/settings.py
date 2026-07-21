@@ -97,6 +97,22 @@ class Settings(BaseSettings):
     # How long a candidate's code may run is policy, not a property of the harness.
     code_execution_timeout_seconds: int = Field(default=30, ge=1)
 
+    # --- code engine: trial runs before submitting ------------------------------
+    # A candidate may run their solution against the question's PUBLIC test cases before
+    # committing to it, which is how anyone actually writes code. Without it the first
+    # execution a candidate ever sees is the graded one, so a typo they would have caught
+    # in five seconds is measured as not knowing the material.
+    #
+    # Public cases only, enforced in `trial.py` and not in the UI: the hidden cases are
+    # what stop a submission being tuned to the examples, so leaking them through a
+    # convenience feature would quietly void the measurement. A UI-level filter would be
+    # one careless edit away from doing exactly that.
+    code_trial_run_tests: int = Field(default=3, ge=1)
+    # Free in score terms, not in sandbox terms. Bounded per question so one candidate
+    # cannot exhaust the execution budget, and so the feature stays a check rather than a
+    # search procedure.
+    code_trial_runs_per_question: int = Field(default=5, ge=0)
+
     # --- code engine: adaptive policy -----------------------------------------
     code_min_questions: int = Field(default=5, ge=1)
     code_max_questions: int = Field(default=12, ge=1)
@@ -136,6 +152,21 @@ class Settings(BaseSettings):
     # engine's convergence rule; this is the outer bound.
     orchestrator_max_items: int = Field(default=60, ge=1)
     orchestrator_time_limit_minutes: int = Field(default=90, ge=1)
+
+    # --- observability: Langfuse -----------------------------------------------
+    # Traces every model call and groups them by assessment session. Off unless both keys
+    # are present — see `services/observability.py` for why monitoring is never allowed to
+    # be load-bearing here.
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_host: str = "https://cloud.langfuse.com"
+    # Keeps a tester's traces separable from a real cohort's inside one project.
+    langfuse_environment: str = "development"
+
+    @property
+    def langfuse_enabled(self) -> bool:
+        """Both keys, or nothing. A public key alone cannot authenticate."""
+        return bool(self.langfuse_public_key and self.langfuse_secret_key)
 
     def llm_share_override(self) -> dict[str, float]:
         """Parsed `code_llm_shares`, or {} when unset or malformed.

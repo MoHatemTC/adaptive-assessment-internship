@@ -55,16 +55,30 @@ def app(stub_boundaries):
     return AppTest.from_file(str(APP), default_timeout=180).run()
 
 
+def begin(app):
+    """Start a session. By label, because setup is no longer the only screen with buttons."""
+    next(b for b in app.button if b.label == "Begin assessment").click().run()
+    return app
+
+
 def answer_everything(app, limit: int = 30) -> int:
-    """Answer questions until the session ends. Returns how many were answered."""
+    """Answer questions until the session ends. Returns how many were answered.
+
+    Widgets are found by LABEL, not by index. AppTest keeps elements from earlier screens
+    in its tree, so `app.radio[0]` is whichever radio was rendered first anywhere in the
+    session — once setup grew a track selector and per-competency confidence radios, that
+    stopped being the answer control and the helper started driving the setup screen.
+    """
     answered = 0
     for _ in range(limit):
         if app.exception or any("Assessment complete" in t.value for t in app.title):
             break
-        if app.radio:
-            app.radio[0].set_value(app.radio[0].options[0])
-        elif app.text_area:
-            app.text_area[0].set_value("def f():\n    return 1\n")
+        answer = [r for r in app.radio if r.label == "Your answer"]
+        solution = [t for t in app.text_area if t.label == "Your solution"]
+        if answer:
+            answer[0].set_value(answer[0].options[0])
+        elif solution:
+            solution[0].set_value("def f():\n    return 1\n")
         submit = [b for b in app.button if b.label.startswith("Submit")]
         if not submit:
             break
@@ -74,27 +88,53 @@ def answer_everything(app, limit: int = 30) -> int:
 
 
 class TestSetupScreen:
-    def test_it_asks_for_competency_level_and_confidence(self, app):
-        """The three things a candidate is asked before anything is administered."""
-        assert app.multiselect, "no competency selector"
+    def test_it_asks_for_track_competency_level_and_confidence(self, app):
+        """Everything a candidate is asked before anything is administered."""
+        assert app.radio, "no track selector"
+        assert app.multiselect, "no sub-competency selector"
         assert app.slider, "no self-rating"
-        assert app.radio, "no confidence control"
         assert any(b.label == "Begin assessment" for b in app.button)
+
+    def test_the_track_choice_offers_all_five(self, app):
+        """T1..T5. A candidate picks a track first; everything else is scoped to it."""
+        options = app.radio[0].options
+        assert len(options) == 5
+        assert all(any(code in option for option in options) for code in
+                   ("T1", "T2", "T3", "T4", "T5"))
 
     def test_it_defaults_to_competencies_carrying_both_modalities(self, app):
         """The mixed ones are what a tester most needs to exercise."""
         assert app.multiselect[0].value
 
+    def test_choosing_a_track_scopes_the_sub_competencies_to_it(self, app):
+        """The point of the track choice. Picking MLOps must not offer only T1.*"""
+        target = next(o for o in app.radio[0].options if o.startswith("T5"))
+        app.radio[0].set_value(target).run()
+        assert not app.exception
+        offered = app.multiselect[0].options
+        assert any(v.startswith("T5.") for v in offered)
+        assert app.multiselect[0].value, "nothing selected by default for this track"
+        assert all(v.startswith("T5.") for v in app.multiselect[0].value)
+
+    def test_engine_controls_are_not_mixed_into_the_candidate_flow(self, app):
+        """The picking-agent switch decides how a candidate's own questions are chosen.
+
+        It belongs to a tester, so it sits behind a labelled expander rather than beside
+        the self-rating, where it reads as something the examinee is being asked.
+        """
+        labels = [e.label for e in app.expander]
+        assert any("Tester options" in label for label in labels)
+
 
 class TestAssessmentScreen:
     def test_beginning_a_session_presents_a_question_and_the_panels(self, app):
-        app.button[0].click().run()
+        begin(app)
         assert not app.exception
         # Queue, Mathematics, Trajectory, Engine log, Diagnostics
         assert len(app.tabs) == 5
 
     def test_a_whole_session_runs_to_completion_without_raising(self, app):
-        app.button[0].click().run()
+        begin(app)
         answered = answer_everything(app)
         assert not app.exception, app.exception
         assert answered > 0
@@ -109,13 +149,55 @@ class TestAssessmentScreen:
         assert not app.exception
 
 
+class TestTrialRuns:
+    """A candidate may run the example cases before committing to a submission."""
+
+    @staticmethod
+    def _reach_a_code_question(app, limit: int = 12):
+        for _ in range(limit):
+            if [t for t in app.text_area if t.label == "Your solution"]:
+                return True
+            answer = [r for r in app.radio if r.label == "Your answer"]
+            if answer:
+                answer[0].set_value(answer[0].options[0])
+            submit = [b for b in app.button if b.label.startswith("Submit")]
+            if not submit:
+                return False
+            submit[0].click().run()
+        return False
+
+    def test_a_code_question_offers_a_run_that_is_not_a_submission(self, app):
+        """Two distinct buttons. A candidate must never be unsure which one they pressed —
+        one changes their measured ability and the other cannot."""
+        begin(app)
+        if not self._reach_a_code_question(app):
+            pytest.skip("no code question was administered in this session")
+
+        labels = [b.label for b in app.button]
+        assert any(label.startswith("Run example cases") for label in labels)
+        assert any(label.startswith("Submit") for label in labels)
+
+    def test_running_the_examples_records_no_answer(self, app):
+        """The property the whole feature depends on: a trial moves no estimate."""
+        begin(app)
+        if not self._reach_a_code_question(app):
+            pytest.skip("no code question was administered in this session")
+
+        before = app.session_state["run"].items_administered
+        run = next(b for b in app.button if b.label.startswith("Run example cases"))
+        run.click().run()
+
+        assert not app.exception, app.exception
+        assert app.session_state["run"].items_administered == before
+
+
 class TestArrowSerialisation:
     """Mixed-type columns fail Arrow and force a coerced render on every rerun."""
 
     def test_every_rendered_table_serialises_cleanly(self, app):
         import pyarrow as pa
 
-        app.button[0].click().run()
+        begin(app)
         answer_everything(app, limit=6)
         assert not app.exception
 
