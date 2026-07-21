@@ -126,6 +126,68 @@ def static_criterion_scores(signals: StaticSignals) -> dict[str, float]:
     return scores
 
 
+def integrity_cap(signals: StaticSignals) -> tuple[float | None, str]:
+    """A ceiling on what a submission can score when its structure invalidates its tests.
+
+    WHY A CAP AND NOT A WEIGHT
+
+    Hard-coding is not a weak answer, it is a void one: returning literals that ignore the
+    arguments passes whichever tests happen to be visible while demonstrating none of the
+    competency those tests exist to probe. A weighted average cannot express that. Static
+    analysis already scores `algorithm_choice` 0.0 for it — and is then outvoted, because
+    under the default split that criterion is only 30% static. Measured consequence:
+    hardcoded submissions separated 0 of 25 on BOTH the objective and the test-anchored
+    approach. Every arm of the study failed the same way, which is what a weighting
+    problem looks like when the real fault is that averaging is the wrong operation.
+
+    WHAT THIS DOES NOT DO
+
+    It never touches ExecutionEvidence. The tests really did pass and that fact stays in
+    the record intact — the anchor is untouched. What is capped is the INFERENCE from
+    "tests passed" to "competency demonstrated", which is a different claim and the only
+    one hard-coding actually breaks.
+
+    Not zero for hard-coding: the candidate wrote something, and 0.0 is the score for
+    having written nothing. That distinction is why `not_implemented` caps lower.
+    """
+    if not signals.syntax_valid:
+        return None, ""  # a syntax error is already scored by execution; not fraud
+    if signals.not_implemented:
+        return 0.0, "NOT_IMPLEMENTED: the function body is empty — nothing was demonstrated"
+    if signals.hard_coded_output_suspected:
+        return 0.25, (
+            "HARDCODED_OUTPUT: returns literals and ignores its arguments — passing tests "
+            "does not demonstrate the competency they probe"
+        )
+    return None, ""
+
+
+def apply_integrity_cap(
+    scores: list[CriterionScore], signals: StaticSignals
+) -> tuple[list[CriterionScore], str]:
+    """Cap every scored criterion, so the learner model sees the cap too.
+
+    Applied to criteria rather than to the overall score alone: competency evidence is
+    projected from criteria, so capping only the headline would leave the learner model
+    updating as though the submission had demonstrated competence.
+    """
+    cap, reason = integrity_cap(signals)
+    if cap is None:
+        return scores, ""
+
+    capped = [
+        CriterionScore(
+            criterion_id=s.criterion_id,
+            score=None if s.score is None else min(s.score, cap),
+            sources_used=s.sources_used,
+            confidence=s.confidence,
+            conflict_flag=s.conflict_flag or ("INTEGRITY_CAP" if s.score and s.score > cap else ""),
+        )
+        for s in scores
+    ]
+    return capped, reason
+
+
 def combine(
     criterion_id: str,
     *,

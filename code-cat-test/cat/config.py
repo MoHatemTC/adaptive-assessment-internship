@@ -87,7 +87,13 @@ class Settings(BaseSettings):
     # --- adaptive policy (section 13) ---
     min_questions: int = Field(default=5, ge=1)
     max_questions: int = Field(default=12, ge=1)
-    target_standard_error: float = Field(default=0.20, gt=0.0)
+    # 0.15, not 0.20. A Beta(1,1) prior already sits at SE 0.2887, so a 0.20 target is
+    # crossed after ONE question — every traced session met it at step 2 and then ran to 5
+    # anyway, because min_questions was doing all the work. A fixed-length test wearing
+    # adaptive clothing. Within max_questions=12 the reachable floor is about 0.12, so
+    # 0.15 lands near question 7: late enough to require real evidence, early enough that
+    # a converging candidate stops before the cap. Verified by stop_rule_calibration().
+    target_standard_error: float = Field(default=0.15, gt=0.0)
     time_limit_minutes: int = Field(default=60, ge=1)
 
     # --- selection (sections 15-17) ---
@@ -109,6 +115,16 @@ class Settings(BaseSettings):
     # of the approach preset for headless runs (score_approach.py, batch scoring) where
     # there is no UI to set it in.
     code_cat_llm_shares: str = ""
+    # Call the model for DIAGNOSIS even when it holds no share of the score.
+    #
+    # The measured split of what the model contributes is lopsided: on 150 seeded
+    # submissions it moved separation by +0.018 [+0.002, +0.034] — real but small — while
+    # moving misconception recall from 0.22 to 0.92. Its value is explaining the defect,
+    # not pricing it. Tying the call to score weight forces those to be bought together.
+    #
+    # Default False so approach A stays genuinely model-free: A's zero cost is a measured
+    # property of the study, and quietly issuing calls for it would destroy that control.
+    llm_diagnosis_when_unweighted: bool = False
 
     # --- LLM evidence handling (section 12) ---
     # Below this, the model's contribution is down-weighted rather than trusted.
