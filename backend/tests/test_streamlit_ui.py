@@ -124,3 +124,55 @@ class TestArrowSerialisation:
             if frame is None or not hasattr(frame, "columns"):
                 continue
             pa.Table.from_pandas(frame)  # raises ArrowInvalid on a mixed column
+
+
+class TestDeploymentRequirements:
+    """Streamlit Cloud installs ONE requirements file: the one beside the entry point.
+
+    It never reads backend/requirements.txt, so the UI's file has to carry the engine's
+    dependencies too. A version listing only streamlit and pandas deployed an app that
+    died on `No module named 'pydantic'` before rendering anything — these tests exist so
+    that fails here instead of in production.
+    """
+
+    @staticmethod
+    def _constraints(path: Path) -> dict[str, str]:
+        constraints: dict[str, str] = {}
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.split("#")[0].strip()
+            if not line or line.startswith("-"):
+                continue
+            for operator in (">=", "==", "~=", ">", "<"):
+                if operator in line:
+                    name, _, spec = line.partition(operator)
+                    constraints[name.strip().lower()] = operator + spec.strip()
+                    break
+            else:
+                constraints[line.strip().lower()] = ""
+        return constraints
+
+    def test_the_ui_requirements_carry_every_runtime_engine_dependency(self):
+        root = APP.parent.parent
+        backend = self._constraints(root / "backend" / "requirements.txt")
+        ui = self._constraints(root / "streamlit" / "requirements.txt")
+
+        # Test-only packages are not needed to serve the app.
+        runtime = {k: v for k, v in backend.items() if not k.startswith("pytest")}
+        missing = sorted(set(runtime) - set(ui))
+        assert not missing, (
+            f"streamlit/requirements.txt is missing {missing} — Streamlit Cloud installs "
+            "only that file, so the deployed app would fail on import"
+        )
+
+    def test_shared_constraints_agree_between_the_two_files(self):
+        """Otherwise the deployed app runs against different versions than the tests did."""
+        root = APP.parent.parent
+        backend = self._constraints(root / "backend" / "requirements.txt")
+        ui = self._constraints(root / "streamlit" / "requirements.txt")
+
+        disagreements = {
+            name: (backend[name], ui[name])
+            for name in set(backend) & set(ui)
+            if backend[name] != ui[name]
+        }
+        assert not disagreements, f"constraints differ: {disagreements}"

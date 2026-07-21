@@ -4,9 +4,19 @@ A Streamlit UI for **checking** the orchestrated engine, not for candidates. Eve
 decision rested on is on screen.
 
 ```bash
-pip install -r backend/requirements.txt -r streamlit/requirements.txt
+pip install -r streamlit/requirements.txt
 streamlit run streamlit/main.py
 ```
+
+`streamlit/requirements.txt` is **self-contained** — it carries the engine's dependencies as
+well as the UI's, because Streamlit Cloud installs exactly one requirements file: the one
+beside the entry point. It never reads `backend/requirements.txt`. A test asserts the two
+agree, so drift fails the suite rather than the next deployment.
+
+**Deploying to Streamlit Cloud:** set the main file to `streamlit/main.py`, and pin the
+Python version in *Advanced settings*. Cloud currently defaults to 3.14, where an unbounded
+resolve pulls pandas 3.x and crashes on import; the upper bounds here prevent that, but
+pinning the interpreter removes the whole class of surprise.
 
 Nothing in `backend/` changes — the UI reads the engine's public API and recomputes the
 rest with the engine's own functions.
