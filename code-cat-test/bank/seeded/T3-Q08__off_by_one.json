@@ -1,0 +1,19 @@
+{
+  "question_id": "T3-Q08",
+  "defect": "off_by_one",
+  "code": "import numpy as np\n\n\ndef most_similar_index(documents, query):\n    if not documents or not query:\n        return -1\n    q = np.asarray(query, dtype=float)\n    q_norm = float(np.linalg.norm(q))\n    if q_norm == 0.0:\n        return -1\n    best_index = -1\n    best_score = None\n    for index, document in enumerate(documents[:-1]):\n        d = np.asarray(document, dtype=float)\n        d_norm = float(np.linalg.norm(d))\n        if d_norm == 0.0:\n            continue\n        score = float(np.dot(d, q) / (d_norm * q_norm))\n        if best_score is None or score > best_score:\n            best_score = score\n            best_index = index\n    return best_index\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_second_doc",
+      "tc_skips_zero_document"
+    ],
+    "weak_competencies": [
+      "T1.4"
+    ],
+    "strong_competencies": [
+      "T3.3",
+      "T1.1"
+    ],
+    "misconception_code": "OFF_BY_ONE_BOUNDARY"
+  }
+}

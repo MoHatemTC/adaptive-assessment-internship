@@ -1,0 +1,15 @@
+{
+  "question_id": "T3-Q08",
+  "defect": "correct",
+  "code": "import numpy as np\n\n\ndef most_similar_index(documents, query):\n    if len(documents) == 0 or len(query) == 0:\n        return -1\n    q = np.array(query, dtype=float)\n    if np.linalg.norm(q) == 0:\n        return -1\n    scores = []\n    for i, doc in enumerate(documents):\n        d = np.array(doc, dtype=float)\n        norm = np.linalg.norm(d)\n        if norm == 0:\n            continue\n        scores.append((float(d @ q) / float(norm * np.linalg.norm(q)), -i))\n    if not scores:\n        return -1\n    return -max(scores)[1]\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [],
+    "weak_competencies": [],
+    "strong_competencies": [
+      "T3.3",
+      "T1.4",
+      "T1.1"
+    ],
+    "misconception_code": null
+  }
+}

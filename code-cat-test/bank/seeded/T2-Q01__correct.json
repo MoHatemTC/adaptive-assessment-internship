@@ -1,0 +1,15 @@
+{
+  "question_id": "T2-Q01",
+  "defect": "correct",
+  "code": "import pandas as pd\n\n\ndef revenue_per_user(rows):\n    if len(rows) == 0:\n        return []\n    frame = pd.DataFrame(rows)\n    grouped = frame.groupby(\"user_id\")[\"revenue\"].sum().reset_index()\n    grouped = grouped.sort_values(by=[\"revenue\", \"user_id\"], ascending=[False, True])\n    out = []\n    for record in grouped.to_dict(orient=\"records\"):\n        out.append({\"user_id\": str(record[\"user_id\"]),\n                    \"revenue\": round(float(record[\"revenue\"]), 2)})\n    return out\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [],
+    "weak_competencies": [],
+    "strong_competencies": [
+      "T2.1",
+      "T1.4",
+      "T1.1"
+    ],
+    "misconception_code": null
+  }
+}

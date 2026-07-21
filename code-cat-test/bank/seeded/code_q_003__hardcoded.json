@@ -11,10 +11,8 @@
       "tc_window_before_list"
     ],
     "weak_competencies": [
-      "boundary_conditions",
-      "arrays",
-      "loops",
-      "algorithmic_reasoning"
+      "T1.1",
+      "T1.4"
     ],
     "strong_competencies": [],
     "misconception_code": "HARDCODED_OUTPUT"

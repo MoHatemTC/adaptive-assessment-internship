@@ -12,13 +12,10 @@
       "tc_long"
     ],
     "weak_competencies": [
-      "boundary_conditions",
-      "loops"
+      "T1.1",
+      "T1.4"
     ],
-    "strong_competencies": [
-      "arrays",
-      "algorithmic_reasoning"
-    ],
+    "strong_competencies": [],
     "misconception_code": "OFF_BY_ONE_BOUNDARY"
   }
 }

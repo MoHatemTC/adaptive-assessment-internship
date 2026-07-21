@@ -1,0 +1,24 @@
+{
+  "question_id": "T1-Q04",
+  "defect": "hardcoded",
+  "code": "def stack_ops(operations):\n    return [None, None, 2]\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_peek_does_not_remove",
+      "tc_is_empty_true",
+      "tc_is_empty_false",
+      "tc_pop_empty_raises",
+      "tc_peek_empty_raises",
+      "tc_no_operations",
+      "tc_lifo_order",
+      "tc_drain_then_pop"
+    ],
+    "weak_competencies": [
+      "T1.2",
+      "T1.4",
+      "T1.1"
+    ],
+    "strong_competencies": [],
+    "misconception_code": "HARDCODED_OUTPUT"
+  }
+}

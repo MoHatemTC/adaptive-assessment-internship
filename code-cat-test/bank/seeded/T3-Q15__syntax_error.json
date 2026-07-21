@@ -1,0 +1,25 @@
+{
+  "question_id": "T3-Q15",
+  "defect": "syntax_error",
+  "code": "from pydantic import BaseModel\n\n\nclass ResumeExtraction(BaseModel)\n    name: str\n    years_experience: int\n    skills: list[str]\n\n\ndef parse_resume(payload):\n    return ResumeExtraction(**payload).model_dump()\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_valid",
+      "tc_empty_skills",
+      "tc_extra_keys_ignored",
+      "tc_numeric_string_coerced",
+      "tc_missing_field",
+      "tc_wrong_type",
+      "tc_skills_not_a_list",
+      "tc_payload_not_a_dict",
+      "tc_empty_payload"
+    ],
+    "weak_competencies": [
+      "T3.6",
+      "T1.3",
+      "T1.4"
+    ],
+    "strong_competencies": [],
+    "misconception_code": "SYNTAX_ERROR"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "question_id": "T5-Q20",
+  "defect": "hardcoded",
+  "code": "def workflow_yaml(path=None):\n    return [\"push\"]\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_job_runs_on",
+      "tc_checkout_step",
+      "tc_setup_python_step",
+      "tc_python_version",
+      "tc_install_step",
+      "tc_pytest_step",
+      "tc_full_document",
+      "tc_missing_path",
+      "tc_index_out_of_range"
+    ],
+    "weak_competencies": [
+      "T5.3",
+      "T1.4",
+      "T1.1"
+    ],
+    "strong_competencies": [],
+    "misconception_code": "HARDCODED_OUTPUT"
+  }
+}

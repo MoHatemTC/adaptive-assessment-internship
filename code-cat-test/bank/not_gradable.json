@@ -1,0 +1,38 @@
+[
+  {
+    "question_id": "T1-Q14",
+    "sub_competency": "T1.6 · API development (FastAPI)",
+    "prompt": "Write a FastAPI POST endpoint /predict that accepts a JSON body with a text: str field (validated by a Pydantic model) and returns {\"length\": <len of text>}.",
+    "reason": "needs fastapi — not installed in the sandbox"
+  },
+  {
+    "question_id": "T3-Q04",
+    "sub_competency": "T3.2 · Prompt engineering",
+    "prompt": "Write a prompt instructing an LLM to classify a customer message into exactly one of {billing, technical, general} and return ONLY the label. Use at least one technique (few-shot or explicit format instruction) to improve reliability.",
+    "reason": "a prompt, not code — no executable artifact"
+  },
+  {
+    "question_id": "T3-Q14",
+    "sub_competency": "T3.5 · LLM app frameworks",
+    "prompt": "Write Python/pseudocode for a simple pipeline: take a user question, retrieve top-3 chunks with store.search(q, k=3), build a prompt using the chunks as context, call llm(prompt), and return the answer.",
+    "reason": "pseudocode by the question's own wording"
+  },
+  {
+    "question_id": "T4-Q12",
+    "sub_competency": "T4.5 · Orchestration frameworks",
+    "prompt": "Sketch (pseudocode) a two-node agent graph: node A calls a search tool, node B summarizes results, with a conditional edge that loops back to A if results are insufficient, else ends.",
+    "reason": "pseudocode by the question's own wording"
+  },
+  {
+    "question_id": "T5-Q03",
+    "sub_competency": "T5.2 · Containerization",
+    "prompt": "Write a minimal Dockerfile for a Python FastAPI app: base image, copy code, install from requirements.txt, expose a port, and run with uvicorn.",
+    "reason": "Dockerfile — not Python, nothing to execute"
+  },
+  {
+    "question_id": "T5-Q19",
+    "sub_competency": "T5.1 · Serving & deployment",
+    "prompt": "Write a FastAPI health-check endpoint /health that returns {\"status\": \"ok\"} with HTTP 200, used by a load balancer to check liveness.",
+    "reason": "needs fastapi — not installed in the sandbox"
+  }
+]

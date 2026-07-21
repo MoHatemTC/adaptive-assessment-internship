@@ -11,10 +11,8 @@
       "tc_long"
     ],
     "weak_competencies": [
-      "arrays",
-      "boundary_conditions",
-      "loops",
-      "algorithmic_reasoning"
+      "T1.1",
+      "T1.4"
     ],
     "strong_competencies": [],
     "misconception_code": "HARDCODED_OUTPUT"

@@ -1,0 +1,22 @@
+{
+  "question_id": "T3-Q15",
+  "defect": "wrong_algorithm",
+  "code": "def parse_resume(payload):\n    if not isinstance(payload, dict):\n        return {\"error\": \"validation_error\"}\n    return {\"name\": payload.get(\"name\"),\n            \"years_experience\": payload.get(\"years_experience\"),\n            \"skills\": payload.get(\"skills\", [])}\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_numeric_string_coerced",
+      "tc_missing_field",
+      "tc_wrong_type",
+      "tc_skills_not_a_list",
+      "tc_empty_payload"
+    ],
+    "weak_competencies": [
+      "T3.6"
+    ],
+    "strong_competencies": [
+      "T1.3",
+      "T1.4"
+    ],
+    "misconception_code": null
+  }
+}

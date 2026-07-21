@@ -1,0 +1,15 @@
+{
+  "question_id": "T1-Q12",
+  "defect": "correct",
+  "code": "import asyncio\n\n\nasync def _stub(url):\n    await asyncio.sleep(0)\n    return \"OK:\" + url\n\n\nasync def _fetch_all_async(urls, fetcher):\n    tasks = [fetcher(url) for url in urls]\n    responses = await asyncio.gather(*tasks)\n    return list(responses)\n\n\ndef fetch_all(urls, fetcher=None):\n    if len(urls) == 0:\n        return []\n    return asyncio.run(_fetch_all_async(urls, fetcher or _stub))\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [],
+    "weak_competencies": [],
+    "strong_competencies": [
+      "T1.5",
+      "T1.4",
+      "T1.1"
+    ],
+    "misconception_code": null
+  }
+}

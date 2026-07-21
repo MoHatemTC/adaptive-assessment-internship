@@ -1,0 +1,21 @@
+{
+  "question_id": "T3-Q08",
+  "defect": "missing_empty_guard",
+  "code": "import numpy as np\n\n\ndef most_similar_index(documents, query):\n    q = np.asarray(query, dtype=float)\n    scores = []\n    for doc in documents:\n        d = np.asarray(doc, dtype=float)\n        scores.append(float(np.dot(d, q) / (np.linalg.norm(d) * np.linalg.norm(q))))\n    return int(np.argmax(scores))\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_empty_documents",
+      "tc_zero_query",
+      "tc_all_zero_documents",
+      "tc_skips_zero_document"
+    ],
+    "weak_competencies": [
+      "T1.4"
+    ],
+    "strong_competencies": [
+      "T3.3",
+      "T1.1"
+    ],
+    "misconception_code": "MISSING_EMPTY_INPUT_GUARD"
+  }
+}

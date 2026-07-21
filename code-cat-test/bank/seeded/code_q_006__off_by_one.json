@@ -12,13 +12,10 @@
       "tc_tabs"
     ],
     "weak_competencies": [
-      "loops",
-      "boundary_conditions"
+      "T1.1",
+      "T1.4"
     ],
-    "strong_competencies": [
-      "string_processing",
-      "arrays"
-    ],
+    "strong_competencies": [],
     "misconception_code": "OFF_BY_ONE_BOUNDARY"
   }
 }

@@ -1,0 +1,25 @@
+{
+  "question_id": "T2-Q01",
+  "defect": "off_by_one",
+  "code": "import pandas as pd\n\n\ndef revenue_per_user(rows):\n    if not rows:\n        return []\n    df = pd.DataFrame(rows[:-1])\n    totals = df.groupby(\"user_id\", as_index=False)[\"revenue\"].sum()\n    totals = totals.sort_values([\"revenue\", \"user_id\"], ascending=[False, True])\n    return [{\"user_id\": str(row.user_id), \"revenue\": round(float(row.revenue), 2)}\n            for row in totals.itertuples()]\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_basic",
+      "tc_single_user",
+      "tc_tie_break_alphabetical",
+      "tc_negative_refund",
+      "tc_float_rounding",
+      "tc_zero_revenue",
+      "tc_many_users",
+      "tc_all_same_user"
+    ],
+    "weak_competencies": [
+      "T1.4"
+    ],
+    "strong_competencies": [
+      "T2.1",
+      "T1.1"
+    ],
+    "misconception_code": "OFF_BY_ONE_BOUNDARY"
+  }
+}

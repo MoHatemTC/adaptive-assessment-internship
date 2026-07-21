@@ -1,0 +1,1547 @@
+{
+  "summary": {
+    "approach": "C",
+    "rubric_id": "mid",
+    "model": "kimi-k2.6",
+    "submissions": 60,
+    "separation": {
+      "gradable": 30,
+      "correct": 22,
+      "rate": 0.7333333333333333,
+      "mean_margin": 0.1598,
+      "worst_margin": -0.083
+    },
+    "misconception": {
+      "expected_count": 42,
+      "recall": 1.0,
+      "false_positives": 29
+    },
+    "integrity": {
+      "anchoring_violations": 0,
+      "ground_truth_test_mismatches": 0,
+      "submissions_with_flags": 2,
+      "llm_unavailable": 0
+    },
+    "cost": {
+      "input_tokens": 87508,
+      "output_tokens": 326149,
+      "tokens_per_submission": 6894,
+      "median_latency_ms": 50874,
+      "wall_clock_s": 599.4
+    },
+    "by_defect": {
+      "correct": {
+        "n": 10,
+        "separated": 0,
+        "misconception_hit": 0
+      },
+      "hardcoded": {
+        "n": 10,
+        "separated": 0,
+        "misconception_hit": 10
+      },
+      "missing_empty_guard": {
+        "n": 10,
+        "separated": 10,
+        "misconception_hit": 10
+      },
+      "off_by_one": {
+        "n": 10,
+        "separated": 9,
+        "misconception_hit": 10
+      },
+      "syntax_error": {
+        "n": 10,
+        "separated": 0,
+        "misconception_hit": 10
+      },
+      "wrong_algorithm": {
+        "n": 10,
+        "separated": 3,
+        "misconception_hit": 2
+      }
+    }
+  },
+  "rows": [
+    {
+      "question_id": "code_q_001",
+      "defect": "correct",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [],
+      "misconception_found": [],
+      "misconception_hit": false,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 1.0,
+      "passed_test_ratio": 1.0,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 55149,
+      "input_tokens": 1234,
+      "output_tokens": 4748
+    },
+    {
+      "question_id": "code_q_001",
+      "defect": "hardcoded",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [
+        "HARDCODED_OUTPUT"
+      ],
+      "misconception_found": [
+        "HARDCODED_OUTPUT",
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": true,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.375,
+      "passed_test_ratio": 0.375,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 46127,
+      "input_tokens": 1440,
+      "output_tokens": 6089
+    },
+    {
+      "question_id": "code_q_001",
+      "defect": "missing_empty_guard",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": 0.33925,
+      "separated": true,
+      "misconception_expected": [
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_found": [
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.875,
+      "passed_test_ratio": 0.875,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 8793,
+      "input_tokens": 1300,
+      "output_tokens": 837
+    },
+    {
+      "question_id": "code_q_001",
+      "defect": "off_by_one",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": -0.007650000000000046,
+      "separated": false,
+      "misconception_expected": [
+        "OFF_BY_ONE_BOUNDARY"
+      ],
+      "misconception_found": [
+        "OFF_BY_ONE_BOUNDARY"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.5,
+      "passed_test_ratio": 0.5,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 66815,
+      "input_tokens": 1370,
+      "output_tokens": 6039
+    },
+    {
+      "question_id": "code_q_001",
+      "defect": "syntax_error",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [
+        "SYNTAX_ERROR"
+      ],
+      "misconception_found": [
+        "SYNTAX_ERROR"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.0,
+      "passed_test_ratio": 0.0,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 53703,
+      "input_tokens": 1499,
+      "output_tokens": 6062
+    },
+    {
+      "question_id": "code_q_001",
+      "defect": "wrong_algorithm",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": -0.07505000000000006,
+      "separated": false,
+      "misconception_expected": [],
+      "misconception_found": [
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_hit": false,
+      "misconception_false_positive": true,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.125,
+      "passed_test_ratio": 0.125,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 70648,
+      "input_tokens": 1457,
+      "output_tokens": 7754
+    },
+    {
+      "question_id": "code_q_002",
+      "defect": "correct",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [],
+      "misconception_found": [],
+      "misconception_hit": false,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 1.0,
+      "passed_test_ratio": 1.0,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 45620,
+      "input_tokens": 1345,
+      "output_tokens": 4406
+    },
+    {
+      "question_id": "code_q_002",
+      "defect": "hardcoded",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [
+        "HARDCODED_OUTPUT"
+      ],
+      "misconception_found": [
+        "HARDCODED_OUTPUT",
+        "IGNORES_RETURN_CONTRACT",
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": true,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.375,
+      "passed_test_ratio": 0.375,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 110664,
+      "input_tokens": 1542,
+      "output_tokens": 9746
+    },
+    {
+      "question_id": "code_q_002",
+      "defect": "missing_empty_guard",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": 0.34043333333333337,
+      "separated": true,
+      "misconception_expected": [
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_found": [
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.875,
+      "passed_test_ratio": 0.875,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 71217,
+      "input_tokens": 1351,
+      "output_tokens": 6955
+    },
+    {
+      "question_id": "code_q_002",
+      "defect": "off_by_one",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": 0.1451,
+      "separated": true,
+      "misconception_expected": [
+        "OFF_BY_ONE_BOUNDARY"
+      ],
+      "misconception_found": [
+        "OFF_BY_ONE_BOUNDARY"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.25,
+      "passed_test_ratio": 0.25,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 10194,
+      "input_tokens": 1554,
+      "output_tokens": 1013
+    },
+    {
+      "question_id": "code_q_002",
+      "defect": "syntax_error",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [
+        "SYNTAX_ERROR"
+      ],
+      "misconception_found": [
+        "SYNTAX_ERROR"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.0,
+      "passed_test_ratio": 0.0,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 41623,
+      "input_tokens": 1578,
+      "output_tokens": 4905
+    },
+    {
+      "question_id": "code_q_002",
+      "defect": "wrong_algorithm",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": -0.07740000000000002,
+      "separated": false,
+      "misconception_expected": [],
+      "misconception_found": [],
+      "misconception_hit": false,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.5,
+      "passed_test_ratio": 0.5,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 56940,
+      "input_tokens": 1476,
+      "output_tokens": 7460
+    },
+    {
+      "question_id": "code_q_003",
+      "defect": "correct",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [],
+      "misconception_found": [],
+      "misconception_hit": false,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 1.0,
+      "passed_test_ratio": 1.0,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 24834,
+      "input_tokens": 1367,
+      "output_tokens": 3955
+    },
+    {
+      "question_id": "code_q_003",
+      "defect": "hardcoded",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [
+        "HARDCODED_OUTPUT"
+      ],
+      "misconception_found": [
+        "HARDCODED_OUTPUT",
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": true,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.375,
+      "passed_test_ratio": 0.375,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 9765,
+      "input_tokens": 1565,
+      "output_tokens": 869
+    },
+    {
+      "question_id": "code_q_003",
+      "defect": "missing_empty_guard",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": 0.11319999999999997,
+      "separated": true,
+      "misconception_expected": [
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_found": [
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.5,
+      "passed_test_ratio": 0.5,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 57765,
+      "input_tokens": 1511,
+      "output_tokens": 8234
+    },
+    {
+      "question_id": "code_q_003",
+      "defect": "off_by_one",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": 0.02654999999999985,
+      "separated": true,
+      "misconception_expected": [
+        "OFF_BY_ONE_BOUNDARY"
+      ],
+      "misconception_found": [
+        "MISSING_EMPTY_INPUT_GUARD",
+        "OFF_BY_ONE_BOUNDARY"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": true,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.5025,
+      "passed_test_ratio": 0.625,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 9060,
+      "input_tokens": 1488,
+      "output_tokens": 1017
+    },
+    {
+      "question_id": "code_q_003",
+      "defect": "syntax_error",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [
+        "SYNTAX_ERROR"
+      ],
+      "misconception_found": [
+        "SYNTAX_ERROR"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.0,
+      "passed_test_ratio": 0.0,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 104446,
+      "input_tokens": 1618,
+      "output_tokens": 8178
+    },
+    {
+      "question_id": "code_q_003",
+      "defect": "wrong_algorithm",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": -0.04749999999999993,
+      "separated": false,
+      "misconception_expected": [],
+      "misconception_found": [
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_hit": false,
+      "misconception_false_positive": true,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.5025,
+      "passed_test_ratio": 0.625,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 9892,
+      "input_tokens": 1449,
+      "output_tokens": 1042
+    },
+    {
+      "question_id": "code_q_004",
+      "defect": "correct",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [],
+      "misconception_found": [],
+      "misconception_hit": false,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 1.0,
+      "passed_test_ratio": 1.0,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 49295,
+      "input_tokens": 1347,
+      "output_tokens": 5304
+    },
+    {
+      "question_id": "code_q_004",
+      "defect": "hardcoded",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [
+        "HARDCODED_OUTPUT"
+      ],
+      "misconception_found": [
+        "HARDCODED_OUTPUT",
+        "IGNORES_RETURN_CONTRACT",
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": true,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.375,
+      "passed_test_ratio": 0.375,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 64683,
+      "input_tokens": 1521,
+      "output_tokens": 7539
+    },
+    {
+      "question_id": "code_q_004",
+      "defect": "missing_empty_guard",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": 0.31010000000000004,
+      "separated": true,
+      "misconception_expected": [
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_found": [
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.8625,
+      "passed_test_ratio": 0.875,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 44251,
+      "input_tokens": 1381,
+      "output_tokens": 4798
+    },
+    {
+      "question_id": "code_q_004",
+      "defect": "off_by_one",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": 0.03985000000000005,
+      "separated": true,
+      "misconception_expected": [
+        "OFF_BY_ONE_BOUNDARY"
+      ],
+      "misconception_found": [
+        "OFF_BY_ONE_BOUNDARY"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.75,
+      "passed_test_ratio": 0.75,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 71877,
+      "input_tokens": 1401,
+      "output_tokens": 7311
+    },
+    {
+      "question_id": "code_q_004",
+      "defect": "syntax_error",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [
+        "SYNTAX_ERROR"
+      ],
+      "misconception_found": [
+        "SYNTAX_ERROR"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.0,
+      "passed_test_ratio": 0.0,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 56573,
+      "input_tokens": 1587,
+      "output_tokens": 7526
+    },
+    {
+      "question_id": "code_q_004",
+      "defect": "wrong_algorithm",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": -0.014666666666666661,
+      "separated": false,
+      "misconception_expected": [],
+      "misconception_found": [
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_hit": false,
+      "misconception_false_positive": true,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.375,
+      "passed_test_ratio": 0.5,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 15941,
+      "input_tokens": 1422,
+      "output_tokens": 1114
+    },
+    {
+      "question_id": "code_q_005",
+      "defect": "correct",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [],
+      "misconception_found": [
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_hit": false,
+      "misconception_false_positive": true,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 1.0,
+      "passed_test_ratio": 1.0,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 54453,
+      "input_tokens": 1368,
+      "output_tokens": 6885
+    },
+    {
+      "question_id": "code_q_005",
+      "defect": "hardcoded",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [
+        "HARDCODED_OUTPUT"
+      ],
+      "misconception_found": [
+        "HARDCODED_OUTPUT",
+        "IGNORES_RETURN_CONTRACT",
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": true,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.3775,
+      "passed_test_ratio": 0.375,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 74108,
+      "input_tokens": 1479,
+      "output_tokens": 7616
+    },
+    {
+      "question_id": "code_q_005",
+      "defect": "missing_empty_guard",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": 0.30589999999999995,
+      "separated": true,
+      "misconception_expected": [
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_found": [
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.8775,
+      "passed_test_ratio": 0.875,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 51982,
+      "input_tokens": 1368,
+      "output_tokens": 7961
+    },
+    {
+      "question_id": "code_q_005",
+      "defect": "off_by_one",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": 0.19369999999999998,
+      "separated": true,
+      "misconception_expected": [
+        "OFF_BY_ONE_BOUNDARY"
+      ],
+      "misconception_found": [
+        "OFF_BY_ONE_BOUNDARY"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.6125,
+      "passed_test_ratio": 0.625,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 50609,
+      "input_tokens": 1429,
+      "output_tokens": 5771
+    },
+    {
+      "question_id": "code_q_005",
+      "defect": "syntax_error",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [
+        "SYNTAX_ERROR"
+      ],
+      "misconception_found": [
+        "SYNTAX_ERROR"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.0,
+      "passed_test_ratio": 0.0,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 91332,
+      "input_tokens": 1580,
+      "output_tokens": 8052
+    },
+    {
+      "question_id": "code_q_005",
+      "defect": "wrong_algorithm",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": -0.08304999999999996,
+      "separated": false,
+      "misconception_expected": [],
+      "misconception_found": [
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_hit": false,
+      "misconception_false_positive": true,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.75,
+      "passed_test_ratio": 0.75,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 11649,
+      "input_tokens": 1404,
+      "output_tokens": 1270
+    },
+    {
+      "question_id": "code_q_006",
+      "defect": "correct",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [],
+      "misconception_found": [],
+      "misconception_hit": false,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 1.0,
+      "passed_test_ratio": 1.0,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 41980,
+      "input_tokens": 1267,
+      "output_tokens": 4978
+    },
+    {
+      "question_id": "code_q_006",
+      "defect": "hardcoded",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [
+        "HARDCODED_OUTPUT"
+      ],
+      "misconception_found": [
+        "HARDCODED_OUTPUT",
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": true,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.375,
+      "passed_test_ratio": 0.375,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 8537,
+      "input_tokens": 1473,
+      "output_tokens": 873
+    },
+    {
+      "question_id": "code_q_006",
+      "defect": "missing_empty_guard",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": 0.39733333333333337,
+      "separated": true,
+      "misconception_expected": [
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_found": [
+        "MISSING_EMPTY_INPUT_GUARD",
+        "QUADRATIC_WHEN_LINEAR_POSSIBLE"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": true,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.75,
+      "passed_test_ratio": 0.75,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 91049,
+      "input_tokens": 1380,
+      "output_tokens": 7108
+    },
+    {
+      "question_id": "code_q_006",
+      "defect": "off_by_one",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": 0.1550499999999999,
+      "separated": true,
+      "misconception_expected": [
+        "OFF_BY_ONE_BOUNDARY"
+      ],
+      "misconception_found": [
+        "MISSING_EMPTY_INPUT_GUARD",
+        "OFF_BY_ONE_BOUNDARY"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": true,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.25,
+      "passed_test_ratio": 0.25,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 79841,
+      "input_tokens": 1488,
+      "output_tokens": 7490
+    },
+    {
+      "question_id": "code_q_006",
+      "defect": "syntax_error",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [
+        "SYNTAX_ERROR"
+      ],
+      "misconception_found": [
+        "MISSING_EMPTY_INPUT_GUARD",
+        "SYNTAX_ERROR"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": true,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.0,
+      "passed_test_ratio": 0.0,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 29491,
+      "input_tokens": 1555,
+      "output_tokens": 4517
+    },
+    {
+      "question_id": "code_q_006",
+      "defect": "wrong_algorithm",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": -0.04036666666666666,
+      "separated": false,
+      "misconception_expected": [],
+      "misconception_found": [
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_hit": false,
+      "misconception_false_positive": true,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.25,
+      "passed_test_ratio": 0.25,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 56181,
+      "input_tokens": 1449,
+      "output_tokens": 6363
+    },
+    {
+      "question_id": "code_q_007",
+      "defect": "correct",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [],
+      "misconception_found": [],
+      "misconception_hit": false,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 1.0,
+      "passed_test_ratio": 1.0,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 37170,
+      "input_tokens": 1314,
+      "output_tokens": 3544
+    },
+    {
+      "question_id": "code_q_007",
+      "defect": "hardcoded",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [
+        "HARDCODED_OUTPUT"
+      ],
+      "misconception_found": [
+        "HARDCODED_OUTPUT",
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": true,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.375,
+      "passed_test_ratio": 0.375,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 59981,
+      "input_tokens": 1508,
+      "output_tokens": 9065
+    },
+    {
+      "question_id": "code_q_007",
+      "defect": "missing_empty_guard",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": 0.5144666666666666,
+      "separated": true,
+      "misconception_expected": [
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_found": [
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.75,
+      "passed_test_ratio": 0.75,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 57241,
+      "input_tokens": 1389,
+      "output_tokens": 7840
+    },
+    {
+      "question_id": "code_q_007",
+      "defect": "off_by_one",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": 0.29690000000000005,
+      "separated": true,
+      "misconception_expected": [
+        "OFF_BY_ONE_BOUNDARY"
+      ],
+      "misconception_found": [
+        "MISSING_EMPTY_INPUT_GUARD",
+        "OFF_BY_ONE_BOUNDARY"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": true,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.125,
+      "passed_test_ratio": 0.125,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 50446,
+      "input_tokens": 1526,
+      "output_tokens": 5923
+    },
+    {
+      "question_id": "code_q_007",
+      "defect": "syntax_error",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [
+        "SYNTAX_ERROR"
+      ],
+      "misconception_found": [
+        "SYNTAX_ERROR"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.0,
+      "passed_test_ratio": 0.0,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 60105,
+      "input_tokens": 1554,
+      "output_tokens": 6786
+    },
+    {
+      "question_id": "code_q_007",
+      "defect": "wrong_algorithm",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": -0.06549999999999995,
+      "separated": false,
+      "misconception_expected": [],
+      "misconception_found": [
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_hit": false,
+      "misconception_false_positive": true,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.5,
+      "passed_test_ratio": 0.5,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 51064,
+      "input_tokens": 1457,
+      "output_tokens": 6114
+    },
+    {
+      "question_id": "code_q_008",
+      "defect": "correct",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [],
+      "misconception_found": [
+        "HARDCODED_OUTPUT",
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_hit": false,
+      "misconception_false_positive": true,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 1.0,
+      "passed_test_ratio": 1.0,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 60564,
+      "input_tokens": 1415,
+      "output_tokens": 8489
+    },
+    {
+      "question_id": "code_q_008",
+      "defect": "hardcoded",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [
+        "HARDCODED_OUTPUT"
+      ],
+      "misconception_found": [
+        "HARDCODED_OUTPUT",
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": true,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.4444,
+      "passed_test_ratio": 0.4444,
+      "llm_available": true,
+      "flags": [
+        "INVENTED_TEST_EVIDENCE: functional_correctness cited ['tc_single, tc_duplicates, tc_negatives, tc_zeros, tc_long']"
+      ],
+      "latency_ms": 11447,
+      "input_tokens": 1578,
+      "output_tokens": 885
+    },
+    {
+      "question_id": "code_q_008",
+      "defect": "missing_empty_guard",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": 0.3368,
+      "separated": true,
+      "misconception_expected": [
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_found": [
+        "HARDCODED_OUTPUT",
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": true,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.8694,
+      "passed_test_ratio": 0.8889,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 103673,
+      "input_tokens": 1452,
+      "output_tokens": 9721
+    },
+    {
+      "question_id": "code_q_008",
+      "defect": "off_by_one",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": 0.2037,
+      "separated": true,
+      "misconception_expected": [
+        "OFF_BY_ONE_BOUNDARY"
+      ],
+      "misconception_found": [
+        "HARDCODED_OUTPUT",
+        "MISSING_EMPTY_INPUT_GUARD",
+        "OFF_BY_ONE_BOUNDARY"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": true,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.5578,
+      "passed_test_ratio": 0.5556,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 78586,
+      "input_tokens": 1519,
+      "output_tokens": 11068
+    },
+    {
+      "question_id": "code_q_008",
+      "defect": "syntax_error",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [
+        "SYNTAX_ERROR"
+      ],
+      "misconception_found": [
+        "SYNTAX_ERROR"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.0,
+      "passed_test_ratio": 0.0,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 42652,
+      "input_tokens": 1658,
+      "output_tokens": 6288
+    },
+    {
+      "question_id": "code_q_008",
+      "defect": "wrong_algorithm",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": 0.15074999999999994,
+      "separated": true,
+      "misconception_expected": [
+        "IGNORES_RETURN_CONTRACT"
+      ],
+      "misconception_found": [
+        "HARDCODED_OUTPUT",
+        "IGNORES_RETURN_CONTRACT",
+        "MISSING_EMPTY_INPUT_GUARD",
+        "QUADRATIC_WHEN_LINEAR_POSSIBLE",
+        "WRONG_DATA_STRUCTURE"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": true,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.4989,
+      "passed_test_ratio": 0.7778,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 15580,
+      "input_tokens": 1504,
+      "output_tokens": 1116
+    },
+    {
+      "question_id": "code_q_009",
+      "defect": "correct",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [],
+      "misconception_found": [],
+      "misconception_hit": false,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 1.0,
+      "passed_test_ratio": 1.0,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 44645,
+      "input_tokens": 1301,
+      "output_tokens": 4736
+    },
+    {
+      "question_id": "code_q_009",
+      "defect": "hardcoded",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [
+        "HARDCODED_OUTPUT"
+      ],
+      "misconception_found": [
+        "HARDCODED_OUTPUT",
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": true,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.3317,
+      "passed_test_ratio": 0.3333,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 57844,
+      "input_tokens": 1514,
+      "output_tokens": 6783
+    },
+    {
+      "question_id": "code_q_009",
+      "defect": "missing_empty_guard",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": 0.5125000000000001,
+      "separated": true,
+      "misconception_expected": [
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_found": [
+        "HARDCODED_OUTPUT",
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": true,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.7789,
+      "passed_test_ratio": 0.7778,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 10462,
+      "input_tokens": 1442,
+      "output_tokens": 886
+    },
+    {
+      "question_id": "code_q_009",
+      "defect": "off_by_one",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": 0.06309999999999993,
+      "separated": true,
+      "misconception_expected": [
+        "OFF_BY_ONE_BOUNDARY"
+      ],
+      "misconception_found": [
+        "HARDCODED_OUTPUT",
+        "MISSING_EMPTY_INPUT_GUARD",
+        "OFF_BY_ONE_BOUNDARY"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": true,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.7789,
+      "passed_test_ratio": 0.7778,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 53720,
+      "input_tokens": 1421,
+      "output_tokens": 8061
+    },
+    {
+      "question_id": "code_q_009",
+      "defect": "syntax_error",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [
+        "SYNTAX_ERROR"
+      ],
+      "misconception_found": [
+        "SYNTAX_ERROR"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.0,
+      "passed_test_ratio": 0.0,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 50685,
+      "input_tokens": 1624,
+      "output_tokens": 5655
+    },
+    {
+      "question_id": "code_q_009",
+      "defect": "wrong_algorithm",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": 0.16960000000000008,
+      "separated": true,
+      "misconception_expected": [],
+      "misconception_found": [
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_hit": false,
+      "misconception_false_positive": true,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.7789,
+      "passed_test_ratio": 0.7778,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 9189,
+      "input_tokens": 1341,
+      "output_tokens": 907
+    },
+    {
+      "question_id": "code_q_010",
+      "defect": "correct",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [],
+      "misconception_found": [],
+      "misconception_hit": false,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 1.0,
+      "passed_test_ratio": 1.0,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 81392,
+      "input_tokens": 1371,
+      "output_tokens": 7692
+    },
+    {
+      "question_id": "code_q_010",
+      "defect": "hardcoded",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [
+        "HARDCODED_OUTPUT"
+      ],
+      "misconception_found": [
+        "HARDCODED_OUTPUT",
+        "IGNORES_RETURN_CONTRACT",
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": true,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.3,
+      "passed_test_ratio": 0.3,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 60399,
+      "input_tokens": 1542,
+      "output_tokens": 8260
+    },
+    {
+      "question_id": "code_q_010",
+      "defect": "missing_empty_guard",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": 0.2300333333333333,
+      "separated": true,
+      "misconception_expected": [
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_found": [
+        "MISSING_EMPTY_INPUT_GUARD"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.9,
+      "passed_test_ratio": 0.9,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 48024,
+      "input_tokens": 1410,
+      "output_tokens": 6176
+    },
+    {
+      "question_id": "code_q_010",
+      "defect": "off_by_one",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": 0.2786666666666667,
+      "separated": true,
+      "misconception_expected": [
+        "OFF_BY_ONE_BOUNDARY"
+      ],
+      "misconception_found": [
+        "OFF_BY_ONE_BOUNDARY"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.5,
+      "passed_test_ratio": 0.5,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 12534,
+      "input_tokens": 1496,
+      "output_tokens": 1245
+    },
+    {
+      "question_id": "code_q_010",
+      "defect": "syntax_error",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": null,
+      "separated": null,
+      "misconception_expected": [
+        "SYNTAX_ERROR"
+      ],
+      "misconception_found": [
+        "SYNTAX_ERROR"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.0,
+      "passed_test_ratio": 0.0,
+      "llm_available": true,
+      "flags": [
+        "INVENTED_TEST_EVIDENCE: edge_case_handling cited ['tc_empty, tc_single_open, tc_single_close, tc_no_brackets']"
+      ],
+      "latency_ms": 39505,
+      "input_tokens": 1669,
+      "output_tokens": 6094
+    },
+    {
+      "question_id": "code_q_010",
+      "defect": "wrong_algorithm",
+      "approach": "C",
+      "rubric_id": "mid",
+      "separation_margin": 0.08230000000000004,
+      "separated": true,
+      "misconception_expected": [
+        "WRONG_DATA_STRUCTURE"
+      ],
+      "misconception_found": [
+        "WRONG_DATA_STRUCTURE"
+      ],
+      "misconception_hit": true,
+      "misconception_false_positive": false,
+      "tests_match_ground_truth": true,
+      "anchoring_violation": false,
+      "functional_score": 0.8,
+      "passed_test_ratio": 0.8,
+      "llm_available": true,
+      "flags": [],
+      "latency_ms": 11157,
+      "input_tokens": 1460,
+      "output_tokens": 1030
+    }
+  ]
+}

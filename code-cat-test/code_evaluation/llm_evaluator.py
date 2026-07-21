@@ -183,11 +183,24 @@ def validate(reply: dict, question: dict, evidence: ExecutionEvidence) -> LLMEva
             continue
 
         cited = [e for e in (raw.get("evidence") or []) if isinstance(e, dict)]
-        invented = [
-            e.get("reference")
-            for e in cited
-            if e.get("type") == "failed_test" and e.get("reference") not in real_test_ids
-        ]
+
+        def cites_unknown_test(entry: dict) -> bool:
+            """True only when a cited test id does not exist.
+
+            A reference may name SEVERAL tests in one string — models routinely write
+            "tc_empty, tc_single, tc_zeros" rather than three separate evidence entries.
+            Treating the whole string as one id made every such citation look fabricated:
+            measured at 10 of 13 INVENTED_TEST_EVIDENCE flags across a 540-run grid, each
+            of which discarded a sound diagnosis and depressed the branch's score for
+            formatting rather than for substance.
+            """
+            if entry.get("type") != "failed_test":
+                return False
+            raw_reference = str(entry.get("reference", ""))
+            parts = {p.strip() for p in raw_reference.replace(";", ",").split(",") if p.strip()}
+            return not parts or not parts <= real_test_ids
+
+        invented = [e.get("reference") for e in cited if cites_unknown_test(e)]
         if invented:
             # Fabricated evidence invalidates the claim it supports. Keeping the score
             # while discarding its justification would preserve exactly the number that
