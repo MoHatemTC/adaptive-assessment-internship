@@ -40,7 +40,7 @@ class EvaluationResult:
     llm: LLMEvaluation
     criterion_scores: list[CriterionScore]
     competency_evidence: list[CompetencyEvidence]
-    overall_score: float
+    overall_score: float | None
     evaluation_latency_ms: int
     flags: list[str] = field(default_factory=list)
 
@@ -92,11 +92,10 @@ def evaluate_submission(
         )
 
     competency_evidence = normalize(question, criterion_scores, execution, llm, signals)
-    overall = (
-        sum(c.score for c in criterion_scores) / len(criterion_scores)
-        if criterion_scores
-        else 0.0
-    )
+    scored = [c for c in criterion_scores if c.score is not None]
+    # None, not 0.0, when nothing could be assessed: an unusable run has no score, and
+    # showing 0.0 (or the 0.5 an averaged stub produced) reads as a measurement.
+    overall = sum(c.score for c in scored) / len(scored) if scored else None
 
     return EvaluationResult(
         question_id=question["question_id"],
@@ -107,7 +106,7 @@ def evaluate_submission(
         llm=llm,
         criterion_scores=criterion_scores,
         competency_evidence=competency_evidence,
-        overall_score=round(overall, 4),
+        overall_score=round(overall, 4) if overall is not None else None,
         evaluation_latency_ms=int((time.time() - started) * 1000),
         flags=[*llm.flags, *[c.conflict_flag for c in criterion_scores if c.conflict_flag]],
     )
