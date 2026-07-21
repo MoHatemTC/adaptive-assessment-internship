@@ -1,0 +1,24 @@
+{
+  "question_id": "T2-Q09",
+  "defect": "hardcoded",
+  "code": "def top_customers(rows):\n    return [[\"c1\", 13.0], [\"c2\", 5.0]]\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_single_row",
+      "tc_tie_break",
+      "tc_limit_to_five",
+      "tc_negative_amounts",
+      "tc_empty_rows",
+      "tc_zero_amount",
+      "tc_exactly_five",
+      "tc_decimal_amounts"
+    ],
+    "weak_competencies": [
+      "T2.4",
+      "T1.4",
+      "T1.1"
+    ],
+    "strong_competencies": [],
+    "misconception_code": "HARDCODED_OUTPUT"
+  }
+}

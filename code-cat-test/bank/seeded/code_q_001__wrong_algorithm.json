@@ -13,11 +13,10 @@
       "tc_long"
     ],
     "weak_competencies": [
-      "loops"
+      "T1.1"
     ],
     "strong_competencies": [
-      "arrays",
-      "boundary_conditions"
+      "T1.4"
     ],
     "misconception_code": null
   }

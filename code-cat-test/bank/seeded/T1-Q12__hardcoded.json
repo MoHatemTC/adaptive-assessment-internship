@@ -1,0 +1,23 @@
+{
+  "question_id": "T1-Q12",
+  "defect": "hardcoded",
+  "code": "def fetch_all(urls, fetcher=None):\n    return [\"OK:a\", \"OK:b\"]\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_order_preserved",
+      "tc_single_url",
+      "tc_duplicates",
+      "tc_empty_urls",
+      "tc_empty_string_url",
+      "tc_many_urls",
+      "tc_absolute_urls"
+    ],
+    "weak_competencies": [
+      "T1.5",
+      "T1.4",
+      "T1.1"
+    ],
+    "strong_competencies": [],
+    "misconception_code": "HARDCODED_OUTPUT"
+  }
+}

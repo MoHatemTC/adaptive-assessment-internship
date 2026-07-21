@@ -8,12 +8,10 @@
       "tc_punctuation_only"
     ],
     "weak_competencies": [
-      "string_processing",
-      "algorithmic_reasoning"
+      "T1.1"
     ],
     "strong_competencies": [
-      "boundary_conditions",
-      "loops"
+      "T1.4"
     ],
     "misconception_code": null
   }

@@ -1,0 +1,25 @@
+{
+  "question_id": "T2-Q13",
+  "defect": "syntax_error",
+  "code": "from sklearn.ensemble import RandomForestClassifier\n\n\ndef train_and_score(X, y)\n    clf = RandomForestClassifier(n_estimators=10, random_state=42)\n    clf.fit(X, y)\n    return clf.score(X, y)\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_separable",
+      "tc_two_features",
+      "tc_three_classes",
+      "tc_single_class",
+      "tc_ambiguous_majority",
+      "tc_larger_sample",
+      "tc_empty_X",
+      "tc_length_mismatch",
+      "tc_too_few_samples"
+    ],
+    "weak_competencies": [
+      "T2.5",
+      "T1.4",
+      "T2.1"
+    ],
+    "strong_competencies": [],
+    "misconception_code": "SYNTAX_ERROR"
+  }
+}

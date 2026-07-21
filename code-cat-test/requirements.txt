@@ -1,8 +1,11 @@
-e2b-code-interpreter>=1.0
-openai>=1.50,<3
+# Upper bounds are deliberate. Unbounded, Streamlit Cloud resolved Python 3.14 with
+# numpy 2.5 / pandas 3.0 on a sibling deploy and crashed inside CPython 3.14's
+# dataclasses while importing a module. Pin the interpreter in the app's advanced
+# settings too — requirements cannot do that.
+streamlit>=1.32,<2
+pandas>=2.1,<3          # app.py renders the CAT trajectory with it
 numpy>=1.26,<3
+openai>=1.50,<3         # LLM calls, via the LiteLLM proxy
+e2b-code-interpreter>=1.0,<2   # the only place learner code ever executes
 pydantic>=2.9,<3
 pydantic-settings>=2.0,<3
-streamlit>=1.32
-pytest>=8.0
-pytest-asyncio>=0.24

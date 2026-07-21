@@ -1,0 +1,15 @@
+{
+  "question_id": "T1-Q07",
+  "defect": "correct",
+  "code": "from dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Point:\n    x: float\n    y: float\n\n    def distance_to(self, other):\n        dx = self.x - other.x\n        dy = self.y - other.y\n        return (dx * dx + dy * dy) ** 0.5\n\n\ndef point_distance(p1, p2):\n    if p1 is None or p2 is None:\n        return None\n    if len(p1) != 2 or len(p2) != 2:\n        return None\n    first = Point(float(p1[0]), float(p1[1]))\n    second = Point(float(p2[0]), float(p2[1]))\n    return round(first.distance_to(second), 6)\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [],
+    "weak_competencies": [],
+    "strong_competencies": [
+      "T1.3",
+      "T1.1",
+      "T1.4"
+    ],
+    "misconception_code": null
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "question_id": "T1-Q04",
+  "defect": "missing_empty_guard",
+  "code": "class Stack:\n    def __init__(self):\n        self._items = []\n\n    def push(self, value):\n        self._items.append(value)\n\n    def pop(self):\n        return self._items.pop() if self._items else None\n\n    def peek(self):\n        return self._items[-1] if self._items else None\n\n    def is_empty(self):\n        return len(self._items) == 0\n\n\ndef stack_ops(operations):\n    stack = Stack()\n    results = []\n    for op in operations:\n        if op[0] == \"push\":\n            stack.push(op[1])\n            results.append(None)\n        elif op[0] == \"pop\":\n            results.append(stack.pop())\n        elif op[0] == \"peek\":\n            results.append(stack.peek())\n        else:\n            results.append(stack.is_empty())\n    return results\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_pop_empty_raises",
+      "tc_peek_empty_raises",
+      "tc_drain_then_pop"
+    ],
+    "weak_competencies": [
+      "T1.4"
+    ],
+    "strong_competencies": [
+      "T1.2",
+      "T1.1"
+    ],
+    "misconception_code": "MISSING_EMPTY_INPUT_GUARD"
+  }
+}

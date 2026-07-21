@@ -1,0 +1,20 @@
+{
+  "question_id": "T3-Q15",
+  "defect": "off_by_one",
+  "code": "from pydantic import BaseModel, ValidationError\n\n\nclass ResumeExtraction(BaseModel):\n    name: str\n    years_experience: int\n    skills: list[str]\n\n\ndef parse_resume(payload):\n    if not isinstance(payload, dict):\n        return {\"error\": \"validation_error\"}\n    try:\n        model = ResumeExtraction.model_validate(payload)\n    except ValidationError:\n        return {\"error\": \"validation_error\"}\n    return {\"name\": model.name,\n            \"years_experience\": model.years_experience,\n            \"skills\": model.skills[:-1]}\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_valid",
+      "tc_extra_keys_ignored",
+      "tc_numeric_string_coerced"
+    ],
+    "weak_competencies": [
+      "T1.4"
+    ],
+    "strong_competencies": [
+      "T3.6",
+      "T1.3"
+    ],
+    "misconception_code": "OFF_BY_ONE_BOUNDARY"
+  }
+}

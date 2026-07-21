@@ -1,0 +1,22 @@
+{
+  "question_id": "T3-Q08",
+  "defect": "hardcoded",
+  "code": "def most_similar_index(documents, query):\n    return 0\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_second_doc",
+      "tc_three_dims",
+      "tc_empty_documents",
+      "tc_zero_query",
+      "tc_all_zero_documents",
+      "tc_skips_zero_document"
+    ],
+    "weak_competencies": [
+      "T3.3",
+      "T1.4",
+      "T1.1"
+    ],
+    "strong_competencies": [],
+    "misconception_code": "HARDCODED_OUTPUT"
+  }
+}

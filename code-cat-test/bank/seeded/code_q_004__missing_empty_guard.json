@@ -7,12 +7,10 @@
       "tc_empty"
     ],
     "weak_competencies": [
-      "boundary_conditions"
+      "T1.4"
     ],
     "strong_competencies": [
-      "algorithmic_reasoning",
-      "loops",
-      "complexity_awareness"
+      "T1.1"
     ],
     "misconception_code": "MISSING_EMPTY_INPUT_GUARD"
   }

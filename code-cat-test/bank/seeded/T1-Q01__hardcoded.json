@@ -1,0 +1,22 @@
+{
+  "question_id": "T1-Q01",
+  "defect": "hardcoded",
+  "code": "def top_k_frequent(items, k):\n    return [\"a\", \"b\"]\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_k_exceeds_distinct",
+      "tc_single_item",
+      "tc_empty_items",
+      "tc_k_zero",
+      "tc_k_negative",
+      "tc_mixed_counts",
+      "tc_tie_multichar"
+    ],
+    "weak_competencies": [
+      "T1.1",
+      "T1.4"
+    ],
+    "strong_competencies": [],
+    "misconception_code": "HARDCODED_OUTPUT"
+  }
+}

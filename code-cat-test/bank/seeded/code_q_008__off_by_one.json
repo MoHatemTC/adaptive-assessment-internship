@@ -10,12 +10,10 @@
       "tc_long"
     ],
     "weak_competencies": [
-      "boundary_conditions"
+      "T1.4"
     ],
     "strong_competencies": [
-      "complexity_awareness",
-      "data_structures",
-      "algorithmic_reasoning"
+      "T1.1"
     ],
     "misconception_code": "OFF_BY_ONE_BOUNDARY"
   }

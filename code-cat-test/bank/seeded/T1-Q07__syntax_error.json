@@ -1,0 +1,25 @@
+{
+  "question_id": "T1-Q07",
+  "defect": "syntax_error",
+  "code": "import math\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Point:\n    x: float\n    y: float\n\n    def distance_to(self, other)\n        return math.hypot(self.x - other.x, self.y - other.y)\n\n\ndef point_distance(p1, p2):\n    return Point(*p1).distance_to(Point(*p2))\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_three_four_five",
+      "tc_same_point",
+      "tc_negative_coords",
+      "tc_float_precision",
+      "tc_horizontal",
+      "tc_vertical",
+      "tc_none_argument",
+      "tc_wrong_arity",
+      "tc_symmetry"
+    ],
+    "weak_competencies": [
+      "T1.3",
+      "T1.1",
+      "T1.4"
+    ],
+    "strong_competencies": [],
+    "misconception_code": "SYNTAX_ERROR"
+  }
+}

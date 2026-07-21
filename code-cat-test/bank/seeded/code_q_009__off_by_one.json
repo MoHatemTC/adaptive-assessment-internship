@@ -8,13 +8,10 @@
       "tc_near_palindrome"
     ],
     "weak_competencies": [
-      "boundary_conditions",
-      "loops"
+      "T1.1",
+      "T1.4"
     ],
-    "strong_competencies": [
-      "string_processing",
-      "algorithmic_reasoning"
-    ],
+    "strong_competencies": [],
     "misconception_code": "OFF_BY_ONE_BOUNDARY"
   }
 }

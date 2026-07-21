@@ -1,0 +1,22 @@
+{
+  "question_id": "T4-Q04",
+  "defect": "wrong_algorithm",
+  "code": "def get_weather(city: str) -> dict:\n    \"\"\"Return the current weather for ``city``.\"\"\"\n    if not isinstance(city, str) or not city.strip():\n        return {\"error\": \"city must be a non-empty string\"}\n    return {\n        \"location\": city,\n        \"temp\": 21.0,\n        \"weather\": \"sunny\",\n        \"source\": \"stub\",\n    }\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_basic",
+      "tc_strips_whitespace",
+      "tc_title_cases",
+      "tc_upper_case_input",
+      "tc_hyphenated"
+    ],
+    "weak_competencies": [
+      "T4.2"
+    ],
+    "strong_competencies": [
+      "T1.3",
+      "T1.4"
+    ],
+    "misconception_code": null
+  }
+}
