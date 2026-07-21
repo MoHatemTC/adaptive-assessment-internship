@@ -1,0 +1,4 @@
+# The tester harness. The engine's own requirements are in backend/requirements.txt and
+# are needed too — this file adds only what the UI itself uses.
+streamlit>=1.32,<2
+pandas>=2.1,<3

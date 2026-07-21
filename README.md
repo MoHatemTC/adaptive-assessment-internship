@@ -170,6 +170,15 @@ report = engine.summarise(state, reason)
 `AssessmentState` is serialisable and the orchestrator holds nothing between calls, so an
 assessment can span HTTP requests and resume on a different worker.
 
+## Tester harness
+
+A Streamlit UI for checking the engine — the queue and why each item was shortlisted, every
+update, the trajectory, the engine's own log, and bank diagnostics. See `streamlit/README.md`.
+
+```bash
+streamlit run streamlit/main.py
+```
+
 ## Tests
 
 ```bash
