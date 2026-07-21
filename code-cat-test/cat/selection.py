@@ -411,3 +411,60 @@ def choose(
         shortlist_ids=[c.question["question_id"] for c in shortlist],
         flags=flags,
     )
+
+
+def stop_rule_calibration(
+    target: float | None = None,
+    min_questions: int | None = None,
+    max_questions: int | None = None,
+) -> dict:
+    """Can the precision target actually END a session, between the floor and the cap?
+
+    A stopping rule is only adaptive if it can bind. Two ways it fails silently, and this
+    system has now hit BOTH — once per question type:
+
+      TRIVIAL      the target is above where the prior already sits, so it is met almost
+                   immediately and min_questions decides the length. Every code session
+                   traced so far crossed SE 0.20 at question 2 and still ran to 5.
+      UNREACHABLE  the target is below what max_questions can deliver, so the rule never
+                   fires and the cap decides. The MCQ bank needed 13 questions to reach
+                   SE 0.65 with a 12-question limit.
+
+    Both look like a working adaptive test from the outside, which is exactly why this is
+    computed rather than assumed. Modelled on the median candidate (p=0.5, the slowest
+    case) with one unit of evidence per question — a lower bound on convergence speed,
+    since real questions often carry evidence for several competencies at once.
+    """
+    target = settings.target_standard_error if target is None else target
+    lo = settings.min_questions if min_questions is None else min_questions
+    hi = settings.max_questions if max_questions is None else max_questions
+
+    def se_after(n: int, p: float = 0.5) -> float:
+        a, b = 1.0 + n * p, 1.0 + n * (1.0 - p)
+        return math.sqrt((a * b) / (((a + b) ** 2) * (a + b + 1.0)))
+
+    reached = next((n for n in range(0, hi + 1) if se_after(n) <= target), None)
+    floor = se_after(hi)
+
+    if reached is None:
+        verdict, detail = "UNREACHABLE", (
+            f"SE {target} is below the {floor:.4f} floor reachable in {hi} questions — "
+            "the rule can never fire and max_questions decides every session"
+        )
+    elif reached <= lo:
+        verdict, detail = "TRIVIAL", (
+            f"SE {target} is met by question {reached}, at or before the min_questions "
+            f"floor of {lo} — min_questions decides every session, not precision"
+        )
+    else:
+        verdict, detail = "BINDING", (
+            f"SE {target} is met around question {reached}, between the floor of {lo} and "
+            f"the cap of {hi} — the rule can end a session"
+        )
+    return {
+        "verdict": verdict,
+        "detail": detail,
+        "expected_stop_question": reached,
+        "reachable_floor": round(floor, 4),
+        "target": target,
+    }

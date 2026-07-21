@@ -72,9 +72,15 @@ def evaluate_submission(
 ) -> EvaluationResult:
     """Run one submission through the whole evaluation layer.
 
-    The LLM is called only when the configured approach gives it weight. Approach A does
-    not call it at all — not merely down-weight it — so a measured cost difference between
-    the approaches is a real one rather than tokens spent and discarded.
+    The LLM is called when the profile gives it weight, or when it is wanted for
+    diagnosis alone (`llm_diagnosis_when_unweighted`). With that off, approach A does not
+    call it at all — not merely down-weight it — so a measured cost difference between the
+    approaches is a real one rather than tokens spent and discarded.
+
+    Diagnosis without score authority is a supported configuration precisely because the
+    two are worth such different amounts: misconception codes reach the learner model
+    through normalize() regardless of criterion weights, so a deployment can keep 0.92
+    recall while letting deterministic evidence decide the number.
     """
     approach = approach or settings.code_cat_approach
     rubric_id = rubric_id or settings.code_cat_rubric
@@ -87,7 +93,7 @@ def evaluate_submission(
     # Driven by the profile, not the approach: an admin who has taken every criterion to
     # 0% model share should stop paying for model calls, and one who has given the model
     # weight under approach A must actually get them.
-    llm_has_weight = profile.uses_llm()
+    llm_has_weight = profile.uses_llm() or settings.llm_diagnosis_when_unweighted
     llm = (
         llm_evaluate(question, code, execution, signals, rubric_id)
         if llm_has_weight and execution.usable
@@ -134,6 +140,10 @@ def evaluate_submission(
             )
         )
 
+    # Structure can void the inference from a passing test to a demonstrated competency.
+    # Applied before normalisation so the learner model sees the cap, not just the report.
+    criterion_scores, integrity_reason = scoring.apply_integrity_cap(criterion_scores, signals)
+
     competency_evidence = normalize(question, criterion_scores, execution, llm, signals)
     scored = [c for c in criterion_scores if c.score is not None]
     # None, not 0.0, when nothing could be assessed: an unusable run has no score, and
@@ -151,7 +161,11 @@ def evaluate_submission(
         competency_evidence=competency_evidence,
         overall_score=round(overall, 4) if overall is not None else None,
         evaluation_latency_ms=int((time.time() - started) * 1000),
-        flags=[*llm.flags, *[c.conflict_flag for c in criterion_scores if c.conflict_flag]],
+        flags=[
+            *llm.flags,
+            *([integrity_reason] if integrity_reason else []),
+            *{c.conflict_flag for c in criterion_scores if c.conflict_flag},
+        ],
         weight_profile=profile.to_dict(),
     )
 
