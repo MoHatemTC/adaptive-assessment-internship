@@ -117,7 +117,7 @@ def record_trajectory(state: dict, decision, result) -> None:
             "q": len(state["answered"]),
             "question": result.question_id,
             "tests": f"{result.execution.passed_tests}/{result.execution.total_tests}",
-            "overall": round(result.overall_score, 3),
+            "overall": None if result.overall_score is None else round(result.overall_score, 3),
             "mastery": round(target.mastery, 4),
             "std_error": round(target.standard_error, 4),
             "evidence": target.evidence_count,
@@ -200,16 +200,32 @@ def render_evaluation(result) -> None:
     """Every layer, in the order it was computed."""
     execution = result.execution
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Tests passed", f"{execution.passed_tests}/{execution.total_tests}")
-    c2.metric("Compiled", "yes" if execution.compiled else "no")
-    c3.metric("Overall", f"{result.overall_score:.3f}")
+    # Every one of these reads "unknown" rather than a value when the sandbox never ran.
+    # Showing "0/8", "Compiled: no" and an overall score for a submission that was never
+    # executed states things about the candidate that no evidence supports.
+    c1.metric("Tests passed",
+              "—" if not execution.usable else f"{execution.passed_tests}/{execution.total_tests}")
+    c2.metric("Compiled",
+              "unknown" if execution.compiled is None else ("yes" if execution.compiled else "no"))
+    c3.metric("Overall", "—" if result.overall_score is None else f"{result.overall_score:.3f}")
     c4.metric("Latency", f"{result.evaluation_latency_ms:,}ms")
 
     if not execution.usable:
         st.error(
-            "Sandbox unavailable — this run measured our infrastructure, not the "
-            "candidate. The learner model was not updated."
+            "**Sandbox unavailable — nothing about this submission was measured.** "
+            "The code was never executed, so no test result, compile status or score "
+            "below describes the candidate. The learner model was not updated.\n\n"
+            f"`{execution.error_message[:200]}`"
         )
+        with st.expander("Why you are seeing this"):
+            st.write(
+                "The sandbox is where untrusted code runs; if it cannot start there is no "
+                "objective evidence, and this pipeline refuses to score without it. "
+                "Common causes: E2B quota exhausted by concurrent runs, a network "
+                "interruption, or a missing/expired `E2B_API_KEY`. Resubmit once it "
+                "recovers — no state was written."
+            )
+        return
 
     st.markdown("**1 · Objective evidence** (deterministic; nothing may contradict it)")
     st.dataframe(
@@ -259,11 +275,19 @@ def render_evaluation(result) -> None:
         )
 
     st.markdown("**4 · Criterion scores** (code combines the sources; weights per approach)")
+    unscored = [c.criterion_id for c in result.criterion_scores if c.score is None]
+    if unscored:
+        st.warning(
+            f"Not assessed: **{', '.join(unscored)}**. Under approach "
+            f"{result.approach} the only source configured for these is the model, and it "
+            "produced nothing usable. They are left unscored and excluded from the overall "
+            "and from the learner model — an unassessed criterion is not a passed one."
+        )
     st.dataframe(
         [
             {
                 "criterion": c.criterion_id,
-                "score": f"{c.score:.3f}",
+                "score": "not assessed" if c.score is None else f"{c.score:.3f}",
                 "sources": ", ".join(f"{k} {v:.0%}" for k, v in c.sources_used.items()) or "—",
                 "conflict": c.conflict_flag or "—",
             }

@@ -81,15 +81,18 @@ def evidence_strength(evidence: ExecutionEvidence, llm: LLMEvaluation) -> float:
     return strength
 
 
-# Which competency a structural warning is evidence ABOUT. Static analysis knows the
-# defect but not the blueprint, so the mapping lives here where the question is in scope.
-_WARNING_TO_COMPETENCY = {
-    "MISSING_EMPTY_INPUT_GUARD": ("boundary_conditions",),
-    "HARDCODED_OUTPUT": ("algorithmic_reasoning",),
-    "NESTED_LOOPS": ("complexity_awareness", "algorithmic_reasoning"),
-    "MUTATES_INPUT": ("data_structures",),
-    "SYNTAX_ERROR": (),
-}
+# A structural warning is about ERROR HANDLING or about the general approach. Expressed
+# as a role rather than a fixed competency id, because a hardcoded id list does not
+# survive a taxonomy change: the previous version named the invented competencies
+# (boundary_conditions, algorithmic_reasoning, ...) and after the bank moved to the real
+# T1-T5 sub-competencies it matched NOTHING, silently returning approach A to 0%
+# misconception recall — the exact defect it had been written to fix.
+_ERROR_HANDLING_WARNINGS = {"MISSING_EMPTY_INPUT_GUARD"}
+_UNATTRIBUTABLE = {"SYNTAX_ERROR"}
+
+# Sub-competencies whose subject IS error handling and robustness, by convention "x.4"
+# in this taxonomy. Matched on the id so a new track inherits it for free.
+_ERROR_HANDLING_SUFFIX = ".4"
 
 
 def _competencies_for_misconception(code: str, question: dict) -> list[str]:
@@ -98,9 +101,23 @@ def _competencies_for_misconception(code: str, question: dict) -> list[str]:
     Restricted to the question's own blueprint: flagging a competency the question does
     not assess would put a misconception on a learner's record from a question that never
     tested it.
+
+    A guard warning attaches to the error-handling sub-competency when the question
+    carries one, since that is what it is evidence about; anything else attaches to the
+    question's primary competency, which is the closest honest attribution structure
+    alone supports.
     """
-    assessed = {c["competency_id"] for c in question["competencies"]}
-    return [c for c in _WARNING_TO_COMPETENCY.get(code, ()) if c in assessed]
+    if code in _UNATTRIBUTABLE:
+        return []
+
+    assessed = [c["competency_id"] for c in question["competencies"]]
+    if code in _ERROR_HANDLING_WARNINGS:
+        matches = [c for c in assessed if c.endswith(_ERROR_HANDLING_SUFFIX)]
+        if matches:
+            return matches
+
+    primary = max(question["competencies"], key=lambda c: c["weight"])["competency_id"]
+    return [primary]
 
 
 def normalize(
@@ -134,6 +151,11 @@ def normalize(
 
     accumulated: dict[str, list[tuple[float, float, float]]] = {}
     for criterion in criterion_scores:
+        # Unscored criteria contribute nothing. Letting a None-scored criterion through
+        # as 0.0 would put "demonstrated nothing" on a learner's record for a criterion
+        # nobody managed to assess.
+        if criterion.score is None:
+            continue
         for competency, weight in mapping.get(criterion.criterion_id, {}).items():
             if weight <= 0:
                 continue
