@@ -1,0 +1,24 @@
+{
+  "question_id": "T3-Q15",
+  "defect": "hardcoded",
+  "code": "def parse_resume(payload):\n    return {\"name\": \"Ada\", \"years_experience\": 7, \"skills\": [\"python\", \"ml\"]}\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_empty_skills",
+      "tc_extra_keys_ignored",
+      "tc_numeric_string_coerced",
+      "tc_missing_field",
+      "tc_wrong_type",
+      "tc_skills_not_a_list",
+      "tc_payload_not_a_dict",
+      "tc_empty_payload"
+    ],
+    "weak_competencies": [
+      "T3.6",
+      "T1.3",
+      "T1.4"
+    ],
+    "strong_competencies": [],
+    "misconception_code": "HARDCODED_OUTPUT"
+  }
+}

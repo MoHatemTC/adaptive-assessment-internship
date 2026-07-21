@@ -1,0 +1,21 @@
+{
+  "question_id": "T2-Q13",
+  "defect": "hardcoded",
+  "code": "def train_and_score(X, y):\n    return 1.0\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_ambiguous_majority",
+      "tc_larger_sample",
+      "tc_empty_X",
+      "tc_length_mismatch",
+      "tc_too_few_samples"
+    ],
+    "weak_competencies": [
+      "T2.5",
+      "T1.4",
+      "T2.1"
+    ],
+    "strong_competencies": [],
+    "misconception_code": "HARDCODED_OUTPUT"
+  }
+}

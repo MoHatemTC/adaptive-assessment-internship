@@ -1,0 +1,22 @@
+{
+  "question_id": "T5-Q20",
+  "defect": "off_by_one",
+  "code": "import yaml\n\nWORKFLOW = \"\"\"name: CI\n\"on\": [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-python@v5\n        with:\n          python-version: \"3.11\"\n      - name: Install dependencies\n        run: pip install -r requirements.txt\n      - name: Run tests\n        run: pytest\n\"\"\"\n\n\ndef workflow_yaml(path=None):\n    if path is None:\n        return WORKFLOW\n    document = yaml.safe_load(WORKFLOW)\n    if path == \"\":\n        return document\n    node = document\n    for segment in path.split(\".\"):\n        if isinstance(node, list):\n            if not segment.lstrip(\"-\").isdigit():\n                return None\n            index = int(segment) + 1\n            if index >= len(node):\n                return None\n            node = node[index]\n        elif isinstance(node, dict):\n            if segment not in node:\n                return None\n            node = node[segment]\n        else:\n            return None\n    return node\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_checkout_step",
+      "tc_setup_python_step",
+      "tc_python_version",
+      "tc_install_step",
+      "tc_pytest_step"
+    ],
+    "weak_competencies": [
+      "T1.4"
+    ],
+    "strong_competencies": [
+      "T5.3",
+      "T1.1"
+    ],
+    "misconception_code": "OFF_BY_ONE_BOUNDARY"
+  }
+}

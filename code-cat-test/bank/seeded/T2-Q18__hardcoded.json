@@ -1,0 +1,24 @@
+{
+  "question_id": "T2-Q18",
+  "defect": "hardcoded",
+  "code": "def add_features(rows):\n    return [{\"price\": 200000, \"area\": 1000, \"age\": 1,\n             \"price_per_sqft\": 200.0, \"age_bucket\": \"new\"}]\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_mid_bucket",
+      "tc_old_bucket",
+      "tc_bin_edges",
+      "tc_rounding",
+      "tc_empty_rows",
+      "tc_zero_area",
+      "tc_age_outside_bins",
+      "tc_multiple_rows"
+    ],
+    "weak_competencies": [
+      "T2.7",
+      "T2.1",
+      "T1.4"
+    ],
+    "strong_competencies": [],
+    "misconception_code": "HARDCODED_OUTPUT"
+  }
+}

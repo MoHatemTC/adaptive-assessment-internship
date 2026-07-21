@@ -1,0 +1,25 @@
+{
+  "question_id": "T1-Q04",
+  "defect": "syntax_error",
+  "code": "class Stack:\n    def __init__(self):\n        self._items = []\n\n    def push(self, value)\n        self._items.append(value)\n\n\ndef stack_ops(operations):\n    return []\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_push_pop",
+      "tc_peek_does_not_remove",
+      "tc_is_empty_true",
+      "tc_is_empty_false",
+      "tc_pop_empty_raises",
+      "tc_peek_empty_raises",
+      "tc_no_operations",
+      "tc_lifo_order",
+      "tc_drain_then_pop"
+    ],
+    "weak_competencies": [
+      "T1.2",
+      "T1.4",
+      "T1.1"
+    ],
+    "strong_competencies": [],
+    "misconception_code": "SYNTAX_ERROR"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "question_id": "T1-Q01",
+  "defect": "syntax_error",
+  "code": "from collections import Counter\n\n\ndef top_k_frequent(items, k)\n    counts = Counter(items)\n    return [w for w, _ in counts.most_common(k)]\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_basic",
+      "tc_tie_alphabetical",
+      "tc_k_exceeds_distinct",
+      "tc_single_item",
+      "tc_empty_items",
+      "tc_k_zero",
+      "tc_k_negative",
+      "tc_mixed_counts",
+      "tc_tie_multichar"
+    ],
+    "weak_competencies": [
+      "T1.1",
+      "T1.4"
+    ],
+    "strong_competencies": [],
+    "misconception_code": "SYNTAX_ERROR"
+  }
+}

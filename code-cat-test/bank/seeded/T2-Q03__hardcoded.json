@@ -1,0 +1,24 @@
+{
+  "question_id": "T2-Q03",
+  "defect": "hardcoded",
+  "code": "def clean_records(records):\n    return [{\"name\": \"a\", \"age\": 10.0, \"email\": \"a@x\"},\n            {\"name\": \"b\", \"age\": 15.0, \"email\": \"b@x\"},\n            {\"name\": \"c\", \"age\": 20.0, \"email\": \"c@x\"}]\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_drop_missing_email",
+      "tc_fill_then_drop",
+      "tc_even_count_median",
+      "tc_nothing_missing",
+      "tc_empty_records",
+      "tc_all_ages_missing",
+      "tc_all_emails_missing",
+      "tc_odd_count_median"
+    ],
+    "weak_competencies": [
+      "T2.2",
+      "T2.1",
+      "T1.4"
+    ],
+    "strong_competencies": [],
+    "misconception_code": "HARDCODED_OUTPUT"
+  }
+}

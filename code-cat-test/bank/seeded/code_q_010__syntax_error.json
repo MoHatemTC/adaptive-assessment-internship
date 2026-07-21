@@ -16,10 +16,8 @@
       "tc_interleaved"
     ],
     "weak_competencies": [
-      "data_structures",
-      "string_processing",
-      "boundary_conditions",
-      "algorithmic_reasoning"
+      "T1.1",
+      "T1.4"
     ],
     "strong_competencies": [],
     "misconception_code": "SYNTAX_ERROR"

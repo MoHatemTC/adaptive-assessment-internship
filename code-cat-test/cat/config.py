@@ -7,10 +7,51 @@ actually executed. A run whose results cannot be attributed to a variant is not 
 
 from __future__ import annotations
 
+import os
 from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _load_streamlit_secrets() -> None:
+    """Copy Streamlit Cloud secrets into the environment before Settings reads it.
+
+    Streamlit Cloud has no .env and does NOT export st.secrets to os.environ, so a
+    settings object that reads only the environment deploys with no E2B key and no LLM
+    credentials — the app comes up looking healthy and fails on the first submission.
+
+    Runs before Settings() is constructed, is a no-op outside Streamlit, and never
+    overwrites a value already set so a local .env still wins during development.
+    Supports both flat keys and a [cat] / [llm] table, since grouping is the obvious
+    thing to write in a secrets TOML.
+    """
+    try:
+        import streamlit as st
+
+        secrets = st.secrets
+    except Exception:
+        return
+
+    def put(key: str, value) -> None:
+        if value is not None and not os.environ.get(key.upper()):
+            os.environ[key.upper()] = str(value)
+
+    for key in (
+        "E2B_API_KEY", "LITELLM_BASE_URL", "LITELLM_API_KEY", "LITELLM_MODEL",
+        "LITELLM_TIMEOUT_SECONDS", "CODE_CAT_APPROACH", "CODE_CAT_RUBRIC",
+    ):
+        try:
+            put(key, secrets.get(key))
+        except Exception:
+            pass
+        for section in ("cat", "CAT", "llm", "LLM"):
+            try:
+                table = secrets.get(section)
+                if table is not None:
+                    put(key, table.get(key))
+            except Exception:
+                pass
 
 # A: objective only        tests + static analysis, deterministic rubric, no LLM scoring
 # B: test-anchored LLM     LLM interprets; functional correctness anchored to tests
@@ -59,4 +100,5 @@ class Settings(BaseSettings):
     minimum_llm_confidence: float = Field(default=0.70, ge=0.0, le=1.0)
 
 
+_load_streamlit_secrets()
 settings = Settings()

@@ -1,0 +1,18 @@
+{
+  "question_id": "T1-Q17",
+  "defect": "missing_empty_guard",
+  "code": "def build_add(variant):\n    if variant.strip() == \"wrong_sum\":\n        return lambda a, b: a + b + 1\n    if variant.strip() == \"no_type_error\":\n        return lambda a, b: str(a) + str(b)\n\n    def add(a, b):\n        if isinstance(a, str) or isinstance(b, str):\n            raise TypeError(\"numbers only\")\n        return a + b\n\n    return add\n\n\ndef run_add_tests(variant=\"correct\"):\n    add = build_add(variant)\n    results = {}\n    for key, fn in ((\"normal\", lambda: add(2, 3) == 5),\n                    (\"edge\", lambda: add(-1, 1) == 0)):\n        try:\n            results[key] = fn()\n        except BaseException:\n            results[key] = False\n    try:\n        add(\"a\", 1)\n        results[\"raises_type_error\"] = False\n    except TypeError:\n        results[\"raises_type_error\"] = True\n    except BaseException:\n        results[\"raises_type_error\"] = False\n    return results\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_none_variant"
+    ],
+    "weak_competencies": [
+      "T1.4"
+    ],
+    "strong_competencies": [
+      "T1.7",
+      "T1.1"
+    ],
+    "misconception_code": "MISSING_EMPTY_INPUT_GUARD"
+  }
+}

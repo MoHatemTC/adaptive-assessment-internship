@@ -8,12 +8,10 @@
       "tc_interleaved"
     ],
     "weak_competencies": [
-      "data_structures",
-      "algorithmic_reasoning"
+      "T1.1"
     ],
     "strong_competencies": [
-      "string_processing",
-      "boundary_conditions"
+      "T1.4"
     ],
     "misconception_code": "WRONG_DATA_STRUCTURE"
   }

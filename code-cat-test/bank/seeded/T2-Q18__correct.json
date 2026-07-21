@@ -1,0 +1,15 @@
+{
+  "question_id": "T2-Q18",
+  "defect": "correct",
+  "code": "import pandas as pd\n\n\ndef add_features(rows):\n    if len(rows) == 0:\n        return []\n    df = pd.DataFrame(rows)\n    ratios = []\n    for price, area in zip(df[\"price\"], df[\"area\"]):\n        ratios.append(None if area == 0 else round(float(price) / float(area), 2))\n    df[\"price_per_sqft\"] = ratios\n    df[\"age_bucket\"] = pd.cut(df[\"age\"], bins=[0, 2, 5, 10],\n                              labels=[\"new\", \"mid\", \"old\"]).astype(object)\n    df = df.where(pd.notna(df), None)\n    return df.to_dict(orient=\"records\")\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [],
+    "weak_competencies": [],
+    "strong_competencies": [
+      "T2.7",
+      "T2.1",
+      "T1.4"
+    ],
+    "misconception_code": null
+  }
+}

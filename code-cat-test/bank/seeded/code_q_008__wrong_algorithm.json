@@ -8,12 +8,10 @@
       "tc_negatives"
     ],
     "weak_competencies": [
-      "complexity_awareness",
-      "algorithmic_reasoning"
+      "T1.1"
     ],
     "strong_competencies": [
-      "data_structures",
-      "boundary_conditions"
+      "T1.4"
     ],
     "misconception_code": "IGNORES_RETURN_CONTRACT"
   }
