@@ -41,6 +41,35 @@ class CompetencyState:
         return math.sqrt((a * b) / (((a + b) ** 2) * (a + b + 1.0)))
 
     @property
+    def level(self) -> int | None:
+        """Mastery as a 1-5 band, or None while unmeasured.
+
+        Bands are what a report shows a candidate; mastery is what the engine reasons
+        with. Kept as a derived property rather than stored so it can never drift from
+        the posterior it describes.
+
+        None rather than 3 when unobserved: a mid band reads as a measured "Competent",
+        which is exactly the false impression the Beta(1,1) mean of 0.5 would give.
+        """
+        if not self.observed:
+            return None
+        m = self.mastery
+        if m < 0.20:
+            return 1
+        if m < 0.40:
+            return 2
+        if m < 0.60:
+            return 3
+        if m < 0.80:
+            return 4
+        return 5
+
+    @property
+    def band(self) -> str:
+        return {None: "Not assessed", 1: "Novice", 2: "Developing", 3: "Competent",
+                4: "Proficient", 5: "Expert"}[self.level]
+
+    @property
     def observed(self) -> bool:
         """False while the estimate is still just the prior.
 
@@ -74,6 +103,8 @@ class LearnerModel:
             cid: {
                 "mastery": round(s.mastery, 4),
                 "standard_error": round(s.standard_error, 4),
+                "level": s.level,
+                "band": s.band,
                 "evidence_count": s.evidence_count,
                 "observed": s.observed,
                 "misconception_codes": s.misconception_codes,
