@@ -46,6 +46,14 @@ from cat.selection import (
 
 SEEDED_DIR = Path(__file__).resolve().parent / "bank" / "seeded"
 
+# Streamlit 1.49 replaced use_container_width with width="stretch" and warns on EVERY
+# widget call: the deployed logs were so thick with that one message that a real
+# KeyError traceback was almost invisible in them. Version-gated rather than switched
+# outright, because before 1.49 `width` meant a pixel count and "stretch" would raise —
+# and requirements.txt deliberately allows streamlit>=1.32.
+_ST_VERSION = tuple(int(p) for p in st.__version__.split(".")[:2] if p.isdigit())
+WIDE = {"width": "stretch"} if _ST_VERSION >= (1, 49) else {"use_container_width": True}
+
 APPROACH_LABEL = {
     "A": "A · objective only — tests + static analysis, no LLM scoring",
     "B": "B · test-anchored LLM — model interprets, tests anchor correctness",
@@ -182,7 +190,10 @@ def render_learner_model(model: LearnerModel, target: str) -> None:
     rows = [
         {
             "competency": ("▶ " if cid == target else "") + cid,
-            "level": s["level"] if s["level"] is not None else "—",
+            # str, not int-or-str: Arrow types a column from its first values, so a mix of
+            # ints and the "—" placeholder makes serialization fail and Streamlit fall back
+            # to a coerced render. Every other cell here is already formatted text.
+            "level": str(s["level"]) if s["level"] is not None else "—",
             "band": s["band"],
             "mastery": f"{s['mastery']:.3f}" if s["observed"] else "—",
             "std error": f"{s['standard_error']:.3f}",
@@ -191,7 +202,7 @@ def render_learner_model(model: LearnerModel, target: str) -> None:
         }
         for cid, s in snapshot.items()
     ]
-    st.dataframe(rows, use_container_width=True, hide_index=True)
+    st.dataframe(rows, hide_index=True, **WIDE)
     st.caption(
         "▶ marks the competency under test. Mastery shows — where no evidence exists yet: "
         "a Beta(1,1) prior has a mean of exactly 0.5, which would otherwise read as a "
@@ -241,7 +252,7 @@ def render_evaluation(result) -> None:
             }
             for o in execution.test_results
         ],
-        use_container_width=True,
+        **WIDE,
         hide_index=True,
     )
 
@@ -273,7 +284,7 @@ def render_evaluation(result) -> None:
                 }
                 for e in result.llm.criterion_evidence
             ],
-            use_container_width=True,
+            **WIDE,
             hide_index=True,
         )
 
@@ -296,7 +307,7 @@ def render_evaluation(result) -> None:
             }
             for c in result.criterion_scores
         ],
-        use_container_width=True,
+        **WIDE,
         hide_index=True,
     )
 
@@ -312,7 +323,7 @@ def render_evaluation(result) -> None:
             }
             for e in result.competency_evidence
         ],
-        use_container_width=True,
+        **WIDE,
         hide_index=True,
     )
 
@@ -388,7 +399,10 @@ if mode == "Assessment":
     m4.metric("Evidence", target.evidence_count)
     m5.metric("Eligible left", len(eligible))
 
-    traces = active["traces"]
+    # .setdefault, not [""]: a session started before this code was deployed lives on in
+    # st.session_state across the reload, so the key can genuinely be absent — and a
+    # KeyError here takes down the whole page, losing a run in progress.
+    traces = active.setdefault("traces", [])
     if traces:
         cat_rows = trace_mod.cat_frame(traces)
         comp_rows = trace_mod.competency_frame(traces)
@@ -398,7 +412,7 @@ if mode == "Assessment":
         )
 
         with tab_cat:
-            st.dataframe(pd.DataFrame(cat_rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(cat_rows), hide_index=True, **WIDE)
             st.caption(
                 "`ability_before/after` and `se_*` are the Beta posterior for the "
                 "competency under test — `se_after` is what the stopping rule reads. "
@@ -425,7 +439,7 @@ if mode == "Assessment":
 
         with tab_comp:
             if comp_rows:
-                st.dataframe(pd.DataFrame(comp_rows), use_container_width=True, hide_index=True)
+                st.dataframe(pd.DataFrame(comp_rows), hide_index=True, **WIDE)
                 st.caption(
                     "One row per competency that MOVED at that step — a question carrying "
                     "four competencies would otherwise repeat all four every step. ◀ marks "
@@ -478,7 +492,7 @@ if mode == "Assessment":
         st.subheader("Learner model")
         render_learner_model(active["model"], active["competency"])
         st.subheader("Audit trail")
-        st.dataframe(active["audit"], use_container_width=True, hide_index=True)
+        st.dataframe(active["audit"], hide_index=True, **WIDE)
         st.stop()
 
     if active["current"] is None:
@@ -531,7 +545,7 @@ if mode == "Assessment":
                 }
                 for i, c in enumerate(shortlist)
             ],
-            use_container_width=True,
+            **WIDE,
             hide_index=True,
         )
         st.caption(
@@ -562,7 +576,7 @@ if mode == "Assessment":
             audit_record(active["id"], len(active["answered"]), result, before, after, decision)
         )
         record_trajectory(active, decision, result)
-        active["traces"].append(
+        active.setdefault("traces", []).append(
             trace_mod.record(
                 len(active["answered"]), question["question_id"], active["competency"],
                 result, decision, before, after,
