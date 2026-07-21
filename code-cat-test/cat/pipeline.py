@@ -20,6 +20,7 @@ from code_evaluation.llm_evaluator import LLMEvaluation, evaluate as llm_evaluat
 from code_evaluation.sandbox import ExecutionEvidence, run_submission
 from code_evaluation.scoring import CriterionScore
 from code_evaluation.static_analysis import StaticSignals, analyse
+from code_evaluation.weight_profile import WeightProfile
 
 BANK_PATH = Path(__file__).resolve().parent.parent / "bank" / "questions.json"
 
@@ -43,14 +44,31 @@ class EvaluationResult:
     overall_score: float | None
     evaluation_latency_ms: int
     flags: list[str] = field(default_factory=list)
+    # The split that produced these scores. Carried on the result, not looked up later:
+    # an admin can change the weights between submissions, so a score is only
+    # reproducible if it travels with the weights that made it.
+    weight_profile: dict = field(default_factory=dict)
 
     @property
     def usable(self) -> bool:
         return self.execution.usable
 
 
+def active_profile(approach: str | None = None) -> WeightProfile:
+    """The split in force: the admin override if one is set, else the approach preset."""
+    approach = approach or settings.code_cat_approach
+    override = settings.llm_share_override()
+    preset = WeightProfile.from_preset(approach, scoring.SOURCE_WEIGHTS)
+    return preset.with_llm_shares(override) if override else preset
+
+
 def evaluate_submission(
-    question: dict, code: str, *, approach: str | None = None, rubric_id: str | None = None
+    question: dict,
+    code: str,
+    *,
+    approach: str | None = None,
+    rubric_id: str | None = None,
+    profile: WeightProfile | None = None,
 ) -> EvaluationResult:
     """Run one submission through the whole evaluation layer.
 
@@ -65,8 +83,11 @@ def evaluate_submission(
     execution = run_submission(code, question["tests"], question["function_name"])
     signals = analyse(code, question["function_name"])
 
-    weights = scoring.SOURCE_WEIGHTS[approach]
-    llm_has_weight = any("llm" in sources for sources in weights.values())
+    profile = profile or active_profile(approach)
+    # Driven by the profile, not the approach: an admin who has taken every criterion to
+    # 0% model share should stop paying for model calls, and one who has given the model
+    # weight under approach A must actually get them.
+    llm_has_weight = profile.uses_llm()
     llm = (
         llm_evaluate(question, code, execution, signals, rubric_id)
         if llm_has_weight and execution.usable
@@ -91,6 +112,7 @@ def evaluate_submission(
             overall_score=None,
             evaluation_latency_ms=int((time.time() - started) * 1000),
             flags=[f"SANDBOX_UNAVAILABLE: {execution.error_message[:160]}"],
+            weight_profile=profile.to_dict(),
         )
 
     objective = scoring.objective_criterion_scores(execution, signals, question["tests"])
@@ -108,6 +130,7 @@ def evaluate_submission(
                 llm=llm_score,
                 llm_confidence=llm_confidence or 1.0,
                 approach=approach,
+                profile=profile,
             )
         )
 
@@ -129,6 +152,7 @@ def evaluate_submission(
         overall_score=round(overall, 4) if overall is not None else None,
         evaluation_latency_ms=int((time.time() - started) * 1000),
         flags=[*llm.flags, *[c.conflict_flag for c in criterion_scores if c.conflict_flag]],
+        weight_profile=profile.to_dict(),
     )
 
 
@@ -162,6 +186,10 @@ def audit_record(
         "step_number": step,
         "approach": result.approach,
         "rubric_id": result.rubric_id,
+        # Without this the record says which APPROACH ran but not which weights, and
+        # under a tunable split those are no longer the same thing.
+        "weight_fingerprint": result.weight_profile.get("fingerprint", ""),
+        "weight_shares": result.weight_profile.get("overall_shares", {}),
         "question_type": "code",
         "answered_question_id": result.question_id,
         "passed_test_ratio": round(result.execution.passed_test_ratio, 4),
@@ -200,6 +228,10 @@ def result_to_dict(result: EvaluationResult) -> dict:
         "question_id": result.question_id,
         "approach": result.approach,
         "rubric_id": result.rubric_id,
+        # Without this the record says which APPROACH ran but not which weights, and
+        # under a tunable split those are no longer the same thing.
+        "weight_fingerprint": result.weight_profile.get("fingerprint", ""),
+        "weight_shares": result.weight_profile.get("overall_shares", {}),
         "overall_score": result.overall_score,
         "passed_test_ratio": round(result.execution.passed_test_ratio, 4),
         "compiled": result.execution.compiled,

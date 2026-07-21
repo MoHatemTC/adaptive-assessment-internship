@@ -17,10 +17,14 @@ difference between the approaches is one table rather than three code paths.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from cat.config import Approach, settings
 from code_evaluation.sandbox import ExecutionEvidence
 from code_evaluation.static_analysis import StaticSignals
+
+if TYPE_CHECKING:  # avoids a cycle: weight_profile builds itself from SOURCE_WEIGHTS
+    from code_evaluation.weight_profile import WeightProfile
 
 # criterion -> {source: weight}. Sources absent from a submission are dropped and the
 # remaining weights renormalised, so a missing source never silently scores zero.
@@ -130,6 +134,7 @@ def combine(
     llm: float | None,
     llm_confidence: float = 1.0,
     approach: Approach | None = None,
+    profile: "WeightProfile | None" = None,
 ) -> CriterionScore:
     """Weighted combination of whichever sources are present.
 
@@ -143,7 +148,12 @@ def combine(
     dropped, so a hedged interpretation degrades toward the objective evidence instead of
     disappearing (which would silently change which sources scored the criterion).
     """
-    weights = dict(SOURCE_WEIGHTS[approach or settings.code_cat_approach].get(criterion_id, {}))
+    # An explicit profile wins over the approach preset: it is what an admin tuned, and
+    # falling back to the preset when one is set would silently discard the setting.
+    if profile is not None:
+        weights = profile.for_criterion(criterion_id)
+    else:
+        weights = dict(SOURCE_WEIGHTS[approach or settings.code_cat_approach].get(criterion_id, {}))
     conflict = ""
 
     if llm is not None and llm_confidence < settings.minimum_llm_confidence:
