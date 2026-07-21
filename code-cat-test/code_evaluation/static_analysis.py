@@ -148,6 +148,27 @@ def _looks_like_boundary_guard(test: ast.expr) -> bool:
     return False
 
 
+def _is_constant_expression(node: ast.expr) -> bool:
+    """True only when a returned expression computes NOTHING — no names, no calls.
+
+    Deliberately conservative, because of what this signal now does: it caps the
+    submission's score. The previous rule asked whether the function's PARAMETER NAMES
+    appeared in the return, which a real computation routinely fails — `return [seen[need],
+    j]` in a working two-sum mentions no parameter, so a correct solution was flagged as
+    hard-coded. Three verified-correct seeded submissions were caught that way, along with
+    seven other genuine attempts.
+
+    The asymmetry decides the rule. A false negative lets someone game a question; a false
+    positive caps a real candidate's score for cheating they did not do. Requiring the
+    return to be free of every Name and Call means only a genuinely fixed value trips it,
+    so `return [1, 2, 3]` is caught and anything assembled from a variable is not.
+    """
+    for child in ast.walk(node):
+        if isinstance(child, (ast.Name, ast.Call, ast.Attribute, ast.Await)):
+            return False
+    return True
+
+
 def analyse(code: str, function_name: str) -> StaticSignals:
     """Extract structural signals. Never raises: unparseable source is itself a signal."""
     try:
@@ -167,12 +188,17 @@ def analyse(code: str, function_name: str) -> StaticSignals:
     # demonstrating no competency at all.
     returns = visitor._returns_in_target
     if returns and visitor._target_args:
-        all_literal = all(
-            isinstance(r.value, (ast.Constant, ast.List, ast.Tuple, ast.Dict))
-            and not any(isinstance(n, ast.Name) and n.id in visitor._target_args
-                        for n in ast.walk(r.value))
-            for r in returns
+        # A branching predicate returns only True/False and is not hard-coding: the answer
+        # it computes IS which branch it reaches, so the literal is the output format
+        # rather than a substitute for working. Without this every correct
+        # `is_something()` in the bank is flagged — `is_clean_palindrome` was, twice.
+        # Branching is what separates a predicate from `return True` as a stub.
+        predicate = (
+            visitor._branch_count > 0
+            and all(isinstance(r.value, ast.Constant) and isinstance(r.value.value, bool)
+                    for r in returns)
         )
+        all_literal = not predicate and all(_is_constant_expression(r.value) for r in returns)
         if all_literal:
             signals.hard_coded_output_suspected = True
             signals.warnings.append("HARDCODED_OUTPUT: returns literals, ignores arguments")
