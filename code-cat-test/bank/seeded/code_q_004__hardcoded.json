@@ -11,10 +11,8 @@
       "tc_alternating"
     ],
     "weak_competencies": [
-      "algorithmic_reasoning",
-      "loops",
-      "complexity_awareness",
-      "boundary_conditions"
+      "T1.1",
+      "T1.4"
     ],
     "strong_competencies": [],
     "misconception_code": "HARDCODED_OUTPUT"

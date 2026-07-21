@@ -1,0 +1,15 @@
+{
+  "question_id": "T2-Q03",
+  "defect": "correct",
+  "code": "import pandas as pd\n\n\ndef clean_records(records):\n    if len(records) == 0:\n        return []\n    df = pd.DataFrame(records)\n    ages = pd.to_numeric(df[\"age\"], errors=\"coerce\")\n    median = ages.median()\n    if pd.isna(median):\n        median = 0.0\n    df[\"age\"] = ages.fillna(median).astype(float).round(2)\n    df = df.dropna(subset=[\"email\"])\n    return df.to_dict(orient=\"records\")\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [],
+    "weak_competencies": [],
+    "strong_competencies": [
+      "T2.2",
+      "T2.1",
+      "T1.4"
+    ],
+    "misconception_code": null
+  }
+}

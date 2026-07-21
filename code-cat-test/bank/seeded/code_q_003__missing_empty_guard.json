@@ -10,12 +10,10 @@
       "tc_window_before_list"
     ],
     "weak_competencies": [
-      "boundary_conditions"
+      "T1.4"
     ],
     "strong_competencies": [
-      "arrays",
-      "loops",
-      "algorithmic_reasoning"
+      "T1.1"
     ],
     "misconception_code": "MISSING_EMPTY_INPUT_GUARD"
   }

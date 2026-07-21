@@ -12,12 +12,10 @@
       "tc_tabs"
     ],
     "weak_competencies": [
-      "string_processing"
+      "T1.1"
     ],
     "strong_competencies": [
-      "loops",
-      "boundary_conditions",
-      "arrays"
+      "T1.4"
     ],
     "misconception_code": null
   }

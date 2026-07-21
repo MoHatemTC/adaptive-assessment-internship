@@ -1,0 +1,15 @@
+{
+  "question_id": "T4-Q04",
+  "defect": "correct",
+  "code": "def get_weather(city: str) -> dict:\n    \"\"\"Return the current weather for ``city`` as a structured dict.\n\n    Args:\n        city: City name; whitespace is stripped and the name is title-cased.\n\n    Returns:\n        dict: the weather reading, or an ``error`` key when the input is invalid.\n    \"\"\"\n    if not isinstance(city, str):\n        return {\"error\": \"city must be a non-empty string\"}\n    normalised = city.strip()\n    if normalised == \"\":\n        return {\"error\": \"city must be a non-empty string\"}\n    return {\n        \"city\": normalised.title(),\n        \"temperature_c\": 21.0,\n        \"conditions\": \"sunny\",\n        \"source\": \"stub\",\n    }\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [],
+    "weak_competencies": [],
+    "strong_competencies": [
+      "T4.2",
+      "T1.3",
+      "T1.4"
+    ],
+    "misconception_code": null
+  }
+}

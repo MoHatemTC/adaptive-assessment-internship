@@ -6,10 +6,8 @@
     "expected_failing_test_ids": [],
     "weak_competencies": [],
     "strong_competencies": [
-      "string_processing",
-      "loops",
-      "boundary_conditions",
-      "arrays"
+      "T1.1",
+      "T1.4"
     ],
     "misconception_code": null
   }

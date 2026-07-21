@@ -1,0 +1,15 @@
+{
+  "question_id": "T5-Q20",
+  "defect": "correct",
+  "code": "import yaml\n\nCI_WORKFLOW = \"\"\"\nname: CI\n\"on\": [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-python@v5\n        with:\n          python-version: \"3.11\"\n      - name: Install dependencies\n        run: pip install -r requirements.txt\n      - name: Run tests\n        run: pytest\n\"\"\"\n\n\ndef _walk(node, segments):\n    for segment in segments:\n        try:\n            if isinstance(node, list):\n                node = node[int(segment)]\n            else:\n                node = node[segment]\n        except (KeyError, IndexError, ValueError, TypeError):\n            return None\n    return node\n\n\ndef workflow_yaml(path=None):\n    if path is None:\n        return CI_WORKFLOW\n    parsed = yaml.safe_load(CI_WORKFLOW)\n    if path == \"\":\n        return parsed\n    return _walk(parsed, path.split(\".\"))\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [],
+    "weak_competencies": [],
+    "strong_competencies": [
+      "T5.3",
+      "T1.4",
+      "T1.1"
+    ],
+    "misconception_code": null
+  }
+}

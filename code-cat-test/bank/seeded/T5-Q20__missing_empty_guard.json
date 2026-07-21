@@ -1,0 +1,19 @@
+{
+  "question_id": "T5-Q20",
+  "defect": "missing_empty_guard",
+  "code": "import yaml\n\nWORKFLOW = \"\"\"name: CI\n\"on\": [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-python@v5\n        with:\n          python-version: \"3.11\"\n      - name: Install dependencies\n        run: pip install -r requirements.txt\n      - name: Run tests\n        run: pytest\n\"\"\"\n\n\ndef workflow_yaml(path=None):\n    if path is None:\n        return WORKFLOW\n    node = yaml.safe_load(WORKFLOW)\n    if path == \"\":\n        return node\n    for segment in path.split(\".\"):\n        if isinstance(node, list):\n            node = node[int(segment)]\n        else:\n            node = node[segment]\n    return node\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_missing_path",
+      "tc_index_out_of_range"
+    ],
+    "weak_competencies": [
+      "T1.4"
+    ],
+    "strong_competencies": [
+      "T5.3",
+      "T1.1"
+    ],
+    "misconception_code": "MISSING_EMPTY_INPUT_GUARD"
+  }
+}

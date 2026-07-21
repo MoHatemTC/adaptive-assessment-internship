@@ -11,10 +11,8 @@
       "tc_tabs"
     ],
     "weak_competencies": [
-      "string_processing",
-      "loops",
-      "boundary_conditions",
-      "arrays"
+      "T1.1",
+      "T1.4"
     ],
     "strong_competencies": [],
     "misconception_code": "HARDCODED_OUTPUT"

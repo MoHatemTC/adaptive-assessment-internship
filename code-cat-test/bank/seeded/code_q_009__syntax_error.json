@@ -15,10 +15,8 @@
       "tc_near_palindrome"
     ],
     "weak_competencies": [
-      "string_processing",
-      "boundary_conditions",
-      "loops",
-      "algorithmic_reasoning"
+      "T1.1",
+      "T1.4"
     ],
     "strong_competencies": [],
     "misconception_code": "SYNTAX_ERROR"

@@ -1,0 +1,20 @@
+{
+  "question_id": "T2-Q13",
+  "defect": "missing_empty_guard",
+  "code": "from sklearn.ensemble import RandomForestClassifier\nfrom sklearn.model_selection import train_test_split\n\n\ndef train_and_score(X, y):\n    train_x, test_x, train_y, test_y = train_test_split(\n        X, y, test_size=0.2, random_state=42\n    )\n    clf = RandomForestClassifier(n_estimators=10, random_state=42)\n    clf.fit(train_x, train_y)\n    return round(float(clf.score(test_x, test_y)), 4)\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_empty_X",
+      "tc_length_mismatch",
+      "tc_too_few_samples"
+    ],
+    "weak_competencies": [
+      "T1.4"
+    ],
+    "strong_competencies": [
+      "T2.5",
+      "T2.1"
+    ],
+    "misconception_code": "MISSING_EMPTY_INPUT_GUARD"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "question_id": "T2-Q09",
+  "defect": "correct",
+  "code": "import sqlite3\n\n\ndef top_customers(rows):\n    if len(rows) == 0:\n        return []\n    conn = sqlite3.connect(\":memory:\")\n    cur = conn.cursor()\n    cur.execute(\"CREATE TABLE orders (customer_id TEXT, amount REAL)\")\n    for customer_id, amount in rows:\n        cur.execute(\"INSERT INTO orders VALUES (?, ?)\", (str(customer_id), float(amount)))\n    cur.execute(\n        \"SELECT customer_id, SUM(amount) FROM orders \"\n        \"GROUP BY customer_id ORDER BY 2 DESC, 1 ASC LIMIT 5\"\n    )\n    out = [[cid, round(float(total), 2)] for cid, total in cur.fetchall()]\n    conn.close()\n    return out\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [],
+    "weak_competencies": [],
+    "strong_competencies": [
+      "T2.4",
+      "T1.4",
+      "T1.1"
+    ],
+    "misconception_code": null
+  }
+}

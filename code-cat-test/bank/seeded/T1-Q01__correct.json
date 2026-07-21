@@ -1,0 +1,14 @@
+{
+  "question_id": "T1-Q01",
+  "defect": "correct",
+  "code": "def top_k_frequent(items, k):\n    counts = {}\n    for item in items:\n        counts[item] = counts.get(item, 0) + 1\n    ordered = sorted(counts, key=lambda word: (-counts[word], word))\n    if k <= 0:\n        return []\n    return ordered[:k]\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [],
+    "weak_competencies": [],
+    "strong_competencies": [
+      "T1.1",
+      "T1.4"
+    ],
+    "misconception_code": null
+  }
+}

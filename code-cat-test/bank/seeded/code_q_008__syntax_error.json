@@ -15,10 +15,8 @@
       "tc_long"
     ],
     "weak_competencies": [
-      "complexity_awareness",
-      "data_structures",
-      "algorithmic_reasoning",
-      "boundary_conditions"
+      "T1.1",
+      "T1.4"
     ],
     "strong_competencies": [],
     "misconception_code": "SYNTAX_ERROR"

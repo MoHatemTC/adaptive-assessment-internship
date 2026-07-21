@@ -6,10 +6,8 @@
     "expected_failing_test_ids": [],
     "weak_competencies": [],
     "strong_competencies": [
-      "algorithmic_reasoning",
-      "loops",
-      "complexity_awareness",
-      "boundary_conditions"
+      "T1.1",
+      "T1.4"
     ],
     "misconception_code": null
   }

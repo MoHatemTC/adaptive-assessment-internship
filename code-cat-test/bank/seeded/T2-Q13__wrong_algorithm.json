@@ -1,0 +1,19 @@
+{
+  "question_id": "T2-Q13",
+  "defect": "wrong_algorithm",
+  "code": "from sklearn.ensemble import RandomForestClassifier\n\n\ndef train_and_score(X, y):\n    if not X or len(X) != len(y) or len(X) < 5:\n        return None\n    clf = RandomForestClassifier(n_estimators=10, random_state=42)\n    clf.fit(X, y)\n    return round(float(clf.score(X, y)), 4)\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_ambiguous_majority",
+      "tc_larger_sample"
+    ],
+    "weak_competencies": [
+      "T2.5"
+    ],
+    "strong_competencies": [
+      "T1.4",
+      "T2.1"
+    ],
+    "misconception_code": null
+  }
+}

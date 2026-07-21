@@ -9,13 +9,10 @@
       "tc_window_before_list"
     ],
     "weak_competencies": [
-      "boundary_conditions",
-      "algorithmic_reasoning"
+      "T1.1",
+      "T1.4"
     ],
-    "strong_competencies": [
-      "arrays",
-      "loops"
-    ],
+    "strong_competencies": [],
     "misconception_code": null
   }
 }

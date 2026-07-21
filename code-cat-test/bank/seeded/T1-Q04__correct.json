@@ -1,0 +1,15 @@
+{
+  "question_id": "T1-Q04",
+  "defect": "correct",
+  "code": "class Stack:\n    def __init__(self):\n        self.data = []\n\n    def push(self, value):\n        self.data.append(value)\n\n    def pop(self):\n        if self.is_empty():\n            raise IndexError(\"empty stack\")\n        last = self.data[-1]\n        del self.data[-1]\n        return last\n\n    def peek(self):\n        if self.is_empty():\n            raise IndexError(\"empty stack\")\n        return self.data[-1]\n\n    def is_empty(self):\n        return not self.data\n\n\ndef stack_ops(operations):\n    stack = Stack()\n    out = []\n    for op in operations:\n        try:\n            if op[0] == \"push\":\n                stack.push(op[1])\n                out.append(None)\n            elif op[0] == \"pop\":\n                out.append(stack.pop())\n            elif op[0] == \"peek\":\n                out.append(stack.peek())\n            else:\n                out.append(stack.is_empty())\n        except IndexError:\n            out.append(\"IndexError\")\n    return out\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [],
+    "weak_competencies": [],
+    "strong_competencies": [
+      "T1.2",
+      "T1.4",
+      "T1.1"
+    ],
+    "misconception_code": null
+  }
+}

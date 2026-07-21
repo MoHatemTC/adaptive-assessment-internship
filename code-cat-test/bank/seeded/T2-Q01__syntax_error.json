@@ -1,0 +1,25 @@
+{
+  "question_id": "T2-Q01",
+  "defect": "syntax_error",
+  "code": "import pandas as pd\n\n\ndef revenue_per_user(rows):\n    df = pd.DataFrame(rows\n    return df.groupby(\"user_id\")[\"revenue\"].sum().to_dict()\n",
+  "ground_truth": {
+    "expected_failing_test_ids": [
+      "tc_basic",
+      "tc_single_user",
+      "tc_tie_break_alphabetical",
+      "tc_negative_refund",
+      "tc_float_rounding",
+      "tc_empty_rows",
+      "tc_zero_revenue",
+      "tc_many_users",
+      "tc_all_same_user"
+    ],
+    "weak_competencies": [
+      "T2.1",
+      "T1.4",
+      "T1.1"
+    ],
+    "strong_competencies": [],
+    "misconception_code": "SYNTAX_ERROR"
+  }
+}

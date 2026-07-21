@@ -8,12 +8,10 @@
       "tc_all_unique"
     ],
     "weak_competencies": [
-      "data_structures",
-      "algorithmic_reasoning"
+      "T1.1"
     ],
     "strong_competencies": [
-      "loops",
-      "boundary_conditions"
+      "T1.4"
     ],
     "misconception_code": null
   }

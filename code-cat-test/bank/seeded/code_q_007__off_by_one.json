@@ -13,12 +13,10 @@
       "tc_deep_left"
     ],
     "weak_competencies": [
-      "boundary_conditions"
+      "T1.4"
     ],
     "strong_competencies": [
-      "recursion",
-      "data_structures",
-      "algorithmic_reasoning"
+      "T1.1"
     ],
     "misconception_code": "OFF_BY_ONE_BOUNDARY"
   }
