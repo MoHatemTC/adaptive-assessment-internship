@@ -174,6 +174,113 @@ def filter_candidates(
 
 
 # --- section 15: ranking ----------------------------------------------------
+# Mastery grid for posterior-weighted quantities. 41 points over [0, 1], matching the
+# MCQ engine's 41 points over [-4, 4]: fine enough that discretisation error is far below
+# any realistic standard error, coarse enough to be microseconds.
+MASTERY_GRID = [i / 40.0 for i in range(41)]
+
+# KL while the estimate is still vague, expected Fisher once it is worth localising
+# around. Three items is where the MCQ engine found the standard error worth trusting,
+# and the Beta posterior here follows the same shape: SE 0.289 -> 0.220 -> 0.199 over the
+# first three, after which it is flat enough for a local criterion to mean something.
+KL_PHASE_ITEMS = 3
+
+# KL neighbourhood at the first item, as a fraction of the ability range. The MCQ engine
+# uses delta = 3.0 on a theta range of 8, and mastery spans 1, so the same proportion is
+# 0.375. It shrinks as sqrt(n+1): early on ask which question separates a wide region of
+# ability, later a narrow one.
+KL_DELTA_AT_START = 0.375
+
+
+def _probability_correct(question: dict, mastery: float) -> float:
+    a = max(float(question.get("discrimination", 1.0)), 0.1)
+    difficulty = float(question["difficulty"])
+    return 1.0 / (1.0 + math.exp(-1.7 * a * (mastery - difficulty)))
+
+
+def beta_posterior_grid(alpha: float, beta: float) -> list[float]:
+    """The Beta posterior evaluated on MASTERY_GRID and normalised to sum to 1.
+
+    Makes the belief an explicit object rather than a mean and a standard deviation, which
+    is what posterior-expected information needs: you cannot average a function over a
+    distribution you only have two moments of.
+
+    Computed in log space — alpha and beta reach double figures after a few questions, and
+    m**(alpha-1) underflows to zero across most of the grid well before that, which would
+    silently return a degenerate posterior concentrated on one point.
+    """
+    logs = []
+    for m in MASTERY_GRID:
+        m = min(max(m, 1e-9), 1.0 - 1e-9)
+        logs.append((alpha - 1.0) * math.log(m) + (beta - 1.0) * math.log(1.0 - m))
+    peak = max(logs)
+    weights = [math.exp(v - peak) for v in logs]
+    total = sum(weights) or 1.0
+    return [w / total for w in weights]
+
+
+def fisher_information(question: dict, mastery: float, loading: float = 1.0) -> float:
+    """Fisher information at a point on the mastery scale.
+
+        I = a^2 * P * (1 - P) * loading
+
+    This IS the exact 3PL quantity the MCQ engine uses, at c = 0:
+
+        a^2 * ((P - c)/(1 - c))^2 * (1 - P)/P   ->   a^2 * P * (1 - P)
+
+    and c = 0 is correct here rather than an approximation — a candidate cannot guess
+    their way to a passing test suite the way they can guess a multiple-choice option.
+    """
+    p = _probability_correct(question, mastery)
+    a = max(float(question.get("discrimination", 1.0)), 0.1)
+    return (a**2) * p * (1.0 - p) * loading
+
+
+def expected_fisher_information(
+    question: dict, posterior: list[float], loading: float = 1.0
+) -> float:
+    """Fisher information averaged over the posterior rather than taken at its mean.
+
+    Information at a point estimate is only the right criterion if the point estimate is
+    right. Early in a session it is not, so maximising I(mastery_hat) chases a number that
+    is still moving and can select a question the next response invalidates. Weighting by
+    where the candidate plausibly IS uses the same belief the estimate is read from.
+    """
+    return sum(
+        w * fisher_information(question, m, loading)
+        for m, w in zip(MASTERY_GRID, posterior)
+    )
+
+
+def kl_information(
+    question: dict, mastery_hat: float, delta: float, loading: float = 1.0
+) -> float:
+    """KL divergence between response distributions at `mastery_hat` and nearby.
+
+    Used for the first few questions, where Fisher information is a poor criterion because
+    it is LOCAL: it asks which question is most informative exactly here, when "here" is
+    barely known. KL integrates over a neighbourhood, so it prefers questions that separate
+    a whole region of ability — which is what an early question is for.
+    """
+    p_hat = min(max(_probability_correct(question, mastery_hat), 1e-9), 1.0 - 1e-9)
+    total = 0.0
+    for m in MASTERY_GRID:
+        if abs(m - mastery_hat) > delta:
+            continue
+        p = min(max(_probability_correct(question, m), 1e-9), 1.0 - 1e-9)
+        total += p_hat * math.log(p_hat / p) + (1.0 - p_hat) * math.log((1.0 - p_hat) / (1.0 - p))
+    return total * loading
+
+
+def selection_criterion(evidence_count: int) -> str:
+    """Which information criterion applies at this point in the session."""
+    return "KL" if evidence_count < KL_PHASE_ITEMS else "E[Fisher]"
+
+
+def kl_delta(evidence_count: int) -> float:
+    return KL_DELTA_AT_START / math.sqrt(evidence_count + 1)
+
+
 def expected_information(question: dict, mastery: float, loading: float) -> float:
     """Information this question carries about a competency at the current estimate.
 
@@ -216,7 +323,18 @@ def rank_candidates(
     described no competency in particular.
     """
     ranked: list[RankedCandidate] = []
+    scratch: list[tuple] = []
     open_misconceptions = {c for s in model.states.values() for c in s.misconception_codes}
+
+    # Which criterion this step uses, and the belief it is computed against. Both are
+    # properties of the session, not of a candidate question, so they are resolved once.
+    if target_competency:
+        target_state = model.get(target_competency)
+        criterion = selection_criterion(target_state.evidence_count)
+        posterior = beta_posterior_grid(target_state.alpha, target_state.beta)
+        delta = kl_delta(target_state.evidence_count)
+    else:
+        criterion, posterior, delta = "E[Fisher]", None, kl_delta(0)
 
     for question in candidates:
         targets = [c["competency_id"] for c in question["competencies"]]
@@ -224,13 +342,17 @@ def rank_candidates(
         weights = [c["weight"] for c in question["competencies"]]
 
         if target_competency:
-            target_state = model.get(target_competency)
             loading = competency_weight(question, target_competency)
             # Ability the question is matched against: the target's own estimate, or the
             # midpoint while it is still unmeasured (where information is maximal anyway).
             ability = target_state.mastery if target_state.observed else 0.5
             uncertainty = target_state.standard_error
-            information = expected_information(question, ability, loading)
+            # KL while the estimate is vague, posterior-expected Fisher once it is worth
+            # localising around — the MCQ engine's phase switch, on the mastery scale.
+            if criterion == "KL":
+                information = kl_information(question, ability, delta, loading)
+            else:
+                information = expected_fisher_information(question, posterior, loading)
         else:
             loading = 0.0
             observed = [s for s in states if s.observed]
@@ -255,6 +377,7 @@ def rank_candidates(
 
         signals = {
             "expected_information": round(information, 4),
+            "criterion": criterion,
             "competency_uncertainty": round(uncertainty, 4),
             "ability_estimate": round(ability, 4),
             "blueprint_need": round(coverage, 4),
@@ -262,11 +385,23 @@ def rank_candidates(
             "target_loading": round(loading, 4),
         }
 
+        scratch.append((question, information, uncertainty, relevance, coverage, signals))
+
+    # Information is normalised against the best candidate BEFORE it is blended, because
+    # KL and Fisher are not on the same scale — KL sums a divergence over a neighbourhood,
+    # Fisher averages a variance. Blending either raw against fixed 0.20/0.15 weights would
+    # silently change how much information counts at the moment the criterion switches, so
+    # the phase change would alter selection for a reason unrelated to the candidate.
+    # Relative to the best available option is the comparison the ranking actually needs.
+    peak = max((info for _, info, *_ in scratch), default=0.0) or 1.0
+
+    for question, information, uncertainty, relevance, coverage, signals in scratch:
+        signals["information_relative"] = round(information / peak, 4)
         # Information leads. Uncertainty scales it: when the target is already precisely
         # estimated there is little left to learn and coverage/misconception work matter
         # relatively more — which is also when the stopping rule is about to fire anyway.
         utility = (
-            0.45 * information
+            0.45 * (information / peak)
             + 0.20 * uncertainty
             + 0.20 * relevance
             + 0.15 * coverage
@@ -280,7 +415,12 @@ def rank_candidates(
 
 
 def _explain(signals: dict[str, float]) -> str:
-    top = max(signals, key=signals.get)
+    # Numeric signals only: `criterion` is a label, and max() over a mix of str and float
+    # raises rather than ranking.
+    numeric = {k: v for k, v in signals.items() if isinstance(v, (int, float))}
+    if not numeric:
+        return "Best available utility."
+    top = max(numeric, key=numeric.get)
     return {
         "expected_information": "Most informative at the current ability estimate.",
         "competency_uncertainty": "The competency under test is still imprecise.",
