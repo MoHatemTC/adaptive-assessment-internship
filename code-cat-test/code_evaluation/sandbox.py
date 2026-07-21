@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 # solution is not marked as a timeout, tight enough that an infinite loop is caught.
 EXECUTION_TIMEOUT_SECONDS = 30
 
+# Inside the sandbox only; never a host path.
+_HARNESS_PATH = "/tmp/_cat_harness.py"
+
 
 @dataclass
 class TestOutcome:
@@ -155,6 +158,56 @@ def _create_sandbox():
         return Sandbox(api_key=kwargs["api_key"], timeout=kwargs["timeout"])
 
 
+@dataclass
+class _Logs:
+    stdout: list[str]
+    stderr: list[str] = field(default_factory=list)
+
+
+@dataclass
+class _Execution:
+    """The shape run_code returns, so both execution paths look identical downstream."""
+
+    logs: _Logs
+    error: object = None
+
+
+def _run_harness(sandbox, harness: str):
+    """Execute the harness in a FRESH INTERPRETER, not the sandbox's notebook kernel.
+
+    `run_code` evaluates inside a Jupyter kernel that already has a running asyncio event
+    loop, so any submission calling `asyncio.run()` dies with "cannot be called from a
+    running event loop" — no matter how correct it is. That is a property of our harness
+    being reported as a property of the candidate's code, which is the worst class of bug
+    this system can have: it fails a correct submission and blames the person who wrote it.
+
+    It was not hypothetical. The one async question in the bank marked its own verified
+    reference solution as failing 7 of 8 tests, and every approach then dutifully scored
+    the resulting wreckage — including in live sessions.
+
+    Running via `commands.run` gives a clean process with no loop of its own. Untrusted
+    code is still confined to the sandbox: this changes which interpreter inside it
+    executes the harness, not what the harness is allowed to reach.
+    """
+    if hasattr(sandbox, "files") and hasattr(sandbox, "commands"):
+        sandbox.files.write(_HARNESS_PATH, harness)
+        result = sandbox.commands.run(
+            f"python3 {_HARNESS_PATH}",
+            timeout=EXECUTION_TIMEOUT_SECONDS,
+        )
+        stdout = result.stdout if isinstance(result.stdout, list) else [result.stdout or ""]
+        stderr = result.stderr if isinstance(result.stderr, list) else [result.stderr or ""]
+        return _Execution(logs=_Logs(stdout=stdout, stderr=stderr))
+
+    # Older SDK without a filesystem API: the event-loop hazard remains, so say so rather
+    # than letting async submissions fail silently and look like candidate errors.
+    logger.warning(
+        "e2b SDK exposes no files/commands API — falling back to the notebook kernel, "
+        "where asyncio.run() submissions will fail spuriously."
+    )
+    return sandbox.run_code(harness, timeout=EXECUTION_TIMEOUT_SECONDS)
+
+
 def _blank_results(tests: list[dict], failure_type: str, detail: str) -> list[TestOutcome]:
     return [
         TestOutcome(t["test_id"], False, 0.0, failure_type, detail) for t in tests
@@ -179,7 +232,7 @@ def run_submission(code: str, tests: list[dict], function_name: str) -> Executio
     sandbox = None
     try:
         sandbox = _create_sandbox()
-        execution = sandbox.run_code(harness, timeout=EXECUTION_TIMEOUT_SECONDS)
+        execution = _run_harness(sandbox, harness)
     except Exception as exc:  # sandbox creation, network, quota — not the learner's fault
         logger.error("sandbox unavailable: %s: %s", type(exc).__name__, exc)
         return ExecutionEvidence(
