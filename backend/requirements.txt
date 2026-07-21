@@ -1,0 +1,20 @@
+# Config & validation — matches the parent project
+pydantic>=2.9,<3
+pydantic-settings>=2.0,<3
+
+# LLM: all calls route through the LiteLLM proxy, as in the parent project
+openai>=1.50,<3
+
+# Ability estimation. The posterior is a grid, so this is a hard requirement, not a
+# convenience — it is not listed in the parent project's requirements and must be added
+# there when these modules are merged in.
+numpy>=1.26,<3
+
+# Tests
+pytest>=8.0
+pytest-asyncio>=0.24
+
+# Untrusted code execution for the code engine. 2.x only: 1.x has no Sandbox.create() and
+# no files/commands API, which the engine needs to run submissions outside the sandbox's
+# notebook kernel — inside it, any asyncio.run() submission fails however correct it is.
+e2b-code-interpreter>=2.0,<3
