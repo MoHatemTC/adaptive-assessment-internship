@@ -41,6 +41,7 @@ from code_evaluation import scoring
 from code_evaluation.weight_profile import CRITERIA, WeightProfile
 from cat.selection import (
     choose,
+    stop_rule_calibration,
     competency_weight,
     evaluate_stop,
     filter_candidates,
@@ -242,6 +243,10 @@ if _profile.fingerprint() != WeightProfile.from_preset(
         f"Custom split `{_profile.fingerprint()}` · "
         f"LLM {_profile.overall_shares()['llm']:.0%} of the score"
     )
+
+_calibration = stop_rule_calibration()
+if _calibration["verdict"] != "BINDING":
+    st.sidebar.warning(f"Stopping rule **{_calibration['verdict']}** — {_calibration['detail']}")
 
 mode = st.sidebar.radio("Mode", ["Assessment", "Inspector"])
 active = run()
