@@ -7,6 +7,9 @@ actually executed. A run whose results cannot be attributed to a variant is not 
 
 from __future__ import annotations
 
+import json
+import logging
+
 import os
 from typing import Literal
 
@@ -95,9 +98,41 @@ class Settings(BaseSettings):
     # model behaves.
     minimum_relative_utility: float = Field(default=0.75, ge=0.0, le=1.0)
 
+    # --- admin control of the logic/LLM split ---
+    # Off by default. The admin panel changes how every subsequent submission is scored,
+    # so it must be opted into deliberately rather than shipped open. This is a feature
+    # gate, NOT authentication: Streamlit has no user model here, so anyone who can reach
+    # an admin-enabled deployment can change the weights. Put a real auth layer in front
+    # of it before exposing it beyond a trusted operator.
+    code_cat_admin: bool = False
+    # Optional JSON, e.g. {"code_quality": 0.5, "algorithm_choice": 0.2}. Applied on top
+    # of the approach preset for headless runs (score_approach.py, batch scoring) where
+    # there is no UI to set it in.
+    code_cat_llm_shares: str = ""
+
     # --- LLM evidence handling (section 12) ---
     # Below this, the model's contribution is down-weighted rather than trusted.
     minimum_llm_confidence: float = Field(default=0.70, ge=0.0, le=1.0)
+
+    def llm_share_override(self) -> dict[str, float]:
+        """Parsed `code_cat_llm_shares`, or {} when unset or malformed.
+
+        Never raises. A typo in an environment variable must not take down scoring — it
+        falls back to the approach preset, which is a defined, documented split rather
+        than an arbitrary one.
+        """
+        raw = (self.code_cat_llm_shares or "").strip()
+        if not raw:
+            return {}
+        try:
+            parsed = json.loads(raw)
+            return {str(k): float(v) for k, v in parsed.items()}
+        except (ValueError, TypeError, AttributeError):
+            logging.getLogger(__name__).warning(
+                "CODE_CAT_LLM_SHARES is not valid JSON (%r) — using the %s preset instead",
+                raw[:80], self.code_cat_approach,
+            )
+            return {}
 
 
 _load_streamlit_secrets()

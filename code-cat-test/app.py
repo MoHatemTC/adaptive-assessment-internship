@@ -30,12 +30,15 @@ from cat import session_log, trace as trace_mod
 from cat.competency_state import LearnerModel
 from cat.config import settings
 from cat.pipeline import (
+    active_profile as pipeline_active_profile,
     apply_to_learner,
     audit_record,
     evaluate_submission,
     load_bank,
     result_to_dict,
 )
+from code_evaluation import scoring
+from code_evaluation.weight_profile import CRITERIA, WeightProfile
 from cat.selection import (
     choose,
     competency_weight,
@@ -146,6 +149,99 @@ st.sidebar.caption(APPROACH_LABEL[settings.code_cat_approach])
 st.sidebar.caption(f"model `{settings.litellm_model}`")
 if not settings.e2b_api_key:
     st.sidebar.error("E2B_API_KEY is not set — no code can be executed.")
+
+
+def current_profile() -> WeightProfile:
+    """The split in force for this browser session."""
+    stored = st.session_state.get("weight_profile")
+    if stored is not None:
+        return stored
+    return pipeline_active_profile(settings.code_cat_approach)
+
+
+CRITERION_HELP = {
+    "functional_correctness": "Does it produce the right answers. Tests measure this directly.",
+    "edge_case_handling": "Boundaries and empty input. Measured by boundary tests; structure shows a missing guard even when no test probes it.",
+    "algorithm_choice": "Was the approach appropriate. Structure sees complexity, nesting and hard-coded returns.",
+    "code_quality": "Readability and style. The one criterion with no objective ground truth.",
+}
+
+
+def render_admin_panel() -> None:
+    """Set how much of each criterion the model decides.
+
+    The slider is the model's share; the remainder returns to tests and static analysis in
+    the base approach's own ratio. Shown with the resulting overall split, because the
+    per-criterion numbers are not what an operator is actually deciding — "the model
+    decides 30% of the score" is.
+    """
+    preset = WeightProfile.from_preset(settings.code_cat_approach, scoring.SOURCE_WEIGHTS)
+    profile = current_profile()
+
+    with st.sidebar.expander("⚙ Admin · scoring split", expanded=False):
+        st.caption(
+            f"Base preset **{settings.code_cat_approach}**. Each slider is the LLM's share "
+            "of that criterion; the rest goes back to tests and static analysis."
+        )
+        shares = {}
+        for criterion in CRITERIA:
+            shares[criterion] = st.slider(
+                criterion.replace("_", " "),
+                min_value=0, max_value=100,
+                value=int(round(profile.llm_shares().get(criterion, 0.0) * 100)),
+                step=5, key=f"share_{criterion}",
+                help=CRITERION_HELP[criterion],
+            ) / 100.0
+
+        tuned = preset.with_llm_shares(shares)
+        overall = tuned.overall_shares()
+
+        st.markdown("**Resulting authority over the whole score**")
+        st.dataframe(
+            [{"source": k, "share": f"{v:.1%}"} for k, v in overall.items()],
+            hide_index=True, **WIDE,
+        )
+        st.caption(f"profile `{tuned.fingerprint()}` · recorded with every score")
+
+        for problem in tuned.validate():
+            st.error(problem)
+
+        if tuned.contradiction_risk() > 0:
+            st.warning(
+                f"The model holds **{tuned.contradiction_risk():.0%}** of functional "
+                "correctness — the one criterion where it can contradict a measured fact. "
+                "The anchoring clamp still blocks a score above the test result, but "
+                "below that line the model's opinion now moves a factual criterion."
+            )
+        if not tuned.uses_llm():
+            st.info(
+                "No criterion gives the model weight, so no LLM calls will be made. "
+                "Misconception diagnosis goes with them — that is the one thing the model "
+                "measurably adds (recall 0.12 → 1.00)."
+            )
+
+        c1, c2 = st.columns(2)
+        if c1.button("Apply", type="primary"):
+            st.session_state["weight_profile"] = tuned
+            st.rerun()
+        if c2.button("Reset to preset"):
+            st.session_state.pop("weight_profile", None)
+            for criterion in CRITERIA:
+                st.session_state.pop(f"share_{criterion}", None)
+            st.rerun()
+
+
+if settings.code_cat_admin:
+    render_admin_panel()
+
+_profile = current_profile()
+if _profile.fingerprint() != WeightProfile.from_preset(
+    settings.code_cat_approach, scoring.SOURCE_WEIGHTS
+).fingerprint():
+    st.sidebar.info(
+        f"Custom split `{_profile.fingerprint()}` · "
+        f"LLM {_profile.overall_shares()['llm']:.0%} of the score"
+    )
 
 mode = st.sidebar.radio("Mode", ["Assessment", "Inspector"])
 active = run()
@@ -568,7 +664,7 @@ if mode == "Assessment":
     if st.button("Submit", type="primary"):
         before = active["model"].snapshot()
         with st.spinner("Running your code in the sandbox…"):
-            result = evaluate_submission(question, code)
+            result = evaluate_submission(question, code, profile=current_profile())
         apply_to_learner(active["model"], result)
         after = active["model"].snapshot()
         active["answered"].append({"question_id": question["question_id"]})
@@ -623,7 +719,7 @@ else:
 
     if st.button("Run through the pipeline", type="primary"):
         with st.spinner("Executing…"):
-            result = evaluate_submission(question, entry["code"])
+            result = evaluate_submission(question, entry["code"], profile=current_profile())
 
         failed = {o.test_id for o in result.execution.test_results if not o.passed}
         expected = set(truth["expected_failing_test_ids"])
