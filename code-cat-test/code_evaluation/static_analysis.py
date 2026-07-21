@@ -25,6 +25,7 @@ class StaticSignals:
     uses_comprehension: bool = False
     nested_loop_depth: int = 0
     hard_coded_output_suspected: bool = False
+    not_implemented: bool = False
     mutates_argument: bool = False
     has_boundary_guard: bool = False
     cyclomatic_complexity: int = 1
@@ -40,6 +41,7 @@ class StaticSignals:
             "uses_comprehension": self.uses_comprehension,
             "nested_loop_depth": self.nested_loop_depth,
             "hard_coded_output_suspected": self.hard_coded_output_suspected,
+            "not_implemented": self.not_implemented,
             "mutates_argument": self.mutates_argument,
             "has_boundary_guard": self.has_boundary_guard,
             "cyclomatic_complexity": self.cyclomatic_complexity,
@@ -98,6 +100,17 @@ class _Visitor(ast.NodeVisitor):
 
         if node.name == self.function_name:
             self._target_args = {a.arg for a in node.args.args}
+            # A body of `...`, `pass`, or nothing but a docstring is not an
+            # implementation. Without this the analyser sees a syntactically valid
+            # function with no loops, no nesting and no suspicious returns, and scores it
+            # full marks for algorithm choice and code quality — a stub scored 0.51
+            # overall on the objective-only approach.
+            body = [
+                n for n in node.body
+                if not (isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant))
+                and not isinstance(n, ast.Pass)
+            ]
+            self.signals.not_implemented = not body
             self._returns_in_target = [
                 n for n in ast.walk(node) if isinstance(n, ast.Return) and n.value is not None
             ]
