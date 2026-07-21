@@ -125,6 +125,18 @@ class Settings(BaseSettings):
     # recall 0.22 -> 0.92 — and should be purchasable separately.
     code_llm_diagnosis_when_unweighted: bool = False
 
+    # --- orchestrator: cross-modality assessment -------------------------------
+    # Items offered to the picking agent per variable. Wide enough that the choice is
+    # meaningful, narrow enough that the prompt stays small.
+    orchestrator_shortlist_size: int = Field(default=5, ge=1)
+    # Below this fraction of the best available information the picker's choice is
+    # overridden. The only bound on how bad a constrained pick can be.
+    orchestrator_minimum_relative_utility: float = Field(default=0.75, ge=0.0, le=1.0)
+    # Whole-assessment budget, across every variable. Per-variable stopping is the MCQ
+    # engine's convergence rule; this is the outer bound.
+    orchestrator_max_items: int = Field(default=60, ge=1)
+    orchestrator_time_limit_minutes: int = Field(default=90, ge=1)
+
     def llm_share_override(self) -> dict[str, float]:
         """Parsed `code_llm_shares`, or {} when unset or malformed.
 
