@@ -122,6 +122,39 @@ print("__RESULT__" + json.dumps({{
 '''
 
 
+def _create_sandbox():
+    """Open a sandbox across e2b SDK generations.
+
+    2.x exposes a `Sandbox.create(...)` classmethod; 1.x only has the constructor and
+    takes different keyword names. Pinning alone should make this unnecessary — and the
+    pin was wrong once already, shipping `>=1.0,<2` while every line here was written and
+    tested against 2.8.1, so every deploy resolved a 1.x and died on
+    "type object 'Sandbox' has no attribute 'create'". The shim means a version skew
+    degrades to a working sandbox instead of an outage.
+    """
+    from e2b_code_interpreter import Sandbox
+
+    kwargs = {
+        "api_key": settings.e2b_api_key,
+        "timeout": EXECUTION_TIMEOUT_SECONDS * 2,
+        # Learner code has no reason to reach the network, and every reason not to.
+        "allow_internet_access": False,
+    }
+    if hasattr(Sandbox, "create"):
+        return Sandbox.create(**kwargs)
+
+    try:
+        return Sandbox(**kwargs)
+    except TypeError:
+        # 1.x did not accept allow_internet_access. Losing network isolation silently
+        # would be worse than failing, so this is the last resort and it is logged.
+        logger.warning(
+            "e2b SDK predates allow_internet_access — sandbox will have network access. "
+            "Upgrade to e2b-code-interpreter>=2.0."
+        )
+        return Sandbox(api_key=kwargs["api_key"], timeout=kwargs["timeout"])
+
+
 def _blank_results(tests: list[dict], failure_type: str, detail: str) -> list[TestOutcome]:
     return [
         TestOutcome(t["test_id"], False, 0.0, failure_type, detail) for t in tests
@@ -138,8 +171,6 @@ def run_submission(code: str, tests: list[dict], function_name: str) -> Executio
     """
     import time
 
-    from e2b_code_interpreter import Sandbox
-
     started = time.time()
     harness = _HARNESS.format(
         submission=code, tests=json.dumps(tests), function_name=function_name
@@ -147,12 +178,7 @@ def run_submission(code: str, tests: list[dict], function_name: str) -> Executio
 
     sandbox = None
     try:
-        sandbox = Sandbox.create(
-            api_key=settings.e2b_api_key,
-            timeout=EXECUTION_TIMEOUT_SECONDS * 2,
-            # Learner code has no reason to reach the network, and every reason not to.
-            allow_internet_access=False,
-        )
+        sandbox = _create_sandbox()
         execution = sandbox.run_code(harness, timeout=EXECUTION_TIMEOUT_SECONDS)
     except Exception as exc:  # sandbox creation, network, quota — not the learner's fault
         logger.error("sandbox unavailable: %s: %s", type(exc).__name__, exc)

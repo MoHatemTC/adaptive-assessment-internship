@@ -6,6 +6,6 @@ streamlit>=1.32,<2
 pandas>=2.1,<3          # app.py renders the CAT trajectory with it
 numpy>=1.26,<3
 openai>=1.50,<3         # LLM calls, via the LiteLLM proxy
-e2b-code-interpreter>=1.0,<2   # the only place learner code ever executes
+e2b-code-interpreter>=2.0,<3   # 2.x only: 1.x has no Sandbox.create()
 pydantic>=2.9,<3
 pydantic-settings>=2.0,<3

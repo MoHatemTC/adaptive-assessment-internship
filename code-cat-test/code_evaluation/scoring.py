@@ -98,11 +98,15 @@ def static_criterion_scores(signals: StaticSignals) -> dict[str, float]:
     scores["edge_case_handling"] = 1.0 if signals.has_boundary_guard else 0.35
 
     algorithm = 1.0
-    if signals.hard_coded_output_suspected:
+    if signals.not_implemented or signals.hard_coded_output_suspected:
         algorithm = 0.0  # no algorithm was demonstrated at all
     elif signals.nested_loop_depth >= 2:
         algorithm = 0.5
     scores["algorithm_choice"] = algorithm
+
+    if signals.not_implemented:
+        # Nothing was written, so there is nothing to judge for readability either.
+        return {**scores, "algorithm_choice": 0.0, "code_quality": 0.0}
 
     quality = 1.0
     if signals.cyclomatic_complexity > 10:
