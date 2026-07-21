@@ -73,6 +73,26 @@ def evaluate_submission(
         else LLMEvaluation(available=False)
     )
 
+    # An unusable run measured nothing, so every criterion is unscored. Deriving them
+    # anyway produced a full score sheet for a submission that never executed: the
+    # passed-test ratio reads 0.0 because zero of N tests passed, static analysis happily
+    # scores the source, and the UI showed "Overall 0.537" beside "nothing about this
+    # submission was measured". A ratio over tests that never ran is not a measurement.
+    if not execution.usable:
+        criterion_scores = [
+            CriterionScore(c["criterion_id"], None, {}, 0.0, "NOT_ASSESSED")
+            for c in question["rubric_criteria"]
+        ]
+        return EvaluationResult(
+            question_id=question["question_id"], approach=approach, rubric_id=rubric_id,
+            execution=execution, signals=signals, llm=llm,
+            criterion_scores=criterion_scores,
+            competency_evidence=normalize(question, criterion_scores, execution, llm, signals),
+            overall_score=None,
+            evaluation_latency_ms=int((time.time() - started) * 1000),
+            flags=[f"SANDBOX_UNAVAILABLE: {execution.error_message[:160]}"],
+        )
+
     objective = scoring.objective_criterion_scores(execution, signals, question["tests"])
     static = scoring.static_criterion_scores(signals)
 
