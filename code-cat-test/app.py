@@ -195,14 +195,19 @@ def render_admin_panel() -> None:
             ) / 100.0
 
         tuned = preset.with_llm_shares(shares)
-        overall = tuned.overall_shares()
+        overall = tuned.overall_shares(scoring.criterion_weights(bank()[0]))
 
         st.markdown("**Resulting authority over the whole score**")
         st.dataframe(
             [{"source": k, "share": f"{v:.1%}"} for k, v in overall.items()],
             hide_index=True, **WIDE,
         )
-        st.caption(f"profile `{tuned.fingerprint()}` · recorded with every score")
+        st.caption(
+            f"profile `{tuned.fingerprint()}` · recorded with every score. Shares are "
+            "EFFECTIVE: weights on a source that cannot score a criterion (tests cannot "
+            "judge algorithm choice) are dropped and renormalised, and criteria are "
+            "weighted by the bank's maximum_score rather than counted equally."
+        )
 
         for problem in tuned.validate():
             st.error(problem)

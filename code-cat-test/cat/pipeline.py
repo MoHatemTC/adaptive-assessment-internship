@@ -145,10 +145,9 @@ def evaluate_submission(
     criterion_scores, integrity_reason = scoring.apply_integrity_cap(criterion_scores, signals)
 
     competency_evidence = normalize(question, criterion_scores, execution, llm, signals)
-    scored = [c for c in criterion_scores if c.score is not None]
     # None, not 0.0, when nothing could be assessed: an unusable run has no score, and
     # showing 0.0 (or the 0.5 an averaged stub produced) reads as a measurement.
-    overall = sum(c.score for c in scored) / len(scored) if scored else None
+    overall = scoring.overall_score(criterion_scores, question)
 
     return EvaluationResult(
         question_id=question["question_id"],

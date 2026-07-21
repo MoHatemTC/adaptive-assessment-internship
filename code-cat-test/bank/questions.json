@@ -9,7 +9,7 @@
     "discrimination": 0.75,
     "estimated_time_seconds": 300,
     "competency": "Python & Software Engineering",
-    "sub_competency": "T1.1 \u00b7 Core Python & data structures",
+    "sub_competency": "T1.1 · Core Python & data structures",
     "competencies": [
       {
         "competency_id": "T1.1",
@@ -23,11 +23,11 @@
     "rubric_criteria": [
       {
         "criterion_id": "functional_correctness",
-        "maximum_score": 4
+        "maximum_score": 8
       },
       {
         "criterion_id": "edge_case_handling",
-        "maximum_score": 4
+        "maximum_score": 5
       },
       {
         "criterion_id": "algorithm_choice",
@@ -35,7 +35,7 @@
       },
       {
         "criterion_id": "code_quality",
-        "maximum_score": 4
+        "maximum_score": 3
       }
     ],
     "prerequisites": [],
@@ -230,7 +230,7 @@
     "discrimination": 1.05,
     "estimated_time_seconds": 420,
     "competency": "Python & Software Engineering",
-    "sub_competency": "T1.1 \u00b7 Core Python & data structures",
+    "sub_competency": "T1.1 · Core Python & data structures",
     "competencies": [
       {
         "competency_id": "T1.1",
@@ -244,11 +244,11 @@
     "rubric_criteria": [
       {
         "criterion_id": "functional_correctness",
-        "maximum_score": 4
+        "maximum_score": 8
       },
       {
         "criterion_id": "edge_case_handling",
-        "maximum_score": 4
+        "maximum_score": 5
       },
       {
         "criterion_id": "algorithm_choice",
@@ -256,7 +256,7 @@
       },
       {
         "criterion_id": "code_quality",
-        "maximum_score": 4
+        "maximum_score": 3
       }
     ],
     "prerequisites": [],
@@ -482,7 +482,7 @@
     "discrimination": 1.35,
     "estimated_time_seconds": 480,
     "competency": "Python & Software Engineering",
-    "sub_competency": "T1.4 \u00b7 Error handling & robustness",
+    "sub_competency": "T1.4 · Error handling & robustness",
     "competencies": [
       {
         "competency_id": "T1.4",
@@ -496,11 +496,11 @@
     "rubric_criteria": [
       {
         "criterion_id": "functional_correctness",
-        "maximum_score": 4
+        "maximum_score": 8
       },
       {
         "criterion_id": "edge_case_handling",
-        "maximum_score": 4
+        "maximum_score": 5
       },
       {
         "criterion_id": "algorithm_choice",
@@ -508,7 +508,7 @@
       },
       {
         "criterion_id": "code_quality",
-        "maximum_score": 4
+        "maximum_score": 3
       }
     ],
     "prerequisites": [],
@@ -711,7 +711,7 @@
     "discrimination": 1.55,
     "estimated_time_seconds": 600,
     "competency": "Python & Software Engineering",
-    "sub_competency": "T1.1 \u00b7 Core Python & data structures",
+    "sub_competency": "T1.1 · Core Python & data structures",
     "competencies": [
       {
         "competency_id": "T1.1",
@@ -725,11 +725,11 @@
     "rubric_criteria": [
       {
         "criterion_id": "functional_correctness",
-        "maximum_score": 4
+        "maximum_score": 8
       },
       {
         "criterion_id": "edge_case_handling",
-        "maximum_score": 4
+        "maximum_score": 5
       },
       {
         "criterion_id": "algorithm_choice",
@@ -737,7 +737,7 @@
       },
       {
         "criterion_id": "code_quality",
-        "maximum_score": 4
+        "maximum_score": 3
       }
     ],
     "prerequisites": [],
@@ -922,7 +922,7 @@
     "discrimination": 1.2,
     "estimated_time_seconds": 480,
     "competency": "Python & Software Engineering",
-    "sub_competency": "T1.1 \u00b7 Core Python & data structures",
+    "sub_competency": "T1.1 · Core Python & data structures",
     "competencies": [
       {
         "competency_id": "T1.1",
@@ -936,11 +936,11 @@
     "rubric_criteria": [
       {
         "criterion_id": "functional_correctness",
-        "maximum_score": 4
+        "maximum_score": 8
       },
       {
         "criterion_id": "edge_case_handling",
-        "maximum_score": 4
+        "maximum_score": 5
       },
       {
         "criterion_id": "algorithm_choice",
@@ -948,7 +948,7 @@
       },
       {
         "criterion_id": "code_quality",
-        "maximum_score": 4
+        "maximum_score": 3
       }
     ],
     "prerequisites": [],
@@ -1130,7 +1130,7 @@
     "discrimination": 0.9,
     "estimated_time_seconds": 360,
     "competency": "Python & Software Engineering",
-    "sub_competency": "T1.1 \u00b7 Core Python & data structures",
+    "sub_competency": "T1.1 · Core Python & data structures",
     "competencies": [
       {
         "competency_id": "T1.1",
@@ -1144,11 +1144,11 @@
     "rubric_criteria": [
       {
         "criterion_id": "functional_correctness",
-        "maximum_score": 4
+        "maximum_score": 8
       },
       {
         "criterion_id": "edge_case_handling",
-        "maximum_score": 4
+        "maximum_score": 5
       },
       {
         "criterion_id": "algorithm_choice",
@@ -1156,7 +1156,7 @@
       },
       {
         "criterion_id": "code_quality",
-        "maximum_score": 4
+        "maximum_score": 3
       }
     ],
     "prerequisites": [],
@@ -1308,7 +1308,7 @@
     "discrimination": 1.45,
     "estimated_time_seconds": 540,
     "competency": "Python & Software Engineering",
-    "sub_competency": "T1.1 \u00b7 Core Python & data structures",
+    "sub_competency": "T1.1 · Core Python & data structures",
     "competencies": [
       {
         "competency_id": "T1.1",
@@ -1322,11 +1322,11 @@
     "rubric_criteria": [
       {
         "criterion_id": "functional_correctness",
-        "maximum_score": 4
+        "maximum_score": 8
       },
       {
         "criterion_id": "edge_case_handling",
-        "maximum_score": 4
+        "maximum_score": 5
       },
       {
         "criterion_id": "algorithm_choice",
@@ -1334,7 +1334,7 @@
       },
       {
         "criterion_id": "code_quality",
-        "maximum_score": 4
+        "maximum_score": 3
       }
     ],
     "prerequisites": [],
@@ -1569,7 +1569,7 @@
     "discrimination": 1.6,
     "estimated_time_seconds": 540,
     "competency": "Python & Software Engineering",
-    "sub_competency": "T1.1 \u00b7 Core Python & data structures",
+    "sub_competency": "T1.1 · Core Python & data structures",
     "competencies": [
       {
         "competency_id": "T1.1",
@@ -1583,11 +1583,11 @@
     "rubric_criteria": [
       {
         "criterion_id": "functional_correctness",
-        "maximum_score": 4
+        "maximum_score": 8
       },
       {
         "criterion_id": "edge_case_handling",
-        "maximum_score": 4
+        "maximum_score": 5
       },
       {
         "criterion_id": "algorithm_choice",
@@ -1595,7 +1595,7 @@
       },
       {
         "criterion_id": "code_quality",
-        "maximum_score": 4
+        "maximum_score": 3
       }
     ],
     "prerequisites": [],
@@ -1825,7 +1825,7 @@
     "discrimination": 1.1,
     "estimated_time_seconds": 420,
     "competency": "Python & Software Engineering",
-    "sub_competency": "T1.1 \u00b7 Core Python & data structures",
+    "sub_competency": "T1.1 · Core Python & data structures",
     "competencies": [
       {
         "competency_id": "T1.1",
@@ -1839,11 +1839,11 @@
     "rubric_criteria": [
       {
         "criterion_id": "functional_correctness",
-        "maximum_score": 4
+        "maximum_score": 8
       },
       {
         "criterion_id": "edge_case_handling",
-        "maximum_score": 4
+        "maximum_score": 5
       },
       {
         "criterion_id": "algorithm_choice",
@@ -1851,7 +1851,7 @@
       },
       {
         "criterion_id": "code_quality",
-        "maximum_score": 4
+        "maximum_score": 3
       }
     ],
     "prerequisites": [],
@@ -2020,7 +2020,7 @@
     "discrimination": 1.75,
     "estimated_time_seconds": 600,
     "competency": "Python & Software Engineering",
-    "sub_competency": "T1.1 \u00b7 Core Python & data structures",
+    "sub_competency": "T1.1 · Core Python & data structures",
     "competencies": [
       {
         "competency_id": "T1.1",
@@ -2034,11 +2034,11 @@
     "rubric_criteria": [
       {
         "criterion_id": "functional_correctness",
-        "maximum_score": 4
+        "maximum_score": 8
       },
       {
         "criterion_id": "edge_case_handling",
-        "maximum_score": 4
+        "maximum_score": 5
       },
       {
         "criterion_id": "algorithm_choice",
@@ -2046,7 +2046,7 @@
       },
       {
         "criterion_id": "code_quality",
-        "maximum_score": 4
+        "maximum_score": 3
       }
     ],
     "prerequisites": [],
@@ -2231,7 +2231,7 @@
     "discrimination": 1.05,
     "estimated_time_seconds": 420,
     "competency": "Python & Software Engineering",
-    "sub_competency": "T1.1 \u00b7 Core Python & data structures",
+    "sub_competency": "T1.1 · Core Python & data structures",
     "competencies": [
       {
         "competency_id": "T1.1",
@@ -2245,11 +2245,11 @@
     "rubric_criteria": [
       {
         "criterion_id": "functional_correctness",
-        "maximum_score": 4
+        "maximum_score": 8
       },
       {
         "criterion_id": "edge_case_handling",
-        "maximum_score": 4
+        "maximum_score": 5
       },
       {
         "criterion_id": "algorithm_choice",
@@ -2257,7 +2257,7 @@
       },
       {
         "criterion_id": "code_quality",
-        "maximum_score": 4
+        "maximum_score": 3
       }
     ],
     "prerequisites": [],
@@ -2489,7 +2489,7 @@
     "discrimination": 1.1,
     "estimated_time_seconds": 540,
     "competency": "Python & Software Engineering",
-    "sub_competency": "T1.2 \u00b7 OOP & class design",
+    "sub_competency": "T1.2 · OOP & class design",
     "competencies": [
       {
         "competency_id": "T1.2",
@@ -2507,11 +2507,11 @@
     "rubric_criteria": [
       {
         "criterion_id": "functional_correctness",
-        "maximum_score": 4
+        "maximum_score": 8
       },
       {
         "criterion_id": "edge_case_handling",
-        "maximum_score": 4
+        "maximum_score": 5
       },
       {
         "criterion_id": "algorithm_choice",
@@ -2519,7 +2519,7 @@
       },
       {
         "criterion_id": "code_quality",
-        "maximum_score": 4
+        "maximum_score": 3
       }
     ],
     "prerequisites": [],
@@ -2803,7 +2803,7 @@
     "discrimination": 0.95,
     "estimated_time_seconds": 420,
     "competency": "Python & Software Engineering",
-    "sub_competency": "T1.3 \u00b7 Typing & data models",
+    "sub_competency": "T1.3 · Typing & data models",
     "competencies": [
       {
         "competency_id": "T1.3",
@@ -2821,11 +2821,11 @@
     "rubric_criteria": [
       {
         "criterion_id": "functional_correctness",
-        "maximum_score": 4
+        "maximum_score": 8
       },
       {
         "criterion_id": "edge_case_handling",
-        "maximum_score": 4
+        "maximum_score": 5
       },
       {
         "criterion_id": "algorithm_choice",
@@ -2833,7 +2833,7 @@
       },
       {
         "criterion_id": "code_quality",
-        "maximum_score": 4
+        "maximum_score": 3
       }
     ],
     "prerequisites": [],
@@ -3066,7 +3066,7 @@
     "discrimination": 0.8,
     "estimated_time_seconds": 300,
     "competency": "Python & Software Engineering",
-    "sub_competency": "T1.4 \u00b7 Error handling & robustness",
+    "sub_competency": "T1.4 · Error handling & robustness",
     "competencies": [
       {
         "competency_id": "T1.4",
@@ -3080,11 +3080,11 @@
     "rubric_criteria": [
       {
         "criterion_id": "functional_correctness",
-        "maximum_score": 4
+        "maximum_score": 8
       },
       {
         "criterion_id": "edge_case_handling",
-        "maximum_score": 4
+        "maximum_score": 5
       },
       {
         "criterion_id": "algorithm_choice",
@@ -3092,7 +3092,7 @@
       },
       {
         "criterion_id": "code_quality",
-        "maximum_score": 4
+        "maximum_score": 3
       }
     ],
     "prerequisites": [],
@@ -3256,7 +3256,7 @@
     "discrimination": 1.25,
     "estimated_time_seconds": 600,
     "competency": "Python & Software Engineering",
-    "sub_competency": "T1.5 \u00b7 Async & concurrency",
+    "sub_competency": "T1.5 · Async & concurrency",
     "competencies": [
       {
         "competency_id": "T1.5",
@@ -3274,11 +3274,11 @@
     "rubric_criteria": [
       {
         "criterion_id": "functional_correctness",
-        "maximum_score": 4
+        "maximum_score": 8
       },
       {
         "criterion_id": "edge_case_handling",
-        "maximum_score": 4
+        "maximum_score": 5
       },
       {
         "criterion_id": "algorithm_choice",
@@ -3286,7 +3286,7 @@
       },
       {
         "criterion_id": "code_quality",
-        "maximum_score": 4
+        "maximum_score": 3
       }
     ],
     "prerequisites": [],
@@ -3491,7 +3491,7 @@
     "discrimination": 1.15,
     "estimated_time_seconds": 480,
     "competency": "Python & Software Engineering",
-    "sub_competency": "T1.7 \u00b7 Testing & quality",
+    "sub_competency": "T1.7 · Testing & quality",
     "competencies": [
       {
         "competency_id": "T1.7",
@@ -3509,11 +3509,11 @@
     "rubric_criteria": [
       {
         "criterion_id": "functional_correctness",
-        "maximum_score": 4
+        "maximum_score": 8
       },
       {
         "criterion_id": "edge_case_handling",
-        "maximum_score": 4
+        "maximum_score": 5
       },
       {
         "criterion_id": "algorithm_choice",
@@ -3521,7 +3521,7 @@
       },
       {
         "criterion_id": "code_quality",
-        "maximum_score": 4
+        "maximum_score": 3
       }
     ],
     "prerequisites": [],
@@ -3708,7 +3708,7 @@
     "discrimination": 1.0,
     "estimated_time_seconds": 420,
     "competency": "Data & ML Foundations",
-    "sub_competency": "T2.1 \u00b7 Data wrangling (pandas/NumPy)",
+    "sub_competency": "T2.1 · Data wrangling (pandas/NumPy)",
     "competencies": [
       {
         "competency_id": "T2.1",
@@ -3726,11 +3726,11 @@
     "rubric_criteria": [
       {
         "criterion_id": "functional_correctness",
-        "maximum_score": 4
+        "maximum_score": 8
       },
       {
         "criterion_id": "edge_case_handling",
-        "maximum_score": 4
+        "maximum_score": 5
       },
       {
         "criterion_id": "algorithm_choice",
@@ -3738,7 +3738,7 @@
       },
       {
         "criterion_id": "code_quality",
-        "maximum_score": 4
+        "maximum_score": 3
       }
     ],
     "prerequisites": [],
@@ -4062,7 +4062,7 @@
     "discrimination": 1.05,
     "estimated_time_seconds": 480,
     "competency": "Data & ML Foundations",
-    "sub_competency": "T2.2 \u00b7 Cleaning & preprocessing",
+    "sub_competency": "T2.2 · Cleaning & preprocessing",
     "competencies": [
       {
         "competency_id": "T2.2",
@@ -4080,11 +4080,11 @@
     "rubric_criteria": [
       {
         "criterion_id": "functional_correctness",
-        "maximum_score": 4
+        "maximum_score": 8
       },
       {
         "criterion_id": "edge_case_handling",
-        "maximum_score": 4
+        "maximum_score": 5
       },
       {
         "criterion_id": "algorithm_choice",
@@ -4092,7 +4092,7 @@
       },
       {
         "criterion_id": "code_quality",
-        "maximum_score": 4
+        "maximum_score": 3
       }
     ],
     "prerequisites": [],
@@ -4476,7 +4476,7 @@
     "discrimination": 1.1,
     "estimated_time_seconds": 480,
     "competency": "Data & ML Foundations",
-    "sub_competency": "T2.4 \u00b7 SQL & querying",
+    "sub_competency": "T2.4 · SQL & querying",
     "competencies": [
       {
         "competency_id": "T2.4",
@@ -4494,11 +4494,11 @@
     "rubric_criteria": [
       {
         "criterion_id": "functional_correctness",
-        "maximum_score": 4
+        "maximum_score": 8
       },
       {
         "criterion_id": "edge_case_handling",
-        "maximum_score": 4
+        "maximum_score": 5
       },
       {
         "criterion_id": "algorithm_choice",
@@ -4506,7 +4506,7 @@
       },
       {
         "criterion_id": "code_quality",
-        "maximum_score": 4
+        "maximum_score": 3
       }
     ],
     "prerequisites": [],
@@ -4878,7 +4878,7 @@
     "discrimination": 1.2,
     "estimated_time_seconds": 600,
     "competency": "Data & ML Foundations",
-    "sub_competency": "T2.5 \u00b7 Classical ML",
+    "sub_competency": "T2.5 · Classical ML",
     "competencies": [
       {
         "competency_id": "T2.5",
@@ -4896,11 +4896,11 @@
     "rubric_criteria": [
       {
         "criterion_id": "functional_correctness",
-        "maximum_score": 4
+        "maximum_score": 8
       },
       {
         "criterion_id": "edge_case_handling",
-        "maximum_score": 4
+        "maximum_score": 5
       },
       {
         "criterion_id": "algorithm_choice",
@@ -4908,7 +4908,7 @@
       },
       {
         "criterion_id": "code_quality",
-        "maximum_score": 4
+        "maximum_score": 3
       }
     ],
     "prerequisites": [],
@@ -5851,7 +5851,7 @@
     "discrimination": 1.0,
     "estimated_time_seconds": 420,
     "competency": "Data & ML Foundations",
-    "sub_competency": "T2.7 \u00b7 Feature engineering",
+    "sub_competency": "T2.7 · Feature engineering",
     "competencies": [
       {
         "competency_id": "T2.7",
@@ -5869,11 +5869,11 @@
     "rubric_criteria": [
       {
         "criterion_id": "functional_correctness",
-        "maximum_score": 4
+        "maximum_score": 8
       },
       {
         "criterion_id": "edge_case_handling",
-        "maximum_score": 4
+        "maximum_score": 5
       },
       {
         "criterion_id": "algorithm_choice",
@@ -5881,7 +5881,7 @@
       },
       {
         "criterion_id": "code_quality",
-        "maximum_score": 4
+        "maximum_score": 3
       }
     ],
     "prerequisites": [],
@@ -6215,7 +6215,7 @@
     "discrimination": 1.15,
     "estimated_time_seconds": 480,
     "competency": "Generative AI & LLM Applications",
-    "sub_competency": "T3.3 \u00b7 Embeddings & vector search",
+    "sub_competency": "T3.3 · Embeddings & vector search",
     "competencies": [
       {
         "competency_id": "T3.3",
@@ -6233,11 +6233,11 @@
     "rubric_criteria": [
       {
         "criterion_id": "functional_correctness",
-        "maximum_score": 4
+        "maximum_score": 8
       },
       {
         "criterion_id": "edge_case_handling",
-        "maximum_score": 4
+        "maximum_score": 5
       },
       {
         "criterion_id": "algorithm_choice",
@@ -6245,7 +6245,7 @@
       },
       {
         "criterion_id": "code_quality",
-        "maximum_score": 4
+        "maximum_score": 3
       }
     ],
     "prerequisites": [],
@@ -6561,7 +6561,7 @@
     "discrimination": 1.1,
     "estimated_time_seconds": 540,
     "competency": "Generative AI & LLM Applications",
-    "sub_competency": "T3.6 \u00b7 Structured outputs & tool schemas",
+    "sub_competency": "T3.6 · Structured outputs & tool schemas",
     "competencies": [
       {
         "competency_id": "T3.6",
@@ -6579,11 +6579,11 @@
     "rubric_criteria": [
       {
         "criterion_id": "functional_correctness",
-        "maximum_score": 4
+        "maximum_score": 8
       },
       {
         "criterion_id": "edge_case_handling",
-        "maximum_score": 4
+        "maximum_score": 5
       },
       {
         "criterion_id": "algorithm_choice",
@@ -6591,7 +6591,7 @@
       },
       {
         "criterion_id": "code_quality",
-        "maximum_score": 4
+        "maximum_score": 3
       }
     ],
     "prerequisites": [],
@@ -6835,7 +6835,7 @@
     "discrimination": 0.9,
     "estimated_time_seconds": 360,
     "competency": "Agentic AI & Orchestration",
-    "sub_competency": "T4.2 \u00b7 Tool use & function calling",
+    "sub_competency": "T4.2 · Tool use & function calling",
     "competencies": [
       {
         "competency_id": "T4.2",
@@ -6853,11 +6853,11 @@
     "rubric_criteria": [
       {
         "criterion_id": "functional_correctness",
-        "maximum_score": 4
+        "maximum_score": 8
       },
       {
         "criterion_id": "edge_case_handling",
-        "maximum_score": 4
+        "maximum_score": 5
       },
       {
         "criterion_id": "algorithm_choice",
@@ -6865,7 +6865,7 @@
       },
       {
         "criterion_id": "code_quality",
-        "maximum_score": 4
+        "maximum_score": 3
       }
     ],
     "prerequisites": [],
@@ -7072,7 +7072,7 @@
     "discrimination": 1.05,
     "estimated_time_seconds": 480,
     "competency": "MLOps & Productionization",
-    "sub_competency": "T5.3 \u00b7 CI/CD",
+    "sub_competency": "T5.3 · CI/CD",
     "competencies": [
       {
         "competency_id": "T5.3",
@@ -7090,11 +7090,11 @@
     "rubric_criteria": [
       {
         "criterion_id": "functional_correctness",
-        "maximum_score": 4
+        "maximum_score": 8
       },
       {
         "criterion_id": "edge_case_handling",
-        "maximum_score": 4
+        "maximum_score": 5
       },
       {
         "criterion_id": "algorithm_choice",
@@ -7102,7 +7102,7 @@
       },
       {
         "criterion_id": "code_quality",
-        "maximum_score": 4
+        "maximum_score": 3
       }
     ],
     "prerequisites": [],

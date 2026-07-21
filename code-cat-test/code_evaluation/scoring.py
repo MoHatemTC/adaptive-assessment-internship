@@ -126,6 +126,43 @@ def static_criterion_scores(signals: StaticSignals) -> dict[str, float]:
     return scores
 
 
+def criterion_weights(question: dict) -> dict[str, float]:
+    """Each criterion's share of the overall score, from the question's `maximum_score`.
+
+    The bank has always declared these and the code has always ignored them: the overall
+    was a plain mean over scored criteria, so functional correctness could never be worth
+    more than a quarter however the bank was authored. A submission passing 1 of 8 tests
+    scored 0.61 in a live session — not because any criterion was wrong, but because
+    "produces correct results" was structurally capped at 25% of the result.
+    """
+    declared = {
+        c["criterion_id"]: float(c.get("maximum_score", 1.0))
+        for c in question.get("rubric_criteria", [])
+    }
+    total = sum(declared.values())
+    if total <= 0:
+        return {k: 1.0 / len(declared) for k in declared} if declared else {}
+    return {k: v / total for k, v in declared.items()}
+
+
+def overall_score(scores: list[CriterionScore], question: dict) -> float | None:
+    """Weighted mean over the criteria that could be assessed.
+
+    Renormalised across the SCORED criteria, so an unassessable criterion redistributes
+    its weight rather than counting as a zero — the same principle combine() applies to a
+    missing source. Returns None when nothing was assessed at all.
+    """
+    weights = criterion_weights(question)
+    usable = [(c, weights.get(c.criterion_id, 0.0)) for c in scores if c.score is not None]
+    total = sum(w for _, w in usable)
+    if not usable or total <= 0:
+        # Weights all zero but scores exist: fall back to the plain mean rather than
+        # returning None, which would report "not assessed" for work that was assessed.
+        plain = [c.score for c in scores if c.score is not None]
+        return round(sum(plain) / len(plain), 4) if plain else None
+    return round(sum(c.score * w for c, w in usable) / total, 4)
+
+
 def integrity_cap(signals: StaticSignals) -> tuple[float | None, str]:
     """A ceiling on what a submission can score when its structure invalidates its tests.
 

@@ -52,6 +52,20 @@ DETERMINISTIC_SOURCES = ("tests", "static")
 # threshold, not the safety mechanism.
 CONTRADICTION_SENSITIVE = "functional_correctness"
 
+# Which sources can actually produce a value for each criterion, mirroring what
+# objective_criterion_scores() and static_criterion_scores() emit. A weight assigned to a
+# source not listed here is dead: combine() drops it and renormalises the rest, so the
+# declared number never applies and quoting it back to an admin is a misreport.
+#
+# Execution cannot judge whether an algorithm was well chosen or whether code reads well —
+# only whether it worked. That is the whole reason those criteria exist separately.
+SOURCES_THAT_CAN_SCORE = {
+    "functional_correctness": {"tests", "llm"},
+    "edge_case_handling": {"tests", "static", "llm"},
+    "algorithm_choice": {"static", "llm"},
+    "code_quality": {"static", "llm"},
+}
+
 
 @dataclass(frozen=True)
 class WeightProfile:
@@ -127,21 +141,40 @@ class WeightProfile:
         """False when no criterion gives the model weight, so no call need be made."""
         return any(w.get("llm", 0.0) > 0.0 for w in self.criteria.values())
 
-    def overall_shares(self) -> dict[str, float]:
-        """Each source's share of the whole score, the number an admin is really setting.
+    def overall_shares(self, criterion_weights: dict[str, float] | None = None) -> dict[str, float]:
+        """Each source's EFFECTIVE share of the whole score.
 
-        Criteria are equally weighted in the bank (every one carries maximum_score 4), so
-        this is a plain mean across criteria rather than a weighted one. Computed from the
-        bank's own structure would be better; asserted here because the bank is uniform and
-        a silent mismatch would misreport the very quantity being tuned.
+        Two corrections separate this from reading the weight table off the page, and both
+        were misreporting the exact quantity this control exists to expose.
+
+        SOURCES THAT NEVER PRODUCE A VALUE ARE DROPPED. `algorithm_choice` declares
+        `tests 0.35`, but execution cannot say whether an algorithm was well chosen and no
+        test-derived value is ever produced for it. combine() correctly drops the absent
+        source and renormalises, which quietly hands that 0.35 to static and the model —
+        so the model really holds 53.8% of that criterion, not the 35% declared. Reading
+        the table gave "LLM 30.0%" when the truth was 34.7%.
+
+        CRITERIA ARE NOT EQUALLY WEIGHTED. They carry `maximum_score` from the bank, so a
+        source concentrated in code_quality (15%) counts for far less than one in
+        functional correctness (40%). Pass the weights to reflect that; the default is an
+        equal split, which is only right for a uniform bank.
         """
+        weights = criterion_weights or {c: 1.0 / len(self.criteria) for c in self.criteria}
         totals = {"tests": 0.0, "static": 0.0, "llm": 0.0}
-        for weights in self.criteria.values():
-            span = sum(weights.values()) or 1.0
-            for source, value in weights.items():
-                totals[source] = totals.get(source, 0.0) + value / span
-        n = len(self.criteria) or 1
-        return {s: round(v / n, 4) for s, v in totals.items()}
+
+        for criterion, sources in self.criteria.items():
+            usable = {
+                s: v for s, v in sources.items()
+                if v > 0 and s in SOURCES_THAT_CAN_SCORE.get(criterion, set(sources))
+            }
+            span = sum(usable.values())
+            if span <= 0:
+                continue
+            share_of_total = weights.get(criterion, 0.0)
+            for source, value in usable.items():
+                totals[source] = totals.get(source, 0.0) + (value / span) * share_of_total
+
+        return {s: round(v, 4) for s, v in totals.items()}
 
     def contradiction_risk(self) -> float:
         """Model share on the criterion where it can contradict a measured fact."""
