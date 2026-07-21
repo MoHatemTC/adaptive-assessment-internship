@@ -52,10 +52,13 @@ SOURCE_WEIGHTS: dict[Approach, dict[str, dict[str, float]]] = {
 
 @dataclass
 class CriterionScore:
-    """One criterion, scored 0..1, with the provenance that produced it."""
+    """One criterion, scored 0..1, with the provenance that produced it.
+
+    `score` is None when the criterion could NOT be assessed — see combine().
+    """
 
     criterion_id: str
-    score: float
+    score: float | None
     sources_used: dict[str, float]
     confidence: float = 1.0
     conflict_flag: str = ""
@@ -160,12 +163,16 @@ def combine(
         used[source] = weight
 
     if total_weight == 0.0:
-        # No configured source produced a value. Fall back to the objective evidence
-        # rather than inventing a score: returning 0.0 would read as "demonstrated
-        # nothing", which is a claim about the learner, not about our coverage.
-        fallback = tests if tests is not None else static
-        return CriterionScore(criterion_id, fallback if fallback is not None else 0.0, {}, 0.0,
-                              "NO_SOURCE_AVAILABLE")
+        # No configured source produced a value, so this criterion CANNOT be assessed and
+        # is returned unscored.
+        #
+        # It previously fell back to whichever source happened to exist, which was a
+        # silent disaster on approach C: algorithm_choice and code_quality are weighted
+        # llm-only there, so whenever the model was unavailable both fell through to
+        # static analysis and a stub that ran nothing scored 1.00 on each. Absence of
+        # evidence became full marks. Scoring 0.0 instead would be the mirror error — a
+        # claim the learner demonstrated nothing, when the truth is that we did not look.
+        return CriterionScore(criterion_id, None, {}, 0.0, "NOT_ASSESSED")
 
     return CriterionScore(
         criterion_id=criterion_id,

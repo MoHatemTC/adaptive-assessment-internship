@@ -38,9 +38,14 @@ class TestOutcome:
 
 @dataclass
 class ExecutionEvidence:
-    """Objective evidence from one submission. Every field is measured, never inferred."""
+    """Objective evidence from one submission. Every field is measured, never inferred.
 
-    compiled: bool
+    `compiled` is None when the sandbox never ran, because then we do not KNOW whether
+    the submission compiles — reporting False there is a claim about the candidate's code
+    that no evidence supports, and the UI rendered it as "Compiled: no".
+    """
+
+    compiled: bool | None
     execution_completed: bool
     runtime_error: bool = False
     timeout: bool = False
@@ -152,7 +157,7 @@ def run_submission(code: str, tests: list[dict], function_name: str) -> Executio
     except Exception as exc:  # sandbox creation, network, quota — not the learner's fault
         logger.error("sandbox unavailable: %s: %s", type(exc).__name__, exc)
         return ExecutionEvidence(
-            compiled=False,
+            compiled=None,
             execution_completed=False,
             infrastructure_error=True,
             total_tests=len(tests),
