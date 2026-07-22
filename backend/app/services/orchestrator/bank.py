@@ -27,6 +27,17 @@ logger = logging.getLogger(__name__)
 BANK_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "question_bank.json"
 
 
+def _main_code_sort_key(code: str) -> tuple[int, str]:
+    """C1..C10 in numeric order, not lexicographic (C10 before C2)."""
+    if code.startswith("C") and code[1:].isdigit():
+        return (0, int(code[1:]))
+    return (1, code)
+
+
+def _sorted_main_codes(codes: set[str] | list[str]) -> list[str]:
+    return sorted(codes, key=_main_code_sort_key)
+
+
 class UnifiedBankRepository(Protocol):
     def all_items(self) -> list[BankItem]: ...
     def get(self, item_id: str) -> BankItem | None: ...
@@ -85,8 +96,10 @@ class JsonUnifiedBank:
         ]
 
     def variables(self) -> list[str]:
-        """Main competencies (T1..T5) that the bank can assess."""
-        return sorted({main_competency(m.variable) for i in self._load() for m in i.measures})
+        """Main competencies (C1..C10) that the bank can assess."""
+        return _sorted_main_codes(
+            {main_competency(m.variable) for i in self._load() for m in i.measures}
+        )
 
     def main_competencies(self) -> list[dict]:
         """Candidate-facing main competencies with names and coverage."""
@@ -102,7 +115,8 @@ class JsonUnifiedBank:
                 main = main_competency(entry.variable)
                 bucket = counts.setdefault(main, {})
                 bucket[item.modality] = bucket.get(item.modality, 0) + 1
-        return dict(sorted(counts.items()))
+        ordered = _sorted_main_codes(counts.keys())
+        return {code: counts[code] for code in ordered}
 
     def tracks(self) -> list[dict]:
         """The five assessable tracks — T1..T5 — each with the variables under it.
@@ -151,7 +165,7 @@ class JsonUnifiedBank:
                     {m for v in variables[code] for m in coverage.get(v, {})}
                 ),
             }
-            for code in sorted(names)
+            for code in _sorted_main_codes(names.keys())
         ]
 
     def information_parity(self, variable: str) -> dict:

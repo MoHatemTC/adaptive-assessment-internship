@@ -7,7 +7,7 @@ while doing it.
 
 Three screens:
 
-    Setup        choose one or more main competencies (T1..T5), self-rate each, and say
+    Setup        choose one or more main competencies (C1..C10), self-rate each, and say
                  how sure that rating is. The rating seeds the prior; the confidence sets
                  its width. Sub-competencies are never chosen by the candidate.
     Assessment   answer, and watch the queue, the mathematics and the trajectory move.
@@ -202,7 +202,7 @@ def render_setup() -> None:
     chosen = st.multiselect(
         "Competencies to be assessed",
         options=[t["code"] for t in tracks],
-        default=["T1", "T2"],
+        default=["C1", "C2"],
         format_func=lambda code: (
             f"{code} · {by_code[code]['name']}  "
             f"— {by_code[code]['items']} questions, "

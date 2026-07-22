@@ -94,10 +94,10 @@ class TestSetupScreen:
         assert app.slider, "no self-rating"
         assert any(b.label == "Begin assessment" for b in app.button)
 
-    def test_the_competency_choice_offers_all_five(self, app):
+    def test_the_competency_choice_offers_all_ten(self, app):
         options = app.multiselect[0].options
-        assert len(options) == 5
-        assert all(code in "".join(options) for code in ("T1", "T2", "T3", "T4", "T5"))
+        assert len(options) == 10
+        assert all(f"C{i}" in "".join(options) for i in range(1, 11))
 
     def test_it_defaults_to_at_least_one_main_competency(self, app):
         assert app.multiselect[0].value

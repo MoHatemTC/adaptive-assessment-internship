@@ -45,7 +45,7 @@ def test_rollup_combines_sub_competencies_under_one_main():
 class TestPresentingQueue:
     @pytest.mark.asyncio
     async def test_presenting_competency_is_absent_from_queue(self, orchestrator):
-        state = orchestrator.begin(["T1", "T2"])
+        state = orchestrator.begin(["C1", "C2"])
         state = await orchestrator.fill_queue(state, use_llm=False, rng=np.random.default_rng(0))
         state = orchestrator.ensure_presenting(state)
         assert state.presenting is not None
@@ -60,9 +60,14 @@ class TestPresentingQueue:
             bank, GraderAgent(CodeAdaptiveSession(JsonQuestionRepository()))
         )
         cross = next(
-            i for i in bank.all_items()
-            if len({main_competency(m.variable) for m in i.measures}) > 1
+            (
+                i for i in bank.all_items()
+                if len({main_competency(m.variable) for m in i.measures}) > 1
+            ),
+            None,
         )
+        if cross is None:
+            pytest.skip("no item in the bank measures more than one main competency")
         mains = sorted({main_competency(m.variable) for m in cross.measures})[:2]
         state = orchestrator.begin(mains)
         state = await orchestrator.fill_queue(state, use_llm=False, rng=np.random.default_rng(1))

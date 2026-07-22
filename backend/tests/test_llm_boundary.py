@@ -39,7 +39,7 @@ async def test_a_non_string_payload_is_refused_at_the_boundary():
     which is what the deployment actually reported and which pointed nowhere useful.
     """
     with pytest.raises(TypeError, match="json.dumps"):
-        await chat_json("system", {"variable": "T1.1"}, require=("selected_id",))
+        await chat_json("system", {"variable": "C1"}, require=("selected_id",))
 
 
 @pytest.mark.asyncio
@@ -103,10 +103,10 @@ async def test_the_picker_falls_back_when_the_gateway_refuses(monkeypatch):
     from app.services.orchestrator.bank import JsonUnifiedBank
     from app.services.orchestrator.variables import seed_variable
 
-    pool = JsonUnifiedBank().shortlist("T1.1", exclude=set())
-    state = seed_variable("T1.1", self_rating=3)
+    pool = JsonUnifiedBank().shortlist("C1", exclude=set())
+    state = seed_variable("C1", self_rating=3)
 
-    candidate = await picker_module.pick(pool, state, "T1.1", use_llm=True)
+    candidate = await picker_module.pick(pool, state, "C1", use_llm=True)
     assert candidate is not None
     assert candidate.chosen_by_llm is False
     assert candidate.item_id in {item.item_id for item in pool}
@@ -136,9 +136,9 @@ async def test_the_picker_sends_serialised_text(monkeypatch):
     from app.services.orchestrator.bank import JsonUnifiedBank
     from app.services.orchestrator.variables import seed_variable
 
-    pool = JsonUnifiedBank().shortlist("T1.1", exclude=set())
-    state = seed_variable("T1.1", self_rating=3)
+    pool = JsonUnifiedBank().shortlist("C1", exclude=set())
+    state = seed_variable("C1", self_rating=3)
 
-    await picker_module.pick(pool, state, "T1.1", use_llm=True)
+    await picker_module.pick(pool, state, "C1", use_llm=True)
     assert isinstance(seen["user"], str)
-    assert json.loads(seen["user"])["variable_under_test"] == "T1.1"
+    assert json.loads(seen["user"])["variable_under_test"] == "C1"

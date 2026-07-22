@@ -17,43 +17,37 @@ def bank() -> JsonUnifiedBank:
 
 
 # --- tracks ------------------------------------------------------------------
-def test_the_bank_offers_exactly_the_five_tracks(bank):
+def test_the_bank_offers_ten_main_competencies(bank):
     tracks = bank.tracks()
-    assert [t["code"] for t in tracks] == ["T1", "T2", "T3", "T4", "T5"]
+    assert [t["code"] for t in tracks] == [
+        f"C{i}" for i in range(1, 11)
+    ]
     for track in tracks:
         assert track["name"], f"{track['code']} has no name to show a candidate"
         assert track["items"] > 0
 
 
 def test_a_track_is_named_by_the_items_that_are_about_it(bank):
-    """Not by every item that touches it.
-
-    A pandas question measures T2.1 at 0.8 and T1.1 at 0.2. Grouping by every measured
-    variable would file it under both tracks, and a candidate choosing Python would be
-    handed questions about dataframes. `tracks()` groups by the heaviest measure, which is
-    what an item is actually about — this asserts the outcome, not the mechanism.
-    """
+    """Not by every item that touches it."""
     names = {t["code"]: t["name"] for t in bank.tracks()}
-    assert "Python" in names["T1"]
-    assert "Data" in names["T2"]
-    assert "MLOps" in names["T5"]
+    assert "Software" in names["C1"]
+    assert "Data" in names["C2"]
+    assert "LLM" in names["C6"]
 
 
 def test_own_variables_are_the_ones_the_track_is_responsible_for(bank):
     for track in bank.tracks():
         assert track["own_variables"], f"{track['code']} owns nothing"
         assert all(v.startswith(track["code"] + ".") for v in track["own_variables"])
-        # Cross-loaded variables stay assessable, so `variables` is the wider set.
         assert set(track["own_variables"]) <= set(track["variables"])
 
 
 def test_every_track_can_actually_be_assessed(bank):
     """A track a candidate can choose but the engine cannot serve is a dead end."""
     for track in bank.tracks():
-        for variable in track["own_variables"]:
-            assert bank.shortlist(variable, exclude=set()), (
-                f"{track['code']}: {variable} is offered but has no active items"
-            )
+        assert bank.shortlist(track["code"], exclude=set()), (
+            f"{track['code']} is offered but has no active items at main-competency level"
+        )
 
 
 # --- trial runs --------------------------------------------------------------

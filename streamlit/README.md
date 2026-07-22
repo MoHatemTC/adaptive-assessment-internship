@@ -23,19 +23,13 @@ rest with the engine's own functions.
 
 ## Screens
 
-**Setup** — three steps.
+**Setup** — two steps.
 
-1. **Track.** One of the five: `T1` Python & Software Engineering, `T2` Data & ML
-   Foundations, `T3` Generative AI & LLM Applications, `T4` Agentic AI & Orchestration,
-   `T5` MLOps & Productionization. Derived from the bank rather than hard-coded — a track's
-   name comes from the items whose *heaviest* measure sits in it, so a pandas question
-   loading 0.2 on core Python is filed under Data & ML, where it belongs.
-2. **Sub-competencies.** Scoped to the chosen track and selected by default. Items that
-   cross-load from other tracks are offered too, marked `shared`: they remain assessable
-   here, but selecting them should be a decision rather than an accident.
-3. **Self-rating.** 1–5 per sub-competency, with high or low confidence. The rating seeds
-   the starting estimate; the confidence sets how wide it is. Neither is ever reported as a
-   measurement.
+1. **Main competencies.** Ten AI/ML engineer competencies (`C1`..`C10`), derived from the
+   bank. Select one or more; sub-competencies are never chosen by the candidate.
+2. **Self-rating.** 1–5 per selected competency, with high or low confidence. The rating
+   seeds the starting estimate; the confidence sets how wide it is. Neither is ever
+   reported as a measurement.
 
 Engine controls live behind **Tester options**, not beside the self-rating — an examinee has
 no business choosing how their own questions get selected. They stay visible in the sidebar
