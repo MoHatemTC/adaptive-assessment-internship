@@ -76,12 +76,14 @@ async def run_session(engine, targets, *, correct=True, max_steps=60):
         stop, stop_reason = engine.should_stop(state)
         if stop:
             break
+        state = engine.ensure_presenting(state)
         nxt = engine.next_item(state)
         if nxt is None:
             stop_reason = "no_candidates_available"
             break
         item, _candidate = nxt
         state, _graded = engine.record_response(state, item, answer_for(item, correct))
+        state = await engine.after_response(state, item, use_llm=False, rng=rng)
     return state, stop_reason
 
 
@@ -119,6 +121,15 @@ class TestFullSession:
         state = await engine.fill_queue(state, use_llm=False, rng=np.random.default_rng(1))
         assert len(state.queue) <= len(state.open_variables)
         assert set(state.queue) <= set(state.open_variables)
+
+    @pytest.mark.asyncio
+    async def test_presenting_excludes_that_competency_from_the_queue(self, engine, targets):
+        state = engine.begin(targets)
+        state = await engine.fill_queue(state, use_llm=False, rng=np.random.default_rng(2))
+        state = engine.ensure_presenting(state)
+        if state.presenting is None:
+            pytest.skip("nothing ready to present")
+        assert state.presenting.variable not in state.queue
 
     @pytest.mark.asyncio
     async def test_a_finalised_variable_keeps_no_queue_slot(self, engine, targets):
@@ -169,12 +180,12 @@ class TestInfrastructureFailure:
         # offer. Every variable carrying code items also carries MCQ ones, so waiting for
         # the queue to serve a code item would make the test depend on the ranking.
         code_item = [i for i in bank.all_items() if i.modality == "code"][0]
-        code_variable = code_item.measures[0].variable
+        code_main = code_item.measures[0].variable.split(".")[0]
 
-        state = engine.begin([code_variable])
-        before = state.variables[code_variable]
+        state = engine.begin([code_main])
+        before = state.variables[code_main]
         state, graded = engine.record_response(state, code_item, "def f():\n    pass\n")
-        after = state.variables[code_variable]
+        after = state.variables[code_main]
 
         assert any("SANDBOX_UNAVAILABLE" in f for f in graded.flags)
 

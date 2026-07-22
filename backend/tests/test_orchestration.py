@@ -39,7 +39,7 @@ def orchestrator(bank) -> Orchestrator:
 
 @pytest.fixture(scope="module")
 def mixed_variable(bank) -> str:
-    """A variable measured by both modalities — where cross-modality ranking is real."""
+    """A main competency measured by both modalities."""
     return next(v for v, m in bank.coverage().items() if len(m) > 1)
 
 

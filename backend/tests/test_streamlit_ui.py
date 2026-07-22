@@ -88,40 +88,22 @@ def answer_everything(app, limit: int = 30) -> int:
 
 
 class TestSetupScreen:
-    def test_it_asks_for_track_competency_level_and_confidence(self, app):
+    def test_it_asks_for_main_competencies_level_and_confidence(self, app):
         """Everything a candidate is asked before anything is administered."""
-        assert app.radio, "no track selector"
-        assert app.multiselect, "no sub-competency selector"
+        assert app.multiselect, "no main-competency selector"
         assert app.slider, "no self-rating"
         assert any(b.label == "Begin assessment" for b in app.button)
 
-    def test_the_track_choice_offers_all_five(self, app):
-        """T1..T5. A candidate picks a track first; everything else is scoped to it."""
-        options = app.radio[0].options
+    def test_the_competency_choice_offers_all_five(self, app):
+        options = app.multiselect[0].options
         assert len(options) == 5
-        assert all(any(code in option for option in options) for code in
-                   ("T1", "T2", "T3", "T4", "T5"))
+        assert all(code in "".join(options) for code in ("T1", "T2", "T3", "T4", "T5"))
 
-    def test_it_defaults_to_competencies_carrying_both_modalities(self, app):
-        """The mixed ones are what a tester most needs to exercise."""
+    def test_it_defaults_to_at_least_one_main_competency(self, app):
         assert app.multiselect[0].value
 
-    def test_choosing_a_track_scopes_the_sub_competencies_to_it(self, app):
-        """The point of the track choice. Picking MLOps must not offer only T1.*"""
-        target = next(o for o in app.radio[0].options if o.startswith("T5"))
-        app.radio[0].set_value(target).run()
-        assert not app.exception
-        offered = app.multiselect[0].options
-        assert any(v.startswith("T5.") for v in offered)
-        assert app.multiselect[0].value, "nothing selected by default for this track"
-        assert all(v.startswith("T5.") for v in app.multiselect[0].value)
-
     def test_engine_controls_are_not_mixed_into_the_candidate_flow(self, app):
-        """The picking-agent switch decides how a candidate's own questions are chosen.
-
-        It belongs to a tester, so it sits behind a labelled expander rather than beside
-        the self-rating, where it reads as something the examinee is being asked.
-        """
+        """The picking-agent switch belongs to a tester, not the candidate flow."""
         labels = [e.label for e in app.expander]
         assert any("Tester options" in label for label in labels)
 

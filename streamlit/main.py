@@ -7,9 +7,9 @@ while doing it.
 
 Three screens:
 
-    Setup        choose a track (T1..T5), pick the sub-competencies within it to be
-                 assessed, self-rate each, and say how sure that rating is. The rating
-                 seeds the prior; the confidence sets its width.
+    Setup        choose one or more main competencies (T1..T5), self-rate each, and say
+                 how sure that rating is. The rating seeds the prior; the confidence sets
+                 its width. Sub-competencies are never chosen by the candidate.
     Assessment   answer, and watch the queue, the mathematics and the trajectory move.
     Report       on convergence — the same detail, retained rather than cleared, because
                  the interesting part of a session is usually visible only afterwards.
@@ -57,6 +57,7 @@ from app.services.orchestrator import GraderAgent, JsonUnifiedBank, Orchestrator
 from app.services.orchestrator import variables as variables_module  # noqa: E402
 from app.services.adaptive.irt import expected_fisher_information  # noqa: E402
 from app.services.orchestrator.picker import criterion_for, information_for  # noqa: E402
+from app.services.orchestrator.competency import rollup_outcomes  # noqa: E402
 
 
 def fisher_after(item, variable_state, variable) -> float:
@@ -184,9 +185,9 @@ def render_tester_options(container, *, locked: bool) -> bool:
 def render_setup() -> None:
     st.title("Adaptive assessment")
     st.caption(
-        "Choose a track, pick what within it to be assessed on, rate yourself, and say how "
-        "sure that rating is. The rating seeds the starting estimate; the confidence sets "
-        "how easily evidence overrides it. Neither is ever reported as a measurement."
+        "Choose the main competencies to be assessed, rate your level in each, and say how "
+        "sure you are. The rating seeds the starting estimate; the confidence sets how "
+        "easily evidence overrides it. Neither is ever reported as a measurement."
     )
 
     coverage = bank().coverage()
@@ -195,90 +196,60 @@ def render_setup() -> None:
         st.error("The question bank is empty.")
         return
 
-    st.markdown("#### 1 · Track")
     by_code = {t["code"]: t for t in tracks}
-    track_code = st.radio(
-        "Which track are you being assessed on?",
+
+    st.markdown("#### 1 · Main competencies")
+    chosen = st.multiselect(
+        "Competencies to be assessed",
         options=[t["code"] for t in tracks],
+        default=["T1", "T2"],
         format_func=lambda code: (
             f"{code} · {by_code[code]['name']}  "
             f"— {by_code[code]['items']} questions, "
             f"{', '.join(by_code[code]['modalities'])}"
         ),
-        # Not "track": that key holds the CHOSEN track for the run, and Streamlit refuses
-        # to let session state be written under a live widget's key.
-        key="track_choice",
-    )
-    track = by_code[track_code]
-
-    st.markdown("#### 2 · Sub-competencies")
-
-    def describe(variable: str) -> str:
-        modalities = coverage.get(variable, {})
-        detail = ", ".join(f"{n} {m}" for m, n in sorted(modalities.items())) or "no items"
-        borrowed = "" if variable in track["own_variables"] else " · shared"
-        return f"{variable} — {detail}{borrowed}"
-
-    # Own sub-competencies first and selected by default; the cross-loaded ones are
-    # offered but not assumed. A pandas question loads lightly on core Python, which makes
-    # T1.1 assessable inside the Data track — worth allowing, wrong to select silently.
-    options = track["own_variables"] + [
-        v for v in track["variables"] if v not in track["own_variables"]
-    ]
-    mixed = [v for v in track["own_variables"] if len(coverage.get(v, {})) > 1]
-    chosen = st.multiselect(
-        "Sub-competencies to be assessed",
-        options=options,
-        default=mixed[:2] or track["own_variables"][:2],
-        format_func=describe,
-        key=f"variables_{track_code}",
-        help="Marked `shared` are measured by this track's questions but belong to "
-             "another track. Sub-competencies carrying both modalities let the engine "
-             "choose between an MCQ item and a coding question on information alone — "
-             "which is the behaviour most worth testing.",
+        key="main_competencies",
+        help="Select one or more main competencies. Sub-competencies are inferred by the "
+             "engine from the questions administered — you never choose them here.",
     )
     if not chosen:
-        st.info("Select at least one sub-competency.")
+        st.info("Select at least one main competency.")
         return
 
-    st.markdown("#### 3 · Self-rating")
+    st.markdown("#### 2 · Self-rating")
 
     intake: dict[str, int] = {}
     confident: dict[str, bool] = {}
     for variable in chosen:
         left, middle, right = st.columns([2, 3, 2])
-        left.markdown(f"**{variable}**")
-        left.caption(", ".join(f"{n} {m}" for m, n in sorted(coverage[variable].items())))
+        left.markdown(f"**{variable} · {by_code[variable]['name']}**")
+        left.caption(
+            ", ".join(f"{n} {m}" for m, n in sorted(coverage.get(variable, {}).items()))
+            or "no items"
+        )
         intake[variable] = middle.slider(
             "Your level", 1, 5, 3, key=f"level_{variable}",
             help="1 novice to 5 expert. Mapped onto the ability scale as a starting point.",
         )
         confident[variable] = right.radio(
             "How sure?", ["High", "Low"], index=1, key=f"conf_{variable}",
-            help="High narrows the starting estimate; low leaves it wide. Either way a "
-                 "few answers override it.",
+            help="High narrows the starting estimate for this competency; low leaves it "
+                 "wide. Either way a few answers override it.",
         ) == "High"
 
     st.markdown("---")
 
-    # Engine controls, not candidate ones. Collapsed and named as such, because an
-    # examinee has no business deciding how their own questions get selected — and
-    # anything they toggle here changes what the session measures.
     with st.expander("Tester options — not part of the examinee's flow"):
         wants_llm = render_tester_options(st, locked=False)
 
-    # A single rating confidence for the session: the engine takes one flag, and pretending
-    # otherwise in the UI would imply a per-variable control that does not exist.
     if st.button("Begin assessment", type="primary"):
-        state = engine().begin(
-            chosen, intake=intake, rating_confident=any(confident.values())
-        )
+        state = engine().begin(chosen, intake=intake, confidence=confident)
         session_log.clear()
         st.session_state.update(
             run=state, steps=[], rng_seed=0, finished=False, stop_reason="", pending=None,
-            track=track_code, track_name=track["name"], trials={},
-            # Fixed for the whole run: a session must be administered under one selection
-            # policy, and this key outlives the widget that set it.
+            competencies=chosen,
+            competency_names={c: by_code[c]["name"] for c in chosen},
+            trials={},
             picker_uses_llm=wants_llm,
         )
         st.rerun()
@@ -287,8 +258,17 @@ def render_setup() -> None:
 # --- shared panels ----------------------------------------------------------
 def render_queue(state) -> None:
     """What is waiting, why it was shortlisted, and why the picker took it."""
+    if state.presenting:
+        st.caption(
+            f"**Being answered:** {state.presenting.variable} · "
+            f"{state.presenting.item_id} ({state.presenting.modality}) — "
+            "not in the queue while the candidate answers."
+        )
     if not state.queue:
-        st.caption("The queue is empty.")
+        if not state.presenting:
+            st.caption("The queue is empty.")
+        else:
+            st.caption("No other competencies queued yet.")
         return
 
     rows = []
@@ -313,8 +293,9 @@ def render_queue(state) -> None:
         )
     st.dataframe(pd.DataFrame(rows), hide_index=True, **WIDE)
     st.caption(
-        "One slot per open competency. `regret` is the fraction of the best available "
-        "information given up — 0 means the engine's own top pick was taken. A pick below "
+        "One slot per open competency other than the one being answered. `regret` is the "
+        "fraction of the best available information given up — 0 means the engine's own top "
+        "pick was taken. A pick below "
         f"{settings.orchestrator_minimum_relative_utility:.0%} of the best is overridden."
     )
 
@@ -529,7 +510,7 @@ def record(state, item, candidate, response) -> None:
     before = {v: s for v, s in state.variables.items()}
     with observability.session(
         state.session_id,
-        track=st.session_state.get("track"),
+        track=st.session_state.get("competencies"),
         stage="grade",
         item_id=item.item_id,
         modality=item.modality,
@@ -548,7 +529,10 @@ def record(state, item, candidate, response) -> None:
         if graded.modality == "code"
         else (1.0 if detail.get("correct") else 0.0)
     )
-    outcome_by_variable = {o["variable"]: o for o in graded.outcomes}
+    outcome_by_variable = {
+        o.variable: o.__dict__
+        for o in rollup_outcomes(graded.outcomes, set(new_state.variables))
+    }
 
     for variable, after in sorted(new_state.variables.items()):
         outcome = outcome_by_variable.get(variable)
@@ -589,6 +573,21 @@ def record(state, item, candidate, response) -> None:
         "detail": detail,
         "flags": graded.flags,
     }
+
+    seed = st.session_state["rng_seed"]
+    st.session_state["rng_seed"] = seed + 1
+    with observability.session(
+        new_state.session_id,
+        track=st.session_state.get("competencies"),
+        stage="refill_queue",
+        item_id=item.item_id,
+    ):
+        new_state = run_async(
+            engine().after_response(
+                new_state, item, use_llm=use_llm(), rng=np.random.default_rng(seed)
+            )
+        )
+    st.session_state["run"] = new_state
 
 
 def render_question(state) -> None:
@@ -739,7 +738,7 @@ def render_assessment() -> None:
         st.session_state["rng_seed"] = seed + 1
         with observability.session(
             state.session_id,
-            track=st.session_state.get("track"),
+            track=st.session_state.get("competencies"),
             stage="fill_queue",
             items_administered=state.items_administered,
         ):
@@ -748,6 +747,7 @@ def render_assessment() -> None:
                     state, use_llm=use_llm(), rng=np.random.default_rng(seed)
                 )
             )
+        state = engine().ensure_presenting(state)
         st.session_state["run"] = state
 
         stop, reason = engine().should_stop(state)
@@ -763,10 +763,13 @@ def render_assessment() -> None:
     # --- sidebar
     st.sidebar.title("Session")
     st.sidebar.caption(f"`{state.session_id}`")
-    if st.session_state.get("track"):
-        st.sidebar.caption(
-            f"Track **{st.session_state['track']}** · {st.session_state.get('track_name','')}"
-        )
+    if st.session_state.get("competencies"):
+        names = st.session_state.get("competency_names", {})
+        labels = [
+            f"**{code}** · {names.get(code, code)}"
+            for code in st.session_state["competencies"]
+        ]
+        st.sidebar.caption("Competencies: " + ", ".join(labels))
     st.sidebar.metric("Questions answered", state.items_administered)
     open_count = len(state.open_variables)
     st.sidebar.metric("Competencies open", f"{open_count} of {len(state.variables)}")

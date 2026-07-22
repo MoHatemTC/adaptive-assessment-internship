@@ -74,7 +74,19 @@ class BankItem(BaseModel):
         return getattr(self, self.modality)
 
     def loading(self, variable: str) -> float:
-        """How much of this item measures `variable`. 0.0 when it does not at all."""
+        """How much of this item measures `variable`. 0.0 when it does not at all.
+
+        Accepts a main competency (T1) or a sub-competency (T1.1). For a main competency
+        the loading is the strongest measure among its sub-competencies on this item.
+        """
+        if "." not in variable:
+            prefix = f"{variable}."
+            loadings = [
+                entry.weight
+                for entry in self.measures
+                if entry.variable == variable or entry.variable.startswith(prefix)
+            ]
+            return max(loadings) if loadings else 0.0
         for entry in self.measures:
             if entry.variable == variable:
                 return entry.weight
@@ -140,6 +152,9 @@ class AssessmentState(BaseModel):
     session_id: str
     variables: dict[str, VariableState] = Field(default_factory=dict)
     queue: dict[str, QueuedCandidate] = Field(default_factory=dict)
+    # The question currently shown to the candidate. While set, that competency's slot is
+    # empty so the queue holds only other competencies' next questions.
+    presenting: QueuedCandidate | None = None
     served_item_ids: list[str] = Field(default_factory=list)
     items_administered: int = 0
     started_at: float = 0.0

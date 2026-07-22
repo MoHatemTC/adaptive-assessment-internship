@@ -20,6 +20,7 @@ from pydantic import ValidationError
 
 from app.schemas.orchestration import BankItem
 from app.services.adaptive.irt import THETA_GRID, fisher_information
+from app.services.orchestrator.competency import main_competency
 
 logger = logging.getLogger(__name__)
 
@@ -84,16 +85,22 @@ class JsonUnifiedBank:
         ]
 
     def variables(self) -> list[str]:
-        return sorted({m.variable for i in self._load() for m in i.measures})
+        """Main competencies (T1..T5) that the bank can assess."""
+        return sorted({main_competency(m.variable) for i in self._load() for m in i.measures})
+
+    def main_competencies(self) -> list[dict]:
+        """Candidate-facing main competencies with names and coverage."""
+        return self.tracks()
 
     def coverage(self) -> dict[str, dict[str, int]]:
-        """variable -> {modality: count}. What can actually be adaptively assessed."""
+        """main competency -> {modality: count}."""
         counts: dict[str, dict[str, int]] = {}
         for item in self._load():
             if item.status != "active":
                 continue
             for entry in item.measures:
-                bucket = counts.setdefault(entry.variable, {})
+                main = main_competency(entry.variable)
+                bucket = counts.setdefault(main, {})
                 bucket[item.modality] = bucket.get(item.modality, 0) + 1
         return dict(sorted(counts.items()))
 
