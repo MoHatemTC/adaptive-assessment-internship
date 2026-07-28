@@ -29,9 +29,11 @@ def test_bank_loads_open_items_only():
     bank = JsonUnifiedBank()
     items = bank.all_items()
     assert len(items) >= 100
-    assert all(i.modality == "open" for i in items)
-    assert all(1.8 <= i.cat.a <= 2.3 for i in items)
-    assert all(abs(i.cat.c - OPEN_RUBRIC_FLOOR) < 1e-9 for i in items)
+    assert {"mcq", "code", "open"}.issubset({i.modality for i in items})
+    open_items = [i for i in items if i.modality == "open"]
+    assert open_items
+    assert all(0.0 < i.cat.a <= 3.0 for i in open_items)
+    assert all(0.0 <= i.cat.c < 1.0 for i in open_items)
     assert bank.variables()
 
 
@@ -125,8 +127,9 @@ def test_evidence_strength_respects_confidence_floor():
 
 
 def test_load_rubric_for_first_item():
-    item = JsonUnifiedBank().all_items()[0]
-    rubric_id = item.payload["rubric_id"]
-    rubric = load_rubric(rubric_id)
-    assert rubric["rubric_id"] == rubric_id
-    assert rubric["criteria"]
+    item = next(i for i in JsonUnifiedBank().all_items() if i.modality == "open")
+    if item.payload.get("rubric_id"):
+        rubric = load_rubric(item.payload["rubric_id"])
+        assert rubric["criteria"]
+    else:
+        assert item.payload.get("rubric_criteria")

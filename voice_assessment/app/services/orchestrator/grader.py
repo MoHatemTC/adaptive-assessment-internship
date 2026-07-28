@@ -81,6 +81,39 @@ class GraderAgent:
             raise RuntimeError("no code engine configured — cannot grade a code item")
         if not isinstance(response, str):
             raise ValueError(f"{item.item_id}: code response must be source text")
-        raise NotImplementedError(
-            "code grading is not part of the voice standalone package — use the combined engine"
+
+        question = self.as_code_question(item)
+        graded = self._code.evaluate(question, response)
+        report = graded["report"]
+
+        outcomes = [
+            GradedOutcome(
+                variable=evidence.competency_id,
+                score=float(evidence.score),
+                # Loading is already folded into criterion->competency projection, so do
+                # not multiply by it again here.
+                weight=min(max(float(evidence.evidence_strength), 0.0), 1.0),
+                confidence=float(evidence.confidence),
+                source_item_id=item.item_id,
+                modality="code",
+            )
+            for evidence in graded["competency_evidence"]
+        ]
+        return GradedResponse(
+            item_id=item.item_id,
+            modality="code",
+            outcomes=[o.__dict__ for o in outcomes],
+            detail=report.model_dump(),
+            flags=list(report.flags),
         )
+
+    @staticmethod
+    def as_code_question(item: BankItem) -> dict:
+        """Rebuild the shape CodeAdaptiveSession expects from unified envelope."""
+        payload = dict(item.payload)
+        payload["question_id"] = item.item_id
+        payload["difficulty"] = payload.get("difficulty", 0.5)
+        payload["competencies"] = [
+            {"competency_id": m.variable, "weight": m.weight} for m in item.measures
+        ]
+        return payload

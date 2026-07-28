@@ -6,15 +6,24 @@ import json
 import logging
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+import numpy as np
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from app.schemas.orchestration import AssessmentState, BankItem
+from app.services.code_adaptive import CodeAdaptiveSession, JsonQuestionRepository
+from app.services.orchestrator.bank import JsonUnifiedBank
+from app.services.orchestrator.grader import GraderAgent
+from app.services.orchestrator.orchestrator import Orchestrator
+from app.services.voice.evaluator import evaluate as evaluate_voice
+from app.services.voice.evaluator import package_from_text
 from app.services.voice_live.debug_log import clear as clear_live_debug
 from app.services.voice_live.debug_log import live_debug, live_debug_exc, snapshot
 from app.services.voice_live.realtime_room import RealtimeLiveRoom
+from app.services.voice_live.transcribe import transcribe_audio_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +53,95 @@ class CreateRoomResponse(BaseModel):
     room_id: str
     ws_path: str
     mode: str = "interview"
+
+
+class CreateCatSessionRequest(BaseModel):
+    target_variables: list[str] | None = None
+    intake: dict[str, int] | None = None
+    confidence: dict[str, bool] | None = None
+    use_llm: bool = True
+    seed: int = 0
+
+
+class CatAnswerRequest(BaseModel):
+    type: str
+    chosen_index: int | None = None
+    code: str | None = None
+    transcript: str | None = None
+    use_llm: bool = True
+    seed: int = 0
+
+
+_cat_bank = JsonUnifiedBank()
+_cat_code_engine = CodeAdaptiveSession(JsonQuestionRepository())
+_cat_orchestrator = Orchestrator(_cat_bank, GraderAgent(code_engine=_cat_code_engine))
+_cat_sessions: dict[str, AssessmentState] = {}
+
+
+def _ui_item(item: BankItem) -> dict:
+    payload = item.payload or {}
+    base = {
+        "item_id": item.item_id,
+        "modality": item.modality,
+        "competency": item.competency,
+        "sub_competency": item.sub_competency,
+    }
+    if item.modality == "mcq":
+        base.update(
+            {
+                "stem": payload.get("stem") or payload.get("question") or "",
+                "options": payload.get("options") or [],
+            }
+        )
+    elif item.modality == "code":
+        base.update(
+            {
+                "prompt": payload.get("prompt") or payload.get("question") or "",
+                "language": payload.get("language", "python"),
+                "function_name": payload.get("function_name", "solve"),
+                "starter_code": payload.get("reference_solution", ""),
+            }
+        )
+    elif item.modality == "open":
+        base.update(
+            {
+                "question": payload.get("question") or payload.get("prompt") or "",
+                "answer_format": payload.get("answer_format") or "spoken",
+            }
+        )
+    return base
+
+
+def _cat_state_response(
+    state: AssessmentState,
+    *,
+    stop_reason: str = "",
+    last_graded: dict | None = None,
+    open_debug: dict | None = None,
+) -> dict:
+    stop, reason = _cat_orchestrator.should_stop(state)
+    reason = stop_reason or reason
+    presenting = None
+    pair = _cat_orchestrator.next_item(state)
+    if pair is not None:
+        item, candidate = pair
+        presenting = {
+            "variable": candidate.variable,
+            "criterion": candidate.criterion,
+            "item": _ui_item(item),
+        }
+    report = _cat_orchestrator.summarise(state, reason).model_dump() if stop else None
+    return {
+        "session_id": state.session_id,
+        "stop": stop,
+        "stop_reason": reason if stop else "",
+        "items_administered": state.items_administered,
+        "open_variables": state.open_variables,
+        "presenting": presenting,
+        "last_graded": last_graded,
+        "open_debug": open_debug,
+        "report": report,
+    }
 
 
 @app.get("/health")
@@ -81,6 +179,134 @@ def live_config():
         "gate_barge_in_extra_db": voice_settings.gate_barge_in_extra_db,
         "model": voice_settings.gemini_live_model,
     }
+
+
+@app.post("/api/cat/sessions")
+async def create_cat_session(body: CreateCatSessionRequest):
+    targets = body.target_variables or _cat_bank.variables()
+    state = _cat_orchestrator.begin(
+        targets,
+        intake=body.intake or {},
+        confidence=body.confidence or {},
+    )
+    state = await _cat_orchestrator.fill_queue(
+        state,
+        use_llm=body.use_llm,
+        rng=np.random.default_rng(body.seed),
+    )
+    state = _cat_orchestrator.ensure_presenting(state)
+    _cat_sessions[state.session_id] = state
+    return _cat_state_response(state)
+
+
+@app.get("/api/cat/sessions/{session_id}")
+async def get_cat_session(session_id: str):
+    state = _cat_sessions.get(session_id)
+    if state is None:
+        raise HTTPException(status_code=404, detail="session not found")
+    state = _cat_orchestrator.ensure_presenting(state)
+    _cat_sessions[session_id] = state
+    return _cat_state_response(state)
+
+
+@app.post("/api/cat/sessions/{session_id}/answer")
+async def submit_cat_answer(
+    session_id: str,
+    request: Request,
+    type_form: str | None = Form(default=None, alias="type"),
+    chosen_index_form: int | None = Form(default=None, alias="chosen_index"),
+    code_form: str | None = Form(default=None, alias="code"),
+    transcript_form: str | None = Form(default=None, alias="transcript"),
+    use_llm_form: bool | None = Form(default=None, alias="use_llm"),
+    seed_form: int | None = Form(default=None, alias="seed"),
+    audio: UploadFile | None = File(default=None),
+):
+    state = _cat_sessions.get(session_id)
+    if state is None:
+        raise HTTPException(status_code=404, detail="session not found")
+
+    state = _cat_orchestrator.ensure_presenting(state)
+    pair = _cat_orchestrator.next_item(state)
+    if pair is None:
+        _cat_sessions[session_id] = state
+        return _cat_state_response(state)
+    item, _candidate = pair
+
+    content_type = request.headers.get("content-type", "")
+    if content_type.startswith("application/json"):
+        body = CatAnswerRequest.model_validate(await request.json())
+        answer_type = body.type
+        chosen_index = body.chosen_index
+        code = body.code
+        transcript = body.transcript
+        use_llm = body.use_llm
+        seed = body.seed
+    else:
+        answer_type = type_form or item.modality
+        chosen_index = chosen_index_form
+        code = code_form
+        transcript = transcript_form
+        use_llm = True if use_llm_form is None else use_llm_form
+        seed = 0 if seed_form is None else seed_form
+
+    if answer_type != item.modality:
+        raise HTTPException(
+            status_code=400,
+            detail=f"answer type mismatch: expected {item.modality}, got {answer_type}",
+        )
+
+    open_debug = None
+    if item.modality == "mcq":
+        if chosen_index is None:
+            raise HTTPException(status_code=400, detail="chosen_index is required for mcq")
+        new_state, graded = _cat_orchestrator.record_response(state, item, chosen_index)
+    elif item.modality == "code":
+        if not code:
+            raise HTTPException(status_code=400, detail="code is required for code modality")
+        new_state, graded = _cat_orchestrator.record_response(state, item, code)
+    elif item.modality == "open":
+        transcript_text = (transcript or "").strip()
+        filename = "answer.wav"
+        if audio is not None:
+            audio_bytes = await audio.read()
+            if not audio_bytes:
+                raise HTTPException(status_code=400, detail="empty audio payload")
+            filename = audio.filename or filename
+            transcript_text = transcribe_audio_bytes(audio_bytes, filename=filename).strip()
+        if not transcript_text:
+            raise HTTPException(
+                status_code=400,
+                detail="transcript or audio file is required for open modality",
+            )
+        package = package_from_text(item.item_id, transcript_text)
+        graded_voice = await evaluate_voice(item, package, use_llm=use_llm)
+        new_state, graded = _cat_orchestrator.record_response(state, item, graded_voice)
+        open_debug = {
+            "transcript": transcript_text,
+            "word_count": package.word_count,
+            "audio_filename": filename if audio is not None else None,
+        }
+    else:  # pragma: no cover
+        raise HTTPException(status_code=400, detail=f"unsupported modality {item.modality}")
+
+    new_state = await _cat_orchestrator.after_response(
+        new_state,
+        item,
+        use_llm=use_llm,
+        rng=np.random.default_rng(seed),
+    )
+    new_state = _cat_orchestrator.ensure_presenting(new_state)
+    _cat_sessions[session_id] = new_state
+    return _cat_state_response(
+        new_state,
+        last_graded={
+            "item_id": graded.item_id,
+            "modality": graded.modality,
+            "flags": graded.flags,
+            "detail": graded.detail,
+        },
+        open_debug=open_debug,
+    )
 
 
 @app.post("/api/live/rooms", response_model=CreateRoomResponse)
@@ -288,6 +514,12 @@ def index():
 def interview_page():
     """Assessment interview UI (used by Streamlit iframes)."""
     return FileResponse(STATIC_DIR / "interview.html")
+
+
+@app.get("/cat")
+def cat_page():
+    """Unified CAT UI for mcq + code + open/voice."""
+    return FileResponse(STATIC_DIR / "cat.html")
 
 
 if STATIC_DIR.exists():
