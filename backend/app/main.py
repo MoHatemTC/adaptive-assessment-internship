@@ -542,6 +542,7 @@ def index():
         "litellm_model": settings.litellm_model,
         "litellm_live_preview_model": settings.litellm_live_preview_model,
         "live_server": voice_settings.live_server_base,
+        "live_public": voice_settings.live_public_base,
     }
 
 

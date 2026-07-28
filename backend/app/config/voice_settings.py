@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Resolve `.env` next to the backend package root regardless of cwd.
@@ -63,16 +63,48 @@ class VoiceSettings(BaseSettings):
     gate_close_frames: int = 8
     gate_barge_in_extra_db: float = 6.0
 
-    # Open items are Live-only in this branch — never typed/transcript answers.
+    # Prefer Live interviews. When True, Streamlit always offers a typed answer box.
+    # When False (default), typed answers appear only if the Live helper is unreachable
+    # — required for Streamlit Cloud / remote hosts that cannot run a second uvicorn.
     allow_text_fallback: bool = False
 
-    # Realtime Live WebSocket server (browser mic duplex)
+    # Realtime Live WebSocket server (browser mic duplex).
+    # Server-side health + room APIs use live_server_base.
+    # The browser iframe uses live_public_base (must be reachable from the user's machine).
+    #
+    # Local defaults: both http://127.0.0.1:8765
+    # Cloud example:
+    #   LIVE_SERVER_BASE=http://127.0.0.1:8765          # Streamlit→helper on same VM
+    #   LIVE_PUBLIC_BASE=https://live.example.com       # browser iframe / WebSocket
+    # Or a single public URL for both when Streamlit can also reach it:
+    #   LIVE_SERVER_BASE=https://live.example.com
     live_server_host: str = "127.0.0.1"
     live_server_port: int = 8765
+    # Full URL overrides (scheme://host[:port]). Empty → build from host/port.
+    live_server_base_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("LIVE_SERVER_BASE", "live_server_base_url"),
+    )
+    live_public_base_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("LIVE_PUBLIC_BASE", "live_public_base_url"),
+    )
 
     @property
     def live_server_base(self) -> str:
+        """URL Streamlit uses for health checks and room create/fetch (server-side)."""
+        override = (self.live_server_base_url or "").strip().rstrip("/")
+        if override:
+            return override
         return f"http://{self.live_server_host}:{self.live_server_port}"
+
+    @property
+    def live_public_base(self) -> str:
+        """URL the candidate browser uses for the /interview iframe (must be public)."""
+        override = (self.live_public_base_url or "").strip().rstrip("/")
+        if override:
+            return override
+        return self.live_server_base
 
 
 voice_settings = VoiceSettings()

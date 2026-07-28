@@ -7,4 +7,6 @@ if [[ ! -x ../.venv/bin/python ]]; then
   echo "Missing .venv — run ./scripts/run_streamlit.sh once to create it." >&2
   exit 1
 fi
-exec ../.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port "${LIVE_PORT:-8765}" "$@"
+# LIVE_HOST=0.0.0.0 when exposing the helper beyond this machine (cloud / LAN).
+exec ../.venv/bin/python -m uvicorn app.main:app \
+  --host "${LIVE_HOST:-127.0.0.1}" --port "${LIVE_PORT:-8765}" "$@"

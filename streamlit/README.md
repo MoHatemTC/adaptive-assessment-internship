@@ -19,7 +19,24 @@ Port 8765 is only the Live interviewer helper that Streamlit embeds for open ite
 Set `LITELLM_MODEL=openai/gpt-5.6-sol`, `LITELLM_LIVE_PREVIEW_MODEL=gemini/gemini-3.1-flash-live-preview`,
 `LITELLM_SSL_VERIFY=false` (if needed) in `backend/.env`.
 
-Open items render a Live interview iframe only — no typed/transcript fallback.
+Open items prefer a Live interview iframe. If the Live helper is unreachable (typical on
+**Streamlit Cloud**, which cannot bind a second uvicorn), the UI offers a **typed answer
+fallback** graded with the same open rubric. Set `ALLOW_TEXT_FALLBACK=true` to always show
+typed answers even when Live is up.
+
+### Cloud Live (optional second service)
+
+`127.0.0.1:8765` only works when Streamlit and the browser share that machine. Remotely:
+
+1. Run the Live helper on a public host:  
+   `uvicorn app.main:app --host 0.0.0.0 --port 8765` (TLS via reverse proxy).
+2. In Streamlit secrets / `.env`:
+   - `LIVE_SERVER_BASE` — URL Streamlit’s server uses for `/health` and room APIs  
+     (often `http://127.0.0.1:8765` if both processes share a VM).
+   - `LIVE_PUBLIC_BASE` — URL the **browser** uses for the `/interview` iframe  
+     (must be the public `https://…` host; WebSockets use the same origin).
+
+Without those, open items stay answerable via the typed fallback.
 
 `streamlit/requirements.txt` is **self-contained** — it carries the engine's dependencies as
 well as the UI's, because Streamlit Cloud installs exactly one requirements file: the one
@@ -29,7 +46,8 @@ agree, so drift fails the suite rather than the next deployment.
 **Deploying to Streamlit Cloud:** set the main file to `streamlit/main.py`, and pin the
 Python version in *Advanced settings*. Cloud currently defaults to 3.14, where an unbounded
 resolve pulls pandas 3.x and crashes on import; the upper bounds here prevent that, but
-pinning the interpreter removes the whole class of surprise.
+pinning the interpreter removes the whole class of surprise. Open/voice needs either a
+separate Live service + `LIVE_*_BASE` secrets, or reliance on the typed fallback.
 
 Nothing in `backend/` changes — the UI reads the engine's public API and recomputes the
 rest with the engine's own functions.

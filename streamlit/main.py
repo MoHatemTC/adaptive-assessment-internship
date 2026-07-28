@@ -11,7 +11,7 @@ Three screens:
                  say how sure that rating is. The rating seeds the prior; the confidence
                  sets its width. Sub-competencies are never chosen by the candidate.
     Assessment   answer MCQ / code / Live voice, and watch the queue, mathematics and
-                 trajectory move. Open items are Live interview only (no typed answers).
+                 trajectory move. Open items prefer Live; typed fallback if Live is down.
     Report       on convergence — the same detail, retained rather than cleared, because
                  the interesting part of a session is usually visible only afterwards.
 
@@ -77,6 +77,7 @@ from app.services.adaptive.irt import expected_fisher_information  # noqa: E402
 from app.services.orchestrator.picker import criterion_for, information_for  # noqa: E402
 from app.services.orchestrator.competency import rollup_outcomes  # noqa: E402
 from app.services.voice.evaluator import evaluate as evaluate_voice  # noqa: E402
+from app.services.voice.evaluator import package_from_text  # noqa: E402
 
 
 def fisher_after(item, variable_state, variable) -> float:
@@ -640,6 +641,33 @@ def live_server_ok() -> bool:
         return False
 
 
+def open_text_fallback_allowed(*, live_up: bool) -> bool:
+    """Typed answers when Live is forced off, or when Live cannot be reached (cloud)."""
+    if voice_settings.allow_text_fallback:
+        return True
+    return not live_up
+
+
+def render_open_text_fallback(state, item, candidate, *, reason: str) -> None:
+    """Grade a typed / pasted answer the same way Live packages are graded."""
+    st.warning(reason)
+    text = st.text_area(
+        "Written answer (fallback)",
+        height=220,
+        key=f"open_text_{item.item_id}",
+        placeholder="Type or paste your explanation here (roughly 150–300 words)…",
+    )
+    if st.button(
+        "Submit written answer",
+        type="primary",
+        disabled=not (text or "").strip(),
+        key=f"open_submit_{item.item_id}",
+    ):
+        package = package_from_text(item.item_id, text.strip())
+        record_live_package(state, item, candidate, package)
+        st.rerun()
+
+
 def create_live_room(item_id: str, question: str, *, assessment_session_id: str = "") -> str:
     r = httpx.post(
         f"{voice_settings.live_server_base}/api/live/rooms",
@@ -688,20 +716,45 @@ def record_live_package(state, item, candidate, package: VoiceResponsePackage) -
 
 
 def render_live_interview(state, item, candidate) -> None:
-    """Open/voice answers are Live-only — never typed transcript or Whisper paste."""
+    """Open/voice: Live interview when the helper is up; typed fallback otherwise."""
     if not settings.litellm_api_key.strip():
         st.warning(
             "Set `LITELLM_API_KEY` (and `LITELLM_BASE_URL`) in `backend/.env` for "
             f"Live interviews via `{settings.litellm_live_preview_model}`."
         )
+        if open_text_fallback_allowed(live_up=False):
+            render_open_text_fallback(
+                state,
+                item,
+                candidate,
+                reason=(
+                    "LiteLLM is not configured for Live. Submit a **written** answer "
+                    "so the session can continue."
+                ),
+            )
         return
 
-    if not live_server_ok():
+    live_up = live_server_ok()
+    if not live_up:
         st.error(
-            f"Live interviewer is not running at `{voice_settings.live_server_base}`. "
-            "From `backend/` run:\n\n"
-            "`python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8765`"
+            f"Live interviewer is not reachable at `{voice_settings.live_server_base}` "
+            f"(browser iframe would use `{voice_settings.live_public_base}`).\n\n"
+            "**Local:** from `backend/` run\n\n"
+            "`python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8765`\n\n"
+            "**Cloud:** run the Live helper on a public host (`--host 0.0.0.0`) and set "
+            "`LIVE_SERVER_BASE` / `LIVE_PUBLIC_BASE` in secrets, **or** use the written "
+            "fallback below (Streamlit Cloud cannot bind a second port by itself)."
         )
+        if open_text_fallback_allowed(live_up=False):
+            render_open_text_fallback(
+                state,
+                item,
+                candidate,
+                reason=(
+                    "Live helper is down — typed answers still update θ via the open "
+                    "grader (same rubric as a Live transcript)."
+                ),
+            )
         return
 
     st.info(
@@ -710,6 +763,15 @@ def render_live_interview(state, item, candidate) -> None:
         f"Interviewer: `{settings.litellm_live_preview_model}` via LiteLLM · "
         f"Picker/grader: `{settings.litellm_model}` via LiteLLM."
     )
+
+    if voice_settings.allow_text_fallback:
+        with st.expander("Prefer to type instead of speaking?"):
+            render_open_text_fallback(
+                state,
+                item,
+                candidate,
+                reason="Typed fallback enabled (`ALLOW_TEXT_FALLBACK=true`).",
+            )
 
     room_id = st.session_state.get("live_room_id")
     if st.session_state.get("live_active_item") != item.item_id:
@@ -731,6 +793,12 @@ def render_live_interview(state, item, candidate) -> None:
             except Exception as exc:  # noqa: BLE001
                 st.session_state["last_audio_error"] = str(exc)
                 st.error(f"Could not open Live room: {exc}")
+                render_open_text_fallback(
+                    state,
+                    item,
+                    candidate,
+                    reason="Live room create failed — you can still submit in writing.",
+                )
     with cols[1]:
         if st.button("Refresh status", disabled=not room_id):
             st.rerun()
@@ -762,7 +830,8 @@ def render_live_interview(state, item, candidate) -> None:
 
     question = item.payload.get("prompt") or item.payload.get("question", "")
     qs = urlencode({"item_id": item.item_id, "question": question, "room_id": room_id})
-    st.iframe(f"{voice_settings.live_server_base}/interview?{qs}", height=480)
+    # Browser must reach this URL — use LIVE_PUBLIC_BASE on cloud, not 127.0.0.1.
+    st.iframe(f"{voice_settings.live_public_base}/interview?{qs}", height=480)
 
     try:
         data = fetch_live_room(room_id)
