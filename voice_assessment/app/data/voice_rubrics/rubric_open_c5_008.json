@@ -1,0 +1,60 @@
+{
+  "rubric_id": "rubric_open_c5_008",
+  "version": "1.0",
+  "item_id": "open_c5_008",
+  "competency": "C5",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C5.8",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Full marks: correctly attributes the gap to diglossia/variety shift plus tokenizer fertility/OOV and train-serve preprocessing skew; accurately describes Arabic orthographic normalization (hamza/alef forms, taa marbuta, alef maqsura, diacritics, tatweel) and correctly characterizes real tools/models (MARBERT, CAMeLBERT, AraBERT, Farasa, CAMeL Tools, XLM-R). Deduct for factual errors about Arabic mechanisms or tool capabilities (e.g. claiming AraBERT is dialect-optimized, or that normalization alone resolves dialect)."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C5.8",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Full marks: gives the diagnosis, a two-sided evaluation of the normalization proposal, AND all four plan dimensions (data, preprocessing/tokenization, model choice, evaluation) including code-switching/Arabizi handling. Deduct for each missing dimension or a one-sided treatment of normalization."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C5.8",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Full marks: justifies why normalization alone is insufficient, weighs where it helps vs where it hurts, and ties each remediation to the specific failure mode it addresses (e.g. MARBERT for dialect, segmentation for fertility, stratified eval for hidden per-dialect gap). Deduct for assertions offered without mechanism."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C5.8",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Full marks: clear diagnosis/evaluation/plan structure, precise use of Arabic-NLP vocabulary, and concrete examples (specific alef/hamza forms, clitics, named tools). Deduct for vague, disorganized, or jargon-only prose."
+    }
+  ],
+  "expected_answer_points": [
+    "Identifies the core cause as diglossia / MSA-vs-dialect distribution shift — the MSA-trained model lacks dialectal lexicon, morphology and syntax — rather than mere orthography",
+    "Names subword-tokenizer fertility / OOV ([UNK]) on dialectal words, Arabizi and English as an off-distribution representation problem, and identifies train/serve preprocessing skew as a distinct contributor",
+    "Evaluates the normalization proposal as standard but lossy hygiene: alef/hamza normalization and diacritic stripping reduce orthographic sparsity yet can conflate distinct words and do not fix diglossia",
+    "States that any normalization/tokenization scheme must match the pretrained model's own preprocessing and be applied identically at train and inference",
+    "Recommends a dialect-aware model (MARBERT or CAMeLBERT-Mix/DA) over MSA-centric AraBERT, and/or XLM-R for code-switching",
+    "Prescribes collecting and labelling in-domain dialectal + Arabizi data (augmentation), with dialect/script identification and Arabizi transliteration",
+    "Specifies consistent morphological/clitic segmentation and normalization via a real toolkit (Farasa or CAMeL Tools), matched to the model",
+    "Prescribes per-dialect / per-script stratified evaluation (per-dialect macro-F1, not just aggregate) plus drift monitoring or a low-confidence human fallback"
+  ],
+  "common_pitfalls": [
+    "Treats the problem as purely orthographic and claims the junior's normalization will close the gap, missing that dialectal vocabulary/syntax (diglossia) is the dominant cause",
+    "Recommends normalization but ignores train/serve consistency and that the scheme must match the pretrained model's own preprocessing — inventing an aggressive scheme that conflicts with the model's tokenizer",
+    "Proposes over-normalization (e.g. taa-marbuta→haa, ya↔alef-maqsura, stripping needed distinctions) without noting it conflates distinct words and is lossy",
+    "Keeps the MSA-centric model or names AraBERT as the fix, unaware of dialect-focused models such as MARBERT or CAMeLBERT-Mix",
+    "Ignores code-switching / Arabizi entirely, treating the input as monolingual Arabic-script text",
+    "Evaluates only with a single aggregate macro-F1, leaving the per-dialect gap invisible — no stratified evaluation or drift monitoring"
+  ],
+  "reference_answer": "Diagnosis. The dominant cause is diglossia / variety shift, not spelling. The classifier was fine-tuned on MSA but serves Egyptian and Gulf dialectal Arabic (DA), which differ from MSA in lexicon, morphology, clitic patterns and syntax — so the model never learned the dialectal words and constructions that carry intent. On top of that sit two representation problems: (a) tokenizer effects — dialectal terms, Arabizi and English brand names are off-distribution for an MSA-centric subword vocabulary, so they fragment into many high-fertility subwords or hit [UNK], degrading embeddings; and (b) train/serve preprocessing skew — if inference normalizes text differently than training did, the same word maps to different token sequences. A 0.91→0.62 drop is the signature of variety shift plus these effects, not a diacritics bug.\n\nEvaluating the proposal. Diacritic stripping and alef/hamza normalization (أ إ آ → ا) are standard, cheap orthographic hygiene: they collapse spelling variants and reduce sparsity, so they help matching a little. But most Arabic text is already undiacritized, so stripping buys little; normalization is lossy and can conflate distinct words, and over-normalizing (e.g. ة→ه, or ى↔ي) merges semantically different tokens. Crucially, the normalization must match the pretrained model's own scheme and be applied identically at train and inference — inventing an aggressive scheme that diverges from what the model/tokenizer expects can hurt. And none of this touches diglossia: normalization is necessary hygiene, not the cure.\n\nPlan.\n- Data: collect and label in-domain production messages stratified by dialect and script; augment the MSA training set with dialectal and Arabizi examples. Add script/dialect identification (e.g. CAMeL Tools DID), transliterate Arabizi into Arabic script, and keep English brand names as-is.\n- Model: replace MSA-centric AraBERT with a dialect-aware encoder — MARBERT (pretrained on ~1B Arabic tweets, strong on DA/social text) or CAMeLBERT-Mix (MSA+DA+CA); consider XLM-R where code-switching is heavy.\n- Preprocessing/tokenization: adopt one defined normalization plus morphological segmentation scheme (Farasa or CAMeL Tools clitic segmentation of و/ف/ال/ب/ل and pronominal suffixes), matched to the chosen model and applied identically at train and serve.\n- Evaluation: report per-dialect and per-script macro-F1 on a stratified set, not just an aggregate, so the dialect gap is visible; monitor production drift and add a confidence-thresholded human fallback.",
+  "global_rubric": "open_grading_rubric.json"
+}

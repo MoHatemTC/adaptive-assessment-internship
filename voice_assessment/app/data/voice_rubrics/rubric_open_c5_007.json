@@ -1,0 +1,59 @@
+{
+  "rubric_id": "rubric_open_c5_007",
+  "version": "1.0",
+  "item_id": "open_c5_007",
+  "competency": "C5",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C5.7",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Correctly frames abstractive summarisation as conditional LM decoding and gives the true cause of unsupported facts (likelihood objective + LM prior, not merely 'bad data'); accurately states ROUGE measures lexical overlap, not factuality; correctly identifies fixed positional/context-window limits; and names real, valid techniques (map-reduce/hierarchical, LED/Longformer, FactCC/SummaC or QAGS/QuestEval, beam/temperature/copy decoding) without technical errors."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C5.7",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Addresses all three parts - (a) hallucination cause + ROUGE gap, (b) exceeding the context window, (c) decoding and evaluation changes - and includes at least one explicit trade-off. Omitting a full part or the trade-off loses marks proportionally."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C5.7",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Justifies each choice rather than listing tools: why sampling worsens hallucination, why chunking risks coherence loss or truncation drops content, and why an entailment/QA metric catches what ROUGE cannot. Reasoning connects the proposed fix to the specific failure observed."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C5.7",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Organised around the three sub-questions, uses correct terminology (abstractive vs extractive, intrinsic/extrinsic hallucination, entailment/factual consistency, positional embeddings), and is precise and concise rather than vague or padded."
+    }
+  ],
+  "expected_answer_points": [
+    "Explains hallucination mechanism: the decoder is a conditional language model optimising likelihood/fluency, not constrained to the source, so its LM prior fills gaps and references containing extrinsic facts teach it to invent (intrinsic vs extrinsic hallucination).",
+    "Explains why ROUGE misses it: ROUGE-L measures n-gram/LCS overlap with a reference, not factual consistency or entailment against the source, so a single wrong fact barely affects the score.",
+    "Identifies the root cause of problem 2: fixed maximum position embeddings / context window (e.g. ~1024 for BART) means long transcripts are truncated or error out.",
+    "Proposes a concrete long-input strategy with a trade-off: chunking + hierarchical/map-reduce summarisation (with overlap), and/or a long-context model (Longformer/LED), and/or extract-then-abstract.",
+    "Changes decoding for faithfulness: favour beam search / lower temperature over high-temperature sampling (and/or copy/constrained decoding, length control), reasoning that sampling increases hallucination.",
+    "Adds a faithfulness evaluation beyond ROUGE: NLI/entailment-based (FactCC/SummaC) or QA-based (QAGS/QuestEval) factual-consistency metrics, and/or targeted human evaluation.",
+    "States an explicit trade-off: tighter grounding/constraint reduces abstractiveness/fluency (toward extractive); hierarchical/long-context approaches add cost or error propagation."
+  ],
+  "common_pitfalls": [
+    "Attributes the invented facts to 'insufficient training data' or 'bad fine-tuning' instead of the fundamental conditional-LM likelihood objective and language-model prior.",
+    "Believes a higher ROUGE would have caught the wrong fact, or proposes 'just improve ROUGE', misunderstanding that ROUGE is overlap-based and factuality-blind.",
+    "Fixes the long-input problem by simply truncating the transcript or raising max_length, not realising truncation drops content and max_length caps the output, not the input window.",
+    "Recommends higher temperature or more diverse top-p sampling to make summaries 'better', which actually increases hallucination.",
+    "Offers only ROUGE or only ad-hoc human reading for evaluation, without any automatable faithfulness metric (NLI/entailment or QA-based).",
+    "Claims extractive summarisation would hallucinate the same invented facts, ignoring that copying source spans cannot fabricate a refund amount that is absent from the transcript."
+  ],
+  "reference_answer": "(a) Hallucination cause. An abstractive summariser is conditional language generation: the decoder samples each token from a distribution learned over training data, conditioned on the encoded source but not constrained to copy from it. Training minimises cross-entropy against reference summaries, optimising fluency/likelihood, and the references themselves often contain facts not verbatim in the source, teaching the model to add plausible but unsupported content. The strong language-model prior fills gaps: on a long or ambiguous transcript the model emits a 'typical' refund amount. This is intrinsic (misrepresenting the source) vs extrinsic (inventing) hallucination. Why ROUGE misses it: ROUGE-L rewards longest-common-subsequence n-gram overlap with a reference, not factual consistency or entailment against the source. A summary can share many n-grams (high ROUGE) yet state one wrong number, and a faithful paraphrase can score low. ROUGE is factuality-blind, so a hallucinated amount barely moves it.\n\n(b) Long inputs. BART/T5 have fixed maximum position embeddings (e.g. ~1024 for BART), so 4-12k-token transcripts are truncated (dropping content) or error. Options: chunk with overlap and summarise hierarchically (map-reduce) - summarise each chunk, then summarise the concatenated chunk-summaries; trade-off is error propagation and lost global coherence plus extra passes. Or switch to a long-context encoder-decoder (Longformer/LED, ~16k tokens) using sparse/sliding-window attention to avoid quadratic cost; trade-off is a heavier model and re-fine-tuning. Or extract-then-abstract: select salient turns first, feed only those; trade-off is the extractor may drop needed content.\n\n(c) Decoding and evaluation. Prefer beam search with a length penalty and low/greedy temperature over high-temperature top-p sampling, since sampling raises diversity and hallucination; add no_repeat_ngram and a length cap for the 3-sentence budget, and consider copy/pointer-generator or constrained decoding to bias toward source tokens. For evaluation, stop relying on ROUGE alone: add a factual-consistency metric - NLI/entailment-based (FactCC, SummaC) or QA-based (QAGS, QuestEval) - plus targeted human spot-checks on numeric facts, optionally an LLM-as-judge groundedness check. Overall trade-off: more grounding constraint reduces abstractiveness/fluency, drifting toward extractive.",
+  "global_rubric": "open_grading_rubric.json"
+}

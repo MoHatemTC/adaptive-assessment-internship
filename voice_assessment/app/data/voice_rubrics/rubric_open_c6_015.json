@@ -1,0 +1,59 @@
+{
+  "rubric_id": "rubric_open_c6_015",
+  "version": "1.0",
+  "item_id": "open_c6_015",
+  "competency": "C6",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C6.15",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "All claims are correct: recall is order-insensitive while nDCG/MRR/MAP are rank-aware; incomplete single-positive qrels bias metrics; the k=20 vs top-5 cutoff mismatch is real; higher recall can coexist with lower context precision and worse generation via distractors / lost-in-the-middle; retrieval metrics bound but do not equal end-to-end quality. No fabricated metric behavior, no claim that higher Recall@k must improve RAG, and any named tools (pytrec_eval, BEIR, RAGAS) are described accurately."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C6.15",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Covers both parts: critiques the label construction, the metric/cutoff choice, and the synthetic query distribution, AND proposes a design spanning pooled graded judgments, production-representative queries, rank-aware metrics at the production k, end-to-end evaluation with the generator fixed, and significance testing / online validation. Full marks require addressing the label/ground-truth flaw and the retrieval-to-answer-quality link, not just listing extra metrics."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C6.15",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Explains the mechanism behind each recommendation — why incomplete labels mislead, why the cutoff mismatch hides the problem, and specifically how B can win Recall@20 yet regress downstream (precision at k=5, distractors, context dilution). Credit is for causal reasoning that ties the methodology flaws to the observed thumbs-up drop, not assertions."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C6.15",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Organized as a critique plus a design, uses retrieval-evaluation vocabulary precisely (qrels, pooling, graded relevance, Recall@k, nDCG@k, MRR, context precision, LLM-as-judge), and is concise and unambiguous for a design-review audience."
+    }
+  ],
+  "expected_answer_points": [
+    "Identifies that single-positive labels (only the generating chunk marked relevant) create incomplete/noisy qrels, so genuinely relevant-but-unlabeled chunks are counted as misses, biasing the comparison; fix with pooling plus graded human/LLM relevance judgments over the union of candidates",
+    "Notes the cutoff mismatch: Recall@20 is evaluated at the wrong k when production feeds top-5, and recall is order-insensitive; evaluate at the production k and use rank-aware metrics (nDCG@5, MRR, MAP) because ordering and truncation matter",
+    "Explains that LLM-generated one-question-per-chunk queries are single-hop and out-of-distribution vs real traffic (missing multi-hop, aggregation, ambiguous, no-answer queries and hard negatives); use real query logs, stratified",
+    "Distinguishes retrieval-level metrics (a ceiling) from end-to-end answer quality, and measures generation with the retriever varied and generator fixed (faithfulness, answer correctness/relevance) to explain the regression",
+    "Gives a concrete mechanism for why higher Recall@20 coincides with worse answers: lower context precision at k=5, more distractor chunks, context dilution / 'lost in the middle', or B winning @20 but losing @5",
+    "Adds statistical rigor: adequately sized, representative set with paired per-query comparison, significance testing and confidence intervals rather than shipping on a raw 0.94 vs 0.88 gap",
+    "Recommends validating offline results online (A/B test or interleaving) before full rollout, and/or names standard tooling (pytrec_eval, BEIR, RAGAS)"
+  ],
+  "common_pitfalls": [
+    "Only proposing additional metrics (nDCG, MRR, MAP) while never questioning the single-positive ground truth — missing the deepest flaw, that unlabeled-but-relevant chunks are scored as misses",
+    "Assuming higher Recall@k must mean better RAG, so being unable to explain how B improves recall yet regresses answer quality (distractors, lower precision@5, lost-in-the-middle)",
+    "Conflating retrieval evaluation with end-to-end RAG evaluation — proposing only faithfulness/answer metrics and dropping retrieval-level diagnostics, or vice versa, instead of connecting the two with the generator held constant",
+    "Trusting LLM-generated one-question-per-chunk queries as representative of production traffic, ignoring single-hop bias and distribution shift from real user queries",
+    "Leaving the evaluation at k=20 when production feeds top-5, or ignoring the cutoff choice and the order-insensitivity of recall entirely",
+    "Treating 0.94 vs 0.88 on 500 items as decisive with no significance test, sample-size/representativeness check, or online A/B validation before rollout"
+  ],
+  "reference_answer": "(a) Flaws. The ground truth is the core problem: labeling only the generating chunk as relevant produces incomplete, single-positive qrels. Other chunks that genuinely answer the question are silently treated as non-relevant, so a retriever that surfaces those is wrongly scored as missing — the labels are noisy in a way that penalizes good retrieval and distorts the difference between systems. Second, the metric and cutoff are mismatched to production: Recall@20 is order-insensitive and measured at k=20, but the generator only sees top-5. B could win at 20 yet lose at 5 (a reranker tuned to pull relevant docs into the top-20 pool tells you nothing about the top-5 ordering the LLM actually consumes). Third, the query distribution is synthetic and single-hop — one question per chunk, answerable from that chunk — so it under-represents real traffic: multi-hop, aggregation, ambiguous, and no-answer queries, and it omits hard negatives. Fourth, recall alone cannot explain a downstream regression: retrieval metrics measure only the retriever's ceiling. B likely raises recall while lowering context precision at k=5, feeding more topically-similar distractors; the generator then degrades via context dilution / 'lost in the middle'. Finally, 0.94 vs 0.88 on 500 items was treated as decisive with no significance test.\n\n(b) Proposed design. Build qrels by pooling candidates from both systems (and BM25) and judging the union with graded relevance (0-3), using human raters or a calibrated LLM-as-judge with measured inter-annotator agreement, so relevant-but-unlabeled docs are captured. Draw queries from real production logs, stratified to include multi-hop and unanswerable cases. Report rank-aware metrics at the production cutoff — nDCG@5, MRR, MAP, and context precision@5 — alongside Recall@5 and Recall@20, using standard tooling (pytrec_eval / BEIR-style qrels). Do paired, per-query comparison with a significance test and confidence intervals. Crucially, run end-to-end evaluation with the generator held constant — faithfulness and answer correctness/relevance (e.g. RAGAS or an LLM judge) plus context precision — to connect retrieval changes to answer quality, and confirm with an online A/B (or interleaving) before full rollout, since offline gains must be shown to transfer.",
+  "global_rubric": "open_grading_rubric.json"
+}

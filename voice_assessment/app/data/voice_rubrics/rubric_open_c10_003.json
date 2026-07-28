@@ -1,0 +1,60 @@
+{
+  "rubric_id": "rubric_open_c10_003",
+  "version": "1.0",
+  "item_id": "open_c10_003",
+  "competency": "C10",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C10.3",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Full marks: correctly characterizes buy as low-fixed-cost, variable, fast-to-ship with strong out-of-the-box quality, and build as high-fixed-cost infra that only amortizes at sustained high volume; the cost, latency, effort, and control claims are all true. Deduct for factual errors such as treating open-weight models as 'free', claiming self-hosting is automatically cheaper or faster, or misstating how the cost structures scale."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C10.3",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Full marks: covers effort/time-to-market, cost structure (variable vs fixed + break-even), quality, and at least one control/compliance factor, AND supplies a concrete switch trigger. Deduct for each major dimension omitted or for giving no reconsideration signal."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C10.3",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Full marks: ties the recommendation explicitly to the scenario's specifics — low, uncertain volume and unproven PMF — and reasons about the volume-dependent crossover rather than asserting a blanket preference. Deduct if the choice is stated without justification or ignores the given context."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C10.3",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Full marks: a well-organized, senior-register answer with a clear decision up front and clean use of the real vocabulary (variable vs fixed cost, break-even, time-to-market, vendor lock-in). Deduct for rambling, contradictory recommendations, or vague hand-waving."
+    }
+  ],
+  "expected_answer_points": [
+    "Recommends BUY (hosted API) for the low-volume, unproven MVP, and gives a clear recommendation rather than hedging",
+    "Argues time-to-market / low engineering effort: a hosted API removes GPU provisioning, scaling, batching, and ops/on-call, so the team ships fast and validates product-market fit before investing",
+    "Contrasts cost structures: API is variable pay-per-token that scales with usage (cheap at low volume), while self-hosting is largely fixed cost with GPUs idle at a few hundred requests/day",
+    "Notes a cost break-even / crossover: because variable API cost grows with volume and self-hosting is mostly fixed, build becomes cheaper only above some sustained, steady volume",
+    "Addresses quality/effort: a managed frontier model gives strong summaries out of the box, whereas a small open-weight model may need eval, prompt tuning, or fine-tuning to match",
+    "Identifies non-cost factors that can pull toward build: data residency/privacy/compliance, vendor lock-in, rate limits, model deprecation, or need for a custom fine-tuned model",
+    "Recommends keeping the decision reversible — a provider-agnostic abstraction layer and an eval harness — so switching later is cheap",
+    "Names a concrete switch trigger, e.g. sustained volume where the amortized self-host cost undercuts the API bill, or a compliance rule barring sending ticket data to a third party"
+  ],
+  "common_pitfalls": [
+    "Assumes self-hosting is cheap or free because open-weight model licenses cost nothing, ignoring GPU provisioning, idle capacity, and ongoing ops/MLOps cost",
+    "Chooses BUILD to 'save money' at low volume without recognizing that variable API cost is tiny at a few hundred requests/day and that build only pays off above a break-even volume",
+    "Treats the decision as purely about per-token price and never weighs engineering effort, time-to-market, quality, or the fact that PMF is unproven",
+    "Recommends build for 'data privacy' reflexively without noting that hosted providers offer enterprise/no-training data terms, or without checking whether the MVP actually has a compliance requirement",
+    "Gives no concrete switch trigger, or an unmeasurable one, so the decision is not revisitable",
+    "Hedges with no clear recommendation, or recommends build and buy simultaneously without resolving the trade-off"
+  ],
+  "reference_answer": "For an unproven MVP at a few hundred requests/day, I would BUY: use a hosted LLM API for the summarization feature.\n\nThe dimensions that matter here are engineering effort / time-to-market, cost structure, quality, and control. A hosted API needs almost no infrastructure work — no GPU provisioning, autoscaling, batching, or on-call — so we ship in days and validate whether users even want the feature. Its cost is variable (pay-per-token) and scales with usage, which is ideal when volume is low and uncertain: at a few hundred requests/day the bill is tiny, whereas self-hosting means paying for GPUs that mostly sit idle, plus the ongoing ops/MLOps burden. A frontier managed model also gives strong summary quality out of the box, while a small open-weight model may need prompt tuning, evaluation, and possibly fine-tuning to match it.\n\nBuild wins later, not now. The two costs cross over: API cost grows roughly linearly with volume, self-hosting is mostly fixed, so above some sustained, steady volume the amortized infra becomes cheaper. Other pulls toward build are hard data-residency/compliance requirements, vendor lock-in, rate limits, or a need for a specialized fine-tuned model.\n\nSo: ship on the API behind a thin provider-agnostic interface and an eval harness. I would revisit build when sustained volume makes the monthly API bill clearly exceed amortized GPU + engineering cost, or if a compliance requirement forbids sending ticket data to a third party.",
+  "global_rubric": "open_grading_rubric.json"
+}

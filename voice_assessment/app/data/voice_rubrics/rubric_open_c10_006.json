@@ -1,0 +1,59 @@
+{
+  "rubric_id": "rubric_open_c10_006",
+  "version": "1.0",
+  "item_id": "open_c10_006",
+  "competency": "C10",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C10.6",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Full marks: mechanisms are correct and used precisely — strangler-fig extraction behind a stable interface, idempotent backfill from a snapshot offset, event-log-driven catch-up with idempotent consumers and a high-water mark, shadow traffic + offline recall/nDCG eval, canary with guardrails, and flag-based instant rollback. Correctly identifies why app dual-writes are riskier than a replayable log, why embedding-model parity matters, and why deletions/tombstones must propagate. Deduct for technically wrong claims (e.g. treating the vector store as static, claiming dual-writes are consistent by default, or asserting latency health alone proves no quality regression)."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C10.6",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Full marks: covers all four required areas — migration pattern/topology, consistency under continuous ingestion (backfill + catch-up + reconciliation), pre-serving validation (shadow + offline eval), and detection + instant rollback — and notes the parallel-run cost and a decommission/bake step. Deduct for each missing area, especially omitting the continuous-ingestion catch-up or the rollback/fallback design."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C10.6",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Full marks: justifies the key choices — why incremental over big-bang, why an event log over dual-writes, why canary over blue-green for a quality-sensitive change, why the old store stays hot until a bake period completes, and why the embedding model is held constant. Weaker answers assert steps without explaining the trade-offs or the failure modes they prevent."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C10.6",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Full marks: organised into clear phases with a legible topology, correct vocabulary (facade/gateway, backfill, high-water mark, shadow/canary, guardrail, tombstone), and an unambiguous end-to-end sequence a reviewer could act on. Deduct for disorganised, vague, or jargon-dropping prose that never forms a coherent plan."
+    }
+  ],
+  "expected_answer_points": [
+    "Uses an incremental strangler-fig approach with a stable retrieval interface/facade so both store implementations run behind one call site, and sequences the two changes (service extraction vs store swap) to change one variable at a time rather than a big-bang cutover",
+    "Handles never-stopping ingestion with a bulk idempotent backfill (upsert by doc id from a known offset) plus a catch-up mechanism, preferring a single durable ordered event log with idempotent per-store consumers over app-level dual-writes, and tracks a high-water mark",
+    "Includes reconciliation/drift detection (counts, checksums, sampled NN comparison) and correct deletion/tombstone propagation to both stores",
+    "Validates quality before serving via shadow/mirror traffic and an offline eval harness (recall@k / overlap / nDCG on a golden set) plus downstream answer-quality eval, keeping the embedding model/version constant to isolate the variable",
+    "Progressive canary cutover (1%->5%->25%->100%) via feature flag/router with online guardrails, and contrasts it against blue-green with the trade-off stated",
+    "Defines explicit guardrail metrics with thresholds (recall proxy, p99 latency, error rate, downstream quality/user feedback) and wires instant automated rollback as a routing/flag change, not a redeploy or re-migration",
+    "Keeps the old store hot and dual-fed through a bake period as the fallback and decommissions only after sustained confidence, while acknowledging the cost/operational overhead of running two stores in parallel"
+  ],
+  "common_pitfalls": [
+    "Proposes a big-bang cutover — freeze ingestion, dump-and-load, flip DNS — treating a continuously-mutated store as a static one-time copy, with no shadow validation and no instant rollback",
+    "Does only a one-time backfill and assumes the two stores stay consistent, missing the catch-up/replay mechanism, high-water-mark parity check, and reconciliation needed to prevent drift",
+    "Relies on naive application-level dual-writes without acknowledging partial-failure and ordering hazards, instead of a replayable event log with idempotent consumers",
+    "Validates only that the new service responds with low latency and no errors, conflating 'healthy' with 'no quality regression', so a silent recall/nDCG drop ships to users",
+    "Swaps the embedding model at the same time as the store, confounding the comparison so any regression cannot be attributed to the migration",
+    "Rollback plan requires a redeploy or re-migration rather than a flag/traffic flip, and/or decommissions the FAISS store before a bake period, leaving no consistent fallback to roll back to"
+  ],
+  "reference_answer": "Pattern & topology (strangler fig, one variable at a time). First reduce blast radius by decoupling the two changes. Introduce a stable retrieval interface (a facade/gateway) at the monolith's call site so callers don't know the backend. Extract retrieval behind that interface as its own service while it still talks to FAISS — this proves the service boundary with no data risk. Then make the store pluggable behind the same interface, with old (FAISS) and new (managed cluster) implementations selectable per-request via a feature flag/router. This lets both run in parallel and makes cutover and rollback a routing decision, not a redeploy.\n\nData consistency under continuous ingestion. A one-time dump-and-load is wrong because ingestion never stops. Do a bulk backfill first: export the 200M embeddings and idempotent-upsert them into the new store keyed by document id, snapshotting at a known log offset/timestamp. Then catch up the tail. Prefer feeding both stores from a single durable, ordered event stream (Kafka/CDC) with idempotent consumers per store, rather than app-level dual-writes — dual-writes fail partially and lose ordering, whereas a replayable log lets a lagging store catch up and be re-driven after any fault. Track a high-water mark per store to confirm the new one has reached parity, and run periodic reconciliation (counts, checksums, sampled nearest-neighbour comparison, tombstone/deletion propagation) to catch drift. Keep the embedding model/version identical across stores so you're changing one variable; re-embedding is a separate migration.\n\nValidation before serving. Shadow (mirror) live queries to both backends: serve from FAISS, log the new store's results, and compare offline — recall@k / result overlap, nDCG on a labelled golden query set, and p50/p99 latency — plus downstream answer quality (LLM-judge or human eval). This surfaces silent recall regressions with zero user impact.\n\nProgressive cutover. Once shadow metrics are green, canary real traffic through the flag: 1% -> 5% -> 25% -> 100%, watching online guardrails at each step. Blue-green gives an instant flip but bets everything at once; canary is safer for a quality-sensitive change, so I default to canary.\n\nDetect & roll back. Define guardrail thresholds — recall proxy (overlap vs old), p99 latency, error rate, and a downstream quality signal (answer eval / thumbs-down rate) — and wire automated rollback: on breach, the flag routes 100% back to FAISS instantly. Crucially, keep the old store hot and dual-fed from the event stream through a bake period so there is always a consistent fallback; decommission FAISS (and the monolith coupling) only after sustained confidence. Call out the costs made explicit by this plan: running two stores in parallel, index-build resource contention, and metadata/dimension parity.",
+  "global_rubric": "open_grading_rubric.json"
+}

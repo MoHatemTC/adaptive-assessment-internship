@@ -1,0 +1,59 @@
+{
+  "rubric_id": "rubric_open_c6_014",
+  "version": "1.0",
+  "item_id": "open_c6_014",
+  "competency": "C6",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C6.14",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Full marks: correctly defines groundedness as claim-level support/entailment by the retrieved context (not world knowledge), correctly separates it from correctness/relevance, and describes a technically sound decompose-then-check-entailment method with real tooling. Deduct for conflating groundedness with retrieval quality or answer accuracy, or for asserting incorrect mechanisms."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C6.14",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Full marks: covers the definition, the contrast with correctness/relevance, a concrete step-by-step evaluation (decompose -> per-claim entailment check -> aggregate), some tooling reference, and at least one named failure mode. Deduct proportionally for each missing element."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C6.14",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Full marks: justifies why per-claim entailment against the given context actually measures support (not mere plausibility or lexical overlap) and explains why the named failure mode defeats a naive approach. Partial credit for asserting the method without explaining why it works."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C6.14",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Full marks: clear, well-structured answer using correct vocabulary (faithfulness, entailment, claim decomposition) and concise within the length budget. Deduct for disorganized, vague, or jargon-misusing prose."
+    }
+  ],
+  "expected_answer_points": [
+    "Defines groundedness/faithfulness as: every factual claim in the answer must be supported/entailed by the retrieved context that was passed to the model, not by the model's own parametric/world knowledge.",
+    "Distinguishes groundedness from answer correctness/relevance — a grounded answer can still be wrong (if context is wrong), and an ungrounded answer can be coincidentally correct; groundedness only concerns support by the given context.",
+    "Method step: decompose the generated answer into atomic, individually verifiable claims rather than judging the whole answer as one yes/no.",
+    "Method step: check each claim for entailment against the retrieved context using an NLI model or an LLM-as-judge constrained to the provided context (supported / not supported / contradicted).",
+    "Method step: aggregate into a score (fraction of claims supported), average over the batch, and surface the specific unsupported/contradicted claims for review.",
+    "Names concrete tooling/framing (e.g., RAGAS faithfulness metric, LLM-as-judge, NLI entailment) and notes the automated judge should be validated against a human-labeled sample.",
+    "Names a real failure mode a naive version misses (e.g., claims entailed only by combining multiple chunks judged in isolation; an LLM judge using its own world knowledge to 'support' claims absent from context; or lexical-overlap being mistaken for support)."
+  ],
+  "common_pitfalls": [
+    "Conflates groundedness with answer correctness — proposes checking the answer against a gold answer or the open web instead of against the provided retrieved context.",
+    "Measures retrieval quality (did we fetch the right documents) rather than generation faithfulness (does the answer stay within what was fetched).",
+    "Relies solely on lexical/embedding overlap (ROUGE/BLEU/cosine between answer and context) and treats high overlap as proof of grounding, missing paraphrased hallucinations and unsupported inferences.",
+    "Evaluates the whole answer as a single supported/unsupported verdict instead of decomposing into atomic claims, so a mostly-correct answer containing one fabricated fact scores as fully grounded.",
+    "Uses an LLM judge but never constrains it to judge strictly from the given context, letting it 'support' claims from its own world knowledge.",
+    "Treats the automated groundedness score as ground truth without validating the NLI model or LLM judge against any human-labeled sample."
+  ],
+  "reference_answer": "Groundedness (faithfulness) means every factual claim in the generated answer is supported by — entailed by — the retrieved context actually passed to the model, not by the model's parametric/world knowledge. It is distinct from correctness and relevance: an answer can be perfectly grounded yet wrong if the retrieved passage is wrong, and an ungrounded answer can be coincidentally correct. Groundedness asks only 'is this backed by the provided context?'\n\nA concrete, repeatable method:\n1. For each (question, context, answer) triple, decompose the answer into atomic claims (one verifiable statement each).\n2. For each claim, run an entailment check against the context — either an NLI model (entailment / neutral / contradiction) or an LLM-as-judge prompted to decide 'supported / not supported by ONLY this context.'\n3. Score = supported claims / total claims; average across the batch and surface the specific unsupported or contradicted claims for inspection.\nThis is essentially the RAGAS faithfulness metric. Validate the automated judge against a small human-labeled sample before trusting the aggregate.\n\nOne failure a naive version misses: checking claims against chunks in isolation can mark a claim 'unsupported' when it is only entailed by two chunks combined; conversely, an LLM judge that leans on its own world knowledge will mark fabricated-but-plausible claims as supported — so the judge must be constrained strictly to the provided context.",
+  "global_rubric": "open_grading_rubric.json"
+}

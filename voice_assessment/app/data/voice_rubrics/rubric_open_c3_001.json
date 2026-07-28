@@ -1,0 +1,59 @@
+{
+  "rubric_id": "rubric_open_c3_001",
+  "version": "1.0",
+  "item_id": "open_c3_001",
+  "competency": "C3",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C3.1",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Full marks: correctly attributes the behavior to ill-conditioning (large-condition-number Hessian from unscaled features), states the eta < ~2/lambda_max stability bound tying the step size to the steepest direction, and correctly links large kappa to slow convergence and eta-raising to divergence. Proposed fixes and their mechanisms (normalization lowering kappa, momentum ~sqrt(kappa), Adam per-coordinate steps, Newton scale-invariance/cost) are technically correct. Deduct for a wrong mechanism, a reversed relationship (e.g. thinking large kappa means small lambda_max), or claiming it must be a gradient bug."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C3.1",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Full marks: covers the diagnosis (geometry + why both slow and unstable), at least two concrete fixes with justification, their trade-offs, and a first-choice recommendation. Deduct for giving only one fix, omitting trade-offs, or skipping the diagnosis and jumping straight to remedies."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C3.1",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Full marks: the fixes are justified by the diagnosed cause (e.g. normalization chosen because it lowers kappa at the source) rather than listed generically, and the first-choice recommendation is defended by a real trade-off argument. Deduct for unsupported assertions or fixes that do not connect back to the conditioning explanation."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C3.1",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Full marks: clear, well-organized answer that a colleague could act on, using correct vocabulary (condition number, curvature/Hessian, step size, oscillation/divergence). Deduct for disorganized, vague, or jargon-without-meaning writing."
+    }
+  ],
+  "expected_answer_points": [
+    "Correctly identifies the root cause as ill-conditioning from unnormalized features of very different scales, producing an elongated/anisotropic loss surface (Hessian with large condition number kappa = lambda_max/lambda_min) rather than a gradient bug",
+    "Explains the stability constraint: a single global step size must satisfy roughly eta < 2/lambda_max, so eta is bounded by the steepest-curvature direction, and exceeding it causes the observed oscillation and divergence to NaN",
+    "Explains the slowness: with eta pinned small, progress along the flat/low-curvature direction is tiny; convergence rate degrades as kappa grows (per-step factor ~ (kappa-1)/(kappa+1) -> 1), so no single eta serves both directions",
+    "Proposes feature standardization/normalization as the direct fix that reduces kappa toward 1 and permits a larger stable eta, noting the transform must be fit on train and reapplied at inference",
+    "Proposes at least one optimizer-side remedy -- momentum/Nesterov (damps oscillation, rate improves to ~sqrt(kappa)) and/or adaptive per-coordinate methods (Adam/RMSProp) that are robust to feature scale",
+    "Notes second-order/preconditioning (Newton, quasi-Newton/L-BFGS) as scale-invariant in principle but O(d^3)/memory-costly, i.e. a trade-off against cheap normalization",
+    "Gives a justified first choice (normalization) because it fixes the underlying geometry cheaply, versus optimizer tweaks that only compensate for bad conditioning"
+  ],
+  "common_pitfalls": [
+    "Concludes the gradient must be buggy, or blames it purely on 'a bad learning rate to tune', missing that the real cause is feature-scale-driven ill-conditioning that no single global eta can fix",
+    "Recommends simply lowering eta to stop the NaNs, not recognizing this makes the already-crawling flat direction even slower -- treating the symptom, not the geometry",
+    "Discusses 'the loss surface being weird' without connecting it to Hessian eigenvalues / condition number, or states the stability bound backwards (e.g. thinks a larger kappa allows a larger stable eta)",
+    "Prescribes unrelated remedies -- more data, stronger L2 regularization, a smaller model, or more epochs -- that do not address curvature anisotropy",
+    "Claims Adam or Newton is a strict free-lunch upgrade, ignoring Adam's extra optimizer-state memory / generalization caveats or Newton's O(d^3) cost and Hessian storage",
+    "Lists several optimizers but never picks a first choice or justifies it, or picks an expensive second-order method over the one-line normalization fix"
+  ],
+  "reference_answer": "The gradient is almost certainly fine; the symptom is classic ill-conditioning caused by unnormalized features on wildly different scales. Because `income` spans ~200000 and `age` ~90, the loss surface is a long, narrow valley: the Hessian of the loss has a very large condition number kappa = lambda_max / lambda_min, meaning curvature is steep along one axis and nearly flat along another.\n\nPlain gradient descent uses one global step size for every coordinate. For stability it must satisfy roughly eta < 2/lambda_max, i.e. eta is pinned by the steepest (largest-curvature) direction. At `1e-6` the step is small enough to be stable, but progress along the flat (small-lambda) direction is proportional to eta*lambda_min, so it crawls; the per-step contraction factor is about (kappa-1)/(kappa+1), which approaches 1 as kappa grows. When they raise eta past 2/lambda_max, the steep direction overshoots and amplifies each step -> oscillation -> divergence to NaN. So no single eta both moves the flat direction fast and keeps the steep direction stable. That is a conditioning problem, not a bug.\n\nFixes:\n1. Standardize/normalize the features (subtract mean, divide by std). This makes the curvature roughly isotropic, collapses kappa toward 1, and lets a much larger stable eta work. Cheapest, most effective, and should be the default -- the only cost is remembering to apply the identical transform at inference (fit the scaler on train only).\n2. Momentum / Nesterov. Accumulating a velocity term damps the oscillation in the steep direction and accelerates the flat one, improving the effective rate to depend on sqrt(kappa) instead of kappa. One extra hyperparameter and a velocity buffer.\n3. Adaptive per-coordinate methods (Adam/RMSProp) give each parameter its own effective step from running gradient-magnitude estimates, so they are largely robust to feature scale. Cost: ~2x parameter memory for the moment buffers and occasionally slightly worse generalization.\n4. Second-order / preconditioning (Newton, L-BFGS): rescale the gradient by the inverse Hessian, making the step scale-invariant, but full Newton is O(d^3) per step and stores a d x d Hessian -- impractical at high dimension.\n\nI would reach for feature standardization first: it is one line, addresses the root cause directly, and makes every downstream optimizer behave better, whereas momentum/Adam merely paper over the bad conditioning.",
+  "global_rubric": "open_grading_rubric.json"
+}

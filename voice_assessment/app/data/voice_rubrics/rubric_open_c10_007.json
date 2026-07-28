@@ -1,0 +1,60 @@
+{
+  "rubric_id": "rubric_open_c10_007",
+  "version": "1.0",
+  "item_id": "open_c10_007",
+  "competency": "C10",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C10.7",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Correctly names the standard ADR sections (context, decision, considered options, consequences, status/metadata); the Kafka-vs-SQS trade-offs are accurate (log/replay/multiple consumer groups/partition ordering vs managed point-to-point simplicity); and the superseded lifecycle is described correctly. No factual errors such as claiming you edit or delete an accepted ADR, or that SQS natively provides replay/fan-out."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C10.7",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Addresses all four asks: diagnosis of what is missing, the section list with purpose, a concrete rewritten ADR, and the handling of the record when the decision is later reversed. Loses marks for omitting the rewrite, the negative consequences, or the superseding lifecycle."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C10.7",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Ties each ADR section to why a future reader needs it, justifies the Kafka choice against this system's specific forces (replay, multiple consumers, ordering, throughput vs operational cost) rather than generic claims, and explains why immutability plus superseding preserves the decision history."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C10.7",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Well organized and uses correct ADR vocabulary (status, context, considered options, consequences, superseded); the improved ADR is readable and coherent enough to stand as a real record rather than a loose list of ideas."
+    }
+  ],
+  "expected_answer_points": [
+    "Identifies that the record is missing the core ADR sections: context/problem, considered options (the alternatives), consequences (trade-offs), and full metadata (id, date, deciders) - it has only a status and a one-line decision",
+    "Explains that 'industry standard' and 'scales well' are appeals to authority, not justification tied to this system's specific requirements, so a future reader cannot reconstruct the reasoning or know when to revisit it",
+    "States that Context must record the forces/constraints at decision time (e.g. event volume, replay needs, multiple consumers, ordering, retention, team skills) because decisions are context-bound and the context is what makes the record useful later",
+    "States that Consequences must include the negative trade-offs accepted (Kafka's operational burden/broker patching or MSK cost, added complexity vs SQS's managed simplicity), not just benefits",
+    "Compares Kafka vs SQS on the axes that actually differ - durable replayable log, multiple independent consumer groups, partition ordering, high throughput vs SQS being point-to-point with no replay/log semantics and simpler operations",
+    "Produces a concrete improved ADR that ties the Kafka choice to this service's needs rather than generic claims",
+    "Explains the immutability/superseding lifecycle: an accepted ADR is not edited or deleted when the decision changes; a NEW ADR is written and the old one is marked 'Superseded by ADR-N' to preserve decision history",
+    "Notes ADR governance/metadata: unique sequential id, date, status field (Proposed then Accepted), deciders/reviewers, versioned in-repo and reviewed via PR like code"
+  ],
+  "common_pitfalls": [
+    "Lists ADR template section names without explaining why each matters or applying them to the Kafka/SQS case, so the critique stays generic",
+    "Re-justifies Kafka with the same vague 'industry standard / scales well' framing instead of concrete forces like replay, multiple independent consumer groups, per-partition ordering, and throughput weighed against operational cost",
+    "Claims the fix when the team later migrates is to edit or overwrite the accepted ADR, instead of writing a new ADR and marking the original 'Superseded by ADR-N', which breaks the immutable decision log",
+    "Presents only Kafka's benefits and omits the negative consequences/trade-offs (broker operations, patching or MSK cost, added complexity) that a proper ADR must record",
+    "Confuses the ADR (a focused, durable decision record) with the design-review meeting itself or with a full RFC/design doc, and bloats it accordingly",
+    "Forgets the metadata (unique id, date, status, deciders) that make the record discoverable and its lifecycle state legible"
+  ],
+  "reference_answer": "The record captures only the outcome plus a slogan. 'Industry standard' and 'scales well' are appeals to authority, not reasoning tied to this service's requirements. A future engineer cannot tell why Kafka beat SQS, what was traded away, or under what conditions the decision should be revisited, so the record has almost no value.\n\nA solid ADR (Nygard/MADR style) contains:\n- Metadata: a unique sequential id (e.g. ADR-014), date, status (Proposed then Accepted), and deciders/reviewers, so it is discoverable and its state is legible.\n- Context / problem: the forces and constraints at decision time (event volume, need for replay, multiple independent consumers, ordering guarantees, retention, existing infra and team skills). This is what makes the record interpretable later.\n- Considered options: the real alternatives compared on the axes that mattered.\n- Decision: the choice, stated plainly.\n- Consequences: both positive and negative, i.e. the trade-offs the team accepted.\n\nImproved ADR:\nADR-014 - Event ingestion transport. Status: Accepted (2026-07). Deciders: platform team.\nContext: ~50k events/s that several independent services must consume, some needing to reprocess history after bug fixes. We need per-key ordering and multi-day retention.\nConsidered options: (1) Kafka/MSK - durable partitioned log, replay, multiple consumer groups, partition ordering; heavy operational surface. (2) SQS - fully managed and trivial to operate, but point-to-point, no replay/log semantics, no multi-consumer fan-out without SNS, limited retention.\nDecision: Adopt Kafka (MSK) as the ingestion transport.\nConsequences: + replayable log, independent consumer groups, ordered high-throughput ingestion. - broker operations/patching or MSK cost, added client complexity, steeper learning curve than SQS.\n\nLifecycle: ADRs are immutable once accepted. If a future team migrates off Kafka, they do not edit or delete ADR-014. They write a new ADR (e.g. ADR-032) with the new context and decision and mark ADR-014 'Superseded by ADR-032' (ADR-032 referencing ADR-014). This preserves the decision history so readers understand what was believed and why it changed.",
+  "global_rubric": "open_grading_rubric.json"
+}

@@ -1,0 +1,58 @@
+{
+  "rubric_id": "rubric_open_c3_009",
+  "version": "1.0",
+  "item_id": "open_c3_009",
+  "competency": "C3",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C3.9",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Correctly explains why accuracy misleads under a 1% base rate (trivial-baseline / accuracy paradox) and correctly characterizes the recommended metrics — precision vs recall defined the right way round, F-beta/PR-AUC used appropriately. No incorrect claims such as recommending plain accuracy, swapping precision and recall, or asserting ROC-AUC is the best imbalance metric without qualification."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C3.9",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Covers all key elements: the imbalance/trivial-baseline problem, the move to class-specific precision and recall, the recall emphasis driven by the false-negative cost, and an imbalance-appropriate summary or curve (PR-AUC / F-beta) plus threshold or baseline comparison. Full marks require both the diagnosis and a concrete metric recommendation."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C3.9",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Explicitly ties the metric choice to the 1% base rate and to the false-negative-worse-than-false-positive cost asymmetry, rather than merely listing metric names. Full marks explain WHY recall (or F-beta with beta>1) follows from the cost structure."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C3.9",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Clear, well-organized, review-appropriate explanation that uses metric terminology correctly and would let a non-expert stakeholder understand why 99% accuracy should not decide the ship call."
+    }
+  ],
+  "expected_answer_points": [
+    "Explains the accuracy paradox: at a 1% base rate a trivial 'always predict not-fraud' classifier already achieves ~99% accuracy while catching no fraud, so the figure carries no evidence of skill.",
+    "Notes that accuracy weights all transactions equally, so the majority (legitimate) class dominates and the rare positive class is effectively invisible.",
+    "Recommends inspecting the confusion matrix and reporting class-specific precision and recall for the fraud (positive) class rather than a single aggregate number.",
+    "Prioritizes recall/sensitivity on the fraud class because false negatives (missed fraud) are the costly error, and justifies this with the stated cost asymmetry.",
+    "Recommends a curve/summary suited to imbalance — precision-recall curve or PR-AUC, and/or an F-beta with beta>1 (e.g. F2) — and notes PR-AUC is more informative than ROC-AUC under heavy imbalance.",
+    "Connects the final metric/threshold choice to the business cost trade-off (e.g. selecting a threshold, reporting precision at a target recall) and comparing against the trivial baseline."
+  ],
+  "common_pitfalls": [
+    "Names F1 as the fix but treats precision and recall as equally important, ignoring that the stated cost asymmetry calls for weighting recall (F-beta with beta>1 / F2), not plain F1.",
+    "Recommends ROC-AUC as the primary metric without noting it can look deceptively strong under extreme imbalance because the large true-negative count inflates it; PR-AUC is more sensitive to performance on the rare class.",
+    "Confuses precision (of flagged transactions, how many are truly fraud) with recall (of actual frauds, how many were caught), reversing which one the cost asymmetry favors.",
+    "Claims accuracy is fine as long as the held-out set is large enough, missing that the problem is the base rate, not sample size.",
+    "Dodges the metric question by answering with data-level fixes ('collect more fraud examples', 'oversample/SMOTE', 'rebalance the classes') instead of proposing an evaluation metric.",
+    "Lists metrics without connecting the choice back to the business cost, so the recommendation reads as a checklist rather than a justified decision."
+  ],
+  "reference_answer": "Accuracy is untrustworthy here because of the extreme class imbalance. With a 1% fraud rate, a trivial model that predicts 'not fraud' for every transaction already scores 99% accuracy while catching zero frauds. So 99% is indistinguishable from the do-nothing baseline and says nothing about the model's ability to find the rare positive class. Accuracy weights every transaction equally, so the 99% of legitimate cases dominate the number and the fraud class is effectively invisible.\n\nInstead I would look at the confusion matrix and report class-specific metrics for the fraud (positive) class: precision (of the transactions we flag, how many are truly fraud) and recall/sensitivity (of the actual frauds, how many we catch). Because a false negative is far costlier than a false positive, recall on the fraud class is the priority — we want to catch as much fraud as possible even at the cost of extra manual reviews. To summarize the trade-off I'd use an F-beta score with beta > 1 (e.g. F2) to weight recall over precision, and evaluate the precision-recall curve / PR-AUC rather than ROC-AUC, since PR curves are far more informative than ROC under heavy imbalance (the huge true-negative count inflates ROC-AUC). Finally I'd choose the operating threshold from the cost trade-off — e.g. report precision at a target recall — and always compare against the trivial baseline, not just quote accuracy.",
+  "global_rubric": "open_grading_rubric.json"
+}

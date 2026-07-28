@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Realtime voice interview</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a222c;
+      --text: #e8eef4;
+      --muted: #8b9aab;
+      --accent: #3d8bfd;
+      --good: #3ecf8e;
+      --warn: #f0b429;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      background: radial-gradient(1200px 600px at 20% -10%, #1c2a3a, var(--bg));
+      color: var(--text); min-height: 100vh; padding: 1.25rem;
+    }
+    h1 { font-size: 1.15rem; margin: 0 0 .35rem; font-weight: 600; }
+    .muted { color: var(--muted); font-size: .9rem; }
+    .row { display: flex; gap: .75rem; flex-wrap: wrap; align-items: center; margin: .9rem 0; }
+    button {
+      background: var(--accent); color: white; border: 0; border-radius: 8px;
+      padding: .65rem 1rem; font-weight: 600; cursor: pointer;
+    }
+    button.secondary { background: #2a3542; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .status {
+      display: inline-flex; gap: .5rem; align-items: center;
+      padding: .35rem .7rem; border-radius: 999px; background: var(--panel);
+      font-size: .85rem;
+    }
+    .dot { width: .55rem; height: .55rem; border-radius: 50%; background: var(--muted); }
+    .dot.live { background: var(--good); box-shadow: 0 0 0 3px rgba(62,207,142,.2); }
+    .dot.error { background: #ff6b6b; }
+    #log {
+      background: var(--panel); border-radius: 12px; padding: 1rem;
+      height: 280px; overflow: auto; font-size: .92rem; line-height: 1.45;
+    }
+    .line { margin: 0 0 .55rem; }
+    .who { color: var(--muted); font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; }
+    label { font-size: .85rem; color: var(--muted); display: flex; gap: .4rem; align-items: center; }
+  </style>
+</head>
+<body>
+  <h1>Realtime voice interview</h1>
+  <p class="muted">Continuous mic ↔ Gemini Live interviewer. Recording is optional (testing only).</p>
+  <div class="row">
+    <span class="status"><span id="dot" class="dot"></span><span id="status">idle</span></span>
+    <span class="status" title="Turn-taking state">turn: <strong id="turnState">idle</strong></span>
+    <span class="status" title="Live mic level and the calibrated gate threshold">mic: <strong id="meter">—</strong></span>
+    <button id="btnStart">Start talking</button>
+    <button id="btnFinish" class="secondary" disabled>Finish answer</button>
+    <label><input type="checkbox" id="saveRec" /> Save recording for testing</label>
+  </div>
+  <p class="muted">Short silence = thinking pause (interviewer waits). Longer silence = end of turn (interviewer may reply). Resume speaking anytime to continue the same answer.</p>
+  <div id="log"></div>
+  <script src="/static/interview.js"></script>
+</body>
+</html>

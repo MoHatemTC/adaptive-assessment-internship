@@ -1,0 +1,57 @@
+{
+  "rubric_id": "rubric_open_c5_009",
+  "version": "1.0",
+  "item_id": "open_c5_009",
+  "competency": "C5",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C5.9",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Correctly explains that accuracy is dominated by the majority class (an all-negative classifier scores ~97%), correctly defines precision and recall for the toxic class, and correctly recommends precision-recall-based/threshold-independent evaluation (PR curve or PR-AUC) as suited to imbalance. No incorrect claims — e.g., does not confuse precision with recall, does not present ROC-AUC as unproblematic under extreme imbalance, and does not claim accuracy becomes valid simply by adding data."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C5.9",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Addresses all three parts of the prompt: (1) why accuracy misleads, (2) which metrics to report instead — precision, recall, F1, confusion matrix, PR curve/PR-AUC — and (3) how to set the operating threshold, plus at least one supporting consideration such as representative test prevalence or per-slice evaluation."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C5.9",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Justifies metric and threshold choices by explicitly linking them to the imbalanced data and the asymmetric costs of the moderation task (false negatives leaving toxic content up vs. false positives censoring legitimate users), rather than listing metrics as generically 'better'."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C5.9",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Explanation is well-organized and uses correct terminology (precision, recall, F1, PR-AUC, confusion matrix, threshold), and is understandable to a non-specialist stakeholder such as the product manager."
+    }
+  ],
+  "expected_answer_points": [
+    "Explains that accuracy is misleading under class imbalance — a trivial all-negative (majority-class) baseline already reaches ~97%, so accuracy reflects the base rate, not toxicity-detection ability.",
+    "Recommends reporting precision and recall for the toxic (positive) class specifically, along with F1 and the confusion matrix (TP/FP/FN/TN).",
+    "Recommends a threshold-independent metric — the precision-recall curve / PR-AUC — and notes it is preferable to ROC-AUC under heavy imbalance because ROC-AUC can look over-optimistic.",
+    "Describes the precision-vs-recall trade-off and ties threshold selection to the asymmetric costs of moderation (missed toxic content vs. over-censoring legitimate users), not to maximizing accuracy.",
+    "Notes evaluating on a set reflecting true prevalence and/or on meaningful subgroups/slices to catch uneven behavior before shipping."
+  ],
+  "common_pitfalls": [
+    "Answering with a training-side fix (oversampling, SMOTE, class weights) as if that resolves the objection, when the question is about the misleading evaluation metric, not how to improve the model.",
+    "Recommending ROC-AUC as the primary fix without recognizing that under 3% prevalence its large true-negative count can make the model look far better than PR-AUC would show.",
+    "Reporting only overall accuracy replaced by overall/macro F1 without singling out recall on the minority (toxic) class, which is the metric that actually matters here.",
+    "Treating F1 (equal weight on precision and recall) as automatically correct and never connecting threshold choice to the asymmetric cost of missed toxicity vs. wrongful takedowns.",
+    "Confusing precision and recall, or describing the threshold as something to tune to maximize accuracy rather than to hit a target recall/precision for the moderation workflow.",
+    "Claiming the 97% accuracy is fine or that the model is 'good enough' because the number is high, missing the majority-class baseline entirely."
+  ],
+  "reference_answer": "The 97% figure is nearly meaningless because the classes are heavily imbalanced (only 3% toxic). A degenerate model that labels every comment non-toxic already scores 97%, so accuracy just mirrors the base rate rather than the model's ability to catch toxicity — which is the entire point of the system.\n\nInstead I'd evaluate the positive (toxic) class directly: report precision (of the comments we flag, how many are genuinely toxic) and recall (of the truly toxic comments, how many we catch), their F1, and inspect the full confusion matrix (TP/FP/FN/TN). For a threshold-independent view I'd plot the precision-recall curve and report PR-AUC, which is more informative than ROC-AUC under extreme imbalance: ROC-AUC's huge true-negative pool can make performance look deceptively strong.\n\nBecause the model outputs a score, I'd pick the operating threshold from the moderation cost trade-off, not to maximize accuracy. False negatives leave toxic content up; false positives censor legitimate users. If flags go to human reviewers I'd favor higher recall at some precision cost; if the system auto-removes content I'd protect precision to avoid wrongful takedowns. Finally I'd confirm the test set reflects true prevalence and check performance on important slices (e.g., by topic or by dialect/identity terms) so uneven behavior surfaces before shipping.",
+  "global_rubric": "open_grading_rubric.json"
+}

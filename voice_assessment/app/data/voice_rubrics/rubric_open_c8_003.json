@@ -1,0 +1,58 @@
+{
+  "rubric_id": "rubric_open_c8_003",
+  "version": "1.0",
+  "item_id": "open_c8_003",
+  "competency": "C8",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C8.3",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Full marks: correctly describes examples as prompt/response pairs with role structure, insists on chat-template + inference-consistent formatting and an EOS token, characterises SFT as imitation via next-token prediction, and correctly states that loss is masked on the prompt and computed only on the response (learning P(response|prompt)). Deduct for wrong loss-masking direction, confusing SFT with RLHF/preference tuning, or inventing formatting that would not match inference."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C8.3",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Full marks: addresses all three parts — per-example structure/format, dataset-level quality (diversity/coverage, dedup, decontamination, quality-over-quantity), and loss masking. Partial credit if one part is thin or a major dataset-quality property (decontamination, diversity, or EOS handling) is missing."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C8.3",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Full marks: ties each choice to the learning mechanism — e.g., quality matters because the model imitates; formatting must match inference or behaviour degrades; masking focuses gradient on the target behaviour. Partial credit for correct claims stated without the underlying 'why'."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C8.3",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Full marks: well-organised (ideally around the three parts), uses correct terminology (SFT, chat template, EOS, loss masking, decontamination) precisely, and is concise and unambiguous. Deduct for disorganised or vague explanation."
+    }
+  ],
+  "expected_answer_points": [
+    "Each training example is a paired (instruction/prompt, target response), structured with explicit roles (system/user/assistant) and supporting multi-turn conversations",
+    "Every example is rendered with the model's chat template / consistent special tokens and role markers, and this formatting must match what is used at inference; an EOS/stop token is appended so the model learns to terminate",
+    "SFT is imitation learning via next-token prediction, so response quality/correctness dominates — the model copies whatever it is shown (garbage in, garbage out)",
+    "Dataset-level properties: diversity and coverage of the instruction types the assistant will face, plus deduplication and decontamination against eval sets to prevent leakage",
+    "Quality over quantity — a smaller curated, diverse set often beats a large noisy one (e.g., the LIMA finding), which is the right call for only ~3,000 examples",
+    "Loss is masked on the prompt (system/user) tokens and computed only on the response tokens so the model learns P(response | prompt) rather than modelling/memorising the user's input"
+  ],
+  "common_pitfalls": [
+    "Frames SFT success as mainly 'get more data' and overlooks that response correctness/style dominates because the model imitates its targets",
+    "States or implies the loss is computed over the whole sequence including the prompt, or gets the masking direction backwards (masking the response instead of the prompt)",
+    "Omits the chat-template / formatting-consistency-with-inference requirement, or proposes an ad-hoc format that would not match how the model is prompted at serving time",
+    "Confuses instruction tuning (SFT) with RLHF / DPO preference tuning — e.g., claims you need a reward model or preference pairs to instruction-tune a base model",
+    "Forgets the EOS/stop token, so the model would not learn where to end its response",
+    "Ignores deduplication and decontamination against eval sets, risking benchmark leakage and inflated scores"
+  ],
+  "reference_answer": "SFT teaches the base model to imitate ideal responses via ordinary next-token prediction, so the data has to encode exactly the input→output behaviour we want.\n\n(a) Per example: each item is a paired (prompt, target response). I structure it with explicit roles — an optional system message, a user instruction, and the assistant response — and support multi-turn conversations. Crucially I render every example through the model's chat template (its role markers and special tokens) and append the EOS token to the response so the model learns to stop. The training-time formatting must be byte-for-byte what I'll use at inference; any mismatch (different delimiters, missing system prefix) degrades behaviour.\n\n(b) Dataset-level: because SFT is imitation, response quality dominates — responses must be correct, in the desired style/tone, and demonstrate the exact behaviour I want (garbage in, garbage out). I want diversity and coverage of the instruction types the assistant will actually face, not 3,000 near-duplicates. I deduplicate, decontaminate against any eval/benchmark sets to avoid leakage, and sanity-check length and format balance. A smaller, curated, diverse set typically beats a large noisy one (the LIMA finding): with only ~3,000 examples I'd curate hard rather than pad.\n\n(c) Loss masking: the sequence contains both the prompt and the response, but I mask the loss on the system/user (prompt) tokens and compute it only on the assistant response tokens. The goal is to learn P(response | prompt) — to generate good answers given an instruction — not to model or memorise the user's input. Training on prompt tokens wastes gradient signal on text the model will never need to produce and can bias it toward parroting instructions.",
+  "global_rubric": "open_grading_rubric.json"
+}

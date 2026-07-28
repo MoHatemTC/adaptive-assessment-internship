@@ -1,0 +1,59 @@
+{
+  "rubric_id": "rubric_open_c3_008",
+  "version": "1.0",
+  "item_id": "open_c3_008",
+  "competency": "C3",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C3.8",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Correctly identifies the leakage mechanisms and prescribes technically sound fixes: preprocessing and SMOTE fit/applied on training folds only (Pipeline / imblearn Pipeline), group-aware splitting keyed on patient_id, a time-ordered split for a temporal deployment, and nested CV or a held-out future set for unbiased selection. No incorrect claims (e.g. does not assert that resampling the validation set is correct, or that ROC-AUC is invalid merely because classes are imbalanced)."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C3.8",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Covers all major bias sources - preprocessing leakage, resampling leakage, group leakage, temporal/distribution shift, and hyperparameter-selection bias - AND lays out a concrete corrected end-to-end protocol rather than fixing only one or two issues."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C3.8",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Explains WHY each issue inflates the estimate (e.g. synthetic neighbors spanning the fold boundary, patient memorization, tuning on the reporting folds) and ties the redesign to the actual deployment scenario of predicting next-quarter patients, connecting it to the observed 0.94-to-0.71 gap."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C3.8",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Well organized (bias sources then corrected protocol), uses precise terminology, and is explicit about which splitters are used and exactly where each preprocessing/resampling step sits relative to the fold boundary."
+    }
+  ],
+  "expected_answer_points": [
+    "Preprocessing leakage: StandardScaler and SelectKBest are fit on the full dataset (including validation folds); they must be fit only on each fold's training split, achieved by wrapping them in a Pipeline that is fit inside CV.",
+    "Resampling leakage: SMOTE is applied before/across the split, so synthetic points derived from validation neighbors leak into training; resampling must be confined to the training fold (e.g. via imblearn's Pipeline) and the validation/test fold must retain the real ~9% prevalence.",
+    "Group leakage: shuffled KFold puts the same patient's encounters in both train and validation, letting the model memorize patient identity; splitting must be grouped by patient_id using GroupKFold or StratifiedGroupKFold.",
+    "Temporal leakage / distribution shift: random CV ignores time while deployment predicts future patients; a time-ordered split (TimeSeriesSplit or a temporal holdout) is needed and explains much of the drop to 0.71 as real generalization + drift.",
+    "Hyperparameter selection bias: picking and reporting the best mean CV score uses the same folds for tuning and estimation; nested CV or a single untouched held-out (future) test set is required for an unbiased estimate.",
+    "Metric under imbalance: performance should be measured at the true prevalence (not on SMOTE-balanced data), and PR-AUC should be reported alongside ROC-AUC.",
+    "A concrete corrected protocol that assembles these: a leakage-free pipeline (scaler, selector, train-only SMOTE, model), a group- and time-aware outer split, inner-loop tuning, and one final evaluation on the untouched future/test set."
+  ],
+  "common_pitfalls": [
+    "Catches only the scaler/SelectKBest leakage and moves them into a Pipeline, while leaving SMOTE applied to the whole dataset or forgetting it must be training-fold-only.",
+    "Says 'just use StratifiedKFold' and believes stratification fixes it, ignoring that patients still straddle folds and that time ordering is still violated.",
+    "Argues that SMOTE-balancing the validation/test set is desirable, or resamples before splitting, rather than keeping the evaluation set at the real ~9% prevalence.",
+    "Claims ROC-AUC is invalid because of class imbalance and treats SMOTE as the remedy, conflating metric choice with the leakage problem.",
+    "Retunes hyperparameters on the same CV used to report the score and calls the result unbiased, missing the need for nested CV or an untouched held-out test set.",
+    "Keeps a random shuffled split for a task whose deployment is temporal, so never surfaces the concept-drift gap that explains the production drop."
+  ],
+  "reference_answer": "The 0.94 is inflated by several independent forms of leakage and by selection bias.\n\n1. Preprocessing leakage. StandardScaler and SelectKBest are fit on all 50k rows, so the fitted means/variances and the chosen feature subset are computed using data that later serves as validation. Every fold's held-out data has already influenced the transform. Fix: put the scaler and selector inside an sklearn Pipeline so they are fit only on each fold's training portion and merely applied to the validation portion.\n\n2. Resampling leakage. SMOTE runs once over the whole dataset before CV. Synthetic minority points are interpolated from neighbors that may sit in the validation fold, and derivatives of validation rows leak into training. Resampling must happen on the training fold only - use imblearn's Pipeline, whose samplers fire on fit (train) but are skipped at predict time, so the validation fold keeps its real ~9% prevalence.\n\n3. Group leakage. KFold(shuffle=True) scatters one patient's encounters across train and validation, letting the model memorize patient-level signal and re-recognize the same patient. Split by patient with GroupKFold or StratifiedGroupKFold(groups=patient_id) so all of a patient's encounters stay on one side.\n\n4. Temporal leakage / distribution shift. Deployment predicts next-quarter patients, but shuffled CV trains on future and tests on past. A time-ordered split (TimeSeriesSplit or a fixed temporal holdout: train on earlier encounters, test on a later period) mirrors production and surfaces concept drift - most of the gap to 0.71 is honest generalization the random split hid.\n\n5. Selection bias. Reporting the best mean CV AUC over the tuned grid uses the same folds to tune and to report, biasing the number upward. Use nested CV (inner loop tunes, outer loop estimates) or a final held-out future test set touched exactly once.\n\nCorrected protocol: an imblearn Pipeline = [scaler, selector, SMOTE(train-only), RandomForest]; outer estimation via a temporal holdout that is also group-disjoint; hyperparameters tuned by GridSearchCV on the training data using StratifiedGroupKFold; the final metric computed once on the untouched future test set, at the true 9% prevalence, reporting PR-AUC alongside ROC-AUC rather than on any SMOTE-balanced data.",
+  "global_rubric": "open_grading_rubric.json"
+}

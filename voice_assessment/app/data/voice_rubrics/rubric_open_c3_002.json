@@ -1,0 +1,59 @@
+{
+  "rubric_id": "rubric_open_c3_002",
+  "version": "1.0",
+  "item_id": "open_c3_002",
+  "competency": "C3",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C3.2",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Bias-variance mechanisms are correct and not swapped: bagging reduces variance by averaging decorrelated trees, boosting reduces bias by sequentially fitting gradients/residuals; correctly asserts n_estimators overfits boosting but not forests; every hyperparameter change moves in the overfitting-reducing direction (lower eta, shallower trees, subsampling, more regularization). No false claims (e.g. that more forest trees overfit, or that raising eta/depth fixes overfitting)."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C3.2",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Covers both the mechanistic contrast (part a) and an actionable retuning plan (part b); the plan touches the main levers — learning_rate + early stopping, tree-complexity controls, stochastic subsampling, and explicit L1/L2 regularization — rather than fixing only one knob."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C3.2",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Ties each recommendation back to bias-variance reasoning and the specific symptom (0.99 vs 0.82 gap), explains the eta x n_estimators coupling, and reaches a defensible judgement about when GBM beats a forest versus when the forest is the safer default."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C3.2",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Uses precise ensemble vocabulary (bagging, boosting, bootstrap, pseudo-residuals, early stopping, subsample/colsample, reg_lambda) correctly; the plan is ordered and easy to follow; distinguishes the two ensembles cleanly without hand-waving."
+    }
+  ],
+  "expected_answer_points": [
+    "Frames bagging/Random Forest as variance reduction: averages many decorrelated deep (low-bias, high-variance) trees trained in parallel on bootstrap samples plus random feature subsets, cutting variance without materially changing bias",
+    "Frames boosting as bias reduction: an additive, sequential model where each shallow tree is fit to the negative gradient / pseudo-residuals of the loss, greedily correcting the current ensemble's errors",
+    "Explains that n_estimators is an overfitting knob in boosting (more rounds keep chasing residuals/noise) but not in bagging (more trees only converge variance and do not overfit)",
+    "Diagnoses the 0.99/0.82 XGBoost gap as high-variance overfitting caused by high learning_rate, deep trees, too many rounds, and no early stopping, versus the forest's controlled gap from variance averaging",
+    "States the learning_rate <-> n_estimators trade-off and prescribes low eta + large n_estimators cap + early_stopping_rounds on a validation set",
+    "Names concrete complexity/regularization controls with correct direction: lower max_depth, raise min_child_weight/gamma, add subsample & colsample_bytree, add reg_lambda/reg_alpha",
+    "Judgement: a properly regularized GBM can match or beat the forest because boosting lowers bias, while the forest is the more robust low-tuning default"
+  ],
+  "common_pitfalls": [
+    "Claims adding more trees overfits a random forest the same way it does boosting, conflating how the two ensembles relate to n_estimators",
+    "Describes boosting as many independent trees voting or trains them in parallel, missing the sequential negative-gradient / residual-fitting mechanism",
+    "Swaps bias and variance: says the forest reduces bias or that boosting reduces variance",
+    "Prescribes fixes in the wrong direction, e.g. increasing learning_rate or max_depth, or 'just reduce n_estimators' without early stopping and without lowering eta",
+    "Lowers learning_rate without increasing the n_estimators budget, ignoring the eta x n_estimators coupling, or omits a validation-based early-stopping criterion entirely",
+    "Offers only generic advice (add more data, cross-validate) without naming the concrete XGBoost regularization levers (min_child_weight, gamma, subsample, colsample_bytree, reg_alpha/reg_lambda)"
+  ],
+  "reference_answer": "(a) Mechanism. A random forest is a bagging ensemble: it trains many deep trees in parallel, each on a bootstrap sample of rows with a random feature subset considered at each split. Individual deep trees are low-bias but high-variance; because bootstrapping and feature subsampling decorrelate them, averaging their outputs sharply reduces variance while leaving bias roughly unchanged. Crucially, adding more trees only makes the variance estimate converge, so n_estimators is not an overfitting knob for a forest — hence its train-validation gap stays controlled (0.97 vs 0.86).\n\nGradient boosting is an additive, sequential model: f_m = f_{m-1} + eta * h_m, where each new shallow tree h_m is fit to the negative gradient (pseudo-residuals) of the loss under the current ensemble. Each stage reduces bias by correcting the ensemble's current errors. Because it greedily drives down training loss, n_estimators IS an overfitting knob: with learning_rate=0.3 (large steps), max_depth=10 (high-capacity learners, not weak learners), 2000 rounds, and no early stopping, the model keeps fitting noise. The 0.99/0.82 gap is classic high-variance overfitting from an over-long, over-flexible boosting run.\n\n(b) Retuning plan (ordered):\n1. Turn on early stopping: pass a validation set / watchlist with early_stopping_rounds and lower learning_rate to ~0.01-0.05, keeping a large n_estimators cap so early stopping picks the optimal round count. Lower eta needs more trees — the eta x n_estimators trade-off.\n2. Reduce learner capacity: cut max_depth to ~3-6, and/or raise min_child_weight and gamma (min split-loss) so splits need more evidence.\n3. Add stochasticity: set subsample (~0.7-0.9) and colsample_bytree (<1) — stochastic gradient boosting decorrelates trees and lowers variance.\n4. Add explicit regularization: reg_lambda (L2) and reg_alpha (L1) on leaf weights.\n5. Tune with cross-validation and watch the train-vs-validation loss curves; for the fraud class imbalance consider scale_pos_weight.\n\nExpectation: a well-regularized GBM should match or beat the forest's 0.86 because boosting reduces bias, but it demands more careful tuning; the random forest is the more robust default when tuning budget is limited.",
+  "global_rubric": "open_grading_rubric.json"
+}

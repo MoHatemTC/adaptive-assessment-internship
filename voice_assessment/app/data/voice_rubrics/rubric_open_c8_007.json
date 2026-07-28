@@ -1,0 +1,59 @@
+{
+  "rubric_id": "rubric_open_c8_007",
+  "version": "1.0",
+  "item_id": "open_c8_007",
+  "competency": "C8",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C8.7",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Correctly names real LLM-as-judge biases (position/order, length/verbosity, self-enhancement) with valid mitigations, correctly distinguishes a pairwise preference win rate from capability benchmarks, applies sound statistical reasoning (CIs/sample size), and invents no fake mechanisms. Full marks require identifying length bias as specifically dangerous given DPO's tendency to lengthen outputs."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C8.7",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Covers the full validation surface - judge-bias controls, statistical significance, contamination/representativeness, capability AND safety regression (alignment tax), and substance-vs-style - rather than fixating on one dimension. Partial credit scales with how many of these axes are addressed."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C8.7",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Explains WHY each risk threatens the 68% conclusion (e.g., why DPO's length increase confounds the judge, why chat win rate can't detect a reasoning regression) and ties the mitigations into a defensible, explicit ship/no-ship gate rather than listing checks in isolation."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C8.7",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Communicates as a prioritized set of risks each paired with a concrete mitigation, uses correct post-training vocabulary (DPO, LLM-as-judge, length-controlled win rate, alignment tax, IFEval), and ends with a clear recommendation suitable for a design review."
+    }
+  ],
+  "expected_answer_points": [
+    "Position/order bias in the LLM judge: evaluate each pair in both orderings (swap A/B) and average or require the win to hold under swapping, rather than trusting a single fixed order.",
+    "Length/verbosity bias is the key confound because DPO systematically lengthens outputs and judges favor longer answers; report length distributions and use a length-controlled win rate (e.g., AlpacaEval 2.0) so the gain isn't just verbosity.",
+    "A single judge is insufficient (self-enhancement/familiarity bias): corroborate with a second judge family and/or human spot-checks, and report judge-human agreement.",
+    "Statistical significance: 68% needs a sample size and a confidence interval (e.g., bootstrap over the held-out prompts) whose lower bound clears 50% before it counts as an improvement.",
+    "Alignment tax / capability regression: pairwise chat preference doesn't capture reasoning or knowledge, so run standard capability benchmarks (MMLU, GSM8K, HumanEval, IFEval) on both checkpoints and gate on no regression.",
+    "Contamination / representativeness: verify the held-out instructions don't overlap the DPO preference data and match the production distribution rather than easy chat prompts.",
+    "Substance-vs-style / reward-hacking and safety: inspect wins to confirm they're driven by correctness not formatting/tone, and run safety and over-refusal evals since preference tuning changes refusal behavior."
+  ],
+  "common_pitfalls": [
+    "Accepts the 68% as self-evidently a real improvement and recommends shipping, treating the win rate as ground truth instead of a biased, noisy measurement.",
+    "Fixes only position/order bias while ignoring length/verbosity bias, which is the dominant confound because DPO reliably produces longer answers that judges prefer.",
+    "Stays entirely within chat win-rate framing and never checks capability regression (alignment tax) via benchmarks like MMLU/GSM8K/HumanEval/IFEval, so a reasoning/knowledge regression could ship unnoticed.",
+    "Omits any statistical treatment - no confidence interval or sample-size reasoning - or conflates 'statistically significant' with 'practically meaningful.'",
+    "Proposes 'just use a stronger/bigger judge model' as if a better judge removes systematic biases like length and position, which it does not.",
+    "Assumes a 'held-out' set automatically means no contamination and representative coverage, without checking overlap with the DPO preference data or the production prompt distribution."
+  ],
+  "reference_answer": "A single 68% LLM-as-judge win rate is a signal, not a verdict; I'd validate it along several axes before signing off.\n\nJudge biases. Pairwise LLM judges have systematic biases. Position/order bias: the response shown first is often favored, so I'd evaluate each pair in both orders and only count a win when it survives swapping (or average the two orderings). Verbosity/length bias is the dominant risk here because DPO reliably lengthens outputs and judges reward length; I'd report both models' length distributions and use a length-controlled metric (e.g., AlpacaEval 2.0's length-controlled win rate) so the gain isn't just 'longer.' Self-enhancement/familiarity bias means one judge is not enough, so I'd corroborate with a second judge family plus a human spot-check and report judge-human agreement.\n\nStatistical validity. 68% is uninterpretable without sample size and a confidence interval. I'd compute a bootstrap CI over the held-out prompts and require its lower bound to clear 50% with margin; typically a few hundred prompts.\n\nRepresentativeness/contamination. I'd confirm the held-out instructions don't overlap the DPO preference data and that they match production traffic, not just easy chat prompts.\n\nAlignment tax/regression. Pairwise chat preference says nothing about knowledge or reasoning, and DPO/RLHF can silently degrade base capabilities. I'd run capability benchmarks on both checkpoints - MMLU, GSM8K/math, HumanEval, IFEval (instruction following) - and gate on no regression. I'd also run safety and over-refusal evals, since preference tuning shifts refusal behavior.\n\nSubstance vs style. I'd read a sample of wins to confirm they're driven by correctness and helpfulness rather than formatting, hedging, or tone (reward hacking / Goodhart).\n\nSign-off gate: a length-controlled, order-swapped win rate with a bootstrap CI whose lower bound clears 50%, no capability or safety regression across the benchmark suite, and human confirmation that wins reflect substance - not just a raw 68%.",
+  "global_rubric": "open_grading_rubric.json"
+}

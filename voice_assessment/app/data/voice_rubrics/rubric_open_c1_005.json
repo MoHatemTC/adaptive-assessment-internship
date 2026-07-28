@@ -1,0 +1,60 @@
+{
+  "rubric_id": "rubric_open_c1_005",
+  "version": "1.0",
+  "item_id": "open_c1_005",
+  "competency": "C1",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C1.5",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Full marks: correctly identifies READ COMMITTED as the default and accurately explains that plain SELECT takes no lock and offers only per-statement snapshot isolation, correctly names the anomaly as a non-atomic read-modify-write/lost-update, and every proposed fix is technically sound — the guarded UPDATE is correctly justified as atomic under READ COMMITTED (row lock + re-check), FOR UPDATE genuinely serializes, and serializable/optimistic paths correctly require retry on 40001/0-rows. Deduct for false claims (e.g. that plain SELECT locks, that a relative decrement alone prevents overdraft, or that raising isolation silently fixes it without retry)."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C1.5",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Full marks: covers the diagnosis, why the default isolation fails to prevent it, at least two distinct DB-layer fixes with SQL sketches, the transaction/autocommit requirement, and the retry or rows-affected handling each fix needs. Partial credit for a correct diagnosis with only one fix or missing the required app-side changes (transaction wrapping, retry loop, rows-affected check)."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C1.5",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Full marks: weighs the fixes against contention (pessimistic blocking/deadlock risk vs optimistic/serializable retry cost vs the lock-free atomic UPDATE), ties the choice to workload, and gives a clearly justified recommendation rather than merely listing options."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C1.5",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Full marks: well-structured, uses precise vocabulary (isolation level, row lock, serialization failure/40001, rows affected, snapshot) correctly, and includes clear, correct SQL sketches so the intended behaviour is unambiguous."
+    }
+  ],
+  "expected_answer_points": [
+    "Diagnoses the anomaly as a non-atomic check-then-act (read-modify-write) split across two statements, made worse by autocommit, allowing concurrent interleaving that bypasses the balance guard and overdraws / double-spends.",
+    "Explains that the default level is READ COMMITTED, where a plain SELECT takes no lock and gives only a per-statement snapshot, so it provides no cross-statement protection and the validated balance is stale by write time.",
+    "Fix — atomic single-statement guarded UPDATE (`... WHERE id=$1 AND balance >= $cost`, then check rows affected), and explains it is safe even at READ COMMITTED because the row lock + re-check makes check-and-decrement atomic.",
+    "Fix — pessimistic locking with `SELECT ... FOR UPDATE` inside one explicit transaction, noting it serializes concurrent access on the row and requires abandoning autocommit.",
+    "Fix — optimistic concurrency (version column) or SERIALIZABLE/SSI, and states the app must catch serialization failures (SQLSTATE 40001) / 0-rows and retry in a bounded loop.",
+    "Contrasts the fixes by contention: pessimistic locking blocks and risks deadlocks under high contention; optimistic/serializable pay retry cost under contention but avoid blocking when contention is low.",
+    "Notes the whole read-check-write must run in a single transaction (not autocommit) for FOR UPDATE / serializable approaches to hold, and lock should be held briefly.",
+    "Gives a justified recommendation (typically the atomic guarded UPDATE), optionally adding a `CHECK (balance >= 0)` constraint as defence-in-depth."
+  ],
+  "common_pitfalls": [
+    "Blaming SQL injection, a missing index, or an ORM N+1 pattern rather than the concurrency race — misreading the failure entirely.",
+    "Asserting that simply raising the isolation level to REPEATABLE READ or SERIALIZABLE silently fixes it, forgetting that the second writer aborts with SQLSTATE 40001 and the app MUST retry, so without a retry loop it just turns overdraft into errors.",
+    "Proposing an application-level mutex or in-process lock, which fails across multiple worker processes / horizontally scaled instances.",
+    "Using `SELECT ... FOR UPDATE` but leaving the service in autocommit (or on a different connection), so the lock is released immediately and provides no protection.",
+    "Claiming the relative `balance = balance - cost` update alone prevents the bug — it prevents lost writes but still overdraws because no sufficiency check is enforced at write time.",
+    "Offering only `CHECK (balance >= 0)` as the sole fix: it is useful defence-in-depth but merely converts the race into constraint-violation errors that still must be handled, and does not serialize the debit logic."
+  ],
+  "reference_answer": "Root cause: the guard is a check-then-act split across two separate statements, and because the service runs in autocommit each statement is its own transaction. PostgreSQL's default level is READ COMMITTED. A plain `SELECT` takes no row lock and sees a fresh snapshot of committed data, so nothing prevents another worker from reading the same balance and deducting in the gap between step 1 and step 2. Two requests both read balance=100, both pass the `balance >= cost` check, and both run the relative `balance = balance - cost` update — the arithmetic isn't lost (each UPDATE re-reads the row), but the *sufficiency check* was validated against stale data, so the account overdraws. This is a classic lost-update / write-skew style anomaly caused by a non-atomic read-modify-write.\n\nFix A — single-statement atomic guarded UPDATE (preferred): push the check into the write:\n\n  UPDATE accounts SET balance = balance - $cost WHERE id = $1 AND balance >= $cost;\n\nThen inspect rows-affected: 0 means insufficient funds. This is atomic even at READ COMMITTED because the UPDATE takes a row lock; a concurrent UPDATE blocks, and when the first commits the second re-evaluates its WHERE against the updated row (EvalPlanQual re-check), so it correctly matches 0 rows. No separate SELECT is needed. Downside: the guard must be expressible in one SQL statement.\n\nFix B — pessimistic lock: keep the read-check-write but wrap it in one transaction and lock the row: `BEGIN; SELECT balance FROM accounts WHERE id=$1 FOR UPDATE; ...; UPDATE ...; COMMIT;`. `FOR UPDATE` serializes concurrent transactions on that row — the second blocks until the first commits, then sees the fresh balance. App change: use an explicit transaction (not autocommit) and hold the lock only as briefly as possible. Under high contention this serializes all of that user's requests and risks deadlocks if multiple rows are locked in inconsistent order.\n\nFix C — optimistic / SERIALIZABLE: add a `version` column and `UPDATE ... SET balance=..., version=version+1 WHERE id=$1 AND version=$read_version`, retrying on 0 rows; or raise isolation to SERIALIZABLE (SSI), where the conflicting schedule is aborted with SQLSTATE 40001 (serialization_failure). Either way the app MUST implement a bounded retry loop. Good when contention is low; wasteful retries when high.\n\nRecommendation: Fix A — the atomic guarded UPDATE — because it is correct at the default isolation level, needs no extra locking or retry machinery, and stays fast under contention. I'd add a `CHECK (balance >= 0)` constraint as defence-in-depth. If the debit logic can't be expressed in one statement, I'd use `SELECT ... FOR UPDATE` inside an explicit transaction.",
+  "global_rubric": "open_grading_rubric.json"
+}

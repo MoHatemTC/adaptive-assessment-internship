@@ -1,0 +1,59 @@
+{
+  "rubric_id": "rubric_open_c5_002",
+  "version": "1.0",
+  "item_id": "open_c5_002",
+  "competency": "C5",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C5.2",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Correctly explains anisotropy/cone effect and the MLM-objective root cause; accurately states that switching to Euclidean/dot or 'temperature' is inert (geometry, not metric); describes contrastive/SBERT fine-tuning and whitening/BERT-flow without inventing mechanisms; does not misattribute [CLS] as a similarity-trained embedding."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C5.2",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Covers every requested part: the mechanism, its training origin, an explicit verdict on the colleague's suggestions, and at least two remediation strategies each with a trade-off; full marks also touch normalization/pooling or asymmetric prefixes / proper eval metrics."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C5.2",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Justifies each remedy by tying it back to the geometry of the embedding space, and genuinely weighs the trade-offs (data/cost vs quality; unsupervised band-aid vs proper fine-tuned encoder) rather than merely listing options."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C5.2",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Clear, well-structured answer that cleanly separates symptom, cause, verdict, and cure, and uses correct terminology (anisotropy, contrastive/siamese objective, whitening) precisely."
+    }
+  ],
+  "expected_answer_points": [
+    "Identifies anisotropy / the 'cone effect' (representation degeneration): raw pretrained BERT vectors occupy a narrow cone, so cosine between arbitrary pairs is uniformly high and non-discriminative.",
+    "Attributes the root cause to the MLM token-level pretraining objective, which never optimizes whole-sentence semantic geometry (and notes [CLS] was trained for NSP, not similarity; token-frequency bias contributes).",
+    "States that swapping the distance metric does not fix it — Euclidean on normalized vectors is monotonic in cosine and dot product is equally degenerate — and that 'temperature' is meaningless in a plain cosine lookup.",
+    "Proposes fine-tuning with a contrastive/siamese objective (Sentence-BERT / MNR / triplet / NLI-supervised) or adopting an off-the-shelf sentence encoder (all-MiniLM, E5, BGE) as the primary fix, with trade-off (needs paired data / cost, best quality).",
+    "Proposes a post-processing remedy — whitening (BERT-whitening) or BERT-flow — as a cheaper unsupervised alternative, noting it is a weaker band-aid that must be fit on representative data and may not generalize.",
+    "Mentions L2-normalization (cosine == dot, but does not by itself remove the cone) and/or mean-vs-CLS pooling as supporting considerations.",
+    "Adds asymmetric-search handling (query/passage prefixes) and/or evaluating with proper retrieval metrics (Recall@k, MRR, nDCG) instead of raw cosine."
+  ],
+  "common_pitfalls": [
+    "Blames poor results on model size, insufficient indexed data, or bad tokenization rather than the anisotropic geometry of raw pretrained embeddings.",
+    "Accepts the colleague's fix — believes switching to Euclidean/dot product or tuning 'temperature' will resolve it, missing that the geometry, not the metric, is the problem.",
+    "Claims L2-normalization alone removes anisotropy or restores discrimination, when it only makes cosine equal dot product while the cone remains.",
+    "Treats [CLS] as a purpose-built sentence embedding, or asserts BERT was trained to place similar sentences close together.",
+    "Offers only vague fixes ('use a bigger LLM', 'add a prompt/prefix') without a contrastive-training or whitening remedy, or invents a nonexistent mechanism.",
+    "Presents mean-vs-CLS pooling as the whole fix, ignoring that both raw poolings suffer the same anisotropy."
+  ],
+  "reference_answer": "The symptom — near-uniform high cosine similarity — is the classic signature of anisotropy (the 'cone effect' / representation degeneration) in raw pretrained transformer embeddings. An un-fine-tuned BERT does not spread its outputs over the hypersphere; the vectors collapse into a narrow cone pointing in a common dominant direction. When every vector shares that direction, all pairs have large positive cosine regardless of meaning, so cosine's usable dynamic range is compressed and it cannot rank relevant above irrelevant.\n\nRoot cause: BERT is trained with masked-language-modeling, a token-level reconstruction objective (plus NSP for [CLS]). Nothing in that objective pushes whole-sentence representations of semantically similar texts together and dissimilar ones apart — there is no metric-learning signal on sentence geometry. Token-frequency effects during MLM further bias the distribution toward the degenerate cone. Mean-pooling the last layer inherits a space whose geometry does not encode similarity, and [CLS] is no better since it was trained for NSP, not similarity.\n\nVerdict on the colleague: neither idea helps. The problem is the geometry of the space, not the metric — squared Euclidean distance on normalized vectors is monotonic in cosine, so it yields the same bad ranking, and raw dot product is likewise degenerate. 'Temperature' has no meaning in a plain cosine lookup (it is a contrastive-loss softmax knob), so it is a non-sequitur.\n\nFix A (best): use a sentence encoder fine-tuned with a contrastive/siamese objective — Sentence-BERT on NLI/paired data, or in-batch Multiple-Negatives-Ranking / triplet loss (SimCSE-style). This directly shapes the space so cosine reflects semantics and largely removes anisotropy. Off-the-shelf checkpoints (all-MiniLM-L6-v2, E5, BGE, GTE) already do this. Trade-off: needs paired/labeled data or a suitable pretrained model plus training/eval infra, but gives the highest quality and is the standard solution.\n\nFix B (cheaper): post-process the existing embeddings to restore isotropy — BERT-whitening (center, then whiten the covariance toward identity) or BERT-flow (map to a Gaussian). Unsupervised, no retraining. Trade-off: a band-aid — it improves discrimination but trails a properly trained encoder, the transform must be fit on representative in-domain data, and it may not generalize across domains.\n\nSupporting details: L2-normalize embeddings so cosine == dot (normalization alone does not remove the cone); prefer mean over CLS pooling if stuck with raw BERT; for short-query-vs-passage (asymmetric) search use a retrieval-trained model with its required `query:`/`passage:` prefixes; and evaluate with Recall@k / MRR / nDCG rather than eyeballing raw cosine.",
+  "global_rubric": "open_grading_rubric.json"
+}
