@@ -1,0 +1,32 @@
+{
+  "name": "code-rubric-loose",
+  "version": "1.0",
+  "description": "Lightweight code-diagnosis rubric used by the LLM evaluator.",
+  "criteria": [
+    {
+      "criterion_id": "functional_correctness",
+      "description": "Judge whether the implementation solves the required task behaviorally.",
+      "evaluation_criteria": "Use objective test outcomes as primary evidence. Do not overclaim correctness when tests fail."
+    },
+    {
+      "criterion_id": "edge_case_handling",
+      "description": "Judge how well the solution handles boundary, null, and unusual cases.",
+      "evaluation_criteria": "Use failed edge tests, control-flow guards, and input handling as evidence."
+    },
+    {
+      "criterion_id": "algorithm_choice",
+      "description": "Judge whether the chosen approach and complexity are suitable.",
+      "evaluation_criteria": "Use structure of loops/data structures and complexity-related signals as evidence."
+    },
+    {
+      "criterion_id": "code_quality",
+      "description": "Judge readability, maintainability, and contract adherence.",
+      "evaluation_criteria": "Use naming, decomposition, side effects, and contract alignment as evidence."
+    }
+  ],
+  "mistake_patterns": [
+    "Claims full correctness despite objective test failures.",
+    "Invents nonexistent test evidence.",
+    "Rates competencies not in the provided question payload."
+  ]
+}

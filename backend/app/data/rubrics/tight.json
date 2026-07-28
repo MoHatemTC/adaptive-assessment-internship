@@ -1,0 +1,72 @@
+{
+  "name": "code-rubric-tight",
+  "version": "1.0",
+  "description": "Strict, checklist-style code-diagnosis rubric emphasizing objective grounding.",
+  "criteria": [
+    {
+      "criterion_id": "functional_correctness",
+      "description": "Measured correctness of required behavior.",
+      "evaluation_criteria": "Score must align with objective test outcomes and compile/runtime evidence.",
+      "binary_points": [
+        "Compiles/runs without fatal errors.",
+        "Passes core path tests.",
+        "Avoids known failing required scenarios.",
+        "Output format/contract matches prompt."
+      ],
+      "quality_checks": [
+        "Never assign high score when many tests fail.",
+        "Always cite concrete evidence for success/failure."
+      ]
+    },
+    {
+      "criterion_id": "edge_case_handling",
+      "description": "Reliability on boundaries and uncommon inputs.",
+      "evaluation_criteria": "Edge handling must be evidenced by tests or explicit defensive logic.",
+      "binary_points": [
+        "Handles empty/null/zero-like inputs when relevant.",
+        "Handles minimum-size inputs.",
+        "Handles duplicate/extreme values where applicable.",
+        "No crashes on malformed but in-scope inputs."
+      ],
+      "quality_checks": [
+        "Penalize absent guards when edge requirements are explicit.",
+        "Do not infer edge robustness without evidence."
+      ]
+    },
+    {
+      "criterion_id": "algorithm_choice",
+      "description": "Suitability and efficiency of chosen approach.",
+      "evaluation_criteria": "Use complexity and structural evidence to judge algorithm fit.",
+      "binary_points": [
+        "Approach is logically valid for the problem class.",
+        "Complexity is reasonable for expected input scale.",
+        "Uses suitable data structures.",
+        "Avoids anti-patterns that dominate runtime."
+      ],
+      "quality_checks": [
+        "Differentiate correctness bugs from inefficiency concerns.",
+        "Use specific code/test evidence for complexity claims."
+      ]
+    },
+    {
+      "criterion_id": "code_quality",
+      "description": "Maintainability and contract safety.",
+      "evaluation_criteria": "Readability, structure, and interface behavior should be judged from observable code.",
+      "binary_points": [
+        "Function signature/return contract is respected.",
+        "Control flow is understandable.",
+        "Naming and decomposition aid readability.",
+        "Avoids unexpected side effects (e.g., mutating input)."
+      ],
+      "quality_checks": [
+        "Prioritize contract violations over style preferences.",
+        "Use concise, evidence-backed rationale only."
+      ]
+    }
+  ],
+  "mistake_patterns": [
+    "Hallucinated evidence or nonexistent test references.",
+    "Score inflation inconsistent with measured failures.",
+    "Non-actionable rationale not tied to objective signals."
+  ]
+}

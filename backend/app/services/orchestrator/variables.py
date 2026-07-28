@@ -1,0 +1,140 @@
+"""Examinee Variables: the live estimate, one latent ability per variable.
+
+The architecture's central store. Seeded from intake, updated after every graded outcome,
+and read by the orchestrator to decide which variable to probe next.
+
+ONE SCALE, ALL MODALITIES. Every variable holds a posterior over the same theta grid,
+whatever measured it. That is what makes "the least-measured variable" a well-defined
+question: comparing a variable measured by MCQ against one measured by code is only
+legitimate if the two numbers mean the same thing, and they do because both are EAP means
+of a posterior over the same latent scale.
+
+FINALISATION IS ONE-WAY. Once a variable's stopping rule fires it is finalised: no further
+picking, no further probing, no un-finalising. A rule that could reverse would let a
+variable oscillate in and out of the queue and make session length unpredictable — and a
+report saying "measured" must not later become "still measuring".
+"""
+
+from __future__ import annotations
+
+import logging
+
+import numpy as np
+
+from app.schemas.orchestration import VariableState
+from app.services.adaptive import convergence
+from app.services.adaptive.irt import (
+    THETA_GRID,
+    ability_band,
+    prior_from_self_rating,
+    uniform_prior,
+)
+from app.services.orchestrator.outcome import GradedOutcome, graded_posterior_update
+
+logger = logging.getLogger(__name__)
+
+# Prior width by how much the self-rating is worth believing, matching the MCQ engine.
+# A rating sets where the search starts, never where it ends.
+PRIOR_SD_CONFIDENT = 1.1
+PRIOR_SD_TENTATIVE = 1.7
+PRIOR_SD_NO_RATING = 2.0
+
+
+def seed_variable(
+    variable: str, self_rating: int | None = None, rating_confident: bool = False
+) -> VariableState:
+    """Open a variable, seeding its prior from intake."""
+    if self_rating is None:
+        posterior = uniform_prior()
+        standard_error = PRIOR_SD_NO_RATING
+    else:
+        sd = PRIOR_SD_CONFIDENT if rating_confident else PRIOR_SD_TENTATIVE
+        posterior = prior_from_self_rating(self_rating, sd)
+        standard_error = sd
+
+    theta_hat = float(np.sum(np.asarray(posterior) * THETA_GRID))
+    return VariableState(
+        variable=variable,
+        posterior=list(map(float, posterior)),
+        theta_hat=theta_hat,
+        standard_error=standard_error,
+    )
+
+
+def certainty(state: VariableState) -> float:
+    """Confidence in this estimate, 0-100. The orchestrator's comparison key.
+
+    Deliberately a function of the standard error alone, so two variables with identical
+    posterior precision are equally certain regardless of how they were primed or which
+    modality measured them. A relative measure would make the probing order depend on
+    intake answers rather than on what is actually still unknown.
+    """
+    return convergence.certainty_pct(
+        state.standard_error, observations=state.observations
+    )
+
+
+def apply_outcome(
+    state: VariableState,
+    outcome: GradedOutcome,
+    a: float,
+    b: float,
+    c: float,
+    item_id: str,
+) -> VariableState:
+    """Fold one graded outcome into a variable's estimate, returning a NEW state.
+
+    Zero-weight outcomes are skipped entirely rather than applied as a no-op update: the
+    arithmetic would leave the posterior untouched either way, but incrementing
+    `observations` would make an unmeasured variable look measured — the same distinction
+    the code engine draws when an infrastructure failure carries no evidence.
+    """
+    if not outcome.moves_the_estimate:
+        logger.debug("outcome for %s carries no evidence — estimate untouched", outcome.variable)
+        return state
+
+    posterior, theta_hat, standard_error = graded_posterior_update(
+        np.asarray(state.posterior, dtype=float), a, b, c, outcome.score, outcome.weight
+    )
+    level, _ = ability_band(theta_hat)
+    return state.model_copy(
+        update={
+            "posterior": list(map(float, posterior)),
+            "theta_hat": theta_hat,
+            "standard_error": standard_error,
+            "observations": state.observations + 1,
+            "served_item_ids": [*state.served_item_ids, item_id],
+            "band_history": [*state.band_history, level],
+        }
+    )
+
+
+def evaluate_finalisation(state: VariableState, items_remaining: int) -> VariableState:
+    """Apply the stopping rules and finalise if any fires.
+
+    Reuses the MCQ engine's `convergence.evaluate` unchanged, so precision, band stability
+    and budget mean exactly what they already mean elsewhere. `converged` stays False for a
+    budget stop: running out of items is not the same as knowing a candidate's level, and
+    a report that conflates them is claiming a measurement nobody made.
+    """
+    if state.finalised:
+        return state
+
+    stop = convergence.evaluate(
+        state.standard_error, state.band_history, state.observations, items_remaining
+    )
+    if not stop.should_stop:
+        return state
+
+    return state.model_copy(
+        update={"finalised": True, "stop_reason": stop.reason, "converged": stop.converged}
+    )
+
+
+def mark_exhausted(state: VariableState) -> VariableState:
+    """Finalise a variable whose pool is empty, without claiming convergence."""
+    if state.finalised:
+        return state
+    return state.model_copy(
+        update={"finalised": True, "stop_reason": "bank_exhausted", "converged": False}
+    )

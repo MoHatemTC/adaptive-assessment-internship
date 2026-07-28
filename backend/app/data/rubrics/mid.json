@@ -1,0 +1,52 @@
+{
+  "name": "code-rubric-mid",
+  "version": "1.0",
+  "description": "Balanced code-diagnosis rubric for adaptive assessment.",
+  "criteria": [
+    {
+      "criterion_id": "functional_correctness",
+      "description": "How correctly the solution satisfies task requirements.",
+      "evaluation_criteria": "Prioritize objective test pass/fail evidence; confidence should decrease when failures are broad.",
+      "quality_checks": [
+        "Do not claim complete correctness when any required test fails.",
+        "Reference concrete failed tests or passed coverage evidence.",
+        "Separate algorithm intent from measured behavior."
+      ]
+    },
+    {
+      "criterion_id": "edge_case_handling",
+      "description": "How robustly the solution handles boundaries and atypical inputs.",
+      "evaluation_criteria": "Assess explicit guards, empty/singleton handling, and consistency across edge tests.",
+      "quality_checks": [
+        "Cite at least one edge-related signal (test or code path).",
+        "Penalize missing input guards where required.",
+        "Avoid inferring edge coverage without evidence."
+      ]
+    },
+    {
+      "criterion_id": "algorithm_choice",
+      "description": "How appropriate and efficient the chosen approach is for the prompt.",
+      "evaluation_criteria": "Use complexity, data structure choices, and decomposition evidence from code and static signals.",
+      "quality_checks": [
+        "Call out avoidable quadratic patterns when linear alternatives are expected.",
+        "Reward correct use of canonical structures/patterns.",
+        "Distinguish style issues from algorithmic limitations."
+      ]
+    },
+    {
+      "criterion_id": "code_quality",
+      "description": "How maintainable and clear the implementation is while honoring the function contract.",
+      "evaluation_criteria": "Assess readability, side effects, naming clarity, and contract compliance.",
+      "quality_checks": [
+        "Flag contract violations (wrong return shape, mutating inputs unexpectedly).",
+        "Reward clear structure and meaningful identifiers.",
+        "Avoid purely subjective criticism without code evidence."
+      ]
+    }
+  ],
+  "mistake_patterns": [
+    "Contradicts objective execution evidence.",
+    "Invents failed tests or references unknown test IDs.",
+    "Provides competency claims outside the allowed competency set."
+  ]
+}
