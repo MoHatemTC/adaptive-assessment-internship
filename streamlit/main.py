@@ -78,6 +78,7 @@ from app.services.orchestrator.picker import criterion_for, information_for  # n
 from app.services.orchestrator.competency import rollup_outcomes  # noqa: E402
 from app.services.voice.evaluator import evaluate as evaluate_voice  # noqa: E402
 from app.services.voice.evaluator import package_from_text  # noqa: E402
+from app.services.voice_live.streamlit_live import StreamlitLiteLLMLiveBridge  # noqa: E402
 
 
 def fisher_after(item, variable_state, variable) -> float:
@@ -641,11 +642,18 @@ def live_server_ok() -> bool:
         return False
 
 
-def open_text_fallback_allowed(*, live_up: bool) -> bool:
-    """Typed answers when Live is forced off, or when Live cannot be reached (cloud)."""
-    if voice_settings.allow_text_fallback:
-        return True
-    return not live_up
+def open_text_fallback_allowed() -> bool:
+    """Typed answers only when explicitly enabled — spoken Live is the default path."""
+    return bool(voice_settings.allow_text_fallback)
+
+
+def native_live_bridge() -> StreamlitLiteLLMLiveBridge:
+    """One turn-based LiteLLM Live session per Streamlit browser session."""
+    bridge = st.session_state.get("native_live_bridge")
+    if bridge is None or not isinstance(bridge, StreamlitLiteLLMLiveBridge):
+        bridge = StreamlitLiteLLMLiveBridge()
+        st.session_state["native_live_bridge"] = bridge
+    return bridge
 
 
 def render_open_text_fallback(state, item, candidate, *, reason: str) -> None:
@@ -698,8 +706,6 @@ def fetch_live_room(room_id: str) -> dict:
 def record_live_package(state, item, candidate, package: VoiceResponsePackage) -> None:
     """Evaluate a finished Live interview (LiteLLM rubric), then update CAT state."""
     with st.spinner("Grading live interview via LiteLLM…"):
-        # Grade under the assessment session so open_grader spans join picker/code
-        # traces (evaluate used to run outside observability.session and vanished).
         with observability.session(
             state.session_id,
             track=st.session_state.get("competencies"),
@@ -713,76 +719,154 @@ def record_live_package(state, item, candidate, package: VoiceResponsePackage) -
     record(state, item, candidate, graded_voice)
     st.session_state.pop("live_room_id", None)
     st.session_state.pop("live_active_item", None)
+    st.session_state.pop("native_live_item", None)
+    st.session_state.pop("native_live_turns", None)
+    bridge = st.session_state.get("native_live_bridge")
+    if isinstance(bridge, StreamlitLiteLLMLiveBridge):
+        try:
+            bridge.abort()
+        except Exception:  # noqa: BLE001
+            pass
 
 
-def live_unavailable_message() -> str:
-    server = voice_settings.live_server_base
-    public = voice_settings.live_public_base
-    if "streamlit.app" in public.lower():
-        return (
-            f"**Live is not available on this Streamlit Cloud app.**\n\n"
-            f"`LIVE_PUBLIC_BASE` is set to `{public}` — that is this Streamlit UI, "
-            "not a Live interviewer service. Streamlit Cloud cannot host the "
-            "`uvicorn` helper (port 8765) inside the same app.\n\n"
-            "**Use the written answer below** (same open rubric / θ update).\n\n"
-            "To enable spoken Live later: deploy the helper on a separate public "
-            "host, then set `LIVE_SERVER_BASE` and `LIVE_PUBLIC_BASE` to that "
-            "host’s URL (not the `.streamlit.app` URL). Or delete both secrets "
-            "to silence this warning."
-        )
-    if "127.0.0.1" in server or "localhost" in server:
-        return (
-            f"Live interviewer is not reachable at `{server}`.\n\n"
-            "**This cloud app cannot use `127.0.0.1:8765`.** Use the **written "
-            "answer** below to continue.\n\n"
-            "Optional: host Live separately and set `LIVE_SERVER_BASE` / "
-            "`LIVE_PUBLIC_BASE` to that service’s public URL. "
-            f"(Current iframe target would be `{public}`.)"
-        )
-    return (
-        f"Live interviewer is not reachable at `{server}` "
-        f"(browser iframe would use `{public}`).\n\n"
-        "**Local:** from `backend/` run\n\n"
-        "`python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8765`\n\n"
-        "**Cloud:** run the Live helper on a public host and set "
-        "`LIVE_SERVER_BASE` / `LIVE_PUBLIC_BASE`, or use the written fallback below."
+def render_native_live_interview(state, item, candidate) -> None:
+    """Spoken Live inside Streamlit via LiteLLM realtime (works on Streamlit Cloud)."""
+    st.info(
+        "Spoken Live interview via LiteLLM (in-app, no separate helper). "
+        "Start the interview, listen to the question, record your answer, then "
+        "**Finish & grade**. "
+        f"Model: `{settings.litellm_live_preview_model}`."
     )
 
+    if st.session_state.get("native_live_item") != item.item_id:
+        # Switching items — drop any prior bridge session.
+        old = st.session_state.get("native_live_bridge")
+        if isinstance(old, StreamlitLiteLLMLiveBridge):
+            try:
+                old.abort()
+            except Exception:  # noqa: BLE001
+                pass
+        st.session_state["native_live_item"] = item.item_id
+        st.session_state["native_live_turns"] = []
+        st.session_state.pop("native_live_started", None)
 
-def render_live_interview(state, item, candidate) -> None:
-    """Open/voice: Live interview when the helper is up; typed fallback otherwise."""
-    if not settings.litellm_api_key.strip():
-        st.warning(
-            "Set `LITELLM_API_KEY` (and `LITELLM_BASE_URL`) in `backend/.env` for "
-            f"Live interviews via `{settings.litellm_live_preview_model}`."
-        )
-        if open_text_fallback_allowed(live_up=False):
-            render_open_text_fallback(
-                state,
-                item,
-                candidate,
-                reason=(
-                    "LiteLLM is not configured for Live. Submit a **written** answer "
-                    "so the session can continue."
-                ),
-            )
+    turns: list[dict] = list(st.session_state.get("native_live_turns") or [])
+    started = bool(st.session_state.get("native_live_started"))
+
+    cols = st.columns(3)
+    with cols[0]:
+        if st.button("Start live interview", type="primary", disabled=started):
+            question = item.payload.get("prompt") or item.payload.get("question", "")
+            try:
+                with st.spinner("Connecting to LiteLLM Live and speaking the question…"):
+                    audio = native_live_bridge().start_interview(item.item_id, question)
+                turns = []
+                if audio.wav_bytes:
+                    turns.append(
+                        {
+                            "role": "interviewer",
+                            "text": audio.transcript,
+                            "wav": audio.wav_bytes,
+                        }
+                    )
+                elif audio.transcript:
+                    turns.append({"role": "interviewer", "text": audio.transcript, "wav": b""})
+                st.session_state["native_live_turns"] = turns
+                st.session_state["native_live_started"] = True
+                st.rerun()
+            except Exception as exc:  # noqa: BLE001
+                st.session_state["last_audio_error"] = (
+                    f"{exc}\n{traceback.format_exc(limit=4)}"
+                )
+                st.error(f"Could not start Live interview: {exc}")
+
+    with cols[1]:
+        finish_disabled = not started
+        if st.button("Finish & grade", type="primary", disabled=finish_disabled):
+            try:
+                with st.spinner("Closing Live session and grading…"):
+                    result = native_live_bridge().finish()
+                    package = result.as_package()
+                    record_live_package(state, item, candidate, package)
+                st.rerun()
+            except Exception as exc:  # noqa: BLE001
+                st.session_state["last_audio_error"] = (
+                    f"{exc}\n{traceback.format_exc(limit=4)}"
+                )
+                st.error(f"Finish/grade failed: {exc}")
+
+    with cols[2]:
+        if st.button("Abort interview", disabled=not started):
+            try:
+                native_live_bridge().abort()
+            except Exception:  # noqa: BLE001
+                pass
+            st.session_state["native_live_started"] = False
+            st.session_state["native_live_turns"] = []
+            st.rerun()
+
+    if st.session_state.get("last_audio_error"):
+        st.caption(f"Last Live error: {st.session_state['last_audio_error']}")
+
+    if not started:
+        st.caption("Click **Start live interview** — the interviewer will speak the question.")
+        if open_text_fallback_allowed():
+            with st.expander("Typed fallback (ALLOW_TEXT_FALLBACK=true)"):
+                render_open_text_fallback(
+                    state,
+                    item,
+                    candidate,
+                    reason="Optional typed path — spoken Live is preferred.",
+                )
         return
 
-    live_up = live_server_ok()
-    if not live_up:
-        st.error(live_unavailable_message())
-        if open_text_fallback_allowed(live_up=False):
-            render_open_text_fallback(
-                state,
-                item,
-                candidate,
-                reason=(
-                    "Live helper is unavailable — type your answer below. It is graded "
-                    "with the same open rubric and still updates θ."
-                ),
-            )
-        return
+    for i, turn in enumerate(turns):
+        who = "Interviewer" if turn.get("role") == "interviewer" else "You"
+        st.markdown(f"**{who}:** {turn.get('text') or '*(audio)*'}")
+        wav = turn.get("wav") or b""
+        if wav:
+            st.audio(wav, format="audio/wav")
 
+    st.markdown("#### Your spoken answer")
+    st.caption("Record a full turn, then submit it. You can record again after a probe.")
+    audio_file = st.audio_input(
+        "Microphone",
+        key=f"native_mic_{item.item_id}_{len(turns)}",
+    )
+    if audio_file is not None and st.button("Send recording to interviewer", type="primary"):
+        try:
+            wav_bytes = audio_file.getvalue()
+            with st.spinner("Sending audio and waiting for the interviewer…"):
+                reply = native_live_bridge().send_candidate_audio(wav_bytes)
+            turns.append({"role": "candidate", "text": "(spoken answer)", "wav": wav_bytes})
+            if reply.wav_bytes or reply.transcript:
+                turns.append(
+                    {
+                        "role": "interviewer",
+                        "text": reply.transcript,
+                        "wav": reply.wav_bytes or b"",
+                    }
+                )
+            # Refresh candidate ASR text from bridge turns if available.
+            bridge = native_live_bridge()
+            for t in bridge.turns:
+                if t.get("role") == "candidate" and t.get("text"):
+                    # Update last candidate bubble with ASR.
+                    for j in range(len(turns) - 1, -1, -1):
+                        if turns[j].get("role") == "candidate":
+                            turns[j]["text"] = t["text"]
+                            break
+            st.session_state["native_live_turns"] = turns
+            st.rerun()
+        except Exception as exc:  # noqa: BLE001
+            st.session_state["last_audio_error"] = (
+                f"{exc}\n{traceback.format_exc(limit=4)}"
+            )
+            st.error(f"Could not send audio: {exc}")
+
+
+def render_iframe_live_interview(state, item, candidate) -> None:
+    """Duplex Live via the FastAPI helper iframe (local / dedicated Live host)."""
     st.info(
         "Speak your answer with the Live interviewer. Use **Finish answer** inside the "
         "panel when done, then **Grade finished interview** here. "
@@ -790,7 +874,7 @@ def render_live_interview(state, item, candidate) -> None:
         f"Picker/grader: `{settings.litellm_model}` via LiteLLM."
     )
 
-    if voice_settings.allow_text_fallback:
+    if open_text_fallback_allowed():
         with st.expander("Prefer to type instead of speaking?"):
             render_open_text_fallback(
                 state,
@@ -819,12 +903,8 @@ def render_live_interview(state, item, candidate) -> None:
             except Exception as exc:  # noqa: BLE001
                 st.session_state["last_audio_error"] = str(exc)
                 st.error(f"Could not open Live room: {exc}")
-                render_open_text_fallback(
-                    state,
-                    item,
-                    candidate,
-                    reason="Live room create failed — you can still submit in writing.",
-                )
+                st.info("Falling back to in-app spoken Live…")
+                render_native_live_interview(state, item, candidate)
     with cols[1]:
         if st.button("Refresh status", disabled=not room_id):
             st.rerun()
@@ -856,7 +936,6 @@ def render_live_interview(state, item, candidate) -> None:
 
     question = item.payload.get("prompt") or item.payload.get("question", "")
     qs = urlencode({"item_id": item.item_id, "question": question, "room_id": room_id})
-    # Browser must reach this URL — use LIVE_PUBLIC_BASE on cloud, not 127.0.0.1.
     st.iframe(f"{voice_settings.live_public_base}/interview?{qs}", height=480)
 
     try:
@@ -876,6 +955,35 @@ def render_live_interview(state, item, candidate) -> None:
             st.success("Interview finished — click **Grade finished interview**.")
     except Exception as exc:  # noqa: BLE001
         st.warning(f"Could not poll room status: {exc}")
+
+
+def render_live_interview(state, item, candidate) -> None:
+    """Open/voice: duplex helper when available, else in-app LiteLLM Live."""
+    if not settings.litellm_api_key.strip():
+        st.error(
+            "Set `LITELLM_API_KEY` and `LITELLM_BASE_URL` (Streamlit secrets / `.env`) "
+            f"for Live interviews via `{settings.litellm_live_preview_model}`."
+        )
+        if open_text_fallback_allowed():
+            render_open_text_fallback(
+                state,
+                item,
+                candidate,
+                reason="LiteLLM is not configured. Typed fallback is enabled.",
+            )
+        return
+
+    if live_server_ok():
+        render_iframe_live_interview(state, item, candidate)
+        return
+
+    # Streamlit Cloud / no helper: spoken Live still works in-process via LiteLLM.
+    st.caption(
+        "Live helper not at "
+        f"`{voice_settings.live_server_base}` — using **in-app spoken Live** "
+        "(Streamlit Cloud compatible)."
+    )
+    render_native_live_interview(state, item, candidate)
 
 
 def render_question(state) -> None:

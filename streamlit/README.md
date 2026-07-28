@@ -19,14 +19,15 @@ Port 8765 is only the Live interviewer helper that Streamlit embeds for open ite
 Set `LITELLM_MODEL=openai/gpt-5.6-sol`, `LITELLM_LIVE_PREVIEW_MODEL=gemini/gemini-3.1-flash-live-preview`,
 `LITELLM_SSL_VERIFY=false` (if needed) in `backend/.env`.
 
-Open items prefer a Live interview iframe. If the Live helper is unreachable (typical on
-**Streamlit Cloud**, which cannot bind a second uvicorn), the UI offers a **typed answer
-fallback** graded with the same open rubric. Set `ALLOW_TEXT_FALLBACK=true` to always show
-typed answers even when Live is up.
+Open items prefer a Live interview. On Streamlit Cloud (no second port) the UI runs
+**in-app spoken Live** via LiteLLM realtime: start → listen → `st.audio_input` → finish &
+grade. Locally, if the helper is up on `:8765`, the duplex iframe is used instead.
+Typed answers appear only when `ALLOW_TEXT_FALLBACK=true`.
 
-### Cloud Live (optional second service)
+### Cloud Live (optional separate duplex helper)
 
-`127.0.0.1:8765` only works when Streamlit and the browser share that machine. Remotely:
+`127.0.0.1:8765` only works when Streamlit and the browser share that machine. Remotely,
+in-app Live is enough. For duplex iframe Live:
 
 1. Run the Live helper on a public host:  
    `uvicorn app.main:app --host 0.0.0.0 --port 8765` (TLS via reverse proxy).
@@ -36,7 +37,8 @@ typed answers even when Live is up.
    - `LIVE_PUBLIC_BASE` — URL the **browser** uses for the `/interview` iframe  
      (must be the public `https://…` host; WebSockets use the same origin).
 
-Without those, open items stay answerable via the typed fallback.
+Ensure `LITELLM_BASE_URL` / `LITELLM_API_KEY` / `LITELLM_LIVE_PREVIEW_MODEL` are set in
+Streamlit secrets (the Live proxy must be reachable from Cloud, not `localhost`).
 
 `streamlit/requirements.txt` is **self-contained** — it carries the engine's dependencies as
 well as the UI's, because Streamlit Cloud installs exactly one requirements file: the one
