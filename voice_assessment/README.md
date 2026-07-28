@@ -1,9 +1,13 @@
-# Voice / open-ended adaptive assessment
+# Unified CAT backend (mcq + code + open/voice)
 
-Standalone CAT for open / voice items. Measurement substrate is vendored from
-`cat-engine-combined-streamlit`. Evaluation is async (LiteLLM rubric grader);
-`record_response` stays sync. **Gemini Live (`gemini-3.1-flash-live-preview`) is
-used only for the voice interviewer** — never for picking or grading.
+This branch runs a single combined CAT backend and a single canonical bank:
+
+- **Backend**: `voice_assessment/app/main.py` (FastAPI)
+- **Bank**: `latest banks and rubric/python_exam_bank_expanded.json`
+
+All modalities (`mcq`, `code`, `open`) flow through the same orchestrator loop.
+Open/voice grading remains LiteLLM-based (transcribe + rubric evaluation).
+Gemini Live is optional and only used by realtime interview/chat endpoints.
 
 ## Setup
 
@@ -20,22 +24,22 @@ cp .env.example .env   # then fill keys
 | `GEMINI_API_KEY` | Live interviewer only |
 | `LANGFUSE_*` | Optional tracing |
 
-## Streamlit tester + realtime Live
+## Run (single backend)
 
 ```bash
-# Terminal 1 — realtime mic ↔ Gemini Live
 cd voice_assessment && source .venv/bin/activate
-./scripts/run_live_server.sh    # http://127.0.0.1:8765
+./scripts/run_backend.sh        # http://127.0.0.1:8765
 
-# Terminal 2 — CAT harness
-streamlit run streamlit/main.py
+# Unified CAT web UI
+open http://127.0.0.1:8765/cat
 ```
 
-Choose **Realtime live interview** → Open realtime interview → speak continuously
-in the embedded panel → **Finish answer** → **Grade finished interview**.
+The `/cat` page creates CAT sessions via `/api/cat/*` and dynamically renders
+the widget for the current modality:
 
-Recording is optional (checkbox) and for testing only; saved under `recordings/`.
-Typed transcript and recorded Whisper modes remain as tester fallbacks.
+- MCQ radio selection
+- Code editor submission
+- Open/voice recording (multipart audio) or transcript fallback
 
 ## Tests
 
@@ -46,20 +50,15 @@ pytest -q
 
 ## Layout
 
-- `app/services/orchestrator/` — vendored CAT loop (+ open calibration / grader)
-- `app/services/voice/` — rubrics, async evaluate, sync grade, session runner
-- `app/services/voice_live/` — Gemini Live interviewer wrapper
-- `app/data/question_bank.json` — 107 open items (from `ai_ml_engineer_open_bank.json`)
-- `app/data/open_grading_rubric.json` — global grading framework
-- `app/data/voice_rubrics/` — per-item rubrics (criteria + weights from the global frame)
+- `app/main.py` — single backend entrypoint for CAT + live routes
+- `app/services/orchestrator/` — shared CAT loop for all modalities
+- `app/services/code_adaptive/` — code grading/evidence pipeline
+- `app/services/voice/` — open rubric evaluation + evidence projection
+- `app/services/voice_live/` — live interview/chat transport + LiteLLM transcription
+- `../latest banks and rubric/python_exam_bank_expanded.json` — canonical mixed bank
 
-Rebuild from source files:
+Compatibility note:
 
-```bash
-python scripts/build_open_bank.py \
-  --bank /path/to/ai_ml_engineer_open_bank.json \
-  --rubric /path/to/ai_ml_engineer_open_grading_rubric.json
-```
-
-Adaptation notes: `open.question` is copied to `open.prompt`; `cat.a` is clamped to
-`[1.8, 2.3]`; `cat.c` is set to `0.15` (open rubric floor) for the fractional update.
+- `app/data/question_bank.json` is no longer the runtime source of truth on this branch.
+- Both orchestrator bank and code question repository read from
+  `latest banks and rubric/python_exam_bank_expanded.json`.
