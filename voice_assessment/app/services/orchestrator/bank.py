@@ -24,7 +24,12 @@ from app.services.orchestrator.competency import main_competency
 
 logger = logging.getLogger(__name__)
 
-BANK_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "question_bank.json"
+# Canonical branch-wide bank (mcq + code + open), from latest banks and rubric.
+BANK_PATH = (
+    Path(__file__).resolve().parents[4]
+    / "latest banks and rubric"
+    / "python_exam_bank_expanded.json"
+)
 
 
 def _main_code_sort_key(code: str) -> tuple[int, str]:

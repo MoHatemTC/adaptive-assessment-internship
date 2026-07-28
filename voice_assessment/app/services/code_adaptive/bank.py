@@ -24,7 +24,101 @@ from app.schemas.code_adaptive import Question
 
 logger = logging.getLogger(__name__)
 
-BANK_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "code_bank.json"
+# Use the same canonical mixed-modality bank as the orchestrator.
+BANK_PATH = (
+    Path(__file__).resolve().parents[4]
+    / "latest banks and rubric"
+    / "python_exam_bank_expanded.json"
+)
+
+_DIFFICULTY_MAP = {
+    "very_easy": 0.15,
+    "easy": 0.30,
+    "medium": 0.50,
+    "hard": 0.70,
+    "very_hard": 0.85,
+}
+
+_DISCRIMINATION_MAP = {
+    "low": 0.8,
+    "moderate": 1.2,
+    "high": 1.8,
+    "very_high": 2.2,
+}
+
+
+def _as_float(v: object, *, fallback: float) -> float:
+    if isinstance(v, (int, float)):
+        return float(v)
+    if isinstance(v, str):
+        return float(v.strip()) if v.strip().replace(".", "", 1).isdigit() else fallback
+    return fallback
+
+
+def _coerce_difficulty(v: object) -> float:
+    if isinstance(v, str):
+        key = v.strip().lower()
+        if key in _DIFFICULTY_MAP:
+            return _DIFFICULTY_MAP[key]
+    return min(max(_as_float(v, fallback=0.5), 0.0), 1.0)
+
+
+def _coerce_discrimination(v: object) -> float:
+    if isinstance(v, str):
+        key = v.strip().lower()
+        if key in _DISCRIMINATION_MAP:
+            return _DISCRIMINATION_MAP[key]
+    return max(_as_float(v, fallback=1.0), 0.05)
+
+
+def _to_code_question(entry: dict) -> dict:
+    payload = entry.get("code") or {}
+    measures = entry.get("measures") or []
+    tests = []
+    for idx, t in enumerate(payload.get("tests") or []):
+        tests.append(
+            {
+                "test_id": t.get("test_id") or f"test_{idx}",
+                "input": t.get("input", []),
+                "expected": t.get("expected"),
+                "weight": float(t.get("weight", 1.0)),
+                "visible": str(t.get("visibility", "hidden")).lower() == "public",
+                "criterion_weights": t.get("criterion_weights") or {},
+                "competency_weights": t.get("competency_weights") or {},
+            }
+        )
+    rubric = []
+    for rc in payload.get("rubric_criteria") or []:
+        criterion_id = rc.get("criterion_id")
+        if not criterion_id:
+            continue
+        rubric.append(
+            {
+                "criterion_id": criterion_id,
+                "maximum_score": float(rc.get("maximum_score", rc.get("weight_pct", 1.0))),
+            }
+        )
+    return {
+        "question_id": entry.get("item_id"),
+        "title": payload.get("title", entry.get("sub_competency", entry.get("item_id", ""))),
+        "prompt": payload.get("prompt", ""),
+        "function_name": payload.get("function_name", "solve"),
+        "starter_code": payload.get("starter_code", ""),
+        "difficulty": _coerce_difficulty(payload.get("difficulty")),
+        "discrimination": _coerce_discrimination(payload.get("discrimination")),
+        "status": entry.get("status", "active"),
+        "prerequisites": payload.get("prerequisites") or [],
+        "competencies": [
+            {
+                "competency_id": m.get("variable"),
+                "weight": float(m.get("weight", 0.0)),
+            }
+            for m in measures
+            if m.get("variable")
+        ],
+        "rubric_criteria": rubric,
+        "tests": tests,
+    }
 
 
 class QuestionRepository(Protocol):
@@ -51,7 +145,11 @@ class JsonQuestionRepository:
     @lru_cache(maxsize=1)  # noqa: B019 — one repository per path, bounded by construction
     def _load(self) -> tuple[Question, ...]:
         raw = json.loads(self._path.read_text(encoding="utf-8"))
-        entries = raw["questions"] if isinstance(raw, dict) else raw
+        if isinstance(raw, dict) and "questions" in raw:
+            entries = raw["questions"]
+        else:
+            mixed = raw["items"] if isinstance(raw, dict) and "items" in raw else raw
+            entries = [_to_code_question(i) for i in mixed if i.get("modality") == "code"]
 
         questions: list[Question] = []
         rejected: list[str] = []
