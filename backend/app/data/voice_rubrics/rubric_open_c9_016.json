@@ -1,0 +1,60 @@
+{
+  "rubric_id": "rubric_open_c9_016",
+  "version": "1.0",
+  "item_id": "open_c9_016",
+  "competency": "C9",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C9.16",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Full marks: correctly names the fields needed to reconstruct a decision (inputs, retrieved context, model+prompt version, decoding params, verbatim output); correctly reasons that LLM non-determinism and provider model changes mean re-execution cannot be trusted and the stored artifact is authoritative; proposes sound integrity mechanisms (append-only/WORM, hashing/signing, isolation); and handles PII/retention correctly including the GDPR-erasure-vs-retention tension. Deduct for technically wrong claims such as 'set temperature=0 and re-run to reproduce it exactly' or storing logs in the same mutable DB as adequate tamper protection."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C9.16",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Full marks: addresses all four required sub-parts (reproducibility, integrity, human-vs-model, PII/retention) AND specifies concrete record contents including model/prompt versioning, correlation ID, and guardrail/error events. Lose marks for each required dimension missing or left vague (e.g. mentions logging but never versioning, or never separates the human decision)."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C9.16",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Full marks: justifies choices by tying them to the actual goal — defensibility to a regulator/dispute and clear accountability — e.g. explains WHY verbatim output must be stored (non-determinism), WHY the store must be immutable (tamper-evidence), and WHY the human action is logged separately (who is responsible). Lower marks for an unjustified checklist of fields with no reasoning."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C9.16",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Full marks: well-organised (clear record schema plus per-dimension discussion), uses correct vocabulary (WORM/append-only, hash-chaining, prompt/model versioning, correlation ID, pseudonymisation, human-in-the-loop) precisely, and is concise. Lose marks for disorganised, hand-wavy, or jargon-misusing writing."
+    }
+  ],
+  "expected_answer_points": [
+    "Each record must capture enough to reconstruct the decision: the actual inputs/features sent, retrieved RAG context/tool outputs, model ID+version, prompt/template version and system prompt, and decoding params (temperature/top_p/seed).",
+    "The verbatim model output (recommendation + rationale) must be persisted at decision time, plus a stable correlation/decision ID linking all events of the request.",
+    "Reproducibility: recognise that LLMs are non-deterministic and providers change/deprecate models, so you cannot rely on re-running to reproduce a past decision — the stored artifact is the source of truth (seed/temperature=0 helps but is not a guarantee).",
+    "Integrity/tamper-evidence: append-only/WORM store separate from the mutable app DB, with hash-chaining or signing and restricted, itself-audited access so alterations are detectable.",
+    "Human oversight must be recorded distinctly from the model: the recommendation shown, the adjuster's identity, accept vs override, final decision, reason, and timestamp — preserving accountability that the human is the decision-maker.",
+    "PII/data protection: minimise/redact sensitive fields, encrypt at rest, and control+log access to the audit store itself.",
+    "Retention: keep records for the regulatory window (5 years) while addressing the tension with GDPR/right-to-erasure (pseudonymisation or a documented legal-basis exemption, with explicit retention/deletion policy).",
+    "Completeness: log guardrail/policy events, blocked outputs, retries, fallbacks and errors — not only successful decisions."
+  ],
+  "common_pitfalls": [
+    "Claims the decision can be reproduced by re-running the model (optionally 'with temperature=0 and a fixed seed'), ignoring that hosted LLMs are non-deterministic and get silently updated or deprecated — so the verbatim output must be persisted rather than regenerated.",
+    "Logs only the final decision or the model's output, omitting the model version, prompt/template version, decoding params, and the retrieved RAG context — making the record neither reproducible nor explainable.",
+    "Stores the audit trail in the same mutable application database with no append-only/WORM, hashing, or access isolation, so tampering (or accidental mutation) is undetectable.",
+    "Conflates the model's recommendation with the final decision — fails to record the adjuster's identity, whether they overrode, and their reason — losing the human-accountability trail that oversight requires.",
+    "Ignores PII entirely (dumps raw claimant data unredacted/unencrypted) or, conversely, treats GDPR erasure and multi-year retention as simply compatible, missing the tension and the pseudonymisation / legal-basis resolution.",
+    "Treats the trail as a log of successful decisions only, omitting guardrail blocks, retries, fallbacks and errors — so suppressed or failed AI actions leave no evidence."
+  ],
+  "reference_answer": "The goal is that any past decision can be reconstructed and defended WITHOUT re-running the model, because LLM output is non-deterministic and providers deprecate or silently update models — so re-execution is not a reliable source of truth. Each decision must persist a self-contained, immutable record.\n\nPer-decision record should capture:\n- A stable correlation/decision ID tying every event in the request together.\n- Inputs actually used: a snapshot of the claim data/features sent to the model, plus any retrieved context (RAG chunks, tool outputs) and their source/version.\n- Model identity and config: provider, model ID and version, system prompt and prompt-template version, decoding params (temperature, top_p, seed, max_tokens).\n- The verbatim model output (recommendation + rationale) and any parsed/structured result, plus token usage.\n- Guardrail / policy events: what was checked, what fired, anything blocked, retries, fallbacks, and errors — not just the happy path.\n- Human oversight: the recommendation exactly as shown to the adjuster, the adjuster's identity, their action (accept/override), the final decision, their stated reason, and the timestamp.\n- Trusted timestamps for each step.\n\nReproducibility: because I cannot trust re-running to reproduce a past decision, I persist the actual output and full context at decision time. Pinning seed and temperature=0 improves determinism but is not guaranteed across provider updates, so the stored artifact — not re-execution — is the record of truth.\n\nIntegrity: store in an append-only / WORM store, separate from the mutable application DB, with hash-chaining or cryptographic signing so tampering is detectable, and strict, itself-audited write/read access.\n\nHuman vs model: the record must clearly separate the AI recommendation from the accountable human decision, so it is always visible who was responsible and whether the human agreed or overrode — the human is the decision-maker, the model is advisory.\n\nPII and retention: minimise and redact sensitive fields, encrypt at rest, restrict and log access. Retain for the five-year regulatory window while reconciling with GDPR erasure rights — typically via pseudonymisation or a documented legal-basis/exemption for audit records, plus explicit retention and deletion policies.\n\nThe result is a queryable-by-decision-ID trail an auditor can pull on demand, which also feeds incident response.",
+  "global_rubric": "open_grading_rubric.json"
+}

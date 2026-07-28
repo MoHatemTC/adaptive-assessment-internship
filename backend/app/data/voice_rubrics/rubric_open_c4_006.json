@@ -1,0 +1,59 @@
+{
+  "rubric_id": "rubric_open_c4_006",
+  "version": "1.0",
+  "item_id": "open_c4_006",
+  "competency": "C4",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C4.6",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Correctly describes vanilla-RNN vanishing/exploding as a product of recurrent Jacobians (diag(tanh') * W_hh^T) governed by W_hh's singular values; states the LSTM additive update c_t = f_t*c_{t-1} + i_t*g_t and correctly identifies diag(forget gate) as the cell-state gradient multiplier (constant error carousel); is accurate about what gating does and does not fix (exploding still needs clipping; saturated forget gate still vanishes) and gives a correct GRU update. No fabricated mechanisms or wrong equations."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C4.6",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Addresses all four asked parts: (a) the vanilla-RNN failure mechanism, (b) the LSTM cell-state gradient path and why long-range survives, (c) at least one unfixed failure mode (exploding and/or forget-gate saturation) with a concrete mitigation (clipping and/or forget-bias init), and (d) a GRU contrast. Full marks require none of the four parts to be missing or merely asserted."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C4.6",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Connects the math to the observed behaviour — links the product of forget gates (vs product of Jacobians) to why the LSTM learns the dependency the RNN missed — and justifies each mitigation by the mechanism rather than asserting it. Distinguishes vanishing from exploding rather than conflating them."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C4.6",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Uses precise vocabulary (Jacobian, singular value/spectral radius, forget/input/output/update gates, cell vs hidden state, constant error carousel) with correct notation, organized so a reviewer can follow the argument from cause to effect."
+    }
+  ],
+  "expected_answer_points": [
+    "Vanilla-RNN BPTT multiplies the recurrent Jacobian diag(tanh'(a_i)) * W_hh^T once per timestep, so over a long span the gradient is a product of many such matrices.",
+    "That product decays or grows geometrically per the largest singular value of W_hh scaled by tanh' (<= 1): < 1 gives vanishing gradients, > 1 gives exploding — with vanishing the typical case.",
+    "The LSTM cell state is updated additively (c_t = f_t (*) c_{t-1} + i_t (*) g_t), so the direct cell-to-cell derivative is approximately diag(f_t) — an element-wise multiply by the forget gate rather than a shared weight matrix through a nonlinearity (the constant error carousel).",
+    "When forget gates stay near 1 the product of forget gates over time stays near 1, so gradients and information survive over hundreds of steps — the reason long-range dependencies are learned.",
+    "Gating does NOT eliminate exploding gradients (paths through gate pre-activations and inputs still blow up with large weights); gradient clipping by global norm is still required.",
+    "A forget gate saturated near 0 re-introduces vanishing/forgetting, so long-range retention is learned not automatic; positive forget-gate bias initialization (~1-2) mitigates this early in training.",
+    "GRU comparison: single update gate with h_t = (1 - z_t) (*) h_{t-1} + z_t (*) h_tilde_t provides the same additive gradient highway with fewer parameters and no separate cell state, typically comparable and sometimes preferable on smaller data."
+  ],
+  "common_pitfalls": [
+    "Claims the LSTM 'solves' vanishing gradients entirely and removes the need for gradient clipping — in fact exploding gradients persist and clipping by global norm is still standard.",
+    "Attributes the improvement vaguely to 'more parameters' or 'memory' without identifying the additive cell-state path and diag(forget gate) as the actual gradient channel.",
+    "Conflates vanishing and exploding gradients, or assumes gating fixes both symmetrically.",
+    "Treats long-range retention as automatic, forgetting that a forget gate saturated near 0 makes the cell forget and re-introduces vanishing.",
+    "Gets the LSTM wrong — e.g. says the cell state is squashed by tanh/sigmoid before the recurrence, or that the hidden state h_t (rather than the cell state c_t) carries the uninterrupted gradient highway.",
+    "Describes the GRU incorrectly — e.g. claims it keeps a separate cell state, or that it has more gates than an LSTM."
+  ],
+  "reference_answer": "(a) Vanilla RNN. With h_t = tanh(W_hh h_{t-1} + W_xh x_t + b), BPTT forms the gradient of a later loss w.r.t. an earlier state as dL_t/dh_k = dL_t/dh_t * product_{i=k+1..t} (dh_i/dh_{i-1}), and each factor is dh_i/dh_{i-1} = diag(tanh'(a_i)) * W_hh^T. The gradient over an n-step span is therefore a product of n such matrices, whose magnitude is governed by the largest singular value of W_hh scaled by tanh' (which is <= 1). If that effective factor is < 1 the product shrinks geometrically -> vanishing gradient (the RNN cannot learn long-range structure); if > 1 it grows -> exploding gradient. Because tanh' <= 1, vanishing is the usual outcome.\n\n(b) LSTM. The cell state updates additively: c_t = f_t (*) c_{t-1} + i_t (*) g_t, with f_t, i_t = sigmoid(.), g_t = tanh(.), and h_t = o_t (*) tanh(c_t). Differentiating the direct cell-to-cell path gives dc_t/dc_{t-1} ≈ diag(f_t): the gradient is multiplied element-wise by the forget gate, not by a shared recurrent weight matrix passed through a squashing nonlinearity. This is the 'constant error carousel'. Over n steps the cell-state gradient scales like product of f_i; when the forget gates stay near 1 that product stays near 1, so gradients (and information) propagate hundreds of steps almost undiminished — which is exactly why the LSTM learns the long-range dependency the RNN missed.\n\n(c) What gating does NOT fix. (1) Exploding gradients still occur — the full Jacobian also includes paths through the gate pre-activations (which depend on h_{t-1}, hence on the recurrent weights) and the input path, so large weights still blow up; the standard fix is gradient clipping by global norm. (2) If the forget gates saturate near 0 the cell deliberately forgets and the gradient vanishes again — long-range retention is learned, not guaranteed. The key mitigation is initializing the forget-gate bias to a positive value (~1-2) so gates start open and signal flows early in training; also useful are orthogonal recurrent-weight init, layer/recurrent normalization, and a sensible truncated-BPTT window.\n\n(d) GRU. A GRU drops the separate cell state and merges keep/write into a single update gate: h_t = (1 - z_t) (*) h_{t-1} + z_t (*) h_tilde_t, with a reset gate gating the candidate h_tilde_t. This leaky/additive form gives the same undiminished gradient highway (the (1 - z_t) coefficient plays the forget-gate role) but with fewer gates and parameters and no distinct memory cell. In practice a GRU performs comparably to an LSTM and can train faster or generalize better on smaller datasets, while the LSTM's separate, output-gated cell can retain an edge on very long or complex sequences.",
+  "global_rubric": "open_grading_rubric.json"
+}

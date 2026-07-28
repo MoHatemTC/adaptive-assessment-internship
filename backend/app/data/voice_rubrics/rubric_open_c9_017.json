@@ -1,0 +1,59 @@
+{
+  "rubric_id": "rubric_open_c9_017",
+  "version": "1.0",
+  "item_id": "open_c9_017",
+  "competency": "C9",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C9.17",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Full marks: every mechanism cited is correct and correctly applied — pinning dated snapshots vs floating aliases, DPA / training opt-out / zero-retention / data residency, PII redaction, regression evals with judge+human review, feature-flag/canary/shadow rollout with rollback. No false claims (e.g. that the retired snapshot can be kept forever, that a newer model is a guaranteed upgrade, or that client-side deletion controls vendor retention). Deduct for each inaccurate or misapplied control."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C9.17",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Full marks: substantively covers all four required areas — (1) versioning & forced-deprecation handling, (2) pre-cutover evaluation, (3) data/contractual controls, (4) safe rollout with monitoring and rollback — plus inventory/registry and vendor lock-in/fallback. Deduct proportionally for each area missing or treated only superficially."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C9.17",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Full marks: justifies the key trade-offs — why pin instead of track latest, why re-evaluate rather than trust 'newer is better', why staged rollout over a hard cutover, and the privacy-vs-utility tension of redaction — rather than listing controls. Partial credit for some justification; little credit for an unreasoned checklist."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C9.17",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Full marks: organised, uses correct governance/LLM-ops vocabulary (model registry, DPA, ZDR/zero-retention, canary/shadow, guardrail metrics, rollback), and reads as a coherent plan a reviewer could act on. Deduct for disorganised, vague, or jargon-without-meaning writing."
+    }
+  ],
+  "expected_answer_points": [
+    "Pin explicit dated model snapshots and never rely on a floating 'latest'/default alias; the vendor's auto-migration is an uncontrolled change that must be gated, and the migration must be completed within the deprecation window since the old snapshot cannot be kept indefinitely",
+    "Maintain a model inventory/registry (model, version, provider, purpose, owner, approval, model card, audit trail) so third-party models are governed like internal ones",
+    "Run the candidate model against a versioned regression/eval suite (golden + adversarial cases, task metrics, LLM-as-judge and human review) comparing quality, latency, cost and safety/refusal behaviour — do not assume newer is better because of behavioural/prompt drift",
+    "Establish data-handling and contractual controls: a DPA, opt-out of training on your data, zero/limited data retention, data residency, and PII minimisation/redaction before sending customer data",
+    "Verify and document what data crosses the trust boundary and that retention/training terms hold for the new model/endpoint (terms can differ per model)",
+    "Operate a safe rollout: feature-flag the model choice, shadow/canary or A/B while keeping the old snapshot live, with guardrail metrics, alerting, and an instant rollback path (previous snapshot or fallback provider)",
+    "Use a provider/model abstraction and a fallback model to reduce single-vendor lock-in, and continue monitoring for drift after cutover"
+  ],
+  "common_pitfalls": [
+    "Assumes the vendor's newer default is a strict upgrade and swaps without a regression eval, ignoring behavioural drift, formatting changes, refusal-rate shifts, and prompt sensitivity",
+    "Treats the change as a routine code deploy and omits the data-privacy/contractual dimension entirely (no DPA, no training opt-out, no retention/residency check)",
+    "Leaves production pointed at a floating 'latest'/default alias — the very thing that caused the surprise auto-migration — or proposes to keep using the retired snapshot indefinitely with no migration plan inside the window",
+    "Offers only prompt tweaks or temperature changes and never addresses versioning, an inventory/registry, monitoring, or rollback",
+    "Says 'we'll test it' without a concrete eval set, guardrail metrics, or a staged canary/shadow rollout and rollback path",
+    "Believes redacting or deleting data client-side controls what the vendor retains, instead of relying on contractual zero-retention/no-training terms, and ignores single-vendor lock-in / fallback"
+  ],
+  "reference_answer": "I treat the hosted model as an external dependency under change control, not a static building block.\n\nVersioning & deprecation: I always pin explicit dated snapshots and never point production at a floating 'latest'/default alias — the auto-migration is exactly the uncontrolled change I want to prevent. I record the model, provider, version, purpose, owner, and approval in a model inventory/registry alongside a model card, so third-party models are governed like internal ones. Since a retired snapshot can't be kept forever, I plan the migration inside the 90-day window rather than being force-cut, and use a provider/model abstraction layer so the model id is a config value, reducing lock-in and letting me keep a fallback provider.\n\nValidation before cutover: newer is not automatically better — models drift in behaviour, formatting, refusal rates and prompt sensitivity. I run the candidate against a versioned regression suite: a golden set of representative and adversarial support cases scored with task metrics plus LLM-as-judge and human spot-checks, and I compare quality, latency, cost, and safety/refusal behaviour against the incumbent. Prompts and few-shot examples may need re-tuning for the new model.\n\nData & contractual controls: I confirm a signed DPA, opt out of training on our data, and enable zero-/limited-retention (enterprise) terms; I verify data residency and document exactly what data crosses the trust boundary. I minimise and redact PII (names, emails, order ids) before the call where feasible, and log that the boundary and retention posture were re-verified for the new model — vendor terms can differ by model or endpoint.\n\nSafe switch: I gate the model behind a feature flag, run shadow/canary or an A/B split so the old snapshot stays live, and define guardrail metrics (quality, latency p95, cost/req, error and escalation rates) with alerting. If guardrails breach, I roll back to the previous snapshot or fallback provider instantly. After cutover I keep monitoring for drift and re-run evals on any provider-side change.",
+  "global_rubric": "open_grading_rubric.json"
+}

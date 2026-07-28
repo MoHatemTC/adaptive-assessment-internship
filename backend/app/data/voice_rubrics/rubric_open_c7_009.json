@@ -1,0 +1,59 @@
+{
+  "rubric_id": "rubric_open_c7_009",
+  "version": "1.0",
+  "item_id": "open_c7_009",
+  "competency": "C7",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C7.9",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Full marks: accurately describes both architectures and their coordination mechanism (single agentic loop/shared tools vs supervisor-routed specialized sub-agents with handoffs/shared state) and states trade-offs that are actually true -- e.g. multi-agent adds LLM round-trips, latency, and cost rather than reducing them. Deduct for wrong claims such as multi-agent being inherently cheaper/faster, or conflating the two designs."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C7.9",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Full marks: covers both definitions, at least one real advantage AND one real cost for each side (including the tool-overload failure mode and a handoff/observability concern), and a recommendation. Deduct for covering only one architecture, listing pros without cons, or omitting the recommendation."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C7.9",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Full marks: the recommendation follows from the trade-offs and is tied to this help-desk system's growing tool count and distinct domains (HR/provisioning/security), rather than a generic preference; shows judgement about when the single agent stops being adequate."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C7.9",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Full marks: well-organized and concise, using correct vocabulary (orchestrator/supervisor, sub-agent, handoff, tool-selection, context window) so a reviewer can follow the comparison and the recommendation easily."
+    }
+  ],
+  "expected_answer_points": [
+    "Defines a single-agent system as one LLM iterating a reason/act/observe loop over a single context with a shared set of tools.",
+    "Defines a multi-agent system as an orchestrator/supervisor routing to specialized sub-agents that each have focused instructions/tools and coordinate via handoffs or shared state.",
+    "Names a genuine single-agent advantage (simplicity, single unbroken context, lower latency/cost from fewer LLM round-trips, or easier tracing/debugging).",
+    "Identifies the single-agent failure mode as scope grows: a large mixed tool set degrades tool-selection accuracy and the prompt/context becomes bloated with competing concerns.",
+    "Names a genuine multi-agent advantage (focused per-agent tools/instructions, isolated context per domain, or independent scaling/ownership).",
+    "Names a genuine multi-agent cost (coordination overhead, more LLM calls raising latency/cost, harder observability, or context loss / error propagation across handoffs).",
+    "Gives a justified recommendation for this scenario: default to the single agent and adopt multi-agent only when tool count/distinct domains justify it, decomposing along real domain boundaries."
+  ],
+  "common_pitfalls": [
+    "Treats multi-agent as simply more advanced/better and recommends it by default, ignoring the added latency, token cost, and debugging burden it introduces.",
+    "Defines the two designs only superficially ('one bot vs several bots') without the mechanisms -- supervisor/routing, per-agent focused tool sets, handoffs or shared state.",
+    "Claims multi-agent is cheaper or faster because work is 'parallelized', when specialist routing typically adds sequential LLM round-trips and token overhead.",
+    "Ignores the actual driver of the decision -- that a single agent's tool-selection accuracy and prompt clarity degrade as the tool set grows.",
+    "Overlooks handoff-specific risks such as context/state loss between agents, error propagation, and reduced observability.",
+    "Gives no recommendation, or one not justified against this scenario's growing and genuinely distinct domains."
+  ],
+  "reference_answer": "A single-agent system is one LLM running an agentic loop over a single context and a shared tool set: it reasons, calls a tool, observes the result, and repeats until done. A multi-agent system decomposes the work across specialized agents -- typically an orchestrator/supervisor that routes each request to a sub-agent (an HR agent, a provisioning agent, a security-triage agent), each with its own focused instructions, tool set, and context, coordinating via handoffs or shared state.\n\nSingle-agent strengths: simpler to build and reason about; one context so nothing is lost between steps; lower latency and token cost because there are fewer model round-trips; and far easier to trace and debug. Its weakness is that it degrades as scope grows -- a large, mixed tool set hurts tool-selection accuracy, the system prompt bloats with competing instructions, and unrelated domains contend for the same context window.\n\nMulti-agent strengths: each agent stays small and focused, so tool selection and instructions are cleaner; distinct domains are isolated; teams can build, scale, and own subsystems independently. Costs: coordination overhead, more LLM calls (higher latency and spend), harder observability, and the risk of context loss or error propagation across handoffs.\n\nRecommendation: keep the single agent for now, perhaps grouping tools, and introduce a supervisor + sub-agents only once the growing tool count and genuinely distinct domains make one prompt unreliable. Don't add orchestration complexity before the single agent measurably breaks; when it does, decompose along the real domain boundaries (HR, provisioning, security).",
+  "global_rubric": "open_grading_rubric.json"
+}

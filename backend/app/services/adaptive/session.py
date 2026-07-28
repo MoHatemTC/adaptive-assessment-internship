@@ -174,7 +174,9 @@ class AdaptiveSession:
             percentile=ability_percentile(state.theta_hat),
             level=level,
             band=band,
-            certainty_pct=convergence.certainty_pct(state.standard_error),
+            certainty_pct=convergence.certainty_pct(
+                state.standard_error, observations=state.observations
+            ),
             questions_answered=state.questions_answered,
             stop_reason=stop.reason,
             converged=stop.converged,

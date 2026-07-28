@@ -1,0 +1,60 @@
+{
+  "rubric_id": "rubric_open_c1_002",
+  "version": "1.0",
+  "item_id": "open_c1_002",
+  "competency": "C1",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C1.2",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Full marks: hash-map counting, the exact-top-K heap subtlety and a valid fix, the O(distinct keys) memory limit, a correct sublinear sketch (CMS or Space-Saving) with the RIGHT error direction (overestimate/never underestimate), and correct big-O time and memory are all stated accurately. Deduct for wrong error direction, a heap scheme that is still incorrect, confusing CMS with a Bloom filter or HyperLogLog, or claiming O(1) memory while storing per-key state for the whole key space."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C1.2",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Full marks: all four asks (a–d) plus the closing trade-off are addressed. Lose points for each part skipped — e.g. no complexity analysis, no discussion of why the naive heap fails, or no mention of the memory/exactness trade-off or recency/time-decay."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C1.2",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Full marks: choices are justified by mechanism (why the heap drifts out of sync, why CMS collisions inflate rather than deflate counts, why fixed memory forces approximation) rather than asserted. Partial credit for correct structures named with thin or hand-wavy justification."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C1.2",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Full marks: organized to the parts asked, uses precise vocabulary (top-K, heavy hitters, addressable heap, Count-Min Sketch, ε/δ error, big-O) correctly, and clearly separates the exact from the approximate design. Deduct for a disorganized brain-dump or loose, ambiguous terminology."
+    }
+  ],
+  "expected_answer_points": [
+    "Maintains running frequencies in a hash map with O(1) average per-event update, refreshing top-K incrementally rather than re-scanning the stream each second.",
+    "Explains why a bare size-K min-heap is wrong for exact top-K: it cannot update the priority of an in-heap key or reconsider an evicted key that later exceeds the heap min, and per-increment pushes leave stale duplicates.",
+    "Gives a correct fix: an addressable/indexed heap with in-place sift, or lazy deletion validated against authoritative counts, or partial selection (nlargest/quickselect) at query time.",
+    "Recognizes exact per-key counting is O(distinct keys) memory and infeasible for an unbounded vocabulary under a fixed budget.",
+    "Proposes an approximate structure with sublinear/fixed memory — Count-Min Sketch or Space-Saving/Misra-Gries — paired with a heap of candidate heavy hitters.",
+    "States the error direction correctly: CMS (or Space-Saving) only overestimates / never underestimates, so it yields false positives but never misses a true heavy hitter.",
+    "Gives concrete costs: per-event O(1)/O(d) update plus O(log K) heap op, and memory O(K + w·d) independent of key cardinality.",
+    "Names the trade-off (exactness vs bounded, cardinality-independent memory) and/or notes recency handling via time decay / sliding window for a 'current' ranking."
+  ],
+  "common_pitfalls": [
+    "Presents a plain size-K min-heap as an exact top-K solution, missing that a key outside the heap can grow past the heap min unnoticed, or that per-increment pushes leave stale duplicate entries that desync the heap from true counts.",
+    "Proposes 'just sort all the counts every second' without acknowledging the O(distinct keys) memory blow-up on an unbounded vocabulary under a fixed budget — the core constraint of the scenario.",
+    "Gets the sketch error direction backwards: claims Count-Min Sketch can undercount, or treats its estimate as exact, and therefore wrongly concludes it might miss a true heavy hitter (it only ever overestimates).",
+    "Reaches for the wrong streaming primitive — a Bloom filter (membership) or HyperLogLog (distinct-count cardinality) — instead of a frequency sketch, showing confusion about what each structure estimates.",
+    "Ignores recency: reports lifetime top-K with no time decay, so a long-past traffic spike dominates the 'current' dashboard forever.",
+    "Omits complexity and memory analysis entirely, or asserts O(1) memory while the described design still holds per-key heap entries proportional to the full key space."
+  ],
+  "reference_answer": "(a) Keep running frequencies in a hash map count[key], giving O(1) average update per event, so I never re-scan the stream; a dashboard refresh just reads the current top-10. To avoid re-sorting the whole map each second I maintain a summary structure of the current leaders alongside the counts.\n\n(b) A bare size-K min-heap keyed on count is not enough for EXACT top-K. It has no way to raise the priority of a key already inside it when its count grows, and no way to reconsider a key it evicted whose count later climbs above the heap minimum — any key can rise into the top-K, so a K-slot structure alone can't be exact. Pushing (count,key) on every increment instead leaves stale duplicate entries, so the heap min drifts out of sync with the true counts. Fixes: an addressable/indexed heap (key→position map) that sifts in place on each change; or lazy deletion where popped entries are validated against the authoritative count and discarded if stale; or simplest, keep exact counts and run a partial selection (heapq.nlargest / quickselect, O(n) or O(n log K)) at query time.\n\n(c) Exact counting costs O(distinct keys) memory, which is unbounded for an open vocabulary under a fixed budget. I switch to a sublinear sketch: a Count-Min Sketch (d hashes × w counters, estimate = min of the d cells). It NEVER underestimates — collisions only inflate counts — so it yields false positives at the top-K boundary but never drops a true heavy hitter. Pair it with a size-K min-heap of candidate heavy hitters: update the sketch, and if a key's estimate beats the heap min, insert/update it. Space-Saving / Misra-Gries is an equally good, deterministic alternative that directly maintains the monitored set with a bounded overcount.\n\n(d) Per event: O(1) map update or O(d) sketch update plus O(log K) heap op; a refresh is O(K log K). Memory: O(K + w·d), independent of key cardinality.\n\nTrade-off: I give up exactness — accepting bounded overestimation and possible false positives at the boundary — in exchange for fixed, cardinality-independent memory and near-constant per-event cost. For a truly \"current\" ranking I'd also add time decay (a sliding window, exponentially decayed counts, or windowed sketches) so old spikes fade.",
+  "global_rubric": "open_grading_rubric.json"
+}

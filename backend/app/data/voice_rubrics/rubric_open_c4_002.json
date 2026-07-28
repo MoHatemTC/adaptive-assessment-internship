@@ -1,0 +1,59 @@
+{
+  "rubric_id": "rubric_open_c4_002",
+  "version": "1.0",
+  "item_id": "open_c4_002",
+  "competency": "C4",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C4.2",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Full marks require correctly stating the numerical mechanism (exp overflow -> inf/inf NaN and/or prob underflow -> log(0) = -inf, ideally noting the -inf * 0 = NaN one-hot term), the fp16-vs-fp32 range difference, that CrossEntropyLoss consumes logits and fuses log_softmax + NLL via the log-sum-exp/subtract-max trick, and the correct multi-label pairing (sigmoid + BCEWithLogitsLoss on logits). Deduct for any false claim such as CrossEntropyLoss expecting probabilities, applying softmax before it, or recommending softmax for multi-label."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C4.2",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Full marks address all four parts: (a) the NaN mechanism and fp16-vs-fp32 framing, (b) the CrossEntropyLoss refactor with its stabilizing mechanism, (c) the clamp critique including its gradient effect, and (d) the multi-label activation + loss pairing. Partial credit if a part is missing or only asserted without content (e.g. names log-sum-exp but omits the clamp gradient issue or the multi-label reasoning)."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C4.2",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Full marks explain WHY rather than merely naming things: why subtracting the max removes overflow/underflow, why clamp is inferior (survives overflow NaNs, corrupts gradients on confidently-wrong examples), and why softmax is structurally wrong for independent labels (forces a sum-to-1 competition). Lower marks for correct-but-unjustified assertions."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C4.2",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Full marks for a clear, well-organized debugging narrative that keeps the four parts distinct and uses the vocabulary precisely (logits, log_softmax, NLL, log-sum-exp, BCEWithLogitsLoss, multi-hot), with any code or the log-sum-exp identity used accurately to sharpen the explanation."
+    }
+  ],
+  "expected_answer_points": [
+    "Identifies the mechanism: manual softmax materializes probabilities, so exp(logits) overflows to inf (softmax -> inf/inf = NaN) and/or small probabilities underflow to 0, making log(0) = -inf and the loss inf/NaN",
+    "Explains fp16 vs fp32 as a dynamic-range issue: fp16 overflows exp near logit ~11 (max ~65504) versus ~88 in fp32, so fp16 exposes a defect that is latent (masked) in fp32 rather than being fp16-specific",
+    "Correct fix is to drop the explicit softmax and pass raw logits to nn.CrossEntropyLoss, which fuses log_softmax + NLL",
+    "Explains the stabilizing mechanism concretely: log-sum-exp / subtract-the-max makes exp arguments <= 0 (no overflow) and computes the target log-prob analytically as x_target - logsumexp(x), never taking log of an underflowed zero",
+    "Critiques clamp: it removes log(0) in the forward pass but does not fix the inf/inf NaN from overflow, distorts gradients (1/eps blow-up plus zeroed gradient in the clamped region on the most informative examples), and only patches a symptom with an arbitrary eps",
+    "Multi-label head needs per-class sigmoid + BCEWithLogitsLoss on raw logits (multi-hot target, optionally pos_weight) because labels are independent/non-mutually-exclusive",
+    "Explains why softmax + CrossEntropyLoss is structurally wrong for multi-label: softmax forces outputs to sum to 1 / compete, so it cannot represent multiple simultaneous tags; and the general principle that fused losses expect logits, not pre-activated probabilities"
+  ],
+  "common_pitfalls": [
+    "Blaming fp16 itself (\"you cannot train classifiers in half precision\") instead of the unstable manual softmax-then-log formulation, and missing that fp32 only masks the identical defect",
+    "Endorsing clamp(min=1e-8) as a genuine fix, not recognizing it leaves the inf/inf overflow NaNs untouched and corrupts gradients (huge 1/eps derivative plus a zero-gradient saturated region)",
+    "Claiming CrossEntropyLoss \"expects probabilities\" or applying softmax before passing to it, i.e. double-activating, showing a misunderstanding that CE takes raw logits and internally does log_softmax",
+    "For the multi-label head, proposing softmax + CrossEntropyLoss or \"just threshold the softmax outputs,\" ignoring that tags are not mutually exclusive; or naming BCE but applying a separate sigmoid then BCE on probabilities and thereby reintroducing the instability BCEWithLogitsLoss avoids",
+    "Hand-waving \"use the log-sum-exp trick\" without describing the subtract-the-max mechanism or stating what CrossEntropyLoss actually fuses",
+    "Diagnosing the NaN as an unrelated cause (learning rate too high, exploding gradients, bad data) rather than the softmax/log numerical instability"
+  ],
+  "reference_answer": "(a) The manual path materializes probabilities: softmax computes exp(logits) and normalizes, then we take log of the result. This is numerically fragile in two ways. First, exp overflows: in fp16 (max ~65504) exp overflows once a logit exceeds ln(65504) ~ 11, giving inf, so softmax becomes inf/inf = NaN. Second, the probability of a class whose logit sits far below the max underflows to 0 (fp16 subnormal floor ~6e-8), so log(0) = -inf; for the target class that makes the loss +inf, and for a non-target class the one-hot product yields (-inf) * 0 = NaN. fp32 does not blow up in ~50 steps only because its range is far wider (exp overflows near logit ~88, subnormal floor ~1e-45). The formulation is unstable at both precisions; fp16's narrow dynamic range merely exposes the latent bug.\n\n(b) Delete the softmax from forward() and pass raw logits: `loss = nn.CrossEntropyLoss()(logits, targets)` with class-index targets. CrossEntropyLoss fuses log_softmax + negative log-likelihood. log_softmax is computed with the log-sum-exp trick: log_softmax(x)_i = x_i - (m + log(sum_j exp(x_j - m))), where m = max_j x_j. Subtracting the max makes every exp argument <= 0, so exp is in (0,1] (no overflow), and the sum is >= 1 so its log is never log(0). The target log-probability is obtained analytically as x_target - logsumexp(x), so we never log an underflowed zero. Same loss value, stable at any precision (and PyTorch autocast additionally keeps softmax/cross-entropy in fp32).\n\n(c) clamp(min=1e-8) removes log(0) = -inf, so the forward value is finite. But it does nothing about the inf/inf = NaN produced inside softmax by overflow, so NaNs from that path survive. Worse, it corrupts gradients: at the eps floor the local derivative of log is 1/eps (enormous), and the clamp passes zero gradient through the saturated region - precisely on the confidently-wrong examples that carry the largest, most useful learning signal. It is a symptom patch with an arbitrary hyperparameter that still materializes unstable probabilities; log_softmax needs no eps and is exact.\n\n(d) Tags are not mutually exclusive, so each class is an independent Bernoulli, not one shared categorical. Use a per-logit sigmoid with binary cross-entropy: `nn.BCEWithLogitsLoss` on raw logits against a multi-hot target (with pos_weight for imbalance), which fuses sigmoid + BCE using the same log-sum-exp-style stabilization. Softmax + CrossEntropyLoss is structurally wrong because softmax forces the outputs to sum to 1 and compete, so it cannot represent an image with two tags simultaneously present - it hard-codes exactly-one-class. General principle: with these fused losses the model must emit logits, never pre-activated probabilities; applying softmax/sigmoid yourself either double-activates or reintroduces the instability.",
+  "global_rubric": "open_grading_rubric.json"
+}

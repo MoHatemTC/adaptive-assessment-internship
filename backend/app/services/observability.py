@@ -18,6 +18,10 @@ WHAT GETS TRACED
                   module patches the OpenAI resource classes in place, so clients built
                   before configure() ran are instrumented too — which matters, because the
                   engine caches its client.
+    gemini-live   Live interviews over LiteLLM `/v1/realtime` (raw WebSocket). The OpenAI
+                  drop-in cannot see those frames, so `start_live` / `end_live` open and
+                  close a manual generation with duration, turn counts and outcome — never
+                  audio bytes or full transcripts.
     traces        one per orchestrated operation, carrying the assessment's session id, so
                   a session's picks and gradings group together rather than arriving as
                   loose calls nobody can attribute.
@@ -27,7 +31,8 @@ WHAT IS DELIBERATELY NOT SENT
 Candidate source code. A submission is a person's work, it goes to an external service
 under this configuration, and nothing in tracing needs it — the score, the test counts and
 the item id answer every question monitoring exists to answer. `redact_code` is applied at
-the one call site that has any.
+the one call site that has any. Live speech is the same class of data: only counts and
+status, via `redact_speech`.
 
 VERSION TOLERANCE
 
@@ -42,7 +47,9 @@ at once.
 from __future__ import annotations
 
 import logging
-from contextlib import contextmanager
+import time
+from contextlib import contextmanager, nullcontext
+from dataclasses import dataclass
 from typing import Any, Iterator
 
 from app.config.settings import settings
@@ -53,6 +60,15 @@ logger = logging.getLogger(__name__)
 # off, which is a normal outcome and must not be retried on every call.
 _state: bool | None = None
 _propagate: Any = None
+
+
+@dataclass
+class LiveHandle:
+    """Opaque handle for a Live WebSocket generation. May wrap nothing when tracing is off."""
+
+    observation: Any = None
+    started_at: float = 0.0
+    ended: bool = False
 
 
 def configure() -> bool:
@@ -139,6 +155,151 @@ def redact_code(source: str) -> str:
     """What may be said about a submission without sending it anywhere."""
     lines = source.splitlines()
     return f"<{len(lines)} lines, {len(source)} characters — source not sent>"
+
+
+def redact_speech(text: str) -> dict[str, int]:
+    """Counts only — Live transcripts are spoken answers, not monitoring payload."""
+    cleaned = (text or "").strip()
+    return {
+        "chars": len(cleaned),
+        "words": len(cleaned.split()) if cleaned else 0,
+    }
+
+
+# Paid Gemini 3.1 Flash Live audio rates (USD / minute). Used when the realtime WS
+# path has no token usage to report — Langfuse still gets a cost estimate.
+_LIVE_AUDIO_INPUT_USD_PER_MIN = 0.005
+_LIVE_AUDIO_OUTPUT_USD_PER_MIN = 0.018
+# Rough audio-token density so the registered TOKENS model prices can also apply.
+_LIVE_AUDIO_TOKENS_PER_SEC = 25.0
+
+
+def _live_usage_and_cost(
+    *, speech_seconds: float, duration_ms: int
+) -> tuple[dict[str, int], dict[str, float]]:
+    duration_s = max(duration_ms / 1000.0, 0.0)
+    input_s = max(float(speech_seconds), 0.0)
+    output_s = max(duration_s - input_s, 0.0)
+    usage = {
+        "input": int(round(input_s * _LIVE_AUDIO_TOKENS_PER_SEC)),
+        "output": int(round(output_s * _LIVE_AUDIO_TOKENS_PER_SEC)),
+    }
+    cost = {
+        "input": round((input_s / 60.0) * _LIVE_AUDIO_INPUT_USD_PER_MIN, 6),
+        "output": round((output_s / 60.0) * _LIVE_AUDIO_OUTPUT_USD_PER_MIN, 6),
+    }
+    cost["total"] = round(cost["input"] + cost["output"], 6)
+    return usage, cost
+
+
+def start_live(
+    *,
+    name: str = "gemini-live",
+    model: str,
+    room_id: str,
+    item_id: str,
+    assessment_session_id: str | None = None,
+    mode: str = "interview",
+    question: str = "",
+    **metadata: Any,
+) -> LiveHandle:
+    """Open a manual generation for a LiteLLM realtime Live session. Never raises."""
+    handle = LiveHandle(started_at=time.time())
+    if not configure():
+        return handle
+    try:
+        from langfuse import get_client
+
+        meta = _clean(
+            {
+                "room_id": room_id,
+                "item_id": item_id,
+                "mode": mode,
+                "via": "litellm_realtime",
+                "modality": "open",
+                "question_chars": len(question or ""),
+                **metadata,
+            }
+        )
+        session_ctx = (
+            _propagate(session_id=assessment_session_id)
+            if assessment_session_id and _propagate is not None
+            else nullcontext()
+        )
+        with session_ctx:
+            handle.observation = get_client().start_observation(
+                name=name,
+                as_type="generation",
+                model=model,
+                input={
+                    "item_id": item_id,
+                    "mode": mode,
+                    "question_chars": len(question or ""),
+                },
+                metadata=meta,
+            )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("langfuse live start failed (%s) — continuing untraced", exc)
+        handle.observation = None
+    return handle
+
+
+def end_live(
+    handle: LiveHandle | None,
+    *,
+    outcome_status: str = "",
+    reason_code: str = "",
+    error: str = "",
+    candidate_turns: int = 0,
+    interviewer_turns: int = 0,
+    speech_seconds: float = 0.0,
+    transcript: str = "",
+    level: str | None = None,
+) -> None:
+    """Close a Live generation. Safe on None / already-ended / tracing-off handles."""
+    if handle is None or handle.ended:
+        return
+    handle.ended = True
+    observation = handle.observation
+    if observation is None:
+        return
+    try:
+        duration_ms = int(max(time.time() - handle.started_at, 0.0) * 1000)
+        status = (error and "ERROR") or level or "DEFAULT"
+        usage, cost = _live_usage_and_cost(
+            speech_seconds=speech_seconds, duration_ms=duration_ms
+        )
+        observation.update(
+            output={
+                "outcome_status": outcome_status or ("error" if error else "unknown"),
+                "reason_code": reason_code or None,
+                "candidate_turns": candidate_turns,
+                "interviewer_turns": interviewer_turns,
+                "speech_seconds": round(float(speech_seconds), 2),
+                "duration_ms": duration_ms,
+                "transcript": redact_speech(transcript),
+                "error": (error[:300] if error else None),
+                "pricing": {
+                    "basis": "gemini-3.1-flash-live audio USD/min",
+                    "input_usd_per_min": _LIVE_AUDIO_INPUT_USD_PER_MIN,
+                    "output_usd_per_min": _LIVE_AUDIO_OUTPUT_USD_PER_MIN,
+                },
+            },
+            metadata=_clean(
+                {
+                    "duration_ms": duration_ms,
+                    "outcome_status": outcome_status or None,
+                    "reason_code": reason_code or None,
+                }
+            ),
+            usage_details=usage,
+            cost_details=cost,
+            level=status if status in {"DEBUG", "DEFAULT", "WARNING", "ERROR"} else "DEFAULT",
+            status_message=(error[:300] if error else None),
+        )
+        observation.end()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("langfuse live end failed (%s)", exc)
 
 
 def flush() -> None:

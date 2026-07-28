@@ -28,6 +28,8 @@ from openai import (
 )
 
 from app.config.settings import settings
+from app.services import observability
+from app.services.litellm_http import sync_http
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +44,12 @@ class LLMUnavailable(RuntimeError):
     """No usable reply. Every caller must have a deterministic path."""
 
 
+def _model_requires_default_temperature(model_name: str) -> bool:
+    """Some routed models reject explicit temperature overrides."""
+    normalized = (model_name or "").strip().lower()
+    return normalized.endswith("gpt-5.6-sol")
+
+
 def get_client() -> OpenAI:
     global _client
     if _client is None:
@@ -53,6 +61,7 @@ def get_client() -> OpenAI:
             # retry on top, budgets multiply and a failing step stalls for minutes with
             # nothing in the log until it finally gives up.
             max_retries=0,
+            http_client=sync_http(),
         )
     return _client
 
@@ -104,12 +113,25 @@ def extract_json(raw: str, require: tuple[str, ...] = ()) -> dict[str, Any]:
     raise LLMUnavailable(f"no JSON object in reply: {raw[:160]!r}")
 
 
-def _one_call(system: str, user: str, temperature: float, require: tuple[str, ...]) -> dict:
+def _one_call(
+    system: str,
+    user: str,
+    temperature: float,
+    require: tuple[str, ...],
+    trace: dict[str, Any] | None = None,
+) -> dict:
+    request_kwargs: dict[str, Any] = {
+        "model": settings.litellm_model,
+        "response_format": {"type": "json_object"},
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+    }
+    # gpt-5.6-sol (via the current LiteLLM route) rejects temperature=0 and requires
+    # provider default behavior; omit the field completely in that case.
+    if not _model_requires_default_temperature(settings.litellm_model):
+        request_kwargs["temperature"] = temperature
     response = get_client().chat.completions.create(
-        model=settings.litellm_model,
-        temperature=temperature,
-        response_format={"type": "json_object"},
-        messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+        **request_kwargs,
+        **(trace or observability.generation(name="code_grader", stage="grade")),
     )
     message = response.choices[0].message
     body = (message.content or "").strip()
@@ -132,13 +154,18 @@ def _one_call(system: str, user: str, temperature: float, require: tuple[str, ..
 
 
 def chat_json(
-    system: str, user: str, *, temperature: float = 0.0, require: tuple[str, ...] = ()
+    system: str,
+    user: str,
+    *,
+    temperature: float = 0.0,
+    require: tuple[str, ...] = (),
+    trace: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Call the proxy and return a parsed object, retrying what is worth retrying."""
     last: Exception | None = None
     for attempt in range(REPLY_ATTEMPTS):
         try:
-            return _one_call(system, user, temperature, require)
+            return _one_call(system, user, temperature, require, trace)
         except LLMUnavailable as exc:
             last = exc
             if attempt < REPLY_ATTEMPTS - 1:
@@ -147,6 +174,10 @@ def chat_json(
             last = exc
             if attempt < TRANSPORT_ATTEMPTS - 1:
                 logger.warning("llm transport failure (%s), retrying", type(exc).__name__)
+                reset_client()
+                from app.services.litellm_http import reset_http
+
+                reset_http()
                 continue
             # Never presented as a model verdict: the gateway did not answer, so nothing
             # was learned about the model.

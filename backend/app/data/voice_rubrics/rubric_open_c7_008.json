@@ -1,0 +1,58 @@
+{
+  "rubric_id": "rubric_open_c7_008",
+  "version": "1.0",
+  "item_id": "open_c7_008",
+  "competency": "C7",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C7.8",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Correctly distinguishes outcome/task-completion eval from trajectory eval; accurately describes a trajectory as spans in a run tree and the required instrumentation; states valid reference-based metrics (ordered/set match, tool-call precision/recall) and reference-free approaches (LLM-as-judge, quantitative path metrics) without inventing behavior; correctly explains why exact-sequence match over-penalizes valid paths and gets precision vs recall right. No false claims (e.g., that a correct final answer implies a sound path, or that a single gold trajectory is mandatory)."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C7.8",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Covers all four asks: (a) why outcome eval is insufficient with system-specific failure modes, (b) the trajectory/span definition plus instrumentation, (c) reference-based versus reference-free methods with when-to-use, and (d) the multiple-valid-paths difficulty with mitigation. Full marks also acknowledge stochasticity (repeated runs) and/or LLM-judge validation."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C7.8",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Ties each recommendation to the scenario's evidence — links redundant/duplicate calls to the cost/latency doubling and auto-cancelled bookings, and justifies metric choices by exactly what they catch (precision for redundant calls, recall for missing steps) — and reasons about trade-offs (strictness vs false negatives, reference cost vs judge reliability)."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C7.8",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Reads as an organized design-review response using precise vocabulary (spans, run tree, trajectory, precision/recall, LLM-as-judge, pass^k); cleanly separates outcome vs trajectory and reference-based vs reference-free; and frames the answer legibly enough to settle the PM's question."
+    }
+  ],
+  "expected_answer_points": [
+    "Explains that task-completion/outcome eval judges only the final artifact and is blind to process, naming concrete failure modes in THIS system: duplicate bookings (real side effects hidden by a corrected final answer), redundant re-planning loops driving the cost/latency regression, unsafe tool ordering, and lucky-but-wrong reasoning.",
+    "Defines a trajectory as the ordered sequence of steps (LLM decision + tool call + arguments + observation) ending in the final answer, and maps it to spans in a run/trace tree (OpenTelemetry GenAI conventions or LangSmith/LangGraph), stating what must be instrumented: tool name, arguments, observation, status, tokens/latency.",
+    "Describes reference-based trajectory metrics against a gold trajectory — exact/ordered match, order-agnostic set match, and precision/recall/F1 over tool calls — and correctly explains what precision (redundant/extra calls) versus recall (missing needed calls) each catch.",
+    "Describes reference-free evaluation: LLM-as-judge scoring the whole trace against a rubric (efficiency, ordering, valid arguments, error recovery), plus reference-free quantitative path metrics (step/tool-call/duplicate counts, token cost, latency), and says reference-free is needed when gold trajectories can't be enumerated.",
+    "Confronts the multiple-valid-trajectories problem: exact-sequence match yields false negatives on valid alternatives; mitigates via set-based/precision-recall metrics, enforcing order only where a genuine dependency exists, equivalence classes of acceptable paths, or rubric-based judging of properties.",
+    "Addresses agent stochasticity (multiple runs / pass^k to separate flakiness from systematic errors) and/or validating the LLM judge against human labels (agreement/kappa) and guarding against its biases before relying on it."
+  ],
+  "common_pitfalls": [
+    "Agrees with the PM that correct final answers make process evaluation unnecessary — treats task-completion as sufficient and never explains the invisible cost, latency, and side-effect defects the outcome metric cannot see.",
+    "Conflates trajectory evaluation with simply re-running final-answer eval, or proposes only one quantitative signal (e.g., step count) while never checking whether the individual steps/tool calls were actually correct.",
+    "Insists on exact ordered tool-sequence match against a single gold trajectory and never confronts that several sequences are valid, yielding an evaluator that fails good runs (false negatives).",
+    "Describes an LLM-as-judge over the trace but treats its scores as ground truth — no mention of validating it against human labels or its length/self-preference biases.",
+    "Ignores instrumentation: assumes trajectories can be judged without capturing tool arguments and observations in spans, or never mentions tracing (OTel/LangSmith) as a prerequisite at all.",
+    "Muddles precision versus recall over tool calls (or reverses them), e.g., claiming recall catches redundant duplicate calls when precision is what flags extras."
+  ],
+  "reference_answer": "Task-completion (outcome) evaluation checks only the terminal artifact — does the final itinerary match the gold answer. It is necessary but blind to process, and in this system it cannot see the very defects we're seeing. (1) Redundant/duplicate tool calls: the duplicate bookings that later auto-cancel still fired a real side effect, yet the corrected final answer passes outcome eval. (2) Wasteful re-planning loops that inflate token cost and p95 latency — exactly the 2x regression that persists while accuracy holds. (3) Wrong-but-lucky reasoning that will break on nearby inputs. (4) Unsafe ordering, e.g. book_reservation before get_user_calendar confirms availability. So the PM is right that answers are correct and wrong that nothing else matters: outcome eval answers 'did it arrive?'; trajectory eval answers 'did it arrive the right way?', and cost, latency, and side effects live entirely in the path.\n\nA trajectory is the ordered execution path: the sequence of steps, each being (LLM decision → tool call with name and arguments → observation/result), ending in the final answer. In tracing terms it is the ordered set of spans in the run tree — one span per LLM call and per tool invocation — with inputs, arguments, outputs, tokens, latency, and error status attached (OpenTelemetry GenAI semantic conventions, or LangSmith/LangGraph run trees). To evaluate it you must instrument spans to capture tool name, serialized arguments, observation, and status for every step; without arguments and observations you can only count steps, not judge them. Offline datasets are best curated from these production traces.\n\nReference-based methods (need a gold/reference trajectory) compare the observed tool sequence to an expected one, from strict to lenient: exact ordered match (trajectory_strict_match); in-order subsequence match; order-agnostic set match; and precision/recall/F1 over the set of tool calls — recall catches missing/needed steps, precision catches redundant/duplicate ones (this is what flags the duplicate-booking regression). Single-step evaluation (given a prefix, was the next action correct) localizes errors.\n\nReference-free methods apply when enumerating gold trajectories is infeasible (most open-ended tasks): an LLM-as-judge reads the whole trace and scores it against a rubric — efficiency (no redundant/duplicate calls), logical ordering, well-formed arguments, error recovery, no hallucinated tools. Also compute cheap quantitative path metrics needing no reference: step count, tool-call count, duplicate-call count, token cost, latency — these directly track the observed regression.\n\nThe central difficulty is that many sequences are valid: you may check weather before or after flights, and flight/hotel order is free. Exact-sequence match produces false negatives on valid alternatives. Mitigations: prefer order-agnostic set match or tool-call precision/recall over strict ordering; enforce ordering only where a real dependency exists (confirm-before-book); define equivalence classes of acceptable trajectories rather than one gold path; or use the rubric-based judge, which scores properties instead of string-matching a path. Finally, because agents are stochastic, run each example multiple times (pass^k) to separate flakiness from systematic path errors, and validate the LLM judge against human labels (e.g. Cohen's kappa) before trusting it, watching for length and self-preference bias.",
+  "global_rubric": "open_grading_rubric.json"
+}

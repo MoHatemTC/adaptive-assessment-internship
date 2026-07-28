@@ -1,150 +1,72 @@
 {
-  "rubric_id": "tight",
-  "name": "Tight — binary points with anchored examples and negative patterns",
-  "description": "Each criterion decomposes into binary points that either fire or do not, each with its own evaluation criteria, quality checks and a worked example. Adds mistake_patterns: negative points that fire when a defect IS PRESENT, which is what lets a rubric express 'this specific failure' rather than only 'this went well'.\n\nThe design question this rubric exists to answer: does specificity substitute for anchoring? If approach C becomes safe under this rubric, rubric hardening is a real lever. If it does not, the anchoring has to live in code.",
+  "name": "code-rubric-tight",
+  "version": "1.0",
+  "description": "Strict, checklist-style code-diagnosis rubric emphasizing objective grounding.",
   "criteria": [
     {
       "criterion_id": "functional_correctness",
-      "description": "Does the solution produce correct results?",
-      "evaluation_criteria": "Determined by execution, not by reading. The passed-test ratio IS the score for this criterion. Your task is to explain what the failure pattern indicates about the learner, never to revise the ratio.",
-      "quality_checks": [
-        "Score equals the passed-test ratio",
-        "No claim of correctness for any behaviour a test disproved"
-      ],
+      "description": "Measured correctness of required behavior.",
+      "evaluation_criteria": "Score must align with objective test outcomes and compile/runtime evidence.",
       "binary_points": [
-        {
-          "id": 101,
-          "description": "All tests pass",
-          "evaluation_criteria": "Every test in the suite passed.",
-          "examples": ["10/10 tests pass — score 1.0"]
-        },
-        {
-          "id": 102,
-          "description": "Main path correct, specific cases fail",
-          "evaluation_criteria": "The general algorithm works; failures cluster in identifiable cases rather than being scattered.",
-          "examples": ["7/10 pass, all 3 failures are boundary tests — main path is sound"]
-        },
-        {
-          "id": 103,
-          "description": "No working implementation",
-          "evaluation_criteria": "The code does not compile, or fails nearly every test, or returns constants.",
-          "examples": ["Syntax error — score 0", "Returns a literal ignoring its arguments — score 0"]
-        }
+        "Compiles/runs without fatal errors.",
+        "Passes core path tests.",
+        "Avoids known failing required scenarios.",
+        "Output format/contract matches prompt."
+      ],
+      "quality_checks": [
+        "Never assign high score when many tests fail.",
+        "Always cite concrete evidence for success/failure."
       ]
     },
     {
       "criterion_id": "edge_case_handling",
-      "description": "Does the solution handle boundary and degenerate inputs?",
-      "evaluation_criteria": "Scored on the boundary tests alone, plus whether the source contains a guard. A solution passing every main-path test and failing every boundary test scores near zero here, however high its overall ratio.",
-      "quality_checks": [
-        "Boundary tests scored separately from the suite",
-        "Presence or absence of an explicit guard is stated",
-        "Overall passed ratio is NOT used as a proxy"
-      ],
+      "description": "Reliability on boundaries and uncommon inputs.",
+      "evaluation_criteria": "Edge handling must be evidenced by tests or explicit defensive logic.",
       "binary_points": [
-        {
-          "id": 201,
-          "description": "Boundary inputs handled and guarded",
-          "evaluation_criteria": "Boundary tests pass and the source shows a deliberate guard or an approach that is naturally total.",
-          "examples": ["Empty input returns 0; source begins with a length check"]
-        },
-        {
-          "id": 202,
-          "description": "Boundary inputs fail",
-          "evaluation_criteria": "One or more boundary tests fail, typically by indexing or dividing without checking first.",
-          "examples": ["tc_empty raises IndexError — the first element is read unguarded"]
-        }
+        "Handles empty/null/zero-like inputs when relevant.",
+        "Handles minimum-size inputs.",
+        "Handles duplicate/extreme values where applicable.",
+        "No crashes on malformed but in-scope inputs."
+      ],
+      "quality_checks": [
+        "Penalize absent guards when edge requirements are explicit.",
+        "Do not infer edge robustness without evidence."
       ]
     },
     {
       "criterion_id": "algorithm_choice",
-      "description": "Is the approach appropriate for the problem?",
-      "evaluation_criteria": "Name the strategy the code implements, then judge it against what the problem requires. Passing tests does not establish soundness — a hard-coded solution passes visible tests and implements no algorithm at all.",
-      "quality_checks": [
-        "The implemented strategy is named explicitly",
-        "Hard-coding is checked for before any credit is given",
-        "Cost is assessed where the problem makes it relevant"
-      ],
+      "description": "Suitability and efficiency of chosen approach.",
+      "evaluation_criteria": "Use complexity and structural evidence to judge algorithm fit.",
       "binary_points": [
-        {
-          "id": 301,
-          "description": "Appropriate strategy at appropriate cost",
-          "evaluation_criteria": "The approach fits the problem and does not do materially more work than needed.",
-          "examples": ["Single linear pass with a dictionary where a nested scan would be quadratic"]
-        },
-        {
-          "id": 302,
-          "description": "Works but at unnecessary cost",
-          "evaluation_criteria": "The result is correct but the approach is materially more expensive than an obvious alternative.",
-          "examples": ["Nested loops where one pass and a set would do"]
-        },
-        {
-          "id": 303,
-          "description": "No algorithm demonstrated",
-          "evaluation_criteria": "The code returns constants, or implements something that cannot generalise beyond the visible cases.",
-          "examples": ["Returns 6 for any input because the first visible test expects 6"]
-        }
+        "Approach is logically valid for the problem class.",
+        "Complexity is reasonable for expected input scale.",
+        "Uses suitable data structures.",
+        "Avoids anti-patterns that dominate runtime."
+      ],
+      "quality_checks": [
+        "Differentiate correctness bugs from inefficiency concerns.",
+        "Use specific code/test evidence for complexity claims."
       ]
     },
     {
       "criterion_id": "code_quality",
-      "description": "Is the code readable and well structured?",
-      "evaluation_criteria": "Assessed from structure and naming only. Correctness belongs to the other criteria; a wrong solution can be well written and a right one badly written.",
-      "quality_checks": [
-        "Judged independently of whether tests passed",
-        "Complexity, function length and argument mutation are considered"
-      ],
+      "description": "Maintainability and contract safety.",
+      "evaluation_criteria": "Readability, structure, and interface behavior should be judged from observable code.",
       "binary_points": [
-        {
-          "id": 401,
-          "description": "Clear and conventional",
-          "evaluation_criteria": "Names convey intent, control flow is flat, nothing surprising.",
-          "examples": ["Short function, meaningful names, no nesting beyond one level"]
-        },
-        {
-          "id": 402,
-          "description": "Hard to follow or surprising",
-          "evaluation_criteria": "High branching, very long body, or side effects on caller-owned data.",
-          "examples": ["Mutates the list it was passed, so the caller's data changes"]
-        }
+        "Function signature/return contract is respected.",
+        "Control flow is understandable.",
+        "Naming and decomposition aid readability.",
+        "Avoids unexpected side effects (e.g., mutating input)."
+      ],
+      "quality_checks": [
+        "Prioritize contract violations over style preferences.",
+        "Use concise, evidence-backed rationale only."
       ]
     }
   ],
   "mistake_patterns": [
-    {
-      "id": 501,
-      "description": "Missing guard for empty or degenerate input",
-      "misconception_code": "MISSING_EMPTY_INPUT_GUARD",
-      "evaluation_criteria": "Fires when the solution assumes non-empty or well-formed input and fails on the degenerate case.",
-      "examples": ["Reads element 0 without checking that the sequence is non-empty"]
-    },
-    {
-      "id": 502,
-      "description": "Boundary off by one",
-      "misconception_code": "OFF_BY_ONE_BOUNDARY",
-      "evaluation_criteria": "Fires when a loop or slice bound is one position wrong, so the first or last element is dropped or over-read.",
-      "examples": ["range(1, n) where range(n) was needed — the first element is skipped"]
-    },
-    {
-      "id": 503,
-      "description": "Output hard-coded to the visible cases",
-      "misconception_code": "HARDCODED_OUTPUT",
-      "evaluation_criteria": "Fires when returns are literals matching the public tests and the arguments are not used.",
-      "examples": ["Returns the exact values the public tests expect and None otherwise"]
-    },
-    {
-      "id": 504,
-      "description": "Wrong strategy for the problem",
-      "misconception_code": "WRONG_DATA_STRUCTURE",
-      "evaluation_criteria": "Fires when the chosen approach cannot solve the stated problem, however it is implemented.",
-      "examples": ["Sorts and takes the middle where the running maximum was required"]
-    },
-    {
-      "id": 505,
-      "description": "Does not parse",
-      "misconception_code": "SYNTAX_ERROR",
-      "evaluation_criteria": "Fires when the submission is not valid source. Diagnose the structure that was attempted; do not claim the competency is absent.",
-      "examples": ["Missing colon on the function definition"]
-    }
+    "Hallucinated evidence or nonexistent test references.",
+    "Score inflation inconsistent with measured failures.",
+    "Non-actionable rationale not tied to objective signals."
   ]
 }

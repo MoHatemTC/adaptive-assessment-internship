@@ -1,0 +1,60 @@
+{
+  "rubric_id": "rubric_open_c6_005",
+  "version": "1.0",
+  "item_id": "open_c6_005",
+  "competency": "C6",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C6.5",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Full marks: correctly attributes the macro-F1 gap to majority-label bias (output distribution tracks in-prompt label frequencies) and the reordering effect to demonstration-order/position bias, and describes kNN retrieval, label balancing, and diversity accurately. Deduct for wrong mechanisms (e.g. calling order sensitivity mere noise), inventing behaviours, or claims that only reduce — not explain — the symptoms."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C6.5",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Full marks: covers the selection mechanism, BOTH problems with their mechanisms, similarity-vs-diversity, a leakage guard, trade-offs (latency/cost/infra/k), and a per-class validation plan. Partial credit scales with how many of these are present; a design that fixes only one of the two problems or omits validation loses points."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C6.5",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Full marks: each design choice is justified by the mechanism it targets (why balancing lifts macro-F1, why interleaving/calibration counters position bias, why diversity matters, why leakage inflates eval) and trade-offs are reasoned rather than listed. Partial credit for correct choices with thin justification."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C6.5",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Full marks: clearly organized around the three asked parts, uses precise vocabulary (kNN example selection, majority-label bias, recency/primacy, MMR, macro-F1, calibration) correctly, and is easy for a reviewer to follow. Deduct for disorganized, vague, or jargon-misusing answers."
+    }
+  ],
+  "expected_answer_points": [
+    "Proposes dynamic, query-conditioned retrieval of demonstrations — embed the incoming ticket and pull nearest neighbours from the 5,000-item pool via the vector index (kNN / semantic similarity) instead of a fixed set.",
+    "Diagnoses the low-macro-F1 symptom as majority-label bias: the model mirrors the label distribution in the prompt, so demonstrations skewed toward high-volume intents suppress long-tail predictions and per-class recall.",
+    "Fixes that by enforcing label balance / stratified selection (representing all or long-tail intents, e.g. per-class retrieval or per-class caps), optionally with calibration of label priors — not just top-k similarity.",
+    "Diagnoses the reordering symptom as demonstration-order sensitivity (recency/primacy position bias), worsened by grouping examples by class, and controls it by interleaving/standardizing order and/or calibration.",
+    "Adds a similarity-vs-diversity consideration: pure top-k can retrieve near-duplicate demonstrations that waste context, so use MMR or clustering for coverage.",
+    "Includes a leakage/contamination guard: exclude the query and near-duplicates from retrieval and keep an eval set out of the demonstration pool so measured gains are not inflated.",
+    "Names the trade-offs: per-request embedding + ANN latency/cost, index precompute and maintenance, reduced determinism/caching, and bounded k due to context budget and diminishing returns.",
+    "Specifies validation by macro-F1 / per-class recall (not accuracy alone) on a held-out set, confusion-matrix inspection, and ablations over selection strategy and k."
+  ],
+  "common_pitfalls": [
+    "Proposes only ‘retrieve the top-k most similar examples’ and stops — which actually reinforces the majority-class problem, since the nearest-neighbour set is dominated by high-volume intents; misses the need for label balancing.",
+    "Treats the reordering effect as random noise or a flaky bug to ignore, rather than as known demonstration-order/position bias to be controlled by interleaving labels, standardizing order, or calibration.",
+    "Answers with ‘just fine-tune the model’ or ‘just add more examples / raise k’, ignoring that the failures are about demonstration composition and prompt structure and that context budget and diminishing returns bound k.",
+    "Omits the leakage guard — retrieves from a pool that still contains the evaluation items or the query itself, so the measured improvement is inflated and does not generalize.",
+    "Confuses the metrics: fails to recognize that high accuracy with low macro-F1 signals neglected long-tail classes, and so misdiagnoses the underlying problem.",
+    "Ignores diversity — assumes nearest neighbours are always ideal and fills the prompt with near-duplicate tickets, wasting the context budget without adding decision-boundary coverage."
+  ],
+  "reference_answer": "Replace the static prompt with query-conditioned (dynamic) demonstration retrieval — but do not stop at plain top-k similarity.\n\n(a) Selection mechanism. Precompute embeddings for all ~5,000 labeled tickets and put them in the vector index. At request time, embed the incoming ticket and retrieve its nearest neighbours (kNN in embedding space, the Liu et al. ‘good in-context examples’ approach): demonstrations near the query sit close to the relevant decision boundary and outperform fixed hand-picked ones. Layer two constraints on top of raw similarity: (i) label balance — build a stratified set so every intent, including long-tail ones, is represented (e.g. retrieve top neighbours per class, or cap per-class counts) instead of letting the neighbourhood be swamped by high-volume intents; (ii) diversity — apply MMR or cluster the candidates so the prompt is not filled with near-duplicate tickets. Keep k modest (context budget) and use one fixed template/verbalizer, identical across demonstrations and the query.\n\n(b) Why this fixes the two problems.\n- Low macro-F1 / majority over-prediction: LLMs show majority-label bias — the predicted-label distribution mirrors the label frequencies present in the prompt. Fixed or similarity-only examples over-represent the three high-volume intents, so the tail is rarely emitted. A balanced/stratified demonstration set (optionally plus contextual calibration of the label priors) restores tail representation and lifts per-class recall, which is exactly what macro-F1 rewards.\n- Order sensitivity: in-context learning is sensitive to demonstration order (recency and primacy effects), and grouping examples by class amplifies positional priming. I interleave labels and standardize (or randomize with calibration) the ordering rather than leaving a fixed, class-grouped sequence; calibration further dampens the positional/prior bias.\n\n(c) Trade-offs and validation. Costs: an embedding call plus ANN lookup per request (latency), embedding precomputation and index maintenance, and reduced determinism/cacheability. Extra shots give diminishing returns and consume context, so k is bounded. Guard against leakage: exclude the query itself and near-duplicates from retrieval, and keep a held-out evaluation set entirely out of the demonstration pool so measured gains are real. Validate on that held-out set using macro-F1 and per-class recall (not just accuracy), inspect the confusion matrix, and ablate similarity-only vs balanced vs balanced+diverse and different k. Monitor per-class metrics in production, not a single aggregate.",
+  "global_rubric": "open_grading_rubric.json"
+}

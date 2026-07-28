@@ -1,0 +1,59 @@
+{
+  "rubric_id": "rubric_open_c6_010",
+  "version": "1.0",
+  "item_id": "open_c6_010",
+  "competency": "C6",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C6.10",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Correctly identifies structure-blind fixed-size splitting as the root cause of both failures and recommends valid, real techniques (heading/structure-aware recursive splitting, atomic table handling with repeated headers, token-based sizing against the embedding limit). No false claims -- e.g. does not assert that adding overlap alone reconstructs a split table, that a larger fixed character window inherently respects structure, or that character count equals token count."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C6.10",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Explicitly addresses BOTH failure modes (procedure fragmentation and header/row separation), plus token-aware sizing, context/provenance preservation (overlap, parent-document retriever, or metadata), and includes both the trade-off and a tuning approach. Missing any of these dimensions costs points."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C6.10",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Explains WHY each proposed change fixes the specific observed symptom and articulates a coherent, defensible trade-off (recall/context completeness vs embedding precision and context-budget cost) with a sensible empirical tuning strategy, rather than merely listing techniques."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C6.10",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Well-organized and concrete, using RAG and document-processing vocabulary precisely (structure-aware/recursive splitting, tokens vs characters, overlap, parent-document retrieval, metadata, recall@k) rather than vague generalities."
+    }
+  ],
+  "expected_answer_points": [
+    "Diagnoses the root cause: fixed character-length splitting cuts at structure-blind offsets, fragmenting numbered procedures and separating table header rows from their value rows.",
+    "Proposes structure-/heading-aware splitting (e.g. MarkdownHeaderTextSplitter or HTMLHeaderTextSplitter, then RecursiveCharacterTextSplitter with structural separators) so section/procedure boundaries are respected and whole procedures stay intact -- fixing failure (a).",
+    "Handles tables specially -- keep each table as an atomic chunk and/or repeat the header row with each row-group so values stay bound to their column names -- fixing failure (b).",
+    "Measures chunk length in tokens (using the embedding model's tokenizer) against the 512-token embedding limit to avoid silent truncation, sub-splitting oversized sections on structural boundaries.",
+    "Preserves surrounding context and provenance via chunk metadata (source, heading path, chunk type) and/or overlap or a parent-document / small-to-big retriever.",
+    "States the central trade-off: larger structure-preserving chunks improve context completeness/recall but dilute embedding specificity and consume more generation context budget (cost/latency, fewer distinct hits).",
+    "Specifies an empirical tuning loop against a labelled retrieval/answer eval set (e.g. recall@k, answer correctness) instead of hard-coding one chunk size."
+  ],
+  "common_pitfalls": [
+    "Just says 'increase the chunk size to ~1000 tokens' without making splitting structure-aware -- a bigger fixed window still cuts a long procedure or table at an arbitrary boundary.",
+    "Claims more overlap alone fixes the table problem; overlap does not reliably reunite a header row with a distant value row and wastes tokens.",
+    "Prescribes semantic (embedding-similarity) chunking as a silver bullet while ignoring that it still needs explicit table handling and adds embedding cost, and without tying it to the two stated symptoms.",
+    "Ignores the character-vs-token mismatch and the 512-token embedding limit, so oversized chunks get silently truncated at embed time.",
+    "Names no concrete trade-off, or asserts an incorrect one (e.g. 'larger chunks always improve retrieval') instead of the recall-vs-precision / context-budget tension.",
+    "Treats chunk size as a fixed magic number with no evaluation or tuning loop against a labelled retrieval/answer eval set."
+  ],
+  "reference_answer": "Both failures share one root cause: fixed 500-character chunking splits at arbitrary offsets that ignore the document's structure, so semantic units (a numbered procedure, a table) get cut in half.\n\nRedesign:\n\n1) Replace the naive character splitter with structure-aware splitting. For Markdown/Confluence, first split on the heading hierarchy (e.g. LangChain's MarkdownHeaderTextSplitter / HTMLHeaderTextSplitter), then within a section use a RecursiveCharacterTextSplitter whose separator list prefers paragraph and list-item boundaries. This keeps a whole 'how do I do X' procedure -- steps 1-6 -- inside one chunk, or at least splits only between logical steps, fixing (a).\n\n2) Treat tables as atomic. Detect tables during parsing and emit each table (with its caption/section heading and header row) as a single chunk; if a table is too large, split by row-groups but repeat the header row with each group so a value is never divorced from its column name. This fixes (b).\n\n3) Measure length in tokens, not characters, using the embedding model's tokenizer (e.g. tiktoken), and size chunks comfortably under the 512-token limit so nothing is silently truncated at embed time. Over-sized sections are sub-split on structural boundaries.\n\n4) Attach metadata to every chunk -- source doc, full heading path, chunk type (prose/table/code) -- for provenance and filtering, and add modest overlap or a parent-document / small-to-big retriever so a matched chunk carries surrounding context.\n\nTrade-off: structure-preserving chunks are larger and more variable in size. That dilutes embedding specificity (a big section embeds to an averaged vector, hurting precision) and consumes more generation context budget per retrieved chunk (fewer distinct hits, higher cost/latency). Tune target chunk size and overlap empirically against a labelled retrieval eval set -- tracking recall@k and end-answer correctness -- rather than guessing a single magic number.",
+  "global_rubric": "open_grading_rubric.json"
+}

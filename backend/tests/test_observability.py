@@ -118,6 +118,49 @@ def test_submitted_source_is_never_put_in_a_trace():
     assert "2 lines" in redacted
 
 
+def test_live_speech_is_never_put_in_a_trace():
+    text = "I would use a dict for O(1) lookup and explain aliasing carefully."
+    redacted = observability.redact_speech(text)
+    assert set(redacted) == {"chars", "words"}
+    assert redacted["chars"] == len(text)
+    assert redacted["words"] == len(text.split())
+    assert text not in str(redacted)
+
+
+def test_live_start_end_are_noops_when_tracing_is_off(monkeypatch):
+    monkeypatch.setattr(settings, "langfuse_public_key", "", raising=False)
+    handle = observability.start_live(
+        model="gemini/x",
+        room_id="r1",
+        item_id="open_1",
+        assessment_session_id="asmt_1",
+        question="secret question text",
+    )
+    assert handle.observation is None
+    observability.end_live(
+        handle,
+        outcome_status="complete",
+        transcript="secret answer text",
+        candidate_turns=2,
+    )
+    assert handle.ended is True
+
+
+def test_live_end_tolerates_broken_observation(monkeypatch):
+    monkeypatch.setattr(observability, "_state", True)
+
+    class _Boom:
+        def update(self, **kwargs):
+            raise RuntimeError("collector down")
+
+        def end(self):
+            raise RuntimeError("collector down")
+
+    handle = observability.LiveHandle(observation=_Boom(), started_at=0.0)
+    observability.end_live(handle, outcome_status="error", error="boom")
+    assert handle.ended is True
+
+
 def test_unset_attributes_are_dropped(monkeypatch):
     """A trace should show what was known, not a wall of nulls."""
     monkeypatch.setattr(observability, "_state", True)

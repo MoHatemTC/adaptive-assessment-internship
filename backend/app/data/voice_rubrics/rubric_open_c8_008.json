@@ -1,0 +1,59 @@
+{
+  "rubric_id": "rubric_open_c8_008",
+  "version": "1.0",
+  "item_id": "open_c8_008",
+  "competency": "C8",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C8.8",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Correctly attributes each symptom to the right mechanism: memorization from duplication (not merely generic 'overfitting'), PII and licensing as distinct governance gaps, benchmark contamination inflating the gate while narrow-data forgetting lowers real capability, and format/system-prompt failure from mixed chat templates plus prompt-token loss. The prescribed controls (near-dup dedup, decontamination, PII redaction, response-only loss masking, provenance/lineage) are technically sound and correctly matched to their causes. Deduct for wrong mechanisms (e.g. calling the inflated benchmark a genuine gain) or misapplied tools."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C8.8",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Addresses all three symptoms with both a root cause and a concrete fix, splits symptom 1 into its two sub-failures (memorization vs PII/licensing), covers both the contamination and the capability-regression halves of symptom 2, and includes the pipeline-level governance gate. Partial credit for a missing symptom, a missing sub-failure, or omission of the process/governance layer."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C8.8",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Explains WHY each control works — why duplication and epochs drive memorization, why a benchmark that may sit in training data cannot gate release, why response-only loss masking improves instruction/system-prompt following — and reasons explicitly about train/eval separation and the contamination-versus-capability distinction, rather than listing tools without justification."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C8.8",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Well-organized per-symptom structure with precise, correctly-used vocabulary (MinHash/LSH, decontamination, loss masking, provenance/lineage, data card, PEFT/LoRA) such that a reviewer could act on the recommendations directly. Deduct for vague hand-waving or misused terms."
+    }
+  ],
+  "expected_answer_points": [
+    "Attributes symptom 1's verbatim output to exact/near-duplicate examples driving memorization (which scales with duplication count and epochs) and prescribes exact dedup plus near-dup detection (MinHash+LSH or SimHash) across all sources jointly and limiting epochs.",
+    "Identifies the leaked email/phone as a governance gap (unscrubbed production logs, missing lawful basis/consent) and prescribes automated PII detection+redaction (NER/regex, e.g. Presidio) plus consent/retention review.",
+    "Flags the competitor copy as a provenance/licensing failure and prescribes per-example source/license tracking and filtering of copyrighted or disallowed third-party content.",
+    "Diagnoses symptom 2's inflated benchmark as train/eval contamination (leak via the purchased set or the synthetic teacher) and prescribes n-gram/substring + embedding decontamination against every held-out eval and a private eval that never enters any data source.",
+    "Explains the real capability drop as narrow-distribution catastrophic forgetting / alignment tax and prescribes diversity/coverage, replay or mixing of general data, fewer epochs / lower LR / PEFT to limit drift.",
+    "Attributes symptom 3 to heterogeneous chat templates plus loss computed over prompt/system tokens (instead of response-only masking) and missing/inconsistent system messages; prescribes canonical template normalization, response-only loss masking, and varied system-conditioned examples.",
+    "Establishes a pipeline-level governance QA gate (dedup, decontamination, PII scan, license/provenance and format validation, gating report) with per-example lineage, dataset versioning, data card, audit trail, and separated eval-set custody."
+  ],
+  "common_pitfalls": [
+    "Reads the +12 benchmark gain as real improvement and treats the model as good, missing that contamination inflated the gated metric while genuine capability actually regressed.",
+    "Fixes symptom 3 only at inference (e.g. 'add a stronger system prompt' or prompt engineering) instead of the training-data root causes — template normalization, response-only loss masking, and system-conditioned examples.",
+    "Conflates exact deduplication with near-duplicate detection, relying on string equality and leaving semantically near-identical copies that still drive memorization.",
+    "Addresses only PII redaction and ignores the separate licensing/provenance problem of the purchased dataset and competitor copy (or vice versa), treating one governance control as covering both.",
+    "Blames model size or hyperparameters and proposes 'more data' or a bigger model, rather than the data-quality and governance root causes.",
+    "Proposes reducing epochs to stop memorization as a standalone fix without dedup, decontamination, PII scanning, or a pre-training governance gate — a partial mitigation presented as complete."
+  ],
+  "reference_answer": "Symptom 1 (verbatim regurgitation + leaked PII): two distinct failures. The verbatim copy is memorization driven by duplicate and near-duplicate examples — the purchased set and production logs almost certainly contain repeated boilerplate, and memorization scales with a sequence's duplication count and with training epochs. Fixes: exact dedup (hash of normalized text) plus near-dup detection (MinHash+LSH or SimHash) run across all three sources jointly, cap per-cluster copies, and avoid many-epoch training on a small set. The leaked email/phone is a governance failure: production transcripts were never PII-scrubbed and may lack a lawful basis/consent for training use. Fixes: automated PII detection+redaction (regex + NER, e.g. Presidio/DLP) as a mandatory pre-train step, plus a consent/retention review of the logs. The competitor's marketing copy is a provenance/licensing problem — you don't know the rights on the purchased data or that it embedded copyrighted third-party text; track per-example source and license and filter disallowed content.\n\nSymptom 2 (benchmark up 12, capability down): classic train/eval contamination plus capability regression. The gated benchmark (or near-duplicates of it) leaked into the training data — via the purchased set, or via the synthetic teacher, which may itself have seen the benchmark — inflating the score. Meanwhile real capability dropped because a narrow, low-diversity SFT distribution caused catastrophic forgetting / an alignment tax. Fixes: decontaminate — n-gram/substring overlap (e.g. 13-gram) plus embedding near-match between the entire training set and every held-out eval, remove hits, and keep a private held-out eval that provably never enters any data source. Never gate release on a public benchmark whose items could be in training. Preserve general ability with diversity/coverage targets, replay/mixing of broad instruction data, fewer epochs, lower LR, or PEFT/LoRA to limit parameter drift; measure on novel, diverse tasks, not just the leaked metric.\n\nSymptom 3 (inconsistent format + ignores system prompt): the three sources use different chat templates/role markers, and loss was likely computed over prompt/system tokens rather than masked to response tokens only, so the model learned to model prompts instead of following them. Training examples probably also had missing or inconsistent system messages, so the model never learned to condition on them. Fixes: normalize every example to one canonical chat template with explicit roles; apply response-only loss masking; include varied, representative system prompts whose target responses genuinely depend on them; and validate each example's structure and length, dropping malformed or truncated records.\n\nPipeline-level governance: institute a mandatory pre-training QA gate that, for every dataset version, runs exact+near dedup, decontamination against all eval sets, PII/secret scanning, license/provenance validation, and format/schema validation, and emits a report that blocks the run on threshold breaches. Track per-example lineage (source, license, consent status, timestamp), version datasets (e.g. DVC) for reproducibility, publish a data card/datasheet, keep an audit trail and access controls, and hold eval-set custody entirely separate from training. This turns 'looked strong internally' into a defensible, repeatable release gate and aligns with data-governance obligations (e.g. EU AI Act Art. 10 for high-risk systems).",
+  "global_rubric": "open_grading_rubric.json"
+}

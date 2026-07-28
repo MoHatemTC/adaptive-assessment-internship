@@ -1,0 +1,171 @@
+{
+  "name": "aiml-engineer-open-ended-grading-rubric",
+  "version": "1.0",
+  "description": "Rubric for silent LLM grading of open-ended (constructed-response) answers in the AI/ML Engineer adaptive assessment (CAT). Adapted from the Masar open-ended grading rubric, but bound to this bank's item fields and to IRT/CAT scoring.",
+  "applies_to": {
+    "bank_file": "ai_ml_engineer_open_bank.json",
+    "modality": "open",
+    "item_count": 107,
+    "schema_version": 2,
+    "competencies": [
+      "C1",
+      "C2",
+      "C3",
+      "C4",
+      "C5",
+      "C6",
+      "C7",
+      "C8",
+      "C9",
+      "C10"
+    ],
+    "note": "Every item carries open.question, open.answer_format, open.reference_answer, open.expected_answer_points, open.rubric_criteria, open.common_pitfalls, plus cat{a,b,c} and open.difficulty."
+  },
+  "sources": [
+    "compteniices/ai_ml_engineer_open_bank.json",
+    "compteniices/taxonomy_for_review.md",
+    "scratch: gen_open.js (item generator)",
+    "scratch: merge_open.py (validator + CAT band assignment)"
+  ],
+  "scoring_frame": {
+    "primary_scale": {
+      "name": "raw",
+      "min": 0,
+      "max": 20
+    },
+    "derived_scales": {
+      "normalized_5": {
+        "min": 0,
+        "max": 5,
+        "formula": "raw / 4.0"
+      },
+      "unit_interval": {
+        "min": 0.0,
+        "max": 1.0,
+        "formula": "raw / 20.0",
+        "use": "graded-response score fed to the CAT engine"
+      }
+    },
+    "criteria": [
+      {
+        "criterion_id": "technical_accuracy",
+        "max": 8,
+        "weight_pct": 40
+      },
+      {
+        "criterion_id": "completeness",
+        "max": 5,
+        "weight_pct": 25
+      },
+      {
+        "criterion_id": "reasoning_and_justification",
+        "max": 4,
+        "weight_pct": 20
+      },
+      {
+        "criterion_id": "clarity_and_communication",
+        "max": 3,
+        "weight_pct": 15
+      }
+    ],
+    "primary_skill_rule": "The primary skill is the item's measures[0].variable (its sub-competency, e.g. C6.11). Grade the answer only against that competency; do not reward tangential knowledge from other competencies. Record the primary sub-competency and its parent competency on the result.",
+    "grader_settings": {
+      "temperature": 0.1,
+      "response_format": "json_object",
+      "model_guidance": "Use a strong reasoning model; grade silently — never reveal the reference answer or scores to the candidate."
+    },
+    "output_schema": {
+      "criterion_scores": {
+        "technical_accuracy": 0,
+        "completeness": 0,
+        "reasoning_and_justification": 0,
+        "clarity_and_communication": 0
+      },
+      "raw_score": 0,
+      "normalized_score": 0.0,
+      "unit_score": 0.0,
+      "primary_competency": "C0",
+      "primary_sub_competency": "C0.0",
+      "points_covered": [],
+      "points_missed": [],
+      "pitfalls_triggered": [],
+      "verdict": "knows | partial | gap",
+      "rationale": "2-4 sentence justification grounded in the criteria and the expected answer points"
+    }
+  },
+  "rubric_resolution_order": [
+    "item.open.rubric_criteria[].descriptor  (primary: the per-item, question-specific standard for each of the four criteria)",
+    "item.open.expected_answer_points        (the discrete ideas a strong answer must contain; drives the completeness score)",
+    "item.open.reference_answer              (the gold-standard model answer; the accuracy yardstick)",
+    "item.open.common_pitfalls              (negative signals; presence caps technical_accuracy)"
+  ],
+  "grading_procedure": [
+    "1. Read item.open.question and item.open.answer_format so the answer is judged against what was actually asked and the expected form.",
+    "2. Match the candidate answer against item.open.expected_answer_points; record which points are covered and which are missed.",
+    "3. Match against item.open.common_pitfalls; record any pitfall the answer commits.",
+    "4. Score each of the four criteria on its own max using the item's per-criterion descriptor (rubric_resolution_order step 1), the covered/missed points, and the reference_answer as the accuracy yardstick.",
+    "5. raw_score = sum of the four criterion scores (0-20). Derive normalized_score = raw/4 and unit_score = raw/20.",
+    "6. Assign the verdict from verdict_thresholds using normalized_score.",
+    "7. Emit output_schema. Keep the rationale brief and evidence-based; never expose the reference answer to the candidate."
+  ],
+  "criterion_definitions": {
+    "technical_accuracy": {
+      "max": 8,
+      "full": "Every technical claim is correct and matches the reference answer's substance; correctly handles the core mechanism the question targets.",
+      "partial": "Mostly correct with a minor error or imprecision that does not change the conclusion.",
+      "zero": "A central claim is wrong, or the answer misidentifies the mechanism.",
+      "hard_cap": "Each distinct common_pitfall the answer commits caps technical_accuracy at no more than 5, and two or more caps it at no more than 3."
+    },
+    "completeness": {
+      "max": 5,
+      "rule": "Score = round(5 * covered_points / total_expected_points), where points are item.open.expected_answer_points. Every required part of a multi-part question must be attempted for full marks."
+    },
+    "reasoning_and_justification": {
+      "max": 4,
+      "full": "Conclusions are argued from mechanism/trade-offs, not asserted; choices are justified against the alternatives the question raises.",
+      "zero": "Only conclusions or recipes with no supporting reasoning."
+    },
+    "clarity_and_communication": {
+      "max": 3,
+      "full": "Well organised, precise terminology, directly answers the ask; a reviewer could act on it.",
+      "zero": "Disorganised or vague enough to obscure whether the candidate understands."
+    }
+  },
+  "pitfall_handling": {
+    "source": "item.open.common_pitfalls",
+    "effect": "Pitfalls are the constructed-response analogue of MCQ distractors. Committing one is direct evidence of a misconception: record it in pitfalls_triggered and apply the technical_accuracy hard_cap. A pitfall about a non-central detail may be noted without capping if the grader judges it peripheral to the question's target."
+  },
+  "answer_channel_handling": {
+    "text": "Default. Grade the written answer directly with the frame above.",
+    "voice_or_video_transcript": "If an answer is captured as speech, transcribe first and grade the transcript with the identical rubric — spoken delivery is NOT judged here (mirrors Masar video.content_score using the voice rubric). Only introduce a separate delivery score if the platform explicitly collects one; it is out of scope for this text-first bank.",
+    "note": "All 107 items in this bank are text constructed-response; answer_channel is an extensibility hook, not a per-item property."
+  },
+  "cat_integration": {
+    "model": "Items are pre-calibrated with cat{a,b,c}; open items use c = 0.0 (no guessing on constructed response), so the effective model is 2PL.",
+    "response_scoring": "Feed unit_score (raw/20, in [0,1]) to the ability (theta) update as a graded/partial-credit response — open-ended items yield partial credit and should not be forced to 0/1 where the estimator supports polytomous scoring.",
+    "dichotomous_fallback": "If the CAT engine expects a binary correct/incorrect (3PL/2PL dichotomous), dichotomize at unit_score >= 0.60 = correct, else incorrect, then apply the item's a/b with c = 0.0. The 0.60 threshold aligns with the 'knows' band boundary below.",
+    "difficulty_note": "Item difficulty is already encoded in cat.b and open.difficulty; do NOT re-scale scores by difficulty during grading — the IRT model accounts for difficulty when updating theta.",
+    "exposure": "Grade one item at a time; the CAT engine selects the next item by information at the current theta. This rubric governs only the per-item score."
+  },
+  "verdict_thresholds": {
+    "knows": {
+      "min_normalized_score": 3.5,
+      "min_unit_score": 0.7
+    },
+    "partial": {
+      "min_normalized_score": 2.0,
+      "min_unit_score": 0.4
+    },
+    "gap": {
+      "max_normalized_score": 1.99,
+      "max_unit_score": 0.399
+    }
+  },
+  "guardrails": {
+    "no_length_bias": "Longer answers are not better. Reward substance that matches expected_answer_points, not verbosity.",
+    "penalise_fabrication": "Confident but incorrect specifics (invented numbers, non-existent APIs, wrong mechanisms) are scored as errors under technical_accuracy, never as completeness.",
+    "answer_the_actual_ask": "An answer that is correct about an adjacent topic but does not address the question's specific ask cannot exceed partial.",
+    "reference_is_a_yardstick_not_a_key": "The candidate need not match the reference answer's wording or every point; a materially correct, well-argued alternative that covers the expected points scores full marks.",
+    "silent_grading": "Never surface the reference answer, expected points, pitfalls, or scores to the candidate during the assessment."
+  }
+}

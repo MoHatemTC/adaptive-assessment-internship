@@ -1,0 +1,60 @@
+{
+  "rubric_id": "rubric_open_c7_004",
+  "version": "1.0",
+  "item_id": "open_c7_004",
+  "competency": "C7",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C7.4",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Accurately describes how deterministic (graph/state-machine, control flow in code, LLM at nodes) and autonomous (self-planning tool-calling loop) workflows actually behave - reproducibility, testability, error accumulation, cost/latency - and correctly frames the payments/refund call as an irreversible side effect. No incorrect claims such as equating 'deterministic' with temperature=0, or asserting an autonomous agent guarantees correct eligibility decisions."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C7.4",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Covers all required facets: trade-offs of both approaches, a definite recommendation for this workflow, correct placement of LLM reasoning at bounded sub-tasks, keeping the policy/threshold decision deterministic, and at least two concrete guardrails (e.g. idempotency key, human-in-the-loop, schema validation, max-step cap, tracing)."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C7.4",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Justifies the recommendation by reasoning from the scenario's properties - well-defined branches, an irreversible money-moving action, and the need for auditability/consistency - rather than asserting a preference, and explains why each placement and guardrail follows from those properties."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C7.4",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Presents an organised comparison and a clearly committed recommendation using correct orchestration vocabulary (state machine/DAG, ReAct loop, tool calling, human-in-the-loop, idempotency, tracing); unambiguous and well-structured."
+    }
+  ],
+  "expected_answer_points": [
+    "Characterises the deterministic workflow correctly: control flow fixed in code as an explicit graph/state machine, LLM confined to specific nodes, giving reproducibility, node-level testability, auditability and predictable cost/latency",
+    "Characterises the autonomous agent correctly: a ReAct/tool-calling loop that plans its own steps, with the costs of non-determinism, compounding errors/hallucination, variable cost/latency, and trace-based (not step) debugging",
+    "Identifies the irreversible side effect - issuing a refund via the payments API - as the decisive risk of letting an autonomous agent choose actions",
+    "Recommends the deterministic workflow as the backbone for this well-defined, branchy, money-moving, auditable process, justified from those scenario properties rather than by preference",
+    "Places LLM/autonomous reasoning only at bounded sub-tasks (classification, field extraction, reply drafting) with schema-validated structured outputs, and keeps the eligibility/threshold decision as deterministic code",
+    "Routes over-threshold or low-confidence cases to human-in-the-loop rather than auto-acting",
+    "Specifies concrete guardrails including an idempotency key on the payments call, retries with backoff, output schema validation, a max-step/cost cap, and tracing/logging for auditability",
+    "(Optional) Notes a viable hybrid: deterministic outer graph plus a constrained agentic sub-loop limited to read-only tools, never granted the irreversible action"
+  ],
+  "common_pitfalls": [
+    "Recommends a fully autonomous agent for the whole flow because it is 'more flexible' or 'more modern', ignoring that the loop can trigger an irreversible refund on a hallucinated eligibility judgement",
+    "Treats 'deterministic vs autonomous' as being about temperature=0 or deterministic token sampling, missing that the real distinction is who controls the control flow",
+    "Lets the LLM make the eligibility decision or apply the $50 threshold instead of encoding that policy as testable, auditable code",
+    "Omits idempotency on the payments call, so a retry after a network timeout silently issues a second refund",
+    "Produces a generic pros/cons list with no committed recommendation, or a recommendation not tied to the specifics of the refund scenario",
+    "Ignores observability and human-in-the-loop - no tracing/logging for audit, no escalation path for low-confidence or over-threshold cases"
+  ],
+  "reference_answer": "The two ends of the spectrum differ in who owns the control flow.\n\nDeterministic workflow: the process is modelled as an explicit graph / state machine (LangGraph nodes and edges, or an orchestrator like Temporal/Prefect). Control flow lives in code; the LLM is invoked only at specific nodes for bounded sub-tasks. Pros: reproducible, unit-testable node by node, auditable, predictable cost and latency, and every side effect can be wrapped in its own guardrails and retries. Failures are localised. Cons: you must anticipate the branches up front, so it is more rigid and takes more engineering to encode.\n\nAutonomous agent: give the model the tools plus the goal and let a ReAct/tool-calling loop decide the order and which tools to call. Pros: flexible, less branching code, adapts to unforeseen phrasing. Cons: non-deterministic and hard to reproduce; hard to unit-test; hallucination/errors compound across steps; token cost and latency vary and can blow up; and, decisively here, the loop can invoke a side-effecting, irreversible tool (issue a refund) on the basis of a hallucinated eligibility judgement. Debugging means reading traces, not stepping code.\n\nRecommendation: use a deterministic workflow as the backbone. The process has a small, known set of branches and contains an irreversible, money-moving side effect that must be governed by an explicit, testable policy gate rather than model discretion, and refunds must be auditable and consistent. Encode classify -> lookup -> policy-check -> decide -> act/escalate as the graph.\n\nWhere LLM reasoning belongs: at bounded, low-risk, hard-to-hardcode sub-tasks - classifying the request type, extracting the order id and amount from free text, maybe drafting the customer reply - each a single node call returning schema-validated structured output, not an open-ended planning loop. The eligibility decision and the $50 threshold must be deterministic code, not an LLM judgement.\n\nGuardrails: schema-validate every LLM output; use an idempotency key on the payments call so a timed-out retry cannot double-refund; retries with backoff on transient tool failures; route over-threshold or low-confidence classifications to human-in-the-loop; a max-step/max-cost cap on any loop; and full tracing/logging of each node's input and output for audit and debugging. If more flexibility is needed later, a hybrid works: a deterministic outer graph with a constrained agentic sub-loop restricted to read-only tools, never given direct access to the refund action.",
+  "global_rubric": "open_grading_rubric.json"
+}

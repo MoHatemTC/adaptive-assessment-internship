@@ -1,0 +1,59 @@
+{
+  "rubric_id": "rubric_open_c2_003",
+  "version": "1.0",
+  "item_id": "open_c2_003",
+  "competency": "C2",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C2.3",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Full marks: every named pandas operation is correct and correctly applied — str.strip()/str.lower() for normalization, a mapping/replace for canonicalization, pd.to_numeric(errors='coerce') for the age coercion (with the accurate observation that '' is not treated as NaN and astype(int) would raise), and drop_duplicates() for exact duplicates. Deduct for wrong operations (e.g. claiming dropna removes empty strings, or astype(int) handling '' gracefully) or misuse of an otherwise-correct method."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C2.3",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Full marks: addresses all three stated problems (country variants, string/empty-string ages, duplicate rows) AND the missing-value decision AND repeatability. Deduct for each omitted concern — e.g. ignoring what happens to coerced NaNs, or not covering de-duplication."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C2.3",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Full marks: clearly justifies WHY normalization must precede de-duplication (exact match semantics), and justifies the missing-age handling choice (impute vs drop, why not fill 0). Partial credit for stating the order without explaining the cause, or handling NaNs without justifying the choice."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C2.3",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Full marks: an ordered, easy-to-follow walkthrough that ties each step to a specific operation and reads as a coherent pipeline. Deduct for a disorganized dump of methods with no clear sequence or unclear mapping of step to purpose."
+    }
+  ],
+  "expected_answer_points": [
+    "Normalize text before de-duplicating, with the justification that drop_duplicates is exact/byte-level so casing/whitespace variants would otherwise survive as separate rows",
+    "Trim whitespace and unify case on the country column using str.strip() and str.lower() (or equivalent)",
+    "Canonicalize the country variants to a single standard value via an explicit mapping/replace, preserving or bucketing unmapped values rather than dropping them",
+    "Convert age from string to numeric with pd.to_numeric(..., errors='coerce'), noting that empty strings are not auto-NaN and astype(int) would raise",
+    "Handle the coerced NaN ages deliberately (impute vs drop) with a justification, rather than a blanket fillna(0) or silent drop",
+    "Remove exact duplicate rows with drop_duplicates() after normalization",
+    "Make the pipeline repeatable/idempotent (e.g. a function) and reproducible for the downstream table"
+  ],
+  "common_pitfalls": [
+    "Running drop_duplicates() before normalizing case/whitespace, so \"USA\", \" usa \", and \"US\" survive as distinct rows and the duplicate removal silently under-counts",
+    "Using df['age'].astype(int) or errors='ignore', which raises on the empty strings or leaves the column as object dtype instead of producing clean numeric values",
+    "Assuming pandas already reads \"\" as NaN, so dropna()/isna() is expected to catch the empty-age rows when it actually does not (they are non-null empty strings until coerced)",
+    "Blanket-filling missing ages with 0 or a global constant, biasing the age distribution, instead of choosing and justifying imputation-vs-drop",
+    "Using .map(mapping) without a fallback, silently converting every unmapped country value to NaN and destroying data",
+    "Describing a one-off manual clean with no mention of wrapping it in a repeatable/idempotent function, despite the requirement that the cleaning be repeatable for the downstream table"
+  ],
+  "reference_answer": "I'd clean in an order where normalization happens before de-duplication, because two rows that differ only by casing or stray whitespace (\"USA\" vs \" usa \") are semantically duplicates but are NOT byte-identical, so `drop_duplicates()` run first would keep them as separate rows.\n\n1. Normalize the text columns first: `df['country'] = df['country'].str.strip().str.lower()` to remove surrounding whitespace and unify case.\n2. Canonicalize the variants with an explicit mapping, e.g. `mapping = {'usa': 'United States', 'us': 'United States', 'united states': 'United States'}` then `df['country'] = df['country'].map(mapping).fillna(df['country'])`, so all forms collapse to one canonical value while unmapped values are preserved (or routed to an 'unknown' bucket) rather than silently turning into NaN.\n3. Coerce `age` to numeric with `df['age'] = pd.to_numeric(df['age'], errors='coerce')`. This is key: the empty strings `\"\"` are not recognized as NaN by pandas, and `astype(int)` would raise on them; `errors='coerce'` turns any unparseable value (including `\"\"`) into a real `NaN` without crashing.\n4. Handle the resulting NaNs explicitly — decide to impute (e.g. `fillna(df['age'].median())`) or drop (`dropna(subset=['age'])`), and justify the choice; don't blanket-fill with 0, which would bias the distribution. Optionally range-check (e.g. keep 0 < age < 120).\n5. Now remove duplicates: `df = df.drop_duplicates()`, and reset the index. Because normalization already ran, case/whitespace variants collapse correctly.\n\nWrap this in a function so it's idempotent and repeatable for the downstream table, and log how many rows/values each step changed.",
+  "global_rubric": "open_grading_rubric.json"
+}

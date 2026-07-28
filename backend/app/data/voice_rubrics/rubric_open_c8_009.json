@@ -1,0 +1,59 @@
+{
+  "rubric_id": "rubric_open_c8_009",
+  "version": "1.0",
+  "item_id": "open_c8_009",
+  "competency": "C8",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C8.9",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Rollout mechanics and monitoring signals are technically correct: shadow vs canary are used accurately, operational metrics (latency percentiles, throughput, GPU/cost, error rate) are real and correctly categorized, and quality signals (LLM-as-judge / labeled samples, schema validity, refusal/hallucination rate, catastrophic forgetting, drift) are described accurately. No invented mechanisms or false claims (e.g., treating uptime as a quality signal, or claiming the offline win guarantees production quality)."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C8.9",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Covers both asks: a progressive rollout plan with a rollback/version-pinning safety net, AND two distinct monitoring categories (operational vs output-quality) each with concrete signals, plus the regression/drift and live-feedback dimension. Full marks require both the rollout and the operational-vs-quality split; partial credit if one category or the rollback plan is thin or missing."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C8.9",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Justifies the choices: why progressive rollout beats a hard swap (limits blast radius, enables comparison), and specifically why quality monitoring for an adapted LLM needs more than uptime dashboards (no cheap ground-truth signal; 'up and fast' can still be 'worse'). Trade-offs such as merged vs unmerged adapter serving, or offline-vs-live evaluation gap, strengthen the score."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C8.9",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Answer is well-organized and uses correct vocabulary (shadow/canary/champion-challenger, p95, LoRA adapter, LLM-as-judge, drift, catastrophic forgetting). The operational and quality signal lists are clearly separated and easy for a reviewer to tick off; reasoning is stated concisely rather than as an undifferentiated list."
+    }
+  ],
+  "expected_answer_points": [
+    "Rejects a hard cutover in favor of progressive rollout -- shadow deployment and/or a canary that routes a small traffic percentage and ramps up gradually while keeping the current model as champion for comparison",
+    "Includes a safety net: version-pin the base model and adapter, define acceptance thresholds from the offline eval, and keep an automated rollback / kill switch tied to alerts",
+    "Names concrete operational/system signals: latency percentiles (p95/p99), throughput (tokens/sec), error/timeout rate, GPU memory/utilization, and cost per request (optionally noting unmerged-adapter serving overhead)",
+    "Names concrete output-quality signals: task quality via labeled/human-reviewed samples or LLM-as-judge, output format/schema validity, refusal/hallucination rate, and output length/tone distribution vs the previous model",
+    "Flags capability regression / catastrophic forgetting from fine-tuning and/or input drift over time, arguing quality evaluation must be continuous rather than a one-time pre-launch gate",
+    "Incorporates live feedback signals -- human spot-checks, thumbs up/down, or a downstream business KPI (escalation/edit/resolution rate) -- because offline eval cannot capture the live distribution",
+    "Explains why quality monitoring is special: LLM output has no cheap ground-truth correctness signal, so a service can be fully 'up' and fast yet silently degrade, requiring semantic metrics plus human-in-the-loop"
+  ],
+  "common_pitfalls": [
+    "Treats the adapted model like an ordinary microservice -- lists only uptime, latency, and error rate and never addresses output quality, which is the crux of the question",
+    "Proposes a direct hard swap (or a manual all-at-once deploy) with no shadow/canary stage and no rollback or kill switch",
+    "Assumes the offline eval win guarantees production quality, so no live evaluation, canary sampling, or feedback loop is proposed",
+    "Ignores capability regression / catastrophic forgetting -- assumes the LoRA adapter can only add skill and never degrade general behavior",
+    "Omits version pinning of the base model and adapter, leaving no way to reliably reproduce or revert to a known-good state",
+    "Over-scopes the answer into a full retraining/RLHF or A/B statistical-significance pipeline instead of the requested deployment-and-monitoring plan"
+  ],
+  "reference_answer": "Don't hard-swap; roll out progressively.\n\nFirst shadow-deploy: mirror a copy of live traffic to the adapted model without returning its answers to users, and diff its outputs against the current model on real inputs. Then canary: route a small slice (e.g. 5%) of real traffic to the adapted model while the current model stays the 'champion', and ramp 5% -> 25% -> 100% only while metrics stay healthy. Pin the exact base-model and adapter versions and keep a one-click rollback / kill switch wired to alert thresholds, so a regression reverts in minutes.\n\nOperational/system signals: p50/p95/p99 latency, throughput (tokens/sec, requests/sec), error and timeout rate, GPU memory and utilization, and cost per request. Serving the LoRA adapter unmerged adds a little per-request overhead; merging the weights removes it at the cost of multi-adapter flexibility.\n\nOutput-quality signals: task quality on a stream of labeled or human-reviewed canary samples (or an LLM-as-judge), output format/schema validity, refusal and hallucination rate, and output length/tone distribution versus the champion. Also watch for capability regression -- fine-tuning can cause catastrophic forgetting on general tasks -- and for drift as the input mix shifts, so quality evaluation must be ongoing, not a one-time gate. Feed in human spot-checks, thumbs up/down, and a downstream KPI such as escalation or human-edit rate.\n\nQuality monitoring needs more than uptime dashboards because an LLM has no cheap ground-truth correctness signal: the service can be 100% 'up' and fast while silently producing worse replies. You only catch that with semantic/quality metrics and human-in-the-loop review, not HTTP 200s.",
+  "global_rubric": "open_grading_rubric.json"
+}

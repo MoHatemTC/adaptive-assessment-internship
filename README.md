@@ -1,11 +1,16 @@
 # Adaptive Competency Assessment — orchestrated engine
 
 An agent-driven CAT engine that measures a candidate across many competencies using
-**multiple-choice and coding items in the same session**, choosing whichever item — of
+**multiple-choice, coding, and open/voice items in the same session**, choosing whichever item — of
 whichever modality — will narrow the weakest estimate fastest, and finishing each
 competency as soon as it is measured.
 
-Open-ended items are designed for and not yet built.
+Open/voice answers are collected via **Gemini Live** (`gemini-3.1-flash-preview`) only.
+Picker and open rubric grading go through **LiteLLM** (`openai/gpt-5.6-sol`). Typed
+transcripts are not accepted for open items.
+
+Canonical bank and rubrics live under `backend/app/data/` (`question_bank.json`,
+`rubrics/` for code, `voice_rubrics/` + inline open criteria for voice).
 
 ```text
 backend/

@@ -1,0 +1,172 @@
+{
+ "name": "python-exam-grading-rubric",
+ "version": "1.1",
+ "description": "Grading rubric for the EXPANDED Python Engineering exam bank (coding and open-ended each 3x). Covers the three modalities (auto-scored MCQ, executed code, rubric-graded open-ended) and how each item's score feeds the adaptive test (CAT/IRT). Adapted from the Masar open-ended grading rubric.",
+ "applies_to": {
+  "bank_file": "python_exam_bank_expanded.json",
+  "competency": "Python Engineering",
+  "item_count": 265,
+  "modalities": {
+   "mcq": 205,
+   "code": 30,
+   "open": 30
+  },
+  "sub_competencies": [
+   "PY.1",
+   "PY.2",
+   "PY.3",
+   "PY.4",
+   "PY.5",
+   "PY.6",
+   "PY.7",
+   "PY.8",
+   "PY.9",
+   "PY.10"
+  ],
+  "note": "Expanded bank: MCQ kept as-is; coding and open-ended tripled to 30 each. Every coding and open item carries the 4-criterion 20-point rubric; MCQ are auto-scored."
+ },
+ "scoring_by_modality": {
+  "mcq": {
+   "method": "Automatic. score = 1.0 if the selected option index == mcq.answer_index else 0.0.",
+   "no_partial_credit": true,
+   "misconception_capture": "On a wrong answer, record mcq.misconceptions[selected_index] as the diagnosed misconception for reporting.",
+   "unit_score": "1.0 or 0.0"
+  },
+  "code": {
+   "method": "Execute the candidate's function against code.tests in a sandbox; score = sum(weight for passing tests) / sum(all weights). Optionally apply the 20-point rubric (functional_correctness 8, edge_case_handling 5, algorithm_choice 4, code_quality 3) for a richer human/LLM score.",
+   "reference": "code.reference_solution passes all tests (verified at build time by execution).",
+   "unit_score": "weighted fraction of tests passed, in [0,1]"
+  },
+  "open": {
+   "method": "Silent LLM grading against the 20-point rubric (technical_accuracy 8, completeness 5, reasoning_and_justification 4, clarity_and_communication 3).",
+   "resolution_order": [
+    "item.open.rubric_criteria[].descriptor",
+    "item.open.expected_answer_points",
+    "item.open.reference_answer",
+    "item.open.common_pitfalls"
+   ],
+   "completeness_rule": "round(5 * covered_points / total_expected_points).",
+   "pitfall_rule": "Each item.open.common_pitfalls the answer commits caps technical_accuracy and is recorded.",
+   "grader_settings": {
+    "temperature": 0.1,
+    "response_format": "json_object"
+   },
+   "unit_score": "raw_20 / 20, in [0,1]",
+   "output_schema": {
+    "criterion_scores": {
+     "technical_accuracy": 0,
+     "completeness": 0,
+     "reasoning_and_justification": 0,
+     "clarity_and_communication": 0
+    },
+    "raw_score": 0,
+    "unit_score": 0.0,
+    "points_covered": [],
+    "pitfalls_triggered": [],
+    "verdict": "knows | partial | gap",
+    "rationale": ""
+   }
+  }
+ },
+ "difficulty_calibration": {
+  "purpose": "Item difficulty is real, not just labelled. Each item was written to an explicit target and independently re-rated; cat.b is assigned in well-separated bands so easy items are genuinely easier than hard ones in the IRT sense.",
+  "b_bands": {
+   "very_easy": [
+    -2.6,
+    -1.9
+   ],
+   "easy": [
+    -1.7,
+    -0.8
+   ],
+   "medium": [
+    -0.5,
+    0.5
+   ],
+   "hard": [
+    0.8,
+    1.6
+   ],
+   "very_hard": [
+    1.9,
+    2.7
+   ]
+  },
+  "target_pass_rates": {
+   "note": "Difficulty is anchored to the fraction of professional Python developers expected to answer correctly (mcq.est_dev_pass_rate_pct records the estimate per item).",
+   "very_easy": "~98%",
+   "easy": "~85%",
+   "medium": "~60%",
+   "hard": "~35%",
+   "very_hard": "~15%"
+  },
+  "verification": "Every item was re-rated by an independent reviewer that did not see the intended difficulty; items off by more than one band were rewritten. Key technical claims were cross-checked against docs.python.org (see VERIFICATION.md)."
+ },
+ "guessability": {
+  "purpose": "MCQ items are built to resist guessing; a candidate with no Python knowledge should not beat 1-in-4 by surface features.",
+  "controls": [
+   "Four individually-plausible distractors; no joke or throwaway options.",
+   "Correct option not distinguishable by length, specificity, grammar, or stem echo.",
+   "No all/none-of-the-above; no absolute-word tells.",
+   "Independent reviewer flags any item a zero-knowledge taker could beat by pattern-matching; flagged items were rewritten."
+  ],
+  "encoded_in_cat_c": "mcq.guess_resistance maps to cat.c (the IRT pseudo-guessing floor): high -> 0.06-0.12, medium -> 0.13-0.19, low -> 0.20-0.25. Code and open items are constructed-response, so cat.c = 0.0."
+ },
+ "discrimination_levels": {
+  "purpose": "The discrimination label reflects the IRT slope cat.a — how sharply the item separates candidates. It is INDEPENDENT of difficulty.",
+  "field": "mcq.discrimination / code.discrimination / open.discrimination; numeric slope is cat.a.",
+  "bands": [
+   {
+    "label": "very_high",
+    "a_range": [
+     2.0,
+     2.5
+    ]
+   },
+   {
+    "label": "high",
+    "a_range": [
+     1.7,
+     2.0
+    ]
+   },
+   {
+    "label": "moderate",
+    "a_range": [
+     1.4,
+     1.7
+    ]
+   },
+   {
+    "label": "low",
+    "a_range": [
+     1.05,
+     1.4
+    ]
+   }
+  ],
+  "cat_use": "Prefer higher-a items near the current theta for faster convergence; down-weight low-a items."
+ },
+ "cat_integration": {
+  "model": "3PL for MCQ (a, b, c), 2PL for code/open (c = 0.0). cat.b encodes difficulty, cat.a discrimination (independent of difficulty), cat.c the MCQ guessing floor.",
+  "response_scoring": "Feed each item's unit_score to the theta update: MCQ is dichotomous (0/1); code and open are graded/partial-credit in [0,1].",
+  "dichotomous_fallback": "If the engine needs binary for code/open, mark correct when unit_score >= 0.60 (aligned with the 'knows' boundary).",
+  "selection": "The CAT engine picks the next item by Fisher information (a function of cat.a and the gap between theta and cat.b) at the current ability estimate."
+ },
+ "verdict_thresholds": {
+  "knows": {
+   "min_unit_score": 0.7
+  },
+  "partial": {
+   "min_unit_score": 0.4
+  },
+  "gap": {
+   "max_unit_score": 0.399
+  }
+ },
+ "guardrails": {
+  "no_length_bias": "For open items, reward substance matching expected_answer_points, not verbosity.",
+  "penalise_fabrication": "Confident-but-wrong specifics are scored as errors, never completeness.",
+  "silent_grading": "Never reveal reference answers, expected points, pitfalls, or scores to the candidate during the assessment."
+ }
+}

@@ -32,25 +32,47 @@ class StopDecision:
         return self.reason == "precision"
 
 
-def certainty_pct(standard_error: float) -> float:
-    """Report confidence as a function of the standard error alone.
+def measurement_certainty_pct(standard_error: float) -> float:
+    """SE → % confidence from the posterior width alone (no sample-size gate).
 
-    Deliberately absolute, not relative to where the candidate started. An earlier design
-    scaled this by the prior width, which meant two candidates with identical posterior
-    precision were shown different confidence, and — because the stability rule below
-    gates on this number — were given different-length tests, purely because of how they
-    answered an intake question. Confidence should describe the estimate, not the guess it
-    started from.
-
-    Maps SE = TARGET to exactly 90% so the precision rule below reads in the same units
-    the candidate's report is written in, and saturates at 100% as SE falls further.
+    Maps SE = TARGET to exactly 90% so the precision rule reads in the same units the
+    report uses, and saturates at 100% as SE falls further. Absolute in SE on purpose:
+    scaling by prior width made two candidates with the same posterior look different
+    purely because of intake.
     """
     se = max(float(standard_error), 1e-6)
     target = settings.cat_se_target
     if se <= target:
         return float(min(90.0 + 10.0 * (1.0 - se / target), 100.0))
-    # Above target, decay smoothly toward 0 as SE grows. SE = 2*target -> 45%.
     return float(max(90.0 * (target / se), 0.0))
+
+
+def certainty_pct(
+    standard_error: float,
+    *,
+    observations: int | None = None,
+) -> float:
+    """Confidence shown after each question.
+
+    Raw SE→% is the measurement signal. Before `cat_precision_min_questions` answers,
+    that signal is treated as *provisional*: a couple of high-`a` items can make SE look
+    like 90% certainty while the estimate has barely been corroborated. Reported
+    confidence therefore ramps with evidence count and is capped below 90% until the
+    precision floor is met — so the UI cannot read "done" before the stop rule would
+    allow a precision stop.
+    """
+    raw = measurement_certainty_pct(standard_error)
+    if observations is None:
+        return raw
+
+    floor = max(int(getattr(settings, "cat_precision_min_questions", settings.cat_min_questions)), 1)
+    n = max(int(observations), 0)
+    if n >= floor:
+        return raw
+
+    # Ramp 0 → raw across the precision floor; never display ≥90% while provisional.
+    progress = n / floor
+    return float(min(raw * progress, 89.0))
 
 
 def band_is_stable(band_history: list[int], window: int) -> bool:
@@ -68,16 +90,19 @@ def evaluate(
 ) -> StopDecision:
     """Apply the stopping rules in precedence order.
 
-    1. PRECISION — the estimate is good enough. The only rule that yields `converged`
-       with `is_precise`, and the only one whose threshold is a psychometric statement.
+    1. PRECISION — SE at/under target AND enough observations to trust that width.
+       A single high-discrimination hit can crush SE; the observation floor stops that
+       from ending the competency before the estimate has been corroborated.
     2. STABLE BAND — the reported band has settled and the estimate is reasonably precise.
-       A test-length optimisation, not evidence of precision: it is gated on a secondary
-       SE floor so it cannot fire while the estimate is still vague, and it still reports
-       `converged` without `is_precise` so a report can say the band settled without
-       claiming a precision it did not reach.
+       A test-length optimisation, not evidence of precision: gated on a secondary SE
+       ceiling and its own min-questions floor.
     3. BUDGET — out of questions, or out of items. Not convergence.
     """
-    if standard_error <= settings.cat_se_target:
+    if (
+        standard_error <= settings.cat_se_target
+        and questions_answered
+        >= getattr(settings, "cat_precision_min_questions", settings.cat_min_questions)
+    ):
         return StopDecision(True, "precision", converged=True)
 
     if (

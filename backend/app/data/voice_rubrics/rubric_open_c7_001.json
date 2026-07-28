@@ -1,0 +1,60 @@
+{
+  "rubric_id": "rubric_open_c7_001",
+  "version": "1.0",
+  "item_id": "open_c7_001",
+  "competency": "C7",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C7.1",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Correctly and precisely distinguishes agentic (autonomous, self-directed loop) from workflow (predefined orchestration) architectures, and applies accurate suitability reasoning: predictable/decomposable task fits a workflow; autonomy adds token cost, latency, and variance; high-stakes irreversible actions need constrained permissions plus HITL; tool use alone is not agency. No incorrect claims (e.g., that agents are always more accurate, or that function-calling equals an agent). Full marks require sound mechanisms, not slogans."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C7.1",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Covers the core suitability dimensions -- task predictability, cost/latency/scale, stakes/reversibility with HITL, and evaluability/error localization -- AND both delivers a recommendation and states the conditions that would flip the decision toward an agent. Partial credit for missing one or two dimensions or omitting the 'what would change my answer' half."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C7.1",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Ties the recommendation explicitly to the scenario's specifics (5k/day volume, tight latency, fee-reversal stakes, the fixed classify/enrich/route sequence) rather than reciting a generic pros/cons list; reaches a defensible decision with cause-and-effect justification and a sense of defaulting to the simplest sufficient design."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C7.1",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Reads as a crisp design-review recommendation: an upfront decision, criteria-structured justification, correct use of terms (agent, workflow, HITL, tool permissions), and no rambling or hedging that obscures the recommendation."
+    }
+  ],
+  "expected_answer_points": [
+    "Distinguishes an autonomous agent (LLM dynamically directs its own steps/tool use in a loop) from a workflow (LLM calls orchestrated along predefined code paths), and defaults to the simplest architecture that works.",
+    "Argues the described task is a predictable, decomposable sequence (classify -> enrich -> answer/escalate) that maps cleanly to a constrained workflow rather than an open-ended agent loop.",
+    "Weighs cost/latency/scale: at ~5k/day with a tight latency budget, a pipeline is cheaper, lower and more predictable latency, and unit-testable per stage, whereas agent iteration count inflates cost/latency/variance.",
+    "Flags stakes/reversibility: fee-reversal (account-affecting) actions require constrained tool permissions and human-in-the-loop approval rather than unconstrained autonomy.",
+    "Notes evaluability/error-localization advantage of a fixed pipeline (per-stage eval, deterministic retry) versus compounding, hard-to-reproduce agent failures.",
+    "Makes a concrete recommendation: a structured workflow (routing + retrieval + gated tool calls with HITL and a bounded escalation path).",
+    "States the conditions that WOULD justify an agent: unpredictable step count/ordering, dynamic tool selection from intermediate results, and clear environment feedback -- and that tool use alone does not make an architecture agentic.",
+    "Proposes validating the decision empirically (prototype simplest version, measure accuracy/latency/cost, add autonomy only where it pays off)."
+  ],
+  "common_pitfalls": [
+    "Treats the stakeholder's 'autonomous agent' framing as settled and never distinguishes an autonomous agent loop from a deterministic workflow, so no real suitability assessment happens.",
+    "Recommends full autonomy because it sounds more capable or future-proof, ignoring the cost, tail latency, and unpredictability that agentic looping adds at 5k/day.",
+    "Overlooks the high-stakes, irreversible account actions (fee reversals) and omits human-in-the-loop approval or constrained tool permissions.",
+    "Conflates tool use / function-calling with being an agent, concluding an agent is required simply because the task calls an internal API and a knowledge base.",
+    "Produces a generic agents-vs-workflows pros/cons list without committing to a decision grounded in THIS task's predictable structure.",
+    "Takes an absolute stance (agents are always better, or agents are never useful) and gives no criteria for when autonomy would actually be warranted."
+  ],
+  "reference_answer": "Reject the premise that 'agent' is a given. Distinguish two architectures: a workflow orchestrates LLM calls along predefined code paths, while an agent lets the LLM dynamically direct its own steps and tool use in a loop until it decides it is done. The right default is the simplest architecture that meets the requirement; autonomy is a cost you add only when the task demands it.\n\nAssess against suitability criteria:\n- Predictability of steps: triage here is a largely fixed sequence -- classify, enrich via the account API, then answer-from-KB or escalate. A predictable, decomposable flow maps naturally to a workflow (a router/classifier step, retrieval, then guarded actions), not an open-ended agent loop.\n- Cost/latency/scale: 5k/day with a tight latency budget favors a constrained pipeline -- fewer tokens, lower and more predictable latency, and it is unit-testable per stage. An agent's variable iteration count inflates cost, tail latency, and output variance.\n- Stakes/reversibility: resolutions can trigger fee reversals. High-stakes, hard-to-reverse effects demand constrained tool permissions and human-in-the-loop approval, not unconstrained autonomy.\n- Evaluability/error localization: a fixed pipeline lets you evaluate and debug each stage and retry deterministically; agent failures compound across steps and are harder to reproduce and localize.\n\nRecommendation: build a structured workflow -- classification/routing, KB retrieval, and gated tool calls with human-in-the-loop on any account-affecting action, plus a bounded escalation path. Note that using tools or function-calling does not by itself make it an agent. Validate empirically: ship the simplest version, measure accuracy/latency/cost, and add autonomy only where measured gains justify it.\n\nWhat would change my answer: if step count and ordering were genuinely unpredictable, if tools had to be selected dynamically from intermediate results, and if the environment gave clear feedback the model could act on -- then a bounded agent loop (capped iterations, guardrails, HITL on risky actions) becomes justified, possibly for just the open-ended subset of tickets.",
+  "global_rubric": "open_grading_rubric.json"
+}

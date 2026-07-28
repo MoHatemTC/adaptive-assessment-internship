@@ -19,6 +19,7 @@ name would invite exactly that confusion.
 
 import json
 import logging
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field
@@ -34,29 +35,50 @@ CodeApproach = Literal["A", "B", "C"]
 # Rubric strictness. Only ever reaches the model; the deterministic path never reads it.
 CodeRubric = Literal["loose", "mid", "tight"]
 
+_PACKAGE_ROOT = Path(__file__).resolve().parents[2]
+
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=str(_PACKAGE_ROOT / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     # --- LLM: every call routes through the LiteLLM proxy, as in the parent project ---
     litellm_base_url: str = "http://localhost:4000"
     litellm_api_key: str = ""
-    litellm_model: str = "gemini/gemini-2.5-flash"
+    litellm_model: str = "openai/gpt-5.6-sol"
+    litellm_embedding_model: str = "text-embedding-004"
+    litellm_transcribe_model: str = "openai/whisper-1"
+    # Gemini Live interviewer via LiteLLM realtime websocket (/v1/realtime).
+    litellm_live_preview_model: str = "gemini/gemini-3.1-flash-live-preview"
     # Reasoning models spend real wall clock on a single selection call — measured at
     # ~20s for kimi-k2.6. A timeout tuned for a non-reasoning model reports a slow call
     # as a failed one, and the selector then falls back to the deterministic path while
     # reporting that the model declined.
     litellm_timeout_seconds: float = 180.0
+    # Gateway often reached by IP with a cert SAN mismatch — set LITELLM_SSL_VERIFY=false.
+    litellm_ssl_verify: bool = True
 
     # --- CAT policy -------------------------------------------------------------
-    # Target posterior standard error. Reaching it is the only stop that counts as
-    # measured precision. Validate a bank against this before trusting it: information
-    # adds, so a pool whose items are individually weak cannot reach any target within a
-    # bounded number of questions no matter how the engine selects.
-    cat_se_target: float = Field(default=0.65, gt=0.0)
+    # Target posterior standard error. Reaching it (after the precision floor below) is
+    # the stop that counts as measured precision. Validate a bank against this before
+    # trusting it: information adds, so a pool whose items are individually weak cannot
+    # reach any target within a bounded number of questions no matter how selection works.
+    #
+    # 0.55 (≈90% on the certainty scale) is tighter than a one-shot high-a update can
+    # usually fake: three very informative items near the candidate often reach ~0.59,
+    # which used to stop a 0.65 target after a short interview.
+    cat_se_target: float = Field(default=0.55, gt=0.0)
 
     # Hard ceiling on questions per competency.
     cat_max_questions: int = Field(default=12, ge=1)
+
+    # Floor before a PRECISION stop may fire. High-discrimination items can crush SE in
+    # two or three answers; without this floor the test ends before coverage / modality
+    # mix has a chance to corroborate the estimate. Independent of stable_band's floor.
+    cat_precision_min_questions: int = Field(default=6, ge=1)
 
     # The stable-band rule may not fire before this many questions: early on, a repeated
     # band means the prior has not moved yet, not that the estimate has settled.

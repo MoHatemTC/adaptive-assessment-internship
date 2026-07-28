@@ -5,8 +5,21 @@ decision rested on is on screen.
 
 ```bash
 pip install -r streamlit/requirements.txt
-streamlit run streamlit/main.py
+
+# Terminal 1 — Live helper (WebSocket rooms for open/voice iframes only)
+cd backend && python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8765
+
+# Terminal 2 — full adaptive engine UI (MCQ + code + Live voice)
+cd .. && streamlit run streamlit/main.py
 ```
+
+Open **Streamlit** (usually http://localhost:8501), not http://127.0.0.1:8765/.
+Port 8765 is only the Live interviewer helper that Streamlit embeds for open items.
+
+Set `LITELLM_MODEL=openai/gpt-5.6-sol`, `LITELLM_LIVE_PREVIEW_MODEL=gemini/gemini-3.1-flash-live-preview`,
+`LITELLM_SSL_VERIFY=false` (if needed) in `backend/.env`.
+
+Open items render a Live interview iframe only — no typed/transcript fallback.
 
 `streamlit/requirements.txt` is **self-contained** — it carries the engine's dependencies as
 well as the UI's, because Streamlit Cloud installs exactly one requirements file: the one
@@ -25,8 +38,8 @@ rest with the engine's own functions.
 
 **Setup** — two steps.
 
-1. **Main competencies.** Ten AI/ML engineer competencies (`C1`..`C10`), derived from the
-   bank. Select one or more; sub-competencies are never chosen by the candidate.
+1. **Main competencies.** Derived from the bank (e.g. `PY` or `C1`..`C10`). Select one or
+   more; sub-competencies are never chosen by the candidate.
 2. **Self-rating.** 1–5 per selected competency, with high or low confidence. The rating
    seeds the starting estimate; the confidence sets how wide it is. Neither is ever
    reported as a measurement.

@@ -1,37 +1,21 @@
 """The Grader Agent: turn a response into graded outcomes, by modality.
 
-Its output is always `list[GradedOutcome]` — the only currency the measurement layer
-accepts — so the orchestrator never learns what an answer index or a test case is.
-
-WHAT "GRADER AGENT" DOES NOT MEAN
-
-The architecture calls this an agent, and for code and open items a model is genuinely
-involved. It is not involved in deciding whether the answer was RIGHT:
-
-    MCQ    exact index comparison. There is a correct answer; nothing is gained by asking
-           a model, and a model that disagreed would simply be wrong.
-    code   the measured split. Sandboxed test execution owns functional correctness at
-           100%, static analysis owns algorithm choice, and the model owns code quality
-           and misconception diagnosis — effective authority tests 60% / static 15% /
-           LLM 25%. This is the arm that was selected by measurement over an LLM-led one;
-           routing code grading wholesale to a model would undo that decision.
-    open   not implemented, and deliberately not guessed.
-
-WEIGHT IS WHERE MODALITIES DIFFER MOST
-
-An MCQ answer is worth a full observation. A code submission is worth `evidence_strength x
-loading`: a submission that did not compile demonstrates a syntax problem rather than the
-absence of every competency the question touches, and an infrastructure failure carries
-zero and must move nothing at all.
+Voice / open items arrive pre-evaluated as GradedVoiceResponse — evaluation is async and
+happens BEFORE this sync path, so orchestrator.record_response stays untouched.
 """
 
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from app.schemas.orchestration import BankItem, GradedResponse
-from app.services.code_adaptive.session import CodeAdaptiveSession
+from app.schemas.voice import GradedVoiceResponse
 from app.services.orchestrator.outcome import GradedOutcome
+from app.services.voice.grader import grade_voice
+
+if TYPE_CHECKING:
+    from app.services.code_adaptive.session import CodeAdaptiveSession
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +24,6 @@ class GraderAgent:
     """Routes a response to the grader its modality requires."""
 
     def __init__(self, code_engine: CodeAdaptiveSession | None = None) -> None:
-        # Injected so tests can stub execution, and so a deployment can share one engine
-        # (and therefore one weight profile) across every session.
         self._code = code_engine
 
     def grade(self, item: BankItem, response: object) -> GradedResponse:
@@ -49,13 +31,20 @@ class GraderAgent:
             return self._grade_mcq(item, response)
         if item.modality == "code":
             return self._grade_code(item, response)
-        raise NotImplementedError(
-            f"no grader for modality {item.modality!r} — open-ended grading is not implemented"
-        )
+        if item.modality == "open":
+            return self._grade_open(item, response)
+        raise NotImplementedError(f"no grader for modality {item.modality!r}")
 
-    # --- mcq ---------------------------------------------------------------
+    def _grade_open(self, item: BankItem, response: object) -> GradedResponse:
+        """Sync. Expects a GradedVoiceResponse produced by VoiceResponseEvaluator.evaluate."""
+        if not isinstance(response, GradedVoiceResponse):
+            raise TypeError(
+                f"{item.item_id}: open response must be GradedVoiceResponse "
+                f"(got {type(response).__name__}) — evaluate() first"
+            )
+        return grade_voice(response)
+
     def _grade_mcq(self, item: BankItem, response: object) -> GradedResponse:
-        """Exact index comparison. Never delegated."""
         try:
             chosen = int(response)  # type: ignore[arg-type]
         except (TypeError, ValueError):
@@ -87,16 +76,7 @@ class GraderAgent:
             detail={"chosen_index": chosen, "correct": bool(score), "answer_index": answer_index},
         )
 
-    # --- code --------------------------------------------------------------
     def _grade_code(self, item: BankItem, response: object) -> GradedResponse:
-        """Delegate to the code engine's evaluation pipeline, unchanged.
-
-        `evaluate()` already returns per-competency evidence carrying a score, a confidence
-        and an evidence strength — exactly a graded outcome. The code engine's own Beta
-        estimator is simply not used here: the estimate lives in Examinee Variables on the
-        theta scale, and having two estimators for one competency would be two answers to
-        one question.
-        """
         if self._code is None:
             raise RuntimeError("no code engine configured — cannot grade a code item")
         if not isinstance(response, str):
@@ -110,8 +90,8 @@ class GraderAgent:
             GradedOutcome(
                 variable=evidence.competency_id,
                 score=float(evidence.score),
-                # Loading is already folded into the criterion->competency projection, so
-                # multiplying by it again here would penalise a broad question twice.
+                # Loading is already folded into criterion->competency projection, so do
+                # not multiply by it again here.
                 weight=min(max(float(evidence.evidence_strength), 0.0), 1.0),
                 confidence=float(evidence.confidence),
                 source_item_id=item.item_id,
@@ -129,17 +109,7 @@ class GraderAgent:
 
     @staticmethod
     def as_code_question(item: BankItem) -> dict:
-        """Rebuild the shape the code engine expects from the unified envelope.
-
-        The engine predates the unified bank and consumes its own question dict. Adapting
-        here rather than changing the engine keeps the measured grading path byte-identical
-        to the one the study validated.
-
-        Public because trial runs need the same translation. Sharing it is the point: if
-        the examples a candidate runs against came from a different translation than the
-        one that grades them, the two could drift apart and the practice runs would stop
-        predicting the graded one.
-        """
+        """Rebuild the shape CodeAdaptiveSession expects from unified envelope."""
         payload = dict(item.payload)
         payload["question_id"] = item.item_id
         payload["difficulty"] = payload.get("difficulty", 0.5)

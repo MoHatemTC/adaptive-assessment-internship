@@ -1,0 +1,60 @@
+{
+  "rubric_id": "rubric_open_c7_002",
+  "version": "1.0",
+  "item_id": "open_c7_002",
+  "competency": "C7",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C7.2",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Full marks: every proposed change is technically correct - correct use of enum, required, additionalProperties:false, typed sub-schemas, and an accurate account of what constrained/strict decoding does and its tradeoffs (all-required, nullable optionals). No false claims (e.g. that JSON Schema alone can verify a ticket exists, or that strict mode removes the need for runtime checks). Deduct for schema constructs used wrongly or overstated guarantees."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C7.2",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Full marks: addresses all five observed failures (wrong verb, missing ticket_id, invalid priority, arbitrary data keys, read-through-mutating-path) AND covers both layers - the schema the model sees and the runtime dispatch validation. Partial credit as failures or the dispatch-layer half are left unaddressed."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C7.2",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Full marks: each change is justified by the specific mechanism it fixes (e.g. why intent-in-tool-name beats an action string, why enum helps at decode time, why runtime checks are still needed) and the schema-guarantee-vs-runtime-semantics boundary is argued, not just asserted. Partial credit for correct changes with thin or missing rationale."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C7.2",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Full marks: organised as a clear critique-then-redesign with correct vocabulary (function calling, JSON Schema, enum, additionalProperties, constrained decoding, idempotency) and a concrete redesigned schema or tool list a reviewer could act on. Deduct for vague prose, no concrete schema, or disorganised argument."
+    }
+  ],
+  "expected_answer_points": [
+    "Split the overloaded tool into single-purpose tools keyed by intent (and separate read-only from mutating operations), so intent lives in the tool name and reads stay side-effect-free instead of relying on a free-form action string",
+    "Constrain categorical fields (priority -> enum P0-P3, and status/verbs) with JSON Schema `enum`, which both guides the model and makes invalid values unsampleable under constrained decoding",
+    "Replace the opaque `data: object` with an explicit typed per-tool schema and set `additionalProperties: false` so arbitrary/hallucinated keys are rejected and validation is meaningful",
+    "Mark truly mandatory fields (ticket_id) in `required` and write precise `description`s (ID format, field meaning, when to choose each tool) because descriptions are the model's main signal for tool selection and argument filling",
+    "Use the provider's strict / structured-output (constrained decoding) mode to guarantee schema- and enum-conformant arguments at decode time, and acknowledge its tradeoffs (additionalProperties:false, all-required, optional-as-nullable)",
+    "Distinguish what the schema enforces (shape, types, enum membership) from what the dispatcher must still enforce at runtime (existence, authorisation, business-rule/state validity), i.e. validate semantics as defense in depth",
+    "Do not trust model-supplied IDs blindly (they are hallucinated); prefer IDs sourced from a prior search/list tool's output, and validate existence before acting",
+    "Return structured, actionable error messages naming the offending field and allowed values so the model can self-correct, and add idempotency/confirmation for destructive writes"
+  ],
+  "common_pitfalls": [
+    "Keeping the single god-tool and only tightening `action` to an enum, missing the larger win of splitting tools by intent and separating read-only from mutating operations",
+    "Claiming that constrained/structured decoding or a strict schema alone makes the agent reliable, ignoring that referential integrity, authorisation, and ticket-state validity are semantic checks JSON Schema cannot express",
+    "Leaving `data` as an untyped object (or making it a required-but-vague field) so `additionalProperties:false` has nothing to constrain and arbitrary keys still slip through",
+    "Trusting the model-supplied `ticket_id` as valid instead of treating IDs as potentially hallucinated and validating existence or sourcing them from a prior search/list tool",
+    "Describing strict mode without its actual constraints - forgetting that it typically forces additionalProperties:false and every property into `required`, so optional fields must be modelled as nullable unions",
+    "Treating failed validation as a dead end (raise/return false) rather than returning a structured, field-level error the model can use to self-correct on the next turn"
+  ],
+  "reference_answer": "The root problem is a single overloaded 'god tool' with an almost type-free schema: the model has no signal for which values are legal and the dispatcher has nothing meaningful to validate against.\n\n1) Split by intent and by side-effect. Replace `manage_ticket` with distinct single-purpose tools: `get_ticket` (read-only), `resolve_ticket`, `set_ticket_priority`, `add_ticket_comment`, etc. The free-form `action` string is the biggest source of wrong verbs (`close` vs `resolve`); when intent is encoded in the tool *name* the model selects it directly and there is no invalid-verb failure mode. Separating reads from writes also means the read path is naturally idempotent and safe, so a status lookup can never accidentally mutate. If you must keep one tool, at minimum make `action` an `enum` of the exact backend verbs.\n\n2) Constrain categorical fields with `enum`. `priority` should be `{\"type\":\"string\",\"enum\":[\"P0\",\"P1\",\"P2\",\"P3\"]}`. The enum does double duty: under constrained/structured decoding it makes illegal values like `\"urgent\"` literally unsampleable, and even without it, it tells the model exactly what is legal, and it gives the validator an exact set to check.\n\n3) Replace the opaque `data: object`. An untyped object lets the model invent arbitrary keys and makes validation vacuous. Give each tool an explicit typed schema for exactly the fields it needs (e.g. `resolve_ticket` takes `ticket_id` and a `resolution_note`), and set `additionalProperties: false` so unexpected keys are rejected rather than silently forwarded.\n\n4) Get `required` and `description` right. Put genuinely mandatory fields (`ticket_id`) in `required` so a call that omits them is invalid rather than reaching the backend as a null. Descriptions are the model's primary signal for tool selection and argument filling: state the ID format, the meaning of each priority, and when to prefer one tool over a sibling, to disambiguate lookalike tools.\n\n5) Use the provider's strict / structured-output mode where available so decoding is grammar-constrained to the schema, guaranteeing well-formed, in-enum arguments rather than merely nudging them. Note the tradeoff: strict modes typically demand `additionalProperties:false` and that every property be listed in `required`, so optional fields must be modelled as nullable unions.\n\n6) Still validate at the dispatch boundary as defense in depth. The schema guarantees shape and enum membership; it cannot guarantee semantics: that the ticket exists, that the caller is authorised, that the ticket isn't already closed, or referential integrity. Validate these at runtime and never trust a model-supplied `ticket_id` blindly, since IDs are frequently hallucinated. Prefer designs where IDs originate from a prior `search`/`list` tool's output rather than being free-typed.\n\n7) Return structured, actionable errors. On rejection, return a machine-readable error naming the field and the allowed values (`{\"error\":\"invalid_priority\",\"allowed\":[\"P0\",...]}`) so the model can self-correct on the next turn instead of failing opaquely. For destructive writes, consider a confirm step or an idempotency key so a retried tool call doesn't double-apply.",
+  "global_rubric": "open_grading_rubric.json"
+}

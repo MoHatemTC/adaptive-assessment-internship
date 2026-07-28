@@ -1,0 +1,59 @@
+{
+  "rubric_id": "rubric_open_c3_003",
+  "version": "1.0",
+  "item_id": "open_c3_003",
+  "competency": "C3",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C3.3",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Correctly explains the majority-class-baseline argument (a trivial negative predictor reaches ~99.5%), correctly defines/uses precision and recall, and accurately recommends PR-based evaluation over ROC/accuracy for heavy imbalance. Proposed remedies (class weights, SMOTE/resampling, threshold tuning) are technically valid and correctly applied. Full marks require no incorrect claims (e.g. mixing up precision and recall, or claiming ROC-AUC is unaffected by imbalance)."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C3.3",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Covers all three required parts: (1) why accuracy misleads, (2) better metrics with justification, and (3) at least two concrete remedies. Full marks also mention the correct evaluation hygiene (resample only training data, keep a stratified/realistic test distribution). Partial credit if one part is missing or only a single remedy is given."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C3.3",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Explicitly connects the metric choice and threshold to the business cost of false negatives vs false positives and names the precision/recall trade-off as a decision the team must make, rather than just listing techniques. Full marks tie the 'why' of each recommendation to the imbalance and the fraud context."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C3.3",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Well-organized review-style explanation using correct terminology; distinguishes precision from recall clearly and states recommendations a teammate could act on. Deduct for vague, disorganized, or jargon-dropping answers that never explain the reasoning."
+    }
+  ],
+  "expected_answer_points": [
+    "A trivial classifier that always predicts the majority class (\"not fraud\") already achieves ~99.5% accuracy, so accuracy merely reflects the base rate and says nothing about fraud-detection ability",
+    "Recommends minority-class-focused metrics: precision, recall, and F1 (and the confusion matrix), rather than overall accuracy",
+    "Recommends the precision-recall curve / PR-AUC and notes it is more informative than ROC-AUC under severe imbalance (ROC-AUC can look deceptively high because true negatives dominate)",
+    "Names the precision vs recall trade-off explicitly and ties it to business cost of false negatives (missed fraud) vs false positives (blocking legitimate customers), which also drives threshold choice",
+    "Remedy: cost-sensitive learning / class weights (e.g. class_weight=\"balanced\")",
+    "Remedy: resampling the training set (e.g. SMOTE oversampling of the minority or undersampling the majority) and/or tuning the decision threshold away from 0.5",
+    "Insists resampling/threshold tuning happen only on training data and the test set preserve the true class distribution (stratified split), so reported metrics reflect production"
+  ],
+  "common_pitfalls": [
+    "Accepting or defending the 99.5% accuracy, or failing to point out that an always-'not-fraud' baseline already achieves it",
+    "Recommending ROC-AUC as the primary metric without recognizing that the precision-recall curve is more informative under extreme imbalance, or asserting ROC-AUC is immune to class imbalance",
+    "Applying SMOTE/oversampling (or threshold tuning) to the whole dataset before the train/test split, or resampling the test set, which leaks information and inflates reported metrics",
+    "Only listing resampling and forgetting other levers such as class weights / cost-sensitive learning and decision-threshold tuning",
+    "Maximizing recall with no regard for the resulting false positives, ignoring the precision/recall trade-off and the business cost of blocking legitimate customers",
+    "Confusing or swapping the definitions of precision and recall"
+  ],
+  "reference_answer": "Accuracy is meaningless here because the classes are extremely imbalanced. A trivial model that predicts \"not fraud\" for every transaction already scores 99.5% accuracy, so that number just reflects the 0.5% base rate and tells us nothing about whether the model catches fraud. I'd ask to see the confusion matrix and minority-class metrics: precision (of the transactions we flag, how many are truly fraud) and recall (of all actual fraud, how much we catch), summarized as F1, and ideally the precision-recall curve / PR-AUC, which is far more informative than ROC-AUC under severe imbalance because ROC is dominated by the huge true-negative count and can look deceptively strong.\n\nThe core trade-off the team must decide is recall vs precision, driven by business cost: a false negative is missed fraud (expensive), while a false positive blocks a legitimate customer (annoying, support cost). That decision also sets the operating threshold rather than a default 0.5.\n\nConcrete remedies: (1) cost-sensitive learning via class weights, e.g. class_weight=\"balanced\", so the loss penalizes minority errors more; (2) resampling the training data, e.g. SMOTE oversampling of the minority or undersampling the majority; and (3) tuning the decision threshold on a validation set. Crucially, resampling and threshold tuning must be done only on training folds, and the test set must keep the true 0.5% distribution (stratified split) so the reported metrics reflect production reality.",
+  "global_rubric": "open_grading_rubric.json"
+}

@@ -79,14 +79,28 @@ def code_cat_parameters(difficulty: float, discrimination: float) -> dict[str, f
     }
 
 
-def open_cat_parameters(difficulty: float, discrimination: float) -> dict[str, float]:
-    """CAT parameters for an open-ended item.
+# The rubric floor is not a guessing floor, and it is not zero.
+# Under the fractional likelihood, `c` is the lowest normalised rubric score a candidate of
+# arbitrarily low ability still obtains. That is measurably non-zero for two reasons that
+# have nothing to do with guessing: level-1 descriptors reward attempting (1 of 4 = 0.25),
+# and an LLM rubric grader has central-tendency bias. With c = 0, a 0.15 score at theta = -4
+# looks like a surprise and pushes the posterior UP, away from an ability the candidate may
+# genuinely have.
+OPEN_RUBRIC_FLOOR = 0.15
 
-    Not implemented, and deliberately not guessed. Open-ended items are graded against a
-    rubric with no test suite behind them, so whether they carry a guessing floor and how
-    their difficulty was authored are questions the open-ended design has to answer first.
-    Defining a mapping now would bake in an answer nobody has given.
+
+def open_cat_parameters(difficulty: float, discrimination: float) -> dict[str, float]:
+    """CAT parameters on theta for one open / voice item.
+
+    Reuses the code path's mastery logit for `b` — same authoring provenance, same [0, 1]
+    scale. `c` is the rubric floor, not a guessing floor. With a floor, P(b) = (1+c)/2 =
+    0.575, so `b` is where the expected normalised score is 0.575, not 0.5 — a ~0.21-theta
+    shift at a = 1.7. Not corrected: it sits under the SE any short test reaches, and
+    shifting an uncalibrated authored number by a derived amount adds arithmetic without
+    adding truth.
     """
-    raise NotImplementedError(
-        "open-ended calibration is undefined until the open-ended grading design exists"
-    )
+    return {
+        "a": round(max(float(discrimination), 0.05), 4),
+        "b": mastery_difficulty_to_theta(difficulty),
+        "c": OPEN_RUBRIC_FLOOR,
+    }

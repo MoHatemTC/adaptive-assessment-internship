@@ -62,14 +62,16 @@ def seed_variable(
 
 
 def certainty(state: VariableState) -> float:
-    """Confidence in this estimate, 0-100. The orchestrator's comparison key.
+    """Confidence in this estimate, 0-100.
 
-    Deliberately a function of the standard error alone, so two variables with identical
-    posterior precision are equally certain regardless of how they were primed or which
-    modality measured them. A relative measure would make the probing order depend on
-    intake answers rather than on what is actually still unknown.
+    Measurement width still comes from SE alone (two variables with the same posterior
+    SD compare equal on that axis). Observation count only gates *reported* confidence
+    while the precision floor has not been met, so a short burst of high-`a` items cannot
+    look like a finished measurement in the UI.
     """
-    return convergence.certainty_pct(state.standard_error)
+    return convergence.certainty_pct(
+        state.standard_error, observations=state.observations
+    )
 
 
 def apply_outcome(

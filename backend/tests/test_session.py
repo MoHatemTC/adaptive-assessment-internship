@@ -100,16 +100,49 @@ async def test_report_never_claims_precision_it_did_not_reach(repository):
 
 
 def test_certainty_depends_only_on_precision():
-    """Two candidates at the same standard error must report the same certainty.
+    """Two candidates at the same standard error must report the same measurement certainty.
 
     Guards a defect this engine was built to avoid: when certainty is scaled by the prior
     width, the same measured precision reports differently depending on how the candidate
     answered an intake question — and because a stopping rule reads that number, it also
     changes the length of the test.
     """
-    assert certainty_pct(0.75) == certainty_pct(0.75)
-    assert certainty_pct(settings.cat_se_target) == pytest.approx(90.0)
-    assert certainty_pct(0.5) > certainty_pct(0.9)
+    from app.services.adaptive.convergence import measurement_certainty_pct
+
+    assert measurement_certainty_pct(0.75) == measurement_certainty_pct(0.75)
+    assert measurement_certainty_pct(settings.cat_se_target) == pytest.approx(90.0)
+    assert measurement_certainty_pct(0.5) > measurement_certainty_pct(0.9)
+
+
+def test_reported_certainty_stays_provisional_before_precision_floor():
+    """A crushed SE after 2–3 high-a items must not display as ≥90% yet."""
+    from app.services.adaptive.convergence import measurement_certainty_pct
+
+    se = 0.50  # ≥90% on the raw scale when target is 0.55
+    assert measurement_certainty_pct(se) >= 90.0
+    assert certainty_pct(se, observations=3) < 90.0
+    assert certainty_pct(se, observations=settings.cat_precision_min_questions) >= 90.0
+
+
+def test_precision_stop_requires_observation_floor():
+    """SE alone is not enough — the short high-a burst must not end the competency."""
+    early = evaluate(
+        standard_error=0.50,
+        band_history=[2, 2, 2],
+        questions_answered=3,
+        items_remaining=20,
+    )
+    assert early.should_stop is False
+
+    ready = evaluate(
+        standard_error=0.50,
+        band_history=[2] * settings.cat_precision_min_questions,
+        questions_answered=settings.cat_precision_min_questions,
+        items_remaining=20,
+    )
+    assert ready.should_stop is True
+    assert ready.reason == "precision"
+    assert ready.converged is True
 
 
 @pytest.mark.asyncio

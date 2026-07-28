@@ -1,0 +1,60 @@
+{
+  "rubric_id": "rubric_open_c9_001",
+  "version": "1.0",
+  "item_id": "open_c9_001",
+  "competency": "C9",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C9.1",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Full marks: correctly frames decode as memory-bandwidth bound with the CPU-vs-GPU bandwidth gap as the driver; accurate FP16 weight math (~14 GB for 7B) plus KV-cache/overhead pushing to ~24 GB; correct batching semantics (throughput up, per-request latency up) and a real continuous-batching stack; a technically sound instance choice. Deduct for wrong bottleneck (pure FLOPs/parallelism), bad memory arithmetic, or claiming batching has no latency cost."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C9.1",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Full marks: substantively covers all four asked parts (bottleneck, memory sizing, batching trade-off, cost/utilization) AND ends with a concrete justified instance. Deduct one point per omitted or only superficially treated part; missing quantization or the measure-p95 caveat costs at most a partial point."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C9.1",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Full marks: the instance choice and sizing follow logically from the bandwidth/memory/concurrency argument (e.g. 24 GB justified by weights + KV cache; single GPU justified by continuous batching; not over-buying an A100). Deduct when recommendations are asserted without linking to the mechanism or when the concurrency-to-hardware jump is unjustified."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C9.1",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Full marks: organized, uses correct vocabulary (HBM bandwidth, KV cache, continuous batching, autoscaling/backpressure) precisely, and a reviewer could act on it directly. Deduct for disorganized, hand-wavy, or jargon-dropping-without-meaning answers."
+    }
+  ],
+  "expected_answer_points": [
+    "Identifies autoregressive decode as memory-bandwidth bound (each token streams all weights + KV cache, low arithmetic intensity) and that GPU HBM/GDDR bandwidth greatly exceeds CPU DRAM bandwidth, which is the real reason CPU is slow and GPU is fast, not FLOPs.",
+    "Sizes VRAM correctly: ~14 GB for 7B FP16 weights (2 bytes/param) plus KV cache (scales with batch x sequence length x layers) plus framework/activation overhead, concluding ~24 GB is needed and 16 GB is too tight.",
+    "Explains batching amortizes weight reads to raise throughput and lower cost-per-token but adds per-request latency, and names continuous/in-flight batching (vLLM/TGI, PagedAttention) as the way to get throughput without forcing latency to the slowest request.",
+    "Concludes one batched GPU can serve the 15-avg/60-peak concurrency, i.e. rejects the one-GPU-per-request assumption.",
+    "Addresses cost/utilization under spiky traffic: autoscaling with a warm baseline, queue + backpressure/concurrency cap, right-sizing rather than over-buying, and possibly spot/serverless for burst.",
+    "Gives a concrete, justified instance pick (e.g. A10G/L4 24 GB, g5.xlarge or GCP g2) tied to memory + bandwidth + concurrency reasoning.",
+    "Mentions quantization (INT8/INT4) as a lever to fit a smaller GPU or enlarge batch headroom.",
+    "Recommends validating real p50/p95 with representative prompt/generation lengths and/or weighing self-host vs a managed endpoint at this volume."
+  ],
+  "common_pitfalls": [
+    "Justifies GPU purely by 'more cores / more FLOPs / parallelism' and misses that single-request autoregressive decode is memory-bandwidth bound, so the real driver is HBM vs DRAM bandwidth.",
+    "Sizes memory as just the ~14 GB of weights (or claims a 16 GB T4 is fine) and forgets the KV cache, activations, and framework overhead, under-provisioning VRAM.",
+    "Treats batching as a pure win that only raises throughput, without acknowledging the added per-request latency, and doesn't know continuous/in-flight batching.",
+    "Assumes one GPU serves one request, concluding they need dozens of GPUs to cover 60 concurrent conversations.",
+    "Over-provisions to an 80 GB A100/H100 for a 7B model that fits comfortably on a 24 GB card, wasting money.",
+    "Pins an always-on large fleet and ignores utilization/cost for spiky traffic (no autoscaling, no warm baseline, no queue/backpressure), or gives no concrete instance at all."
+  ],
+  "reference_answer": "Recommendation: move to GPU; a single mid-range 24 GB GPU with a batching-aware server will meet the targets.\n\n(a) Bottleneck. Autoregressive decoding is memory-bandwidth bound, not compute bound. Generating each token requires streaming the entire set of weights (plus the growing KV cache) from memory through the compute units, and only a single token's worth of work is done per pass, so arithmetic intensity is very low. CPU main-memory bandwidth is typically tens to low-hundreds of GB/s, whereas GPU HBM/GDDR bandwidth is many hundreds of GB/s to multiple TB/s (an A10G is ~600 GB/s; an A100 ~1.5-2 TB/s). That bandwidth gap, not raw FLOPs, is why CPU decode crawls and GPU decode is interactive.\n\n(b) Memory sizing. 7B params at FP16 is ~14 GB for weights alone (2 bytes/param). On top of that: the KV cache, which scales with batch x sequence length x layers (~0.5 MB per token per sequence for a 7B-class model, so ~1 GB for a 2K-token conversation), plus CUDA/framework context and activation memory. A 16 GB card (T4) is too tight once KV cache and batching are included; you want ~24 GB of headroom. INT8/INT4 quantization (~7 GB / ~3.5 GB of weights) is a lever to fit a smaller GPU or leave more room for larger batches.\n\n(c) Batching. A single request badly underutilizes the GPU because each token read of the weights is amortized over just one sequence. Batching many concurrent requests amortizes that weight read across many tokens, sharply increasing tokens/sec throughput and lowering cost-per-token, but it raises per-request latency (queueing + larger matmuls). Continuous / in-flight batching (vLLM, TGI) resolves this by inserting and evicting requests at the token level rather than waiting for a whole batch, and PagedAttention reduces KV-cache fragmentation. With continuous batching, one 24 GB GPU comfortably serves the 15-avg / 60-peak concurrency; you do NOT need one GPU per conversation.\n\n(d) Cost/utilization. Keep a small autoscaling fleet with a warm minimum (1 instance) to cover baseline, scale out for peaks behind a request queue with backpressure and a concurrency cap, and right-size the hardware, don't buy an 80 GB A100/H100 for a 7B model. Spot/on-demand can absorb burst.\n\nConcrete choice: AWS g5.xlarge (single NVIDIA A10G, 24 GB, ~600 GB/s) running vLLM with continuous batching, autoscaled 1->N behind a queue; FP16 weights, optionally INT8 to enlarge batch headroom. 24 GB fits the FP16 weights plus KV cache, the bandwidth gives interactive token rates, and batching lets one instance cover the concurrency far more cheaply than an A100. I'd validate p50/p95 with representative prompt and generation lengths before committing, and sanity-check the self-host economics against a managed endpoint (SageMaker/Bedrock/Vertex) at this volume.",
+  "global_rubric": "open_grading_rubric.json"
+}

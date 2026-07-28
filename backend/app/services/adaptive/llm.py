@@ -25,6 +25,7 @@ from openai import (
 
 from app.config.settings import settings
 from app.services import observability
+from app.services.litellm_http import async_http
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,12 @@ class LLMUnavailable(RuntimeError):
     """No usable reply, for any reason. Callers fall back to the deterministic path."""
 
 
+def _model_requires_default_temperature(model_name: str) -> bool:
+    """Some routed models reject explicit temperature overrides."""
+    normalized = (model_name or "").strip().lower()
+    return normalized.endswith("gpt-5.6-sol")
+
+
 def _llm() -> AsyncOpenAI:
     global _client
     if _client is None:
@@ -59,6 +66,7 @@ def _llm() -> AsyncOpenAI:
             # single failing step becomes SDK-retries x our-retries silent attempts, and
             # nothing reaches the log until the whole thing finally gives up.
             max_retries=0,
+            http_client=async_http(),
         )
     return _client
 
@@ -123,16 +131,23 @@ async def _one_call(
     require: tuple[str, ...],
     trace: dict[str, Any] | None = None,
 ):
-    response = await _llm().chat.completions.create(
-        model=settings.litellm_model,
-        temperature=temperature,
-        response_format={"type": "json_object"},
-        messages=[
+    request_kwargs: dict[str, Any] = {
+        "model": settings.litellm_model,
+        "response_format": {"type": "json_object"},
+        "messages": [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ],
+    }
+    # gpt-5.6-sol (via the current LiteLLM route) rejects temperature=0 and requires
+    # provider default behavior; omit the field completely in that case.
+    if not _model_requires_default_temperature(settings.litellm_model):
+        request_kwargs["temperature"] = temperature
+
+    response = await _llm().chat.completions.create(
         # Empty unless Langfuse is configured, and stripped by its argument extractor
         # before the request is built either way — the gateway never sees these.
+        **request_kwargs,
         **(trace or {}),
     )
     message = response.choices[0].message
@@ -198,6 +213,13 @@ async def chat_json(
             last = exc
             if attempt < TRANSPORT_ATTEMPTS - 1:
                 logger.warning("llm transport failure (%s), retrying", type(exc).__name__)
+                # Drop pooled clients: instantaneous Connection errors are usually a
+                # dead keepalive to the LiteLLM proxy; retrying on the same socket
+                # just records another Langfuse ERROR span.
+                reset_client()
+                from app.services.litellm_http import reset_http
+
+                reset_http()
                 continue
             raise LLMUnavailable(f"gateway unreachable: {type(exc).__name__}") from exc
         except APIStatusError as exc:

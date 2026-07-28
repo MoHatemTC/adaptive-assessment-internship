@@ -4,6 +4,7 @@ pydantic-settings>=2.0,<3
 
 # LLM: all calls route through the LiteLLM proxy, as in the parent project
 openai>=1.50,<3
+httpx>=0.27
 
 # Ability estimation. The posterior is a grid, so this is a hard requirement, not a
 # convenience — it is not listed in the parent project's requirements and must be added
@@ -16,6 +17,13 @@ numpy>=1.26,<3
 # session-grouping API this uses (propagate_attributes) does not exist below it; its
 # absence costs only the grouping, so the ceiling is the real constraint.
 langfuse>=3.0,<5
+
+# Live interviewer for open/voice (picker + open grader still use LiteLLM).
+google-genai>=1.0
+websockets>=13
+fastapi>=0.110
+uvicorn[standard]>=0.27
+python-multipart>=0.0.9
 
 # Tests
 pytest>=8.0

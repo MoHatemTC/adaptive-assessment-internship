@@ -1,0 +1,59 @@
+{
+  "rubric_id": "rubric_open_c5_006",
+  "version": "1.0",
+  "item_id": "open_c5_006",
+  "competency": "C5",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C5.6",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Full marks require factually correct treatment of bi-encoder vs cross-encoder roles (reranker over a shortlist, not the whole corpus), the symmetric-STS vs asymmetric-retrieval distinction, dense-vs-lexical/hybrid fusion, HNSW/ANN approximate recall behavior, and correct metric usage. Deduct for errors such as claiming a cross-encoder can index 20M passages, treating the STS score as proof of retrieval quality, conflating cosine with inner product on unnormalized vectors, or misdescribing RRF/nDCG/Recall@k."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C5.6",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Full marks address BOTH reported symptoms (lexical/entity misses AND the best passage buried under near-duplicates), cover both first-stage recall and second-stage precision, and include a concrete evaluation plan. Lose points for omitting the hybrid/lexical arm, the reranker, the ANN-recall consideration, or the evaluation methodology."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C5.6",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Full marks justify each component against the 150 ms latency budget and the recall-then-precision division of labor (why candidate recall caps final quality, why the reranker only sees a shortlist), arguing trade-offs rather than listing tools. Partial credit for correct choices with thin or missing justification."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C5.6",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Full marks present a coherent diagnosis-to-design-to-evaluation narrative using precise IR vocabulary (recall@k, nDCG, RRF, ef_search, cross-encoder, hard negatives) and clearly map each fix to the symptom it addresses. Deduct for disorganized, vague, or jargon-dropping-without-meaning answers."
+    }
+  ],
+  "expected_answer_points": [
+    "Identifies that a single-stage bi-encoder cannot model query-passage interaction and adds a cross-encoder reranker over a small top-k shortlist, noting the cross-encoder is too expensive to run over the full corpus",
+    "Attributes symptom (a) to the dense-retrieval lexical/entity gap and proposes a hybrid design adding a sparse/lexical arm (BM25 or SPLADE) fused with the dense list (e.g. RRF)",
+    "Recognizes that a high STS (symmetric) benchmark score is the wrong proxy for asymmetric short-query-to-passage retrieval, and recommends a retrieval-trained encoder (contrastive + hard negatives, query/passage prefixes)",
+    "Flags the ANN approximate-recall gap: HNSW ef_search / M and quantization can drop the true best passage, so first-stage recall must be measured against exact brute-force and tuned because it caps final quality",
+    "Addresses the near-duplicate crowding in symptom (b) via reranking plus diversification/dedup (e.g. MMR), and checks embedding normalization / index-metric consistency and chunk granularity",
+    "Proposes an evaluation plan on a labeled relevance set that separates first-stage candidate Recall@k from final-ranking nDCG@10 / MRR, plus online A/B on engagement, explicitly rejecting the STS score as the success metric",
+    "Justifies component choices against the 150 ms p95 budget (e.g. rerank only ~50-100 candidates, batched) rather than merely listing tools"
+  ],
+  "common_pitfalls": [
+    "Proposes 'use a bigger/better embedding model' or 'fine-tune the bi-encoder' as the sole fix, ignoring that a bi-encoder alone cannot model query-passage interaction and that exact-entity misses need a lexical/sparse component",
+    "Suggests running a cross-encoder (or an LLM reranker) over the entire 20M-passage corpus, or claims it is feasible, missing that joint-encoding rerankers are only tractable over a small candidate shortlist",
+    "Trusts the offline STS benchmark as evidence the model is fine, failing to see that symmetric sentence-similarity is the wrong proxy for asymmetric query-to-passage retrieval and that a labeled relevance set with Recall@k / nDCG is needed",
+    "Assumes HNSW returns the true nearest neighbors, so never tunes ef_search / M or measures candidate recall against exact brute-force, and therefore misses that approximate recall caps everything downstream",
+    "Forgets query/passage instruction prefixes, L2-normalization, or index-metric consistency, or conflates cosine similarity with inner product on unnormalized vectors",
+    "Treats 'best passage ranked below near-duplicates' as purely a model-quality problem, overlooking redundancy/diversification (MMR/dedup) and the reranking fix, and never separates first-stage recall from final-stage ranking quality in evaluation"
+  ],
+  "reference_answer": "Diagnosis. Three largely independent failure modes are in play.\n\n1) The system is a single-stage bi-encoder retriever. A bi-encoder embeds query and passage independently, so it captures only coarse topical similarity and cannot model term-level query-passage interaction. That explains symptom (b): among 50 topically-similar candidates it cannot distinguish the genuinely-best passage from generic or near-duplicate ones. The fix is a two-stage pipeline: keep the bi-encoder + ANN as a high-recall candidate generator, then rerank the top-k with a cross-encoder that jointly encodes the (query, passage) pair and outputs a relevance score. Cross-encoders are far more accurate but cost one forward pass per candidate, so they are only tractable over a small shortlist -- rerank ~50-100 candidates, batched on GPU, which fits 150 ms; you cannot run one over 20M passages.\n\n2) Symptom (a) -- missing exact-phrase/entity matches -- is the classic dense-retrieval lexical gap. Embeddings generalize semantically but under-weight rare tokens, IDs, product codes and jargon, exactly what BM25 handles well. Add a lexical arm (BM25 or a learned-sparse model such as SPLADE) and fuse the two candidate lists (e.g. Reciprocal Rank Fusion, or a weighted score combination) before reranking. Hybrid retrieval recovers exact matches while preserving semantic recall.\n\n3) The offline signal is misleading. A strong STS benchmark score measures symmetric sentence-to-sentence similarity, which is the wrong proxy for asymmetric short-query -> long-passage retrieval. Swap the general model for a retrieval-trained encoder (E5/GTE/BGE family) trained contrastively with in-batch and hard negatives, and use its query/passage instruction prefixes; a symmetric STS model applied to asymmetric retrieval systematically under-ranks the right passage.\n\nTwo hygiene checks: confirm vectors are L2-normalized and the index metric truly is cosine/inner-product (a mismatch silently corrupts ranking), and confirm chunking granularity -- embedding a long document dilutes the relevant span, so chunk to passage size. The near-duplicate crowding also warrants MMR or dedup so the reranker isn't handed 40 copies of the same text.\n\nANN recall. HNSW returns approximate neighbors; a low ef_search or aggressive quantization (PQ) can silently drop the true best passage before the reranker ever sees it. Because a reranker can only reorder what the first stage retrieves, first-stage recall is the hard ceiling. Measure ANN recall against brute-force exact search and raise ef_search/M until candidate Recall@k is high enough.\n\nEvaluation. The STS score is not the metric. Build a labeled relevance set from real production queries and measure two things separately: candidate Recall@k for stage one (did the right passage make the shortlist?) and nDCG@10 / MRR for the final ordering (is it at the top?). Then A/B test online against click-through, dwell, or task-success. This separation localizes any regression to either retrieval or reranking.",
+  "global_rubric": "open_grading_rubric.json"
+}

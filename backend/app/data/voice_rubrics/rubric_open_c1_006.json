@@ -1,0 +1,60 @@
+{
+  "rubric_id": "rubric_open_c1_006",
+  "version": "1.0",
+  "item_id": "open_c1_006",
+  "competency": "C1",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C1.6",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Correctly explains that constrained decoding guarantees only structural/syntactic JSON conformance; that providers enforce a subset of JSON Schema with assertion keywords (pattern/format/min-max/length) commonly unenforced; that truncation (finish_reason 'length') and refusals break conformance; and that schema-validity is not semantic correctness. Full marks require no false claims (e.g. asserting strict mode makes validation failures impossible, or that temperature 0 guarantees validity)."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C1.6",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Accounts for BOTH incidents' mechanisms and delivers a full handling design: finish_reason and refusal checks, parse + validate, a bounded repair loop with error feedback and a dead-letter/human fallback, a distinct semantic/referential validation stage, untrusted-input treatment before writes, plus idempotency and observability. Missing whole pillars (e.g. no semantic validation, or no truncation handling) caps this score."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C1.6",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Ties each control to the specific failure it addresses (unenforced keywords and truncation -> incident a; hallucinated values -> incident b) and justifies design choices — why bounded rather than unbounded retry, why semantic checks cannot be delegated to the decoder, why referential checks are needed for IDs, why temperature 0 is insufficient."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C1.6",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Cleanly separates 'what the guarantee covers' from 'what it does not', maps mechanisms to the two incidents explicitly, and presents the design as an organized, actionable pipeline using precise vocabulary (constrained/grammar decoding, finish_reason, strict mode, Pydantic, repair loop, dead-letter)."
+    }
+  ],
+  "expected_answer_points": [
+    "Constrained/grammar-based decoding masks the sampler to tokens that keep a valid JSON prefix, so it guarantees only structural/syntactic conformance (types, required keys, enum membership, nesting, additionalProperties:false) — a structural guarantee, not a semantic one.",
+    "Providers enforce only a subset of JSON Schema that varies by provider/version; assertion keywords such as pattern, format, minLength/maxLength, minimum/maximum are commonly NOT enforced by the decoder, so the grammar can emit values that a stricter Pydantic model rejects — a cause of incident (a).",
+    "Truncation: hitting max_tokens yields finish_reason 'length' and an incomplete (invalid) JSON document; the service must check finish_reason and treat non-natural stops as failures, and budget max_tokens for worst-case output.",
+    "Refusals / out-of-band completions (refusal field, empty/null, non-standard stop reason) are not schema-conformant and must be detected and routed separately rather than parsed blindly.",
+    "Incident (b) is inherent: the grammar constrains shape not truth, so schema-valid but wrong values (wrong enum choice, well-typed but nonexistent customer_id) require semantic/business validation — cross-field rules plus referential/existence checks against the DB or allow-lists.",
+    "LLM output must be treated as untrusted input: no id or value is used for a side-effecting write, query, or action without an existence/authorization check.",
+    "Robust handling design: validate on receipt, then a bounded repair loop that re-prompts with the concrete validator error, with a dead-letter/human-review fallback when the budget is exhausted — not an unbounded retry.",
+    "Operational hardening: idempotent writes, structured observability (failure_reason/repair/refusal rates per schema version), tight schemas, and recognition that temperature 0 reduces variance but is not a schema/semantic guarantee."
+  ],
+  "common_pitfalls": [
+    "Asserts that strict/structured-output mode makes validation failures impossible, so blames incident (a) on a provider bug instead of recognizing unenforced assertion keywords and truncation.",
+    "Conflates structural/syntactic validity with semantic correctness — argues a schema-valid ticket cannot have a wrong priority or a bad customer_id, so never proposes semantic/referential validation for incident (b).",
+    "Offers temperature 0 (or 'add a better example to the prompt') as the fix, treating determinism as if it were a schema or truth guarantee.",
+    "Handles failures with an unbounded retry loop, or retries without feeding the exact validator error back, risking infinite loops and cost blowup and no path to human review.",
+    "Never checks finish_reason, so truncated responses are silently mis-parsed or endlessly re-parsed instead of being detected and re-driven with a larger max_tokens.",
+    "Trusts the returned customer_id and writes it to the database without an existence/authorization check, treating LLM output as trusted rather than untrusted input."
+  ],
+  "reference_answer": "Strict mode uses constrained (grammar-based) decoding: at each step the token sampler is masked to only tokens that keep the output a valid prefix of a JSON document matching the schema's structure. That is a real but narrow guarantee — the bytes will parse as JSON and match the structural skeleton (declared types, required keys, enum membership, nesting, additionalProperties:false). It does NOT guarantee that every JSON-Schema keyword is enforced, that the response is complete, that the model didn't refuse, or that the values are true.\n\nIncident (a): ~1/500 fails Pydantic. Two causes. First, constrained decoders enforce only a subset of JSON Schema, and the subset varies by provider and version; assertion keywords such as pattern, format, minLength/maxLength, and minimum/maximum are commonly NOT enforced during decoding. If your Pydantic model constrains a field the decoder ignored (an email regex, a positive-int bound), the grammar will happily emit a value that Pydantic then rejects. Second, truncation: if generation hits max_tokens, finish_reason is 'length' and the JSON is cut off mid-object — a valid prefix but not a valid document. You must inspect finish_reason and treat anything but a natural stop as a failure, and size max_tokens for worst-case output.\n\nIncident (b): valid but wrong. The grammar constrains shape, not truth. 'priority: low' on an outage and a well-typed but nonexistent customer_id are both schema-valid; the model simply produced the wrong value. No decoding constraint can catch a semantic error.\n\nDesign:\n1. On receipt, check finish_reason and the refusal channel FIRST. A refusal or empty completion is out-of-band and will not conform — route it (retry or human queue), don't feed it to the parser.\n2. Parse and Pydantic-validate. On failure, run a BOUNDED repair loop (e.g. <=2 attempts) that re-prompts with the previous output plus the exact validator error message; on exhaustion, send to a dead-letter/human-review queue rather than looping forever or dropping silently.\n3. Add a separate semantic/business-validation stage: cross-field rules (outage keywords => priority not 'low') and referential checks — look customer_id up in the DB, use allow-lists for enums that map to real entities. Treat all LLM output as untrusted input: never write an id or take a side-effecting action without an existence/authorization check.\n4. Make the DB write idempotent (dedupe on message id) and emit structured telemetry — failure_reason, repair rate, refusal rate, per schema version. Keep the schema tight (over-broad schemas hurt quality and grammar-compile latency); temperature 0 lowers variance but is not a correctness guarantee, so it is not a substitute for validation.",
+  "global_rubric": "open_grading_rubric.json"
+}

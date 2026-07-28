@@ -1,0 +1,59 @@
+{
+  "rubric_id": "rubric_open_c4_005",
+  "version": "1.0",
+  "item_id": "open_c4_005",
+  "competency": "C4",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C4.5",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Full marks require correct mechanics: OS32 downsampling discards spatial detail that upsampling cannot restore; dilated convolution removes stride and raises dilation to preserve the effective receptive field ((2d+1) span for a 3x3 kernel, dilation doubled per removed stride-2) at higher resolution; dilation leaves kernel size and parameter count unchanged so pretrained weights transfer; and OS8 raises activation memory/compute by roughly 16x. Penalize claims that upsampling recovers lost detail, that dilation adds parameters or equals transposed/deconvolution, or incorrect receptive-field reasoning."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C4.5",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Covers all three asked parts: the diagnosis, the concrete stride-to-dilation redesign reaching OS8 while reusing pretrained weights, and the trade-offs (memory/compute and gridding) with mitigations. Award partial credit proportionally; deduct for omitting receptive-field preservation, the cost analysis, the gridding artifact, or the need for a decoder/skip connections."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C4.5",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Rewards causal reasoning: why sub-pixel structures vanish and interpolation cannot undo it, why doubling dilation exactly compensates a removed stride-2, why OS8 costs about 16x more activations, and why gridding arises from sparse sampling. Full marks connect each design choice to its mechanism rather than merely naming techniques."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C4.5",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Clear, well-organized answer that separates diagnosis / redesign / trade-offs, uses correct terminology (output stride, dilation/atrous rate, effective receptive field, ASPP, skip connections), and is precise and concise rather than vague."
+    }
+  ],
+  "expected_answer_points": [
+    "Diagnoses the root cause: output stride 32 discards fine spatial detail so sub-pixel thin/small objects vanish at the coarse feature map, and a single bilinear upsample only interpolates and cannot recover information already thrown away, producing blurry boundaries.",
+    "States the core dilated-convolution idea: remove the stride (set stride 1) in the deep stages and increase the dilation rate correspondingly so spatial resolution is preserved (output stride 8) while the effective receptive field is maintained.",
+    "Gives the receptive-field relationship: a 3x3 kernel at dilation d spans (2d+1), and doubling the dilation compensates for each removed stride-2 so context coverage matches the original OS32 backbone (e.g. dilation 2 then 4 in res4/res5).",
+    "Notes pretrained weights transfer directly because dilation changes only the sampling grid, not kernel size or parameter count, so only stride/dilation hyperparameters change.",
+    "Quantifies the compute/memory cost: OS8 feature maps are 4x larger per spatial dimension, about 16x more activations in the deep high-channel stages, sharply raising memory and FLOPs.",
+    "Identifies gridding/aliasing artifacts from sparse dilated sampling and proposes a mitigation such as hybrid/co-prime dilation rates or Atrous Spatial Pyramid Pooling (ASPP).",
+    "Recognizes that dilation alone does not sharpen boundaries and recommends an encoder-decoder / skip-connection design (U-Net or DeepLabv3+ decoder) to fuse high-resolution early features."
+  ],
+  "common_pitfalls": [
+    "Claims a bilinear upsample or a learnable transposed convolution can recover the lost fine detail, missing that information discarded by OS32 downsampling is gone and the fix is to avoid discarding it, not to invert the upsample.",
+    "Confuses dilated (atrous) convolution with transposed/deconvolution or with simply using larger kernels, or wrongly asserts dilation increases the parameter count.",
+    "Removes the stride to raise resolution but forgets to increase the dilation rate, so the effective receptive field shrinks and large-scale context is lost.",
+    "Treats OS8 as a free win, ignoring the roughly 16x growth in activations/FLOPs in the deep high-channel stages and the resulting memory pressure.",
+    "Overlooks gridding/aliasing artifacts entirely, or applies a single uniform dilation rate everywhere, which actually worsens gridding.",
+    "Treats dilation as a complete solution and omits the need for skip connections or a decoder to recover crisp object boundaries."
+  ],
+  "reference_answer": "(a) Root cause. The backbone reduces spatial resolution by 32x, so on a 512x512 image the deepest feature map is only 16x16. A pole a few pixels wide in the input maps to a fraction of one cell at that scale and is effectively averaged away before any prediction is made; that is why thin and distant classes score poorly while large homogeneous regions survive. The final 32x bilinear upsample is pure interpolation, so it cannot restore high-frequency spatial information the strided convolutions and pooling already discarded, which is why boundaries come back blurry.\n\n(b) Dilated redesign. Keep the pretrained backbone but, in the last two stages (ResNet res4 and res5), set the stride of the downsampling convolutions to 1 and compensate by dilating the 3x3 convolutions in those stages: dilation 2 in the first affected stage and dilation 4 in the next. A 3x3 kernel at dilation d has an effective span of (2d+1), so doubling the dilation for each removed stride-2 preserves the same effective receptive field (context coverage) the network had at output stride 32. Because dilation changes only the sampling grid, not the kernel size or parameter count, the ImageNet weights transfer directly, only the stride/dilation hyperparameters change. This yields output stride 8 (a 64x64 feature map), so small structures survive and only an 8x upsample is needed.\n\n(c) Trade-offs and mitigations. Running res4/res5 at output stride 8 makes those feature maps 4x larger per spatial dimension, roughly 16x more activations in the highest-channel part of the network, so memory and FLOPs rise sharply; OS8 is usually the practical floor, and gradient checkpointing or smaller crops help. Dilated (sparse) sampling causes gridding artifacts when stacked at a single rate, so use hybrid dilation with varying/co-prime rates or an ASPP module that pools several rates in parallel. Finally, dilation alone still will not give crisp boundaries: add a decoder with skip connections from high-resolution early layers (U-Net or DeepLabv3+ style) to fuse fine spatial detail with the deep semantic features.",
+  "global_rubric": "open_grading_rubric.json"
+}

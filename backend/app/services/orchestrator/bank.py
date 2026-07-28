@@ -161,9 +161,8 @@ class JsonUnifiedBank:
                     v for v in variables[code] if v.split(".")[0] == code
                 ),
                 "items": sum(names[code].values()),
-                "modalities": sorted(
-                    {m for v in variables[code] for m in coverage.get(v, {})}
-                ),
+                # coverage() is keyed by main competency (C1 / PY), not sub-codes.
+                "modalities": sorted(coverage.get(code, {}).keys()),
             }
             for code in _sorted_main_codes(names.keys())
         ]

@@ -1,0 +1,59 @@
+{
+  "rubric_id": "rubric_open_c1_001",
+  "version": "1.0",
+  "item_id": "open_c1_001",
+  "competency": "C1",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C1.1",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Correctly states that the default is evaluated once at definition time and stored on the function, that the mutable list is shared across calls, and that in-place append is what leaks state. The corrected snippet uses a None (or object()) sentinel and allocates a fresh list. No false claims (e.g. that defaults re-evaluate per call, or that history.clear()/a global fixes it). Full marks require both the accurate mechanism and a correct fix."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C1.1",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Covers the mechanism, a working fix, AND both follow-ups: (a) the residual aliasing when a caller passes a list, with the copy remedy, and (b) the deliberate-cache framing plus the linter/sentinel nuance. Partial credit for omitting one follow-up; minimal credit if only the fix is shown without explaining why the original leaks."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C1.1",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Argues from Python semantics (evaluation timing, object identity, in-place mutation) rather than asserting a rule. Justifies is None over truthiness and explains why copying removes the caller-visible side effect. Reasoning connects each symptom to a specific language behavior."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C1.1",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Reads as a crisp debugging narrative: names the root cause, shows a clean corrected snippet, and separates the aliasing caveat from the core fix. Uses precise terminology (default evaluation, shared object, aliasing, sentinel) without rambling."
+    }
+  ],
+  "expected_answer_points": [
+    "Default argument values are evaluated once, when the def statement executes at definition time, not on each call; the same list object is bound as the default (retrievable via the function's __defaults__).",
+    "Because append() mutates that single shared list in place, items persist across calls that rely on the default, so unrelated conversations accumulate each other's messages.",
+    "Correct fix is the sentinel pattern: default to None (or a unique sentinel) and allocate a fresh list inside the body when the argument was not supplied.",
+    "Explains that `if history is None: history = []` creates a new list per call, and that `is None` is preferable to a truthiness check like `history or []` which mishandles a legitimately-passed empty/falsy value.",
+    "(a) Identifies that even with the None-sentinel fix, a caller-supplied list is still mutated in place (aliasing); to avoid side-effecting the caller's object, copy it (e.g. history = list(history)).",
+    "Notes that if None is itself a valid argument value, a private sentinel object (_MISSING = object()) should be used instead of None.",
+    "(b) Acknowledges the shared-default persistence can be (ab)used as a cache/memo but should be made explicit; mentions linters flag it (ruff/flake8-bugbear B006 or pylint W0102)."
+  ],
+  "common_pitfalls": [
+    "Claims default arguments are re-evaluated on every call and therefore concludes the code 'should' reset each time — misdiagnosing the mechanism entirely instead of recognizing the once-at-definition evaluation.",
+    "'Fixes' it while keeping the mutable default — e.g. calling history.clear() or reassigning inside the body — which either still mutates the shared object or fails to help callers that rely on the default.",
+    "Uses `history = history or []` and calls it equivalent to `is None`, missing that truthiness silently discards a deliberately-passed empty list and mishandles other falsy inputs.",
+    "Applies the None-sentinel fix but asserts it is now fully side-effect-free, overlooking that a caller-supplied list is still mutated in place (aliasing).",
+    "Blames variable scope, closures, or a hidden global rather than the default-argument object being stored on the function.",
+    "Over-engineers with copy.deepcopy of the default or a module-level global as the primary fix instead of the idiomatic sentinel pattern."
+  ],
+  "reference_answer": "This is Python's default-argument evaluation model, not a logic error. A default value is evaluated exactly once, when the `def` statement runs at definition/import time, and the resulting object is stored on the function itself (in `build_messages.__defaults__`). There is therefore a single list shared by every call that relies on the default. Because `history.append(...)` mutates that list in place, each request that omits `history` appends onto the same object, so later 'fresh' conversations already hold earlier messages.\n\nFix with the sentinel pattern:\n\n```python\ndef build_messages(user_msg, history=None):\n    if history is None:\n        history = []\n    history.append({\"role\": \"user\", \"content\": user_msg})\n    return history\n```\n\nA new list is allocated per call, so no state leaks. Prefer `is None` over `history or []`: truthiness would also discard a deliberately-passed empty list and mishandle other falsy inputs.\n\n(a) No. Even after the fix, when a caller passes their own list the function still mutates it in place (aliasing); the caller sees the appended message. If that side effect is unwanted, copy first: `history = list(history)`. If `None` is itself a valid value, use a private sentinel `_MISSING = object()` instead.\n\n(b) The shared, persistent default is occasionally exploited as a cheap per-function cache/memo, but an explicit module-level dict is clearer and linters (ruff/flake8-bugbear B006, pylint W0102) flag the mutable default by default.",
+  "global_rubric": "open_grading_rubric.json"
+}

@@ -1,0 +1,60 @@
+{
+  "rubric_id": "rubric_open_c8_002",
+  "version": "1.0",
+  "item_id": "open_c8_002",
+  "competency": "C8",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C8.2",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Full marks require correct, true claims throughout: the ~16 bytes/param full-FT figure with the components named and the point that optimizer/master states dominate; ~0.5 byte/param for the 4-bit base; on-the-fly dequantization of a frozen NF4 base to the bf16 compute dtype; gradients flowing only to A and B with the base receiving none; the alpha/r scaling and zero-init of B; all-linear-layer targeting; and the merge-then-requantize mismatch. Deduct for false statements such as the base weights being trained/updated, NF4 being lossless, or alpha setting the parameter count."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C8.2",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Full marks require substantive coverage of all four requested parts: (1) the memory breakdown contrasting full FT with QLoRA, (2) forward/backward behavior and where gradients do and do not flow, (3) rank/alpha/target-module choices with the QLoRA target-module finding, and (4) the deployment merge trade-off including the 4-bit re-quantization wrinkle. Missing or only-gestured parts lose marks proportionally."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C8.2",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Full marks require causal justification rather than assertion: why QLoRA fits (the base's gradients and fp32 optimizer/master states are eliminated), why adapter breadth beats large rank, why zero-init B gives a safe start, and why re-quantizing a merged model injects error the adapter never saw. Answers that merely list facts without the underlying mechanism score lower."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C8.2",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Full marks for a well-organized, design-review-appropriate answer that maps cleanly to the four parts, uses precise terminology (NF4, compute/dequant dtype, alpha/r, adapter merge, paged optimizer) correctly, and stays concise. Rambling, disorganized, or jargon-misusing answers score lower."
+    }
+  ],
+  "expected_answer_points": [
+    "Full fine-tuning with Adam costs ~16 bytes/param (bf16 weight + bf16 grad + fp32 master + fp32 Adam m,v), ~200 GB for 13B, so it exceeds 24 GB; the optimizer/master states dominate, not the weights themselves.",
+    "QLoRA fits because the base is stored in 4-bit NF4 (~0.5 byte/param, ~6.5 GB) and only the tiny adapters carry gradients and optimizer states; gradient checkpointing and a paged optimizer absorb activations/spikes.",
+    "The frozen NF4 base is dequantized on the fly to the bf16 compute dtype for each matmul and discarded; NF4 is a lossy 4-bit quantile type, not an exact store.",
+    "Gradients flow only to the LoRA matrices A and B (and their optimizer states); the quantized base gets no gradient/no optimizer state, which is the source of the memory saving; B is zero-initialized so training starts at the base model.",
+    "r sets adapter capacity/param count while alpha scales the update as alpha/r (e.g. alpha ~ 2r); they are distinct levers.",
+    "Per the QLoRA finding, attaching adapters to all linear layers (attention q/k/v/o and MLP gate/up/down) matters more for matching full-FT quality than pushing rank high; breadth beats depth of rank.",
+    "Merging folds W + (alpha/r)BA into one matrix to remove adapter inference latency and serve a single model.",
+    "Re-quantizing the merged weights to 4-bit introduces a quantization error the adapter never trained against, degrading quality; mitigate by merging into an fp16 base or keeping the adapter unmerged (which also enables multi-adapter hot-swap)."
+  ],
+  "common_pitfalls": [
+    "Claims QLoRA's saving comes mainly from shrinking the base weights to 4-bit, missing that the dominant saving is removing the gradients and fp32 Adam/master states for the frozen base.",
+    "States or implies the 4-bit base weights are updated during training, rather than only the A and B adapter matrices.",
+    "Treats adapter merging as always free and lossless, ignoring that re-quantizing the merged weights to 4-bit introduces error the adapter never trained against.",
+    "Recommends maximizing rank r as the primary quality lever, overlooking the QLoRA finding that attaching adapters to all linear layers matters more than large rank.",
+    "Confuses alpha with rank, or claims alpha sets the number of trainable parameters, when alpha only scales the update via the alpha/r factor.",
+    "Believes NF4 stores weights exactly or that dequantization recovers the original bf16 values, rather than being lossy quantile quantization of normally distributed weights."
+  ],
+  "reference_answer": "1) Memory. Mixed-precision full fine-tuning with Adam costs roughly 16 bytes/parameter: a bf16 weight (2) + bf16 gradient (2) + an fp32 master copy (4) + fp32 Adam m and v (4+4). For 13B that is ~208 GB before activations, far beyond 24 GB; the optimizer/master states, not the weights, dominate. QLoRA stores the frozen base in 4-bit NF4 (~0.5 byte/param -> ~6.5 GB, less with double quantization) and only the small LoRA adapters (<1% of params) carry gradients and Adam states, so those cost a few hundred MB. The rest of the budget is activations, cut with gradient checkpointing, plus a paged optimizer that offloads spikes to CPU. It fits.\n\n2) Forward/backward. NF4 is a lossy 4-bit quantile ('NormalFloat') type tuned for zero-centered normal weights. The base is frozen: on each matmul its NF4 weights are dequantized on the fly to the bf16 compute dtype, used, then discarded. The LoRA path runs alongside: h = W_deq x + (alpha/r)·B(Ax), with A,B in bf16 and B initialized to zero (A Gaussian) so at step 0 the adapter is a no-op and training starts exactly at the base model. Backprop computes gradients only for A and B; the quantized base receives no gradient and no optimizer state - that is the whole saving. W_deq is still used to propagate gradients to earlier activations, but dW is never accumulated.\n\n3) Hyperparameters. r (commonly 8-64) sets adapter capacity/param count; alpha enters as the scale alpha/r, so it amplifies the update independent of r (set alpha ~ 2r, then tune). Crucially, the QLoRA paper found that matching full-FT quality depends on attaching adapters to all linear layers (q,k,v,o plus the MLP gate/up/down), not just q and v - the breadth of adapted matrices matters more than a large rank. So prefer many modules at modest rank over few modules at high rank.\n\n4) Merge trade-off. For inference you can fold W_merged = W + (alpha/r)·BA into one matrix, removing the extra adapter matmul and serving a single model. The wrinkle: the adapter was trained to correct one specific NF4-quantized base. If you dequantize, add BA, then re-quantize the merged weights back to 4-bit, you inject a new quantization error the adapter never saw, degrading quality. Mitigate by merging into an fp16/bf16 base (serve in fp16/8-bit, higher memory) or by keeping the adapter unmerged at inference - which also lets you hot-swap multiple adapters on one dequantized base at a small latency cost.",
+  "global_rubric": "open_grading_rubric.json"
+}

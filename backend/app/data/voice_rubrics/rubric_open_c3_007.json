@@ -1,0 +1,59 @@
+{
+  "rubric_id": "rubric_open_c3_007",
+  "version": "1.0",
+  "item_id": "open_c3_007",
+  "competency": "C3",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C3.7",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Correctly separates true overfitting (train >> held-out gap) from an over-optimistic validation estimate; accurately describes leakage, improper-split, and drift/train-serving-skew mechanisms; and correctly states what L2 regularization can and cannot fix. No false claims such as 'regularization or a simpler model fixes leakage/drift' or 'a random holdout is the honest split for temporal data.'"
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C3.7",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Names at least two distinct, plausible root causes for the CV-to-production drop, each with a detection method; explains why regularization is the wrong first move; and includes a concrete re-validation/backtest plan. Full marks require all three elements plus a way to distinguish causes."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C3.7",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Justifies the diagnosis from the specific evidence (high CV yet low production), reasons about why each remedy does or does not address each cause, and supplies a triage/discrimination strategy instead of asserting a single cause without evidence."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C3.7",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Reads as a clear, prioritized design-review response using correct terminology (generalization gap, data/target leakage, time-based split/GroupKFold, covariate/concept shift, train-serving skew) and states recommended actions in a logical order."
+    }
+  ],
+  "expected_answer_points": [
+    "Recognizes that a high CV score with a large production drop is not classic overfitting, because overfitting to the training set would already depress the held-out CV score; the real issue is that the CV estimate is over-optimistic relative to the deployment distribution (a generalization-estimate gap).",
+    "Explains why stronger L2 regularization is unlikely to fix this: regularization reduces variance/fitting to training noise but does nothing for leakage, bad splits, distribution shift, or train-serving skew, which are the probable causes when CV itself is inflated.",
+    "Identifies target/data leakage as a root cause and gives a concrete detection method (audit feature timing/provenance relative to the prediction cutoff; ablate suspect features and watch CV fall).",
+    "Identifies an improper CV split (random k-fold on temporal or per-customer/grouped data leaking across folds) and prescribes a time-based/walk-forward split and/or GroupKFold to re-estimate honestly.",
+    "Identifies distribution shift/concept drift or train-serving skew as a cause and gives a detection method (compare offline vs live feature distributions via PSI/KS, log serving-time features to compare against the offline pipeline).",
+    "Provides a way to distinguish the hypotheses rather than guessing one (e.g., feature-timing audit and ablation for leakage, re-run with an honest split, offline-vs-online feature comparison for shift/skew).",
+    "Specifies a validation plan: re-estimate with a leakage-free, temporally honest holdout/backtest that mimics deployment so the offline number tracks production, then confirm on live data and monitor."
+  ],
+  "common_pitfalls": [
+    "Accepts the author's 'overfitting' label at face value and just recommends more L2, a simpler model, or more data, missing that a high CV score already rules out ordinary train-set overfitting as the cause.",
+    "Conflates overfitting with the CV-to-production gap, not realizing that overfitting to the training set would have depressed the CV score itself.",
+    "Names only one cause (e.g., 'it's drift') without proposing how to distinguish it from leakage or a flawed validation split.",
+    "Proposes fixes but no honest re-validation or backtest, leaving no way to confirm the offline estimate now reflects the deployment distribution.",
+    "Recommends a random k-fold or random holdout as the remedy, reintroducing the same cross-fold leakage for temporally ordered or per-customer data.",
+    "Claims regularization or reducing model complexity will fix data leakage or distribution shift, which it will not."
+  ],
+  "reference_answer": "The key observation is that the 0.93 came from cross-validation, not merely the training set. Classic overfitting means fitting training noise and generalizing poorly to held-out data, but that would already depress the CV score. Here the held-out CV estimate is high and only production is low, so the CV estimate itself is over-optimistic relative to the deployment distribution. That is a generalization-estimate problem, not high variance against the training set. Stronger L2 regularization is therefore unlikely to help: regularization trades a little bias for less variance and curbs fitting to training noise, but it does nothing about leakage, an unrepresentative validation split, distribution shift, or train-serving skew, which are the likely culprits when CV itself is inflated.\n\nPlausible root causes and how I'd distinguish them:\n\n1) Target/data leakage. A feature may encode the label or use post-outcome information (e.g., an account-status flag or 'days since retention call' updated at the moment of churn). Detection: audit each feature's provenance and the time it becomes available relative to the prediction cutoff; ablate suspicious features and watch whether CV falls toward the production number. Leakage is the prime suspect for a suspiciously high CV.\n\n2) Improper CV split. Random 5-fold on temporally ordered or per-customer data leaks across folds (the future, or the same customer, appears in both train and validation), inflating CV. Fix: use a time-based/walk-forward split and GroupKFold on customer id, then re-estimate.\n\n3) Distribution shift or train-serving skew. The live population or churn behavior may differ from the training window (covariate/label shift), or features may be computed differently online vs offline. Detection: compare offline vs live feature distributions (PSI/KS tests) and log serving-time feature values to compare against the offline pipeline.\n\nI'd triage in that order, since a bad split or leakage could explain the whole gap by itself. To validate any fix, I'd re-estimate with a leakage-free, temporally honest holdout that mimics deployment (train on months 1..N, test on N+1); a trustworthy offline AUC should land near the 0.71 we observed and then rise only as I remove genuine problems. I'd confirm on the next month of live data and add ongoing monitoring so the offline estimate keeps tracking production.",
+  "global_rubric": "open_grading_rubric.json"
+}

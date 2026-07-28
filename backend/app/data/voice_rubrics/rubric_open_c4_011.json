@@ -1,0 +1,60 @@
+{
+  "rubric_id": "rubric_open_c4_011",
+  "version": "1.0",
+  "item_id": "open_c4_011",
+  "competency": "C4",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C4.11",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Correctly identifies the interaction between the coarse per-tensor scale and the heavy-tailed/salient-channel structure (not merely 'four bits is too few'); names PTQ techniques (group-wise, AWQ, GPTQ) with mechanisms stated accurately and not conflated; and correctly distinguishes memory-bandwidth-bound decode (helped) from compute-bound prefill/large-batch (not helped), tying activation quantisation/SmoothQuant to the compute-bound case. Deduct for wrong mechanisms, conflated methods, or claiming W4A16 reduces FLOPs."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C4.11",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Addresses all four parts: the collapse mechanism, an INT4-budget-respecting recovery design, the acceleration analysis (what does and does not speed up), and a multi-metric validation plan that includes downstream evals, calibration-overfit / OOD checks, and generation pathologies."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C4.11",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Justifies each design choice from mechanism — why finer granularity localises outlier damage, why weight-only helps decode but not prefill, why the memory budget motivates PTQ over QAT or an INT8 fallback — rather than listing techniques without linking them to the observed failure."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C4.11",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Organised around the four parts, uses correct vocabulary precisely (per-tensor vs group-wise, W4A16 vs W8A8, memory-bound vs compute-bound, salient channels), and is concise and unambiguous."
+    }
+  ],
+  "expected_answer_points": [
+    "INT4 has only 16 levels vs INT8's 256; with a single per-tensor scale a few large-magnitude weights inflate the dynamic range and force a coarse step that rounds the bulk of small weights toward zero with large relative error, whereas INT8's finer grid tolerates the same tail.",
+    "Transformer weights are heavy-tailed with a small set of salient channels (aligned with systematically large-magnitude activation features); error in those channels dominates layer output and compounds through the residual stream and across autoregressive steps.",
+    "Finer quantisation granularity — group-wise / per-channel scales (e.g. group size 128 along the input dimension) — localises outlier damage and recovers most accuracy at small metadata overhead, staying within the INT4 budget.",
+    "Names an advanced PTQ method with the correct mechanism: AWQ (scale up ~1% salient channels identified by activation magnitude before quantising) and/or GPTQ (Hessian-weighted, column-wise error-compensating quantisation); optionally mixed precision for sensitive layers.",
+    "Weight-only INT4 accelerates by cutting weight memory footprint and bandwidth, which speeds up memory-bandwidth-bound low-batch autoregressive decode (and lets the model fit the budget).",
+    "It does not reduce FLOPs (matmul still runs in FP16 after dequant), so compute-bound prefill / large-batch serving see little or no speedup; accelerating those requires quantising activations (W8A8), which needs activation-outlier handling such as SmoothQuant.",
+    "Validation must go beyond a single perplexity number: use downstream/task evals, OOD data to detect calibration overfitting, per-layer sensitivity analysis, real-regime latency/memory, and inspection of generation pathologies.",
+    "PTQ methods (GPTQ/AWQ) depend on a representative calibration dataset."
+  ],
+  "common_pitfalls": [
+    "Attributes the collapse purely to '4-bit precision being too low' and misses that granularity (per-tensor scale) interacting with salient outlier channels is the actual lever — so cannot explain why group-wise INT4 recovers accuracy.",
+    "Conflates or misstates the PTQ methods — e.g. says GPTQ scales salient channels or that AWQ does Hessian-based error updates — or proposes full QAT/retraining when the scenario calls for post-training methods.",
+    "Claims weight-only INT4 speeds up all inference including prefill and large-batch, missing the memory-bound-vs-compute-bound distinction and that the matmul still runs in FP16 after dequant.",
+    "Confuses weight-only W4A16 with activation quantisation — blames activation outliers directly for the weight-only failure, or conversely ignores salient channels entirely; fails to note that activation outliers/SmoothQuant belong to the W8A8 compute-bound path.",
+    "Validates with a single perplexity number and declares success, missing downstream-task regressions, calibration-set overfitting, long-context/rare-token failures, and generation pathologies.",
+    "Answers 'just fall back to INT8,' ignoring the stated memory budget instead of designing an INT4 scheme."
+  ],
+  "reference_answer": "(a) Mechanism of the collapse. INT4 exposes only 16 quantisation levels versus INT8's 256, so for the same range the step size is ~16x coarser. With a single per-tensor scale the step is set by the matrix's full dynamic range (step ≈ (w_max − w_min)/15). Transformer weight matrices are heavy-tailed: a small number of large-magnitude \"salient\" weights, concentrated in particular channels, inflate that range and force a large step, so the overwhelming majority of ordinary small weights round to a handful of levels (often to zero) with enormous relative error. Those salient channels are not random — they multiply the input feature dimensions that carry systematically large activations, so they dominate each layer's output. Crushing them with a coarse scale injects large per-layer error that compounds through the residual stream across dozens of layers, and in an autoregressive model feeds back token to token — hence 5.7 → 42. INT8's finer grid simply tolerates the same heavy tail, which is why 8 bits is fine.\n\n(b) INT4 weight-only recovery scheme, within budget: (1) Finer granularity first — replace the per-tensor scale with group-wise quantisation, e.g. a separate scale (and zero-point if asymmetric) per group of 128 weights along the input dimension. This localises each outlier's damage and recovers most of the loss for small metadata overhead (effective ~4.25–4.5 bits). (2) AWQ (activation-aware weight quantisation) — use calibration data to find the ~1% of channels with the largest activation magnitudes, scale those weight channels up before quantising (folding the inverse into the adjacent op) so their relative quantisation error shrinks; no retraining. (3) GPTQ — layer-wise, Hessian-weighted error-compensating quantisation: quantise columns sequentially and update the not-yet-quantised weights to compensate for the error just introduced, minimising output reconstruction error; needs a representative calibration set. (4) Optionally keep a few most-sensitive tensors/layers in higher precision (mixed precision). These are post-training methods, appropriate because full QAT is too costly and we only need to fit the INT4 budget.\n\n(c) What INT4 actually accelerates. W4A16 shrinks weights ~4x and cuts the memory bandwidth needed to stream them. Low-batch autoregressive decode is memory-bandwidth-bound — each token reads all weights with little reuse — so W4A16 directly reduces decode latency and fits the budget. It does not reduce FLOPs: the kernel dequantises weights to FP16 and the matmul runs in FP16. Prefill and large-batch serving are compute-bound (weights reused across many tokens, high arithmetic intensity), so they are limited by tensor-core throughput, not weight bandwidth; W4A16 gives little speedup there and the dequant step can even add overhead. To accelerate the compute-bound regime you must quantise activations too (W8A8 on INT8 tensor cores), which reintroduces the activation-outlier problem and needs something like SmoothQuant to migrate the outlier scale from activations into weights.\n\n(d) Validation. Compare against the FP16 baseline on several axes, not one perplexity number: perplexity on in-domain and diverse held-out corpora plus downstream task suites (e.g. MMLU, GSM8K, and the product's own tasks). Averaged next-token loss can look fine while reasoning, math, code, or long-context accuracy collapses, because rare-but-important tokens are drowned out. Run per-layer sensitivity analysis, and evaluate on out-of-distribution data to catch calibration-set overfitting. Measure latency, tokens/s and peak memory in the actual target regime (decode, target batch). Finally inspect generations for pathologies — repetition/degeneracy, long-sequence drift, safety/refusal regressions — that aggregate metrics miss.",
+  "global_rubric": "open_grading_rubric.json"
+}

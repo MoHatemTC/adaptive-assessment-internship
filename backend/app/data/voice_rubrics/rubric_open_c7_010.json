@@ -1,0 +1,59 @@
+{
+  "rubric_id": "rubric_open_c7_010",
+  "version": "1.0",
+  "item_id": "open_c7_010",
+  "competency": "C7",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C7.10",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Correctly assigns each of the four capabilities to the right primitive (schema=resource, SQL executor=tool, weekly review=prompt, customer lookup=resource template or tool) and accurately states MCP's control model plus the correct mechanisms (inputSchema/tools/call, resource URIs/templates and resources/read, prompt arguments). No factual errors such as claiming the model invokes resources, that prompts auto-trigger, or that read-only status makes something a resource."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C7.10",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Addresses all four capabilities, explicitly names who initiates each, identifies the parameterization mechanism where one applies, and answers the arbitrary-SQL-as-a-resource question. Full marks require the customer-lookup case to be handled rather than skipped."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C7.10",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Justifies each mapping by the control model and side-effect/safety semantics rather than asserting it, and resolves the genuinely ambiguous customer-lookup case with a principled discriminator (who initiates the fetch) instead of a dogmatic single answer."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C7.10",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Organized per capability, uses correct MCP vocabulary (control model, inputSchema, resource template/URI, prompt arguments, the relevant JSON-RPC methods), and is concise and unambiguous."
+    }
+  ],
+  "expected_answer_points": [
+    "States MCP's control model explicitly: tools are model-controlled, resources are application/host-controlled, prompts are user-controlled.",
+    "Maps the warehouse schema to a resource: read-only, URI-addressed context selected by the host/user (resources/list, resources/read), not invoked by the model.",
+    "Maps the read-only SQL executor to a tool because it is model-initiated parameterized computation (inputSchema / tools/call), and notes read-only status is signaled via an annotation (readOnlyHint), not by making it a resource.",
+    "Recognizes the customer-lookup case is genuinely ambiguous and discriminates by who initiates the fetch: resource template (customers://{id}) if user/app-selected vs a tool with an id parameter if the model decides autonomously.",
+    "Maps the weekly revenue review to a prompt: user-triggered workflow (often a slash command) with arguments (region, date_range) via prompts/list / prompts/get, not auto-invoked by the model.",
+    "Correctly identifies parameterization mechanisms per primitive: JSON Schema inputSchema for tools, URI templates for resources, arguments for prompts.",
+    "Explains why arbitrary SQL as a resource is wrong: resources are URI-addressed, enumerable, side-effect-free context the app/user selects and the model does not invoke, whereas an arbitrary model-composed parameterized query is the tool control model."
+  ],
+  "common_pitfalls": [
+    "Modeling the read-only SQL executor as a resource because 'it only reads,' missing that model-initiated, model-composed parameterized computation is the tool control model regardless of whether it writes.",
+    "Claiming the model chooses or 'calls' resources — conflating resources (application/user-selected context) with tools (model-invoked).",
+    "Treating the weekly revenue review as a tool the model invokes, rather than a user-triggered prompt / slash command with arguments.",
+    "Giving a single dogmatic answer for the customer lookup without recognizing it can be a resource template or a tool depending on who initiates the fetch.",
+    "Confusing or omitting the parameterization mechanisms — e.g. proposing a JSON Schema inputSchema for a resource, or forgetting that resource templates use URI templates and prompts use arguments.",
+    "Ignoring side-effect/safety semantics: not noting resources must be side-effect-free and enumerable, or not signaling the SQL tool as read-only via an annotation (readOnlyHint) instead of via primitive choice."
+  ],
+  "reference_answer": "MCP defines three server primitives distinguished by who controls invocation: tools are model-controlled, resources are application/host-controlled, and prompts are user-controlled.\n\n1. Warehouse schema -> Resource. This is read-only context, not an action. Expose it as a resource with a stable URI (e.g. schema://warehouse), advertised via resources/list and fetched via resources/read. The host or user decides whether to attach it as context; it is side-effect-free and idempotent, and the server can emit notifications/resources/updated if the schema changes.\n\n2. Execute a read-only SQL query -> Tool. Even though it only reads, it is model-initiated, parameterized computation: the model decides mid-reasoning to run a query it composes. That is exactly the tool control model. Declare it with an inputSchema (JSON Schema) for the query string, invoke via tools/call, and set the readOnlyHint annotation so the host knows it performs no writes.\n\n3. Customer lookup by ID -> Defensible either way; the discriminator is who initiates the fetch. If the user/app chooses which customer to attach, model it as a resource template (customers://{id}, advertised via resources/templates/list). If the model must autonomously decide to pull a record while reasoning, make it a tool with an id parameter. State the trade-off rather than asserting one answer.\n\n4. Weekly revenue review -> Prompt. It is a user-triggered, templated multi-step workflow, typically surfaced as a slash command. Declare it via prompts/list with region and date_range arguments; prompts/get returns the filled message sequence. The model does not auto-invoke it — the user does.\n\nWhy arbitrary SQL as a resource is wrong: resources are addressed by URI and enumerated/selected by the application or user, and are meant to be side-effect-free context — not free-form model-driven computation. You cannot meaningfully enumerate \"all queries,\" and the model never invokes a resource. An arbitrary, model-composed, parameterized query is inherently the tool control model, so it belongs behind tools/call with a validated inputSchema (read-only == an annotation, not a reason to make it a resource).",
+  "global_rubric": "open_grading_rubric.json"
+}

@@ -1,44 +1,52 @@
 {
-  "rubric_id": "mid",
-  "name": "Mid — evaluation criteria and quality checks per criterion",
-  "description": "Each criterion states what evidence to look at and what to check, but gives no worked examples and no negative points. Roughly the level of specificity a careful team reaches without deliberately hardening the rubric.",
+  "name": "code-rubric-mid",
+  "version": "1.0",
+  "description": "Balanced code-diagnosis rubric for adaptive assessment.",
   "criteria": [
     {
       "criterion_id": "functional_correctness",
-      "description": "Does the solution produce correct results?",
-      "evaluation_criteria": "Judge only from the executed test results. The passed-test ratio is the measurement; your role is to say what the pattern of passes and failures indicates, not to re-decide whether the code works.",
+      "description": "How correctly the solution satisfies task requirements.",
+      "evaluation_criteria": "Prioritize objective test pass/fail evidence; confidence should decrease when failures are broad.",
       "quality_checks": [
-        "Score is consistent with the passed-test ratio",
-        "Failures are attributed to a specific behaviour, not to the code in general"
+        "Do not claim complete correctness when any required test fails.",
+        "Reference concrete failed tests or passed coverage evidence.",
+        "Separate algorithm intent from measured behavior."
       ]
     },
     {
       "criterion_id": "edge_case_handling",
-      "description": "Does the solution handle boundary and degenerate inputs?",
-      "evaluation_criteria": "Weigh the boundary tests specifically, not the suite as a whole. A solution can pass most tests and fail every boundary case; that is a low score on this criterion regardless of the overall ratio.",
+      "description": "How robustly the solution handles boundaries and atypical inputs.",
+      "evaluation_criteria": "Assess explicit guards, empty/singleton handling, and consistency across edge tests.",
       "quality_checks": [
-        "Boundary tests examined separately from the main path",
-        "A guard's presence or absence in the source is considered alongside the test outcome"
+        "Cite at least one edge-related signal (test or code path).",
+        "Penalize missing input guards where required.",
+        "Avoid inferring edge coverage without evidence."
       ]
     },
     {
       "criterion_id": "algorithm_choice",
-      "description": "Is the approach appropriate for the problem?",
-      "evaluation_criteria": "Assess the strategy the code actually implements against what the problem calls for. Passing tests does not by itself establish that the approach is sound, and failing them does not by itself establish that it is not.",
+      "description": "How appropriate and efficient the chosen approach is for the prompt.",
+      "evaluation_criteria": "Use complexity, data structure choices, and decomposition evidence from code and static signals.",
       "quality_checks": [
-        "The implemented strategy is identified explicitly",
-        "Cost is considered where the problem makes it relevant"
+        "Call out avoidable quadratic patterns when linear alternatives are expected.",
+        "Reward correct use of canonical structures/patterns.",
+        "Distinguish style issues from algorithmic limitations."
       ]
     },
     {
       "criterion_id": "code_quality",
-      "description": "Is the code readable and well structured?",
-      "evaluation_criteria": "Assess structure, naming and clarity from the source and the structural signals. This criterion is about maintainability, not correctness.",
+      "description": "How maintainable and clear the implementation is while honoring the function contract.",
+      "evaluation_criteria": "Assess readability, side effects, naming clarity, and contract compliance.",
       "quality_checks": [
-        "Judged from structure, not from whether tests passed",
-        "Complexity and function length are taken into account"
+        "Flag contract violations (wrong return shape, mutating inputs unexpectedly).",
+        "Reward clear structure and meaningful identifiers.",
+        "Avoid purely subjective criticism without code evidence."
       ]
     }
   ],
-  "mistake_patterns": []
+  "mistake_patterns": [
+    "Contradicts objective execution evidence.",
+    "Invents failed tests or references unknown test IDs.",
+    "Provides competency claims outside the allowed competency set."
+  ]
 }

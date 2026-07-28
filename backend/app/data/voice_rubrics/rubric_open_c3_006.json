@@ -1,0 +1,60 @@
+{
+  "rubric_id": "rubric_open_c3_006",
+  "version": "1.0",
+  "item_id": "open_c3_006",
+  "competency": "C3",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C3.6",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Correctly states the directions of change with lambda (training error up, test error U-shaped, bias up, variance down) and correctly identifies which component dominates at each extreme; accurately describes ridge as shrinkage (not selection) and attributes L1's exact zeros to the subgradient/soft-thresholding or constraint-geometry mechanism while explaining that L2's vanishing gradient at zero cannot; contains no incorrect claims (e.g., that ridge zeros coefficients, that the penalties are scale-invariant, or that increasing lambda raises variance)."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C3.6",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Addresses all four parts: (a) the four trajectories plus the shrinkage mechanism and both extremes, (b) the L1-vs-L2 zeroing mechanism, (c) a justified regulariser choice with a concrete failure mode and mitigation, and (d) an essential preprocessing step with its consequence -- without dropping the mechanism explanations."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C3.6",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Explains outcomes via mechanism -- the bias-variance trade-off, shrinkage / effective degrees of freedom, and the (sub)gradient or constraint geometry -- rather than asserting them, and justifies the regulariser choice specifically against the p >> n, sparse-truth, correlated-feature setting."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C3.6",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Uses precise terminology (bias, variance, shrinkage, subgradient/soft-thresholding, effective degrees of freedom, elastic net) correctly, keeps the answer organised by sub-question, and cleanly distinguishes shrinkage from selection."
+    }
+  ],
+  "expected_answer_points": [
+    "As lambda increases, training error rises monotonically and test error follows a U-shape (minimum at intermediate lambda), while bias increases and variance decreases.",
+    "Ridge's mechanism is proportional coefficient shrinkage toward zero via (X^T X + lambda*I)^{-1} (shrinking low-singular-value/noise directions most, per the d_i^2/(d_i^2+lambda) factor), lowering effective degrees of freedom and trading variance for bias -- it shrinks but does not select.",
+    "At lambda ~ 0 variance dominates (overfitting, unstable min-norm fit under p >> n / collinearity); at lambda -> infinity bias dominates (coefficients -> 0, model predicts the mean, underfitting).",
+    "L1 zeros coefficients because its penalty is non-smooth at 0 with a constant-magnitude subgradient (+/- lambda) -- soft-thresholding -- or equivalently its constraint polytope has corners on the axes; L2's gradient 2*lambda*w vanishes at 0, so it only shrinks and never produces exact zeros.",
+    "Given a sparse true model, choose L1/lasso (or elastic net) for feature selection, yielding a sparse, interpretable model that generalises better when most coefficients are truly zero.",
+    "Failure mode of lasso here: instability with correlated features (arbitrarily keeps one of a correlated group) and the p > n limit of selecting at most n features; mitigate with elastic net and choose penalties by cross-validation.",
+    "Standardise features (zero mean, unit variance) and do not penalise the intercept, because the penalties are not scale-invariant and otherwise shrinkage depends on arbitrary feature units.",
+    "(Bonus) Bayesian/MAP interpretation: ridge corresponds to a Gaussian prior on the weights and lasso to a Laplace prior."
+  ],
+  "common_pitfalls": [
+    "Claims ridge (L2) also drives coefficients exactly to zero, conflating shrinkage with feature selection.",
+    "Explains L1 sparsity only by asserting 'the diamond has corners' or 'L1 gives sparsity' without the mechanism (subgradient / soft-thresholding, or why the optimum lands on a corner), or gets the geometry backwards.",
+    "Reverses the bias-variance direction -- e.g., says larger lambda increases variance or reduces bias, or claims training error decreases as lambda grows.",
+    "Describes test error as monotonic rather than U-shaped, and fails to identify that variance dominates at small lambda and bias at large lambda.",
+    "Picks lasso but ignores its instability with correlated features and the 'selects at most n features when p > n' limitation, and never mentions elastic net.",
+    "Omits feature standardisation / the scale-non-invariance of the penalties, or wrongly penalises the intercept."
+  ],
+  "reference_answer": "(a) Ridge minimises ||y - Xw||^2 + lambda*||w||_2^2. As lambda grows from 0: training error rises monotonically, because we increasingly trade fit for a smaller-norm w, so the unpenalised residual can only get larger. Bias increases and variance decreases. The closed form w_hat = (X^T X + lambda*I)^{-1} X^T y shows ridge adds lambda*I to the (here singular / ill-conditioned) X^T X and shrinks every coefficient toward zero; in the SVD basis each direction is scaled by d_i^2 / (d_i^2 + lambda), so the low-singular-value, noise-dominated directions are shrunk most. This lowers the effective degrees of freedom, tr(X (X^T X + lambda*I)^{-1} X^T), reducing sensitivity to the particular sample (less variance) at the cost of systematically underestimating the true coefficients (more bias). Test error is therefore U-shaped: at lambda ~ 0, with p >> n the fit is an unstable minimum-norm interpolation -- variance dominates and it overfits; at lambda -> infinity, w -> 0 and the model predicts the intercept/mean -- bias dominates and it underfits. The best lambda (chosen by cross-validation) sits at the bias/variance balance.\n\n(b) Lasso minimises ||y - Xw||^2 + lambda*||w||_1. The difference lives at zero. The L1 term is non-differentiable at 0 with subgradient in [-lambda, +lambda]: whenever the data's gradient on a coordinate is smaller in magnitude than lambda, the optimum pins that coordinate to exactly 0 (soft-thresholding). Equivalently, the L1 constraint region is a polytope whose corners lie on the axes, so the loss contours first touch it at a corner where some coordinates vanish. L2's penalty is smooth with gradient 2*lambda*w, which vanishes at 0 -- it applies proportional shrinkage but never exerts a force that pins a coefficient exactly to zero, so ridge keeps all features. (Equivalently: ridge is MAP estimation under a Gaussian prior on w, lasso under a Laplace prior whose sharp peak at zero yields sparsity.)\n\n(c) Because the truth is believed sparse (~30 of 2000), I would choose an L1-based method -- lasso, or better elastic net -- so the model performs selection, giving a sparse, interpretable estimator that generalises better when most coefficients are genuinely zero. Failure mode: with many correlated engineered features lasso is unstable -- it arbitrarily keeps one member of a correlated group and drops the rest, and when p > n it can select at most n features. Mitigation: elastic net (lambda1*||w||_1 + lambda2*||w||_2^2) retains correlated features as a group and is better behaved when p >> n; tune both penalties by cross-validation.\n\n(d) Standardise the features (zero mean, unit variance) and leave the intercept unpenalised. Neither penalty is scale-invariant: the norm of w depends on feature units, so without standardisation a feature measured on a larger scale is effectively penalised less, and the amount of shrinkage becomes an artefact of arbitrary units rather than of predictive value.",
+  "global_rubric": "open_grading_rubric.json"
+}

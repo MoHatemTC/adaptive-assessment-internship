@@ -7,10 +7,11 @@ while doing it.
 
 Three screens:
 
-    Setup        choose one or more main competencies (C1..C10), self-rate each, and say
-                 how sure that rating is. The rating seeds the prior; the confidence sets
-                 its width. Sub-competencies are never chosen by the candidate.
-    Assessment   answer, and watch the queue, the mathematics and the trajectory move.
+    Setup        choose one or more main competencies from the bank, self-rate each, and
+                 say how sure that rating is. The rating seeds the prior; the confidence
+                 sets its width. Sub-competencies are never chosen by the candidate.
+    Assessment   answer MCQ / code / Live voice, and watch the queue, mathematics and
+                 trajectory move. Open items are Live interview only (no typed answers).
     Report       on convergence — the same detail, retained rather than cleared, because
                  the interesting part of a session is usually visible only afterwards.
 
@@ -22,8 +23,11 @@ from __future__ import annotations
 
 import asyncio
 import sys
+import traceback
 from pathlib import Path
+from urllib.parse import urlencode
 
+import httpx
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -45,7 +49,21 @@ for path in (str(BACKEND), str(HERE)):
 
 import session_log  # noqa: E402  — must be importable before the engine logs anything
 
+# Conda envs with openai 0.x explode on `from openai import APIConnectionError`. Require
+# the repo `.venv` (openai>=1.50) before importing the engine.
+try:
+    import openai as _openai_pkg
+    from openai import APIConnectionError as _APIConnectionError  # noqa: F401
+except ImportError as _openai_exc:
+    raise SystemExit(
+        f"Incompatible openai package ({_openai_exc}). "
+        "From the repo root use: `.venv/bin/streamlit run streamlit/main.py` "
+        "or `./scripts/run_streamlit.sh` — not a bare conda `streamlit` with openai 0.x."
+    ) from _openai_exc
+
 from app.config.settings import settings  # noqa: E402
+from app.config.voice_settings import voice_settings  # noqa: E402
+from app.schemas.voice import VoiceResponsePackage  # noqa: E402
 from app.services import observability  # noqa: E402
 from app.services.adaptive.irt import ability_band  # noqa: E402
 from app.services.code_adaptive import (  # noqa: E402
@@ -58,6 +76,7 @@ from app.services.orchestrator import variables as variables_module  # noqa: E40
 from app.services.adaptive.irt import expected_fisher_information  # noqa: E402
 from app.services.orchestrator.picker import criterion_for, information_for  # noqa: E402
 from app.services.orchestrator.competency import rollup_outcomes  # noqa: E402
+from app.services.voice.evaluator import evaluate as evaluate_voice  # noqa: E402
 
 
 def fisher_after(item, variable_state, variable) -> float:
@@ -183,7 +202,13 @@ def render_tester_options(container, *, locked: bool) -> bool:
 
 # --- setup screen -----------------------------------------------------------
 def render_setup() -> None:
-    st.title("Adaptive assessment")
+    st.title("Adaptive assessment — MCQ · Code · Voice")
+    st.caption(
+        "Full CAT tester (same loop as cat-engine-combined-streamlit): mixed-modality "
+        "item selection, queue, θ updates, and report. Open items are answered by Live "
+        f"voice via LiteLLM (`{settings.litellm_live_preview_model}`); picker/grader use "
+        f"`{settings.litellm_model}`."
+    )
     st.caption(
         "Choose the main competencies to be assessed, rate your level in each, and say how "
         "sure you are. The rating seeds the starting estimate; the confidence sets how "
@@ -199,14 +224,16 @@ def render_setup() -> None:
     by_code = {t["code"]: t for t in tracks}
 
     st.markdown("#### 1 · Main competencies")
+    track_codes = [t["code"] for t in tracks]
+    default_tracks = track_codes[: min(2, len(track_codes))]
     chosen = st.multiselect(
         "Competencies to be assessed",
-        options=[t["code"] for t in tracks],
-        default=["C1", "C2"],
+        options=track_codes,
+        default=default_tracks,
         format_func=lambda code: (
             f"{code} · {by_code[code]['name']}  "
             f"— {by_code[code]['items']} questions, "
-            f"{', '.join(by_code[code]['modalities'])}"
+            f"{', '.join(by_code[code]['modalities']) or '—'}"
         ),
         key="main_competencies",
         help="Select one or more main competencies. Sub-competencies are inferred by the "
@@ -384,9 +411,12 @@ def render_trajectory(state) -> None:
         ).ffill()
         st.line_chart(pivot)
         st.caption(
-            "Confidence rises only as evidence arrives. A competency finalises when it "
-            f"reaches the precision target (SE ≤ {settings.cat_se_target}, which reads as "
-            "90%) or its band stops moving."
+            "Confidence tracks posterior SE, ramped while evidence is still thin "
+            f"(below {settings.cat_precision_min_questions} items it stays provisional and "
+            f"under 90%). A competency finalises on precision only when SE ≤ "
+            f"{settings.cat_se_target} **and** at least "
+            f"{settings.cat_precision_min_questions} items were answered — or when its "
+            "band settles under the stable-band rule."
         )
 
     st.markdown("**Where each competency stands**")
@@ -444,7 +474,10 @@ def render_diagnostics() -> None:
         pd.DataFrame(
             [
                 {"setting": "precision target (SE)", "value": str(settings.cat_se_target),
-                 "meaning": "a competency finalises at or below this standard error"},
+                 "meaning": "posterior SD that maps to 90% measurement confidence; "
+                            "precision stop also needs the min-questions floor"},
+                {"setting": "precision min questions", "value": str(settings.cat_precision_min_questions),
+                 "meaning": "precision stop cannot fire before this many scored items"},
                 {"setting": "min / max questions", "value": f"{settings.cat_min_questions} / {settings.cat_max_questions}",
                  "meaning": "per-competency bounds before the band-stability rule may fire"},
                 {"setting": "shortlist size", "value": str(settings.orchestrator_shortlist_size),
@@ -524,11 +557,20 @@ def record(state, item, candidate, response) -> None:
     step = step + 1
 
     detail = graded.detail or {}
-    score_shown = (
-        detail.get("overall_score")
-        if graded.modality == "code"
-        else (1.0 if detail.get("correct") else 0.0)
-    )
+    if graded.modality == "code":
+        score_shown = detail.get("overall_score")
+    elif graded.modality == "open":
+        # Show the graded ability score, not grader self-confidence (those often look
+        # like 0.99 even when the answer scored near zero).
+        outcome_scores = [
+            float(o["score"]) if isinstance(o, dict) else float(o.score)
+            for o in graded.outcomes
+        ]
+        score_shown = (
+            sum(outcome_scores) / len(outcome_scores) if outcome_scores else 0.0
+        )
+    else:
+        score_shown = 1.0 if detail.get("correct") else 0.0
     outcome_by_variable = {
         o.variable: o.__dict__
         for o in rollup_outcomes(graded.outcomes, set(new_state.variables))
@@ -590,6 +632,157 @@ def record(state, item, candidate, response) -> None:
     st.session_state["run"] = new_state
 
 
+def live_server_ok() -> bool:
+    try:
+        r = httpx.get(f"{voice_settings.live_server_base}/health", timeout=2.0, verify=False)
+        return r.status_code == 200
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def create_live_room(item_id: str, question: str, *, assessment_session_id: str = "") -> str:
+    r = httpx.post(
+        f"{voice_settings.live_server_base}/api/live/rooms",
+        json={
+            "item_id": item_id,
+            "question": question,
+            "save_recording": False,
+            "mode": "interview",
+            "assessment_session_id": assessment_session_id,
+        },
+        timeout=30.0,
+        verify=False,
+    )
+    r.raise_for_status()
+    return r.json()["room_id"]
+
+
+def fetch_live_room(room_id: str) -> dict:
+    r = httpx.get(
+        f"{voice_settings.live_server_base}/api/live/rooms/{room_id}",
+        timeout=10.0,
+        verify=False,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+def record_live_package(state, item, candidate, package: VoiceResponsePackage) -> None:
+    """Evaluate a finished Live interview (LiteLLM rubric), then update CAT state."""
+    with st.spinner("Grading live interview via LiteLLM…"):
+        # Grade under the assessment session so open_grader spans join picker/code
+        # traces (evaluate used to run outside observability.session and vanished).
+        with observability.session(
+            state.session_id,
+            track=st.session_state.get("competencies"),
+            stage="grade",
+            item_id=item.item_id,
+            modality="open",
+            variable=candidate.variable if candidate else None,
+        ):
+            graded_voice = run_async(evaluate_voice(item, package, use_llm=use_llm()))
+            observability.flush()
+    record(state, item, candidate, graded_voice)
+    st.session_state.pop("live_room_id", None)
+    st.session_state.pop("live_active_item", None)
+
+
+def render_live_interview(state, item, candidate) -> None:
+    """Open/voice answers are Live-only — never typed transcript or Whisper paste."""
+    if not settings.litellm_api_key.strip():
+        st.warning(
+            "Set `LITELLM_API_KEY` (and `LITELLM_BASE_URL`) in `backend/.env` for "
+            f"Live interviews via `{settings.litellm_live_preview_model}`."
+        )
+        return
+
+    if not live_server_ok():
+        st.error(
+            f"Live interviewer is not running at `{voice_settings.live_server_base}`. "
+            "From `backend/` run:\n\n"
+            "`python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8765`"
+        )
+        return
+
+    st.info(
+        "Speak your answer with the Live interviewer. Use **Finish answer** inside the "
+        "panel when done, then **Grade finished interview** here. "
+        f"Interviewer: `{settings.litellm_live_preview_model}` via LiteLLM · "
+        f"Picker/grader: `{settings.litellm_model}` via LiteLLM."
+    )
+
+    room_id = st.session_state.get("live_room_id")
+    if st.session_state.get("live_active_item") != item.item_id:
+        room_id = None
+
+    cols = st.columns(3)
+    with cols[0]:
+        if st.button("Open realtime interview", type="primary"):
+            try:
+                question = item.payload.get("prompt") or item.payload.get("question", "")
+                room_id = create_live_room(
+                    item.item_id,
+                    question,
+                    assessment_session_id=state.session_id,
+                )
+                st.session_state["live_room_id"] = room_id
+                st.session_state["live_active_item"] = item.item_id
+                st.rerun()
+            except Exception as exc:  # noqa: BLE001
+                st.session_state["last_audio_error"] = str(exc)
+                st.error(f"Could not open Live room: {exc}")
+    with cols[1]:
+        if st.button("Refresh status", disabled=not room_id):
+            st.rerun()
+    with cols[2]:
+        if st.button("Grade finished interview", type="primary", disabled=not room_id):
+            try:
+                data = fetch_live_room(room_id)
+                if data.get("status") != "finished" or not data.get("package"):
+                    st.warning(
+                        f"Interview not finished yet (status={data.get('status')}). "
+                        "Click Finish answer in the live panel first."
+                    )
+                else:
+                    package = VoiceResponsePackage.model_validate(data["package"])
+                    record_live_package(state, item, candidate, package)
+                    st.rerun()
+            except Exception as exc:  # noqa: BLE001
+                st.session_state["last_audio_error"] = (
+                    f"{exc}\n{traceback.format_exc(limit=4)}"
+                )
+                st.error(f"Grading failed: {exc}")
+
+    if st.session_state.get("last_audio_error"):
+        st.caption(f"Last Live error: {st.session_state['last_audio_error']}")
+
+    if not room_id:
+        st.caption("Click **Open realtime interview** to start speaking.")
+        return
+
+    question = item.payload.get("prompt") or item.payload.get("question", "")
+    qs = urlencode({"item_id": item.item_id, "question": question, "room_id": room_id})
+    st.iframe(f"{voice_settings.live_server_base}/interview?{qs}", height=480)
+
+    try:
+        data = fetch_live_room(room_id)
+        st.caption(
+            f"Room `{room_id}` · status **{data.get('status')}** · "
+            f"turn **{data.get('turn_state', '—')}**"
+        )
+        if data.get("status") == "error" and data.get("error"):
+            st.error(data["error"])
+        if data.get("turns"):
+            with st.expander("Live conversation", expanded=True):
+                for turn in data["turns"]:
+                    who = "Interviewer" if turn.get("role") == "interviewer" else "You"
+                    st.markdown(f"**{who}:** {turn.get('text', '')}")
+        if data.get("status") == "finished":
+            st.success("Interview finished — click **Grade finished interview**.")
+    except Exception as exc:  # noqa: BLE001
+        st.warning(f"Could not poll room status: {exc}")
+
+
 def render_question(state) -> None:
     """Present whatever the orchestrator chose, and collect an answer."""
     nxt = engine().next_item(state)
@@ -614,19 +807,28 @@ def render_question(state) -> None:
         if st.button("Submit answer", type="primary", disabled=choice is None):
             record(state, item, candidate, options.index(choice))
             st.rerun()
-    else:
-        st.markdown(payload.get("prompt", ""))
-        starter = payload.get("starter_code") or f"def {payload.get('function_name', 'solve')}():\n    ...\n"
-        code = st.text_area("Your solution", value=starter, height=260, key=f"code_{item.item_id}")
-        st.caption(
-            "Run in a sandbox against the question's tests. Test results own functional "
-            "correctness; the model only judges quality."
-        )
-        render_trial_runs(item, code)
-        if st.button("Submit solution", type="primary"):
-            with st.spinner("Running your code in the sandbox…"):
-                record(state, item, candidate, code)
-            st.rerun()
+        return
+
+    if item.modality == "open":
+        st.markdown(payload.get("prompt") or payload.get("question", ""))
+        if payload.get("answer_format"):
+            st.info(payload["answer_format"])
+        render_live_interview(state, item, candidate)
+        return
+
+    # code
+    st.markdown(payload.get("prompt", ""))
+    starter = payload.get("starter_code") or f"def {payload.get('function_name', 'solve')}():\n    ...\n"
+    code = st.text_area("Your solution", value=starter, height=260, key=f"code_{item.item_id}")
+    st.caption(
+        "Run in a sandbox against the question's tests. Test results own functional "
+        "correctness; the model only judges quality (code rubrics in backend/app/data/rubrics)."
+    )
+    render_trial_runs(item, code)
+    if st.button("Submit solution", type="primary"):
+        with st.spinner("Running your code in the sandbox…"):
+            record(state, item, candidate, code)
+        st.rerun()
 
 
 def render_trial_runs(item, code: str) -> None:
@@ -720,6 +922,20 @@ def render_last_result() -> None:
                 st.warning("Misconceptions: " + ", ".join(detail["misconception_codes"]))
             if detail.get("diagnostic"):
                 st.caption(detail["diagnostic"])
+        elif last["modality"] == "open":
+            detail = last.get("detail") or {}
+            columns = st.columns(3)
+            columns[0].metric("Eval confidence", f"{float(detail.get('evaluation_confidence') or 0):.2f}")
+            columns[1].metric("Degraded", str(detail.get("degraded")))
+            columns[2].metric("Status", str(detail.get("outcome_status") or "—"))
+            if detail.get("rationale"):
+                st.caption(detail["rationale"])
+            if last.get("flags"):
+                st.caption("Flags: " + ", ".join(last["flags"]))
+            preview = detail.get("transcript_preview")
+            if preview:
+                with st.expander("Transcript preview"):
+                    st.write(preview)
         else:
             st.caption(
                 f"Chose option {last['detail'].get('chosen_index')}, "
@@ -787,7 +1003,18 @@ def render_assessment() -> None:
         st.session_state.update(finished=True, stop_reason="ended_by_tester")
         st.rerun()
     if st.sidebar.button("Start over"):
-        for key in ("run", "steps", "finished", "stop_reason", "pending", "last_graded"):
+        for key in (
+            "run",
+            "steps",
+            "finished",
+            "stop_reason",
+            "pending",
+            "last_graded",
+            "live_room_id",
+            "live_active_item",
+            "last_audio_error",
+            "trials",
+        ):
             st.session_state.pop(key, None)
         st.rerun()
 

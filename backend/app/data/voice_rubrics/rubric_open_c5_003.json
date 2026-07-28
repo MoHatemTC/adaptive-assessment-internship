@@ -1,0 +1,58 @@
+{
+  "rubric_id": "rubric_open_c5_003",
+  "version": "1.0",
+  "item_id": "open_c5_003",
+  "competency": "C5",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C5.3",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Full marks: correctly defines B- (entity start), I- (continuation of same-type entity) and O (outside), states that every entity begins with B-, and describes a correct left-to-right decoding rule. Deduct for reversed B-/I- meaning, claiming the type-only scheme always works, or a decoding rule that mislabels boundaries."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C5.3",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Full marks: covers all four asked parts — tag definitions, the reason BIO is used (boundary marking), a concrete failure example for the type-only scheme, and the span-decoding procedure. Partial credit if the example or the decoding step is missing or only implied."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C5.3",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Full marks: explicitly ties the need for B- to separating adjacent same-type entities and justifies the failure example by showing why consecutive-run grouping collapses two spans into one. Lower if the failure is asserted without a mechanism or the example does not actually break the type-only scheme."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C5.3",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Full marks: uses correct terminology (span, token, tag prefix), and the worked example and decoding steps are concrete and easy to follow. Lower for vague, jargon-only, or disorganised explanations."
+    }
+  ],
+  "expected_answer_points": [
+    "NER is a token-level sequence-labelling task, but the desired output is typed multi-token spans, so the label scheme must encode span boundaries recoverable from per-token labels",
+    "Defines BIO/IOB2 tags correctly: B-TYPE = first token of an entity, I-TYPE = continuation/inside token of an entity of that type, O = outside any entity",
+    "States that the B- prefix marks the start of a new entity, which is what lets two adjacent entities of the same type be separated",
+    "Gives a concrete example with two adjacent same-type entities where the type-only scheme wrongly merges them into one span while BIO keeps them distinct",
+    "Describes span decoding: B-X opens a span; subsequent I-X extends it; O, a new B-, or a type change closes it",
+    "Notes that model outputs can be malformed (e.g. an I-X not preceded by a matching B-X) and gives a sensible way to handle it"
+  ],
+  "common_pitfalls": [
+    "Picking an example with entities separated by O or of different types, which the type-only scheme handles fine, so it fails to demonstrate the actual weakness (adjacent same-type entities)",
+    "Reversing the tags — treating I- as the beginning of an entity and B- as the continuation",
+    "Answering about model architecture (CRF vs softmax head, transformers, BiLSTM) instead of the label-encoding question that was actually asked",
+    "Defining the tags but never describing how to decode a tag sequence back into entity spans",
+    "Claiming the type-only run-grouping scheme is always equivalent to BIO, missing that it cannot represent a boundary between two same-type entities",
+    "Ignoring that predicted tag sequences can be ill-formed (e.g. I-PER after O or after I-ORG) and giving no strategy to handle it"
+  ],
+  "reference_answer": "NER is framed as sequence labelling: the model predicts one label per token, but the real output is a set of typed spans, so the label encoding has to let you recover span boundaries from per-token labels. In BIO (IOB2), every label is O (token is outside any entity) or a type prefixed by B- or I-: B-TYPE marks the first token of an entity of that type, and I-TYPE marks a continuation (inside) token of an entity already started with the same type. Crucially, every entity's first token is B-.\n\nThe B- prefix exists to mark boundaries between adjacent entities of the same type. The teammate's type-only scheme can't do this. Example: 'Alice Bob founded Acme' where 'Alice' and 'Bob' are two separate PER entities. Type-only tags them PER PER O ORG, so grouping consecutive same-type tokens merges them into one span 'Alice Bob'. BIO tags them B-PER B-PER O B-ORG, and the second B-PER signals a new entity, correctly yielding two people.\n\nDecoding: scan left to right. A B-X opens a new span of type X; each following I-X extends the current span; an O, a B- (any type), or a differently-typed tag closes the current span. For robustness, handle malformed sequences — e.g. an I-X with no matching open span (or following a different type) — by treating it as a span start or dropping it, since raw softmax outputs aren't guaranteed to be well-formed.",
+  "global_rubric": "open_grading_rubric.json"
+}

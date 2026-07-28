@@ -1,0 +1,58 @@
+{
+  "rubric_id": "rubric_open_c4_003",
+  "version": "1.0",
+  "item_id": "open_c4_003",
+  "competency": "C4",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C4.3",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Full marks: correctly describes the LR as the step-size multiplier in the update rule, the too-high/too-low failure modes, and gives accurate mechanisms for warmup (noisy early gradients/Adam moment estimates) and decay (settling near a minimum). Deduct for wrong claims such as 'lower LR always gives better accuracy', decay used to 'speed up' training, conflating LR decay with weight decay, or asserting Adam's adaptivity removes the need for any schedule."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C4.3",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Full marks: addresses all four parts (LR meaning, warmup, decay, fixed-vs-scheduled trade-off) and explicitly answers the teammate's Adam objection. Deduct proportionally for each part omitted or left only asserted without mechanism."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C4.3",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Full marks: justifies each claim with the underlying mechanism (why noisy early estimates make large steps dangerous; why small steps aid final convergence; why one constant cannot serve both phases) rather than restating that warmup/decay 'help'. Partial credit for correct but shallow justification."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C4.3",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Full marks: a clear, well-organised explanation pitched appropriately to a teammate, using correct terminology (learning rate, warmup, decay/annealing, step size) and cleanly separating the four points. Deduct for disorganised, vague, or jargon-muddled answers."
+    }
+  ],
+  "expected_answer_points": [
+    "States that the learning rate scales the size of each parameter update along the (negative) gradient (theta <- theta - eta * update), i.e. it sets the step magnitude",
+    "Identifies the failure modes: too high causes overshoot/oscillation/divergence (loss increases or NaN); too low causes very slow convergence or stalling",
+    "Explains warmup's mechanism: early gradients and Adam's moment estimates (especially the second moment) are noisy/unreliable, so ramping eta up avoids early instability/divergence",
+    "Explains decay's mechanism: shrinking eta near a minimum lets the optimiser settle/refine instead of bouncing around the basin, reducing gradient-noise jitter and lowering final loss",
+    "Makes the fixed-LR trade-off explicit: one constant cannot be both large enough for fast early progress and small enough for stable late convergence, so a schedule decouples the phases",
+    "Rebuts the teammate correctly: Adam adapts the relative per-parameter step sizes but not the global learning-rate trajectory over training, so scheduling is still useful (optionally: names a concrete schedule like cosine/linear/step and notes LR is a top hyperparameter)"
+  ],
+  "common_pitfalls": [
+    "Accepting the teammate's premise - claiming Adam's per-parameter adaptivity makes a global LR schedule redundant, when Adam adapts relative scaling but not the learning-rate trajectory over training",
+    "Claiming a lower learning rate always yields better final performance, ignoring that too-low means painfully slow convergence or stalling",
+    "Describing warmup vaguely (e.g. 'so the model can see some data first') instead of naming the mechanism - noisy early gradients and unreliable early Adam second-moment estimates",
+    "Saying decay is meant to 'speed up' training - it shrinks step size; the real purpose is finer, more stable convergence near a minimum",
+    "Confusing learning-rate decay with weight decay (L2 regularisation), treating them as the same knob",
+    "Treating too-high LR as merely 'slower' rather than causing overshoot, oscillation, or outright divergence/NaN"
+  ],
+  "reference_answer": "(a) The learning rate (LR), eta, scales how far each step moves the parameters along the (negative) gradient direction: theta <- theta - eta * update. In Adam the 'update' is the gradient normalised by running estimates of its first and second moments, but eta still sets the overall step magnitude. So the LR is the single knob controlling step size; too high and steps overshoot minima and the loss oscillates or diverges (can go to NaN), too low and training crawls or stalls.\n\n(b) Warmup starts eta near zero and ramps it up. Early in training the parameters are far from any good region and Adam's second-moment estimate is computed from very few gradients, so it is noisy and unreliable; taking a large step on top of that can send the loss diverging. Ramping up lets these running statistics stabilise before full-size steps are taken - this matters especially for large batches, large models, and transformers.\n\n(c) As the model approaches a minimum, a large LR makes it bounce around the basin rather than settle. Annealing eta down shrinks the steps so the optimiser can converge into and refine the minimum, damping the gradient-noise-driven jitter and typically reaching a lower final loss.\n\n(d) A fixed LR must be simultaneously small enough to be stable at the end and large enough to make fast progress early - it cannot be both, so you compromise. Adam adapts the *relative* per-parameter scaling but not this global schedule over training. A warmup-plus-decay schedule decouples the two phases: bold movement early, careful refinement late. LR is usually the most important hyperparameter, and this is why schedules are near-universal in practice. (Note: LR decay is not weight decay - the latter is L2-style regularisation, a separate mechanism.)",
+  "global_rubric": "open_grading_rubric.json"
+}

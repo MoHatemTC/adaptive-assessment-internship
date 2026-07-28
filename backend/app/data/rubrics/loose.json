@@ -1,24 +1,32 @@
 {
-  "rubric_id": "loose",
-  "name": "Loose — criteria named, judgement left to the grader",
-  "description": "Each criterion is named and given a one-line intent. No evaluation criteria, no quality checks, no anchoring examples, no negative points. This is the rubric most teams actually start with, and it is the control for how much of an approach's behaviour comes from the rubric rather than the model.",
+  "name": "code-rubric-loose",
+  "version": "1.0",
+  "description": "Lightweight code-diagnosis rubric used by the LLM evaluator.",
   "criteria": [
     {
       "criterion_id": "functional_correctness",
-      "description": "Does the solution produce correct results?"
+      "description": "Judge whether the implementation solves the required task behaviorally.",
+      "evaluation_criteria": "Use objective test outcomes as primary evidence. Do not overclaim correctness when tests fail."
     },
     {
       "criterion_id": "edge_case_handling",
-      "description": "Does the solution handle boundary and degenerate inputs?"
+      "description": "Judge how well the solution handles boundary, null, and unusual cases.",
+      "evaluation_criteria": "Use failed edge tests, control-flow guards, and input handling as evidence."
     },
     {
       "criterion_id": "algorithm_choice",
-      "description": "Is the approach appropriate for the problem?"
+      "description": "Judge whether the chosen approach and complexity are suitable.",
+      "evaluation_criteria": "Use structure of loops/data structures and complexity-related signals as evidence."
     },
     {
       "criterion_id": "code_quality",
-      "description": "Is the code readable and well structured?"
+      "description": "Judge readability, maintainability, and contract adherence.",
+      "evaluation_criteria": "Use naming, decomposition, side effects, and contract alignment as evidence."
     }
   ],
-  "mistake_patterns": []
+  "mistake_patterns": [
+    "Claims full correctness despite objective test failures.",
+    "Invents nonexistent test evidence.",
+    "Rates competencies not in the provided question payload."
+  ]
 }

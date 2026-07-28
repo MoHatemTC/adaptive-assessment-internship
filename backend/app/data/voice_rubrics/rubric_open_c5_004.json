@@ -1,0 +1,59 @@
+{
+  "rubric_id": "rubric_open_c5_004",
+  "version": "1.0",
+  "item_id": "open_c5_004",
+  "competency": "C5",
+  "criteria": [
+    {
+      "criterion_id": "technical_accuracy",
+      "competency_id": "C5.4",
+      "weight": 0.4,
+      "required": true,
+      "maximum_score": 8.0,
+      "descriptor": "Full marks: correctly attributes the inflated accuracy to O-class imbalance; defines span/entity-level F1 as requiring exact boundary AND type match (CoNLL/seqeval); and states the mechanism (a single wrong token breaks a whole span) accurately. No false claims (e.g. does not conflate token-level F1 with span-level F1, or assert partial spans get credit). Deduct for each incorrect or muddled mechanism."
+    },
+    {
+      "criterion_id": "completeness",
+      "competency_id": "C5.4",
+      "weight": 0.25,
+      "required": true,
+      "maximum_score": 5.0,
+      "descriptor": "Full marks: addresses all four asked parts — why the metrics disagree, the correct evaluation, diagnosis of failure modes, and concrete fixes — and touches at least the label-alignment check, BIO-transition/CRF enforcement, and per-type reporting. Partial credit if one or two of these strands (especially diagnosis or the subword-alignment root cause) are missing."
+    },
+    {
+      "criterion_id": "reasoning_and_justification",
+      "competency_id": "C5.4",
+      "weight": 0.2,
+      "required": true,
+      "maximum_score": 4.0,
+      "descriptor": "Full marks: reasons from mechanism to symptom (why boundary errors specifically produce the observed 'misses companies' complaint), justifies why exact-match F1 is the right gate, and motivates fixes by the diagnosis rather than listing them arbitrarily. Lower scores for assertions without a causal chain."
+    },
+    {
+      "criterion_id": "clarity_and_communication",
+      "competency_id": "C5.4",
+      "weight": 0.15,
+      "required": false,
+      "maximum_score": 3.0,
+      "descriptor": "Full marks: well-organized around the four parts, uses correct NER vocabulary (BIO/IOB, O tag, span/entity-level F1, seqeval, subword alignment) precisely, and is concise. Deduct for disorganized, vague, or jargon-misusing prose."
+    }
+  ],
+  "expected_answer_points": [
+    "Token-level accuracy is inflated by the dominant 'O' (outside) class — most tokens are non-entities, so under this label imbalance a model can score ~98% while still missing many real entity spans; accuracy is the wrong metric for NER.",
+    "The correct metric is span/entity-level precision, recall, and F1, where a prediction is a true positive only if both the span boundaries and the entity type exactly match the gold entity (CoNLL-style exact match, e.g. via seqeval over reconstructed BIO spans).",
+    "Explains the mechanism linking the two: one mislabeled token inside a multi-token entity barely affects token accuracy but invalidates the whole span at entity level, so boundary errors reconcile 'high accuracy' with 'misses entities'.",
+    "Proposes diagnosing by categorizing errors (correct / boundary-partial / type-confusion / missed / spurious), e.g. comparing exact-match vs relaxed/partial (MUC-style) matching to separate boundary errors from type errors.",
+    "Checks subword-tokenization label alignment (label first subword, -100 on continuation subwords; reassemble to word-level spans before scoring) as a concrete, common root cause rather than assuming model capacity.",
+    "Suggests enforcing valid BIO transitions via a CRF layer or constrained decoding so illegal sequences (e.g. I- without a matching preceding B-) cannot occur.",
+    "Recommends reporting per-entity-type P/R/F1 (not only a micro-average) so a rare type with near-zero recall is not hidden, and addressing rare-type/boundary weakness with more or augmented data."
+  ],
+  "common_pitfalls": [
+    "Just says 'use F1 instead of accuracy' without explaining the O-class imbalance or that span-level F1 requires an exact boundary-and-type match — treating F1 as a black-box better number.",
+    "Computes or proposes token-level F1 (F1 over the per-token labels including O) and believes it measures entities; it still doesn't capture whole-span correctness.",
+    "Assumes a predicted span that partially overlaps the gold span earns partial credit, when CoNLL exact-match gives it zero unless both boundaries and type match.",
+    "Jumps straight to 'add more data' or 'use a bigger model' without diagnosing that the errors are boundary/BIO or label-alignment errors.",
+    "Overlooks the subword-tokenization label-alignment bug (labeling continuation subwords, or scoring at subword rather than word level), attributing the whole gap to model capacity.",
+    "Reports only a single micro-averaged F1 and misses that a rare type like MONEY or a specific ORG subclass can have near-zero recall hidden by the average."
+  ],
+  "reference_answer": "The gap is a metric artifact. In BIO tagging the vast majority of tokens carry the 'O' (outside) label, so the label distribution is extremely imbalanced. A model that recovers most O tokens and only some entity tokens still scores ~98% token accuracy — accuracy rewards the trivial majority class and gives partial credit for partially-correct spans. That is exactly the wrong metric for NER.\n\nThe right metric is entity/span-level precision, recall, and F1, where a predicted entity counts as a true positive only if BOTH its span boundaries and its type exactly match a gold entity (CoNLL-2003 convention, computed with a library like `seqeval` over reconstructed B-/I- spans). Under this definition a single mislabeled token inside a multi-token ORG (e.g. predicting O on the middle token of a three-token company name) barely moves token accuracy but destroys the entire span — turning one gold entity into zero or two wrong ones. That is why 'high accuracy' and 'misses companies' are consistent.\n\nTo diagnose, I'd compute span-level P/R/F1 per entity type (not just a micro-average that hides a rare type with near-zero recall), and split errors into categories — correct, boundary/partial, type-confusion, missing, spurious — e.g. by comparing exact-match vs a relaxed/partial-match (MUC-style) score to see whether failures are boundary errors or type errors.\n\nLikely fixes: (1) verify subword-token label alignment — labels must map to the correct subword (label the first subword, set -100 on the rest) and spans must be reassembled to whole words before scoring, a very common bug that alone can explain the symptom; (2) enforce valid BIO transitions with a CRF layer or constrained decoding so an I- tag can't follow O/a mismatched type; (3) address the rare-type / boundary weakness with more or augmented data and by monitoring per-type recall. I would re-report span-level F1, not token accuracy, as the shipping gate.",
+  "global_rubric": "open_grading_rubric.json"
+}
