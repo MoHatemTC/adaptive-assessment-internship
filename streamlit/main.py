@@ -715,6 +715,40 @@ def record_live_package(state, item, candidate, package: VoiceResponsePackage) -
     st.session_state.pop("live_active_item", None)
 
 
+def live_unavailable_message() -> str:
+    server = voice_settings.live_server_base
+    public = voice_settings.live_public_base
+    if "streamlit.app" in public.lower():
+        return (
+            f"**Live is not available on this Streamlit Cloud app.**\n\n"
+            f"`LIVE_PUBLIC_BASE` is set to `{public}` — that is this Streamlit UI, "
+            "not a Live interviewer service. Streamlit Cloud cannot host the "
+            "`uvicorn` helper (port 8765) inside the same app.\n\n"
+            "**Use the written answer below** (same open rubric / θ update).\n\n"
+            "To enable spoken Live later: deploy the helper on a separate public "
+            "host, then set `LIVE_SERVER_BASE` and `LIVE_PUBLIC_BASE` to that "
+            "host’s URL (not the `.streamlit.app` URL). Or delete both secrets "
+            "to silence this warning."
+        )
+    if "127.0.0.1" in server or "localhost" in server:
+        return (
+            f"Live interviewer is not reachable at `{server}`.\n\n"
+            "**This cloud app cannot use `127.0.0.1:8765`.** Use the **written "
+            "answer** below to continue.\n\n"
+            "Optional: host Live separately and set `LIVE_SERVER_BASE` / "
+            "`LIVE_PUBLIC_BASE` to that service’s public URL. "
+            f"(Current iframe target would be `{public}`.)"
+        )
+    return (
+        f"Live interviewer is not reachable at `{server}` "
+        f"(browser iframe would use `{public}`).\n\n"
+        "**Local:** from `backend/` run\n\n"
+        "`python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8765`\n\n"
+        "**Cloud:** run the Live helper on a public host and set "
+        "`LIVE_SERVER_BASE` / `LIVE_PUBLIC_BASE`, or use the written fallback below."
+    )
+
+
 def render_live_interview(state, item, candidate) -> None:
     """Open/voice: Live interview when the helper is up; typed fallback otherwise."""
     if not settings.litellm_api_key.strip():
@@ -736,23 +770,15 @@ def render_live_interview(state, item, candidate) -> None:
 
     live_up = live_server_ok()
     if not live_up:
-        st.error(
-            f"Live interviewer is not reachable at `{voice_settings.live_server_base}` "
-            f"(browser iframe would use `{voice_settings.live_public_base}`).\n\n"
-            "**Local:** from `backend/` run\n\n"
-            "`python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8765`\n\n"
-            "**Cloud:** run the Live helper on a public host (`--host 0.0.0.0`) and set "
-            "`LIVE_SERVER_BASE` / `LIVE_PUBLIC_BASE` in secrets, **or** use the written "
-            "fallback below (Streamlit Cloud cannot bind a second port by itself)."
-        )
+        st.error(live_unavailable_message())
         if open_text_fallback_allowed(live_up=False):
             render_open_text_fallback(
                 state,
                 item,
                 candidate,
                 reason=(
-                    "Live helper is down — typed answers still update θ via the open "
-                    "grader (same rubric as a Live transcript)."
+                    "Live helper is unavailable — type your answer below. It is graded "
+                    "with the same open rubric and still updates θ."
                 ),
             )
         return
