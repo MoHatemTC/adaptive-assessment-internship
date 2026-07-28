@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 *)",
+      "Bash(.venv/bin/python -c \"import scipy; print\\('scipy', scipy.__version__\\)\")",
+      "Bash(../.venv/bin/python *)",
+      "Bash(.venv/bin/python *)",
+      "Bash(git checkout *)",
+      "Bash(xargs git log --oneline -1)",
+      "Bash(/media/nagah/01DB54578FFCD100/2026-summer/SPRINTS/TESTING/masaar-mcq-cat-test/.venv/bin/python -c 'import numpy, dotenv, openai; print\\('\\\\''deps ok'\\\\''\\)')",
+      "Bash(OPENAI_API_KEY='' /media/nagah/01DB54578FFCD100/2026-summer/SPRINTS/TESTING/masaar-mcq-cat-test/.venv/bin/python test_approach.py)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(/media/nagah/01DB54578FFCD100/2026-summer/SPRINTS/TESTING/masaar-mcq-cat-test/.venv/bin/python -c \"import openai, streamlit, dotenv; print\\('ok'\\)\")",
+      "Bash(/media/nagah/01DB54578FFCD100/2026-summer/SPRINTS/TESTING/masaar-mcq-cat-test/.venv/bin/python /tmp/claude-1000/h1_test.py)",
+      "Bash(sed -i 's/from scipy.optimize import brentq//' /tmp/claude-1000/h1_test2.py)",
+      "Bash(sed -i 's|a_far = brentq\\(f, 0.5, 5.0\\)|lo, hi = 0.5, 5.0\\\\nfor _ in range\\(200\\):\\\\n    mid = \\(lo + hi\\) / 2\\\\n    if f\\(mid\\) < 0: lo = mid\\\\n    else: hi = mid\\\\na_far = \\(lo + hi\\) / 2|' /tmp/claude-1000/h1_test2.py)",
+      "Bash(/media/nagah/01DB54578FFCD100/2026-summer/SPRINTS/TESTING/masaar-mcq-cat-test/.venv/bin/python /tmp/claude-1000/h1_test2.py)",
+      "Bash(OPENAI_API_KEY= /media/nagah/01DB54578FFCD100/2026-summer/SPRINTS/TESTING/masaar-mcq-cat-test/.venv/bin/python audit_a2.py)",
+      "Bash(/media/nagah/01DB54578FFCD100/2026-summer/SPRINTS/TESTING/masaar-mcq-cat-test/.venv/bin/python -m pytest test_approach.py test_rephrase_guard.py -q)",
+      "Bash(/media/nagah/01DB54578FFCD100/2026-summer/SPRINTS/TESTING/masaar-mcq-cat-test/.venv/bin/python test_approach.py)",
+      "Bash(/media/nagah/01DB54578FFCD100/2026-summer/SPRINTS/TESTING/masaar-mcq-cat-test/.venv/bin/python test_rephrase_guard.py)",
+      "Bash(OPENAI_API_KEY= /media/nagah/01DB54578FFCD100/2026-summer/SPRINTS/TESTING/masaar-mcq-cat-test/.venv/bin/python audit_a2b.py)",
+      "Bash(/media/nagah/01DB54578FFCD100/2026-summer/SPRINTS/TESTING/masaar-mcq-cat-test/.venv/bin/python /tmp/claude-1000/h2.py)",
+      "Bash(.venv/bin/python3 -c \"import ast;ast.parse\\(open\\('rephrase_guard.py'\\).read\\(\\)\\)\")",
+      "Bash(.venv/bin/python3 -c \"import rephrase_guard\")"
+    ]
+  }
+}

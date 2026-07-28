@@ -1,0 +1,317 @@
+[
+  {
+    "id": "T1-Q02",
+    "competency": "Python & Software Engineering",
+    "sub_competency": "T1.1 \u00b7 Core Python & data structures",
+    "difficulty": "easy",
+    "discrimination": "low",
+    "stem": "What is printed when f() is called twice, given: def f(x=[]): x.append(1); return x ?",
+    "options": [
+      "[1] then [1]",
+      "[1] then [1, 1]",
+      "[1, 1] then [1, 1]",
+      "It raises an error on the second call"
+    ],
+    "answer_index": 1
+  },
+  {
+    "id": "T1-Q03",
+    "competency": "Python & Software Engineering",
+    "sub_competency": "T1.1 \u00b7 Core Python & data structures",
+    "difficulty": "medium",
+    "discrimination": "medium",
+    "stem": "Which statement is TRUE about squares = (n*n for n in range(1_000_000)) ?",
+    "options": [
+      "It immediately computes and stores 1,000,000 values in memory",
+      "It is a generator; values are produced lazily and it can be iterated only once",
+      "It is a tuple of squares that can be indexed with squares[5]",
+      "It is identical to the list comprehension but faster to index"
+    ],
+    "answer_index": 1
+  },
+  {
+    "id": "T1-Q05",
+    "competency": "Python & Software Engineering",
+    "sub_competency": "T1.2 \u00b7 OOP & class design",
+    "difficulty": "hard",
+    "discrimination": "high",
+    "stem": "You want instances of your class to work correctly as dictionary keys and inside sets. Which must you implement consistently?",
+    "options": [
+      "__eq__ only",
+      "__hash__ only",
+      "Both __eq__ and __hash__, kept consistent with each other",
+      "__len__ and __cmp__"
+    ],
+    "answer_index": 2
+  },
+  {
+    "id": "T1-Q08",
+    "competency": "Python & Software Engineering",
+    "sub_competency": "T1.3 \u00b7 Typing & data models",
+    "difficulty": "easy",
+    "discrimination": "low",
+    "stem": "A FastAPI endpoint must validate and coerce incoming JSON (e.g. the string \"25\" to int 25) and return clear validation errors. Which is most appropriate?",
+    "options": [
+      "A plain @dataclass \u2014 it validates and coerces types automatically at runtime",
+      "A NamedTuple \u2014 it enforces and coerces the declared types",
+      "A Pydantic BaseModel \u2014 it validates and coerces values on instantiation",
+      "A TypedDict \u2014 it raises at runtime when a field has the wrong type"
+    ],
+    "answer_index": 2
+  },
+  {
+    "id": "T1-Q09",
+    "competency": "Python & Software Engineering",
+    "sub_competency": "T1.3 \u00b7 Typing & data models",
+    "difficulty": "medium",
+    "discrimination": "medium",
+    "stem": "What does def f(x: list[int] | None = None) communicate?",
+    "options": [
+      "x must be a list of ints and can never be None",
+      "x is either a list of ints or None (default None); the annotation is not enforced at runtime",
+      "x defaults to an empty list",
+      "Passing a string to x will raise a TypeError automatically"
+    ],
+    "answer_index": 1
+  },
+  {
+    "id": "T1-Q11",
+    "competency": "Python & Software Engineering",
+    "sub_competency": "T1.4 \u00b7 Error handling & robustness",
+    "difficulty": "hard",
+    "discrimination": "high",
+    "stem": "Which try/except approach is the SAFEST practice?",
+    "options": [
+      "A bare except: that catches everything and silently continues",
+      "except Exception: pass, so the program never crashes",
+      "except (ValueError, KeyError) as e: handling expected errors and logging, letting unexpected ones propagate",
+      "Wrapping the whole program in a single try/except Exception"
+    ],
+    "answer_index": 2
+  },
+  {
+    "id": "T1-Q13",
+    "competency": "Python & Software Engineering",
+    "sub_competency": "T1.5 \u00b7 Async & concurrency",
+    "difficulty": "easy",
+    "discrimination": "low",
+    "stem": "You have a CPU-bound numerical loop. Which approach actually speeds it up on a multi-core machine?",
+    "options": [
+      "Wrapping it in async def and awaiting it",
+      "Launching many copies with asyncio.gather",
+      "Using multiprocessing / ProcessPoolExecutor",
+      "Starting one threading.Thread per call"
+    ],
+    "answer_index": 2
+  },
+  {
+    "id": "T1-Q15",
+    "competency": "Python & Software Engineering",
+    "sub_competency": "T1.6 \u00b7 API development (FastAPI)",
+    "difficulty": "medium",
+    "discrimination": "medium",
+    "stem": "A client POSTs to create a resource but the body is missing a required field. What is the most appropriate response status?",
+    "options": [
+      "200 OK with an error message in the body",
+      "404 Not Found",
+      "422 Unprocessable Entity (or 400 Bad Request)",
+      "500 Internal Server Error"
+    ],
+    "answer_index": 2
+  },
+  {
+    "id": "T1-Q18",
+    "competency": "Python & Software Engineering",
+    "sub_competency": "T1.7 \u00b7 Testing & quality",
+    "difficulty": "hard",
+    "discrimination": "high",
+    "stem": "Why would you use a mock when unit-testing a function that calls an external LLM API?",
+    "options": [
+      "To make the test hit the real API faster",
+      "To isolate the unit from network, cost and nondeterminism by returning a controlled response",
+      "Because mocks automatically increase code coverage",
+      "To permanently replace the API in production"
+    ],
+    "answer_index": 1
+  },
+  {
+    "id": "T1-Q19",
+    "competency": "Python & Software Engineering",
+    "sub_competency": "T1.8 \u00b7 Tooling & environments",
+    "difficulty": "easy",
+    "discrimination": "low",
+    "stem": "What is the primary purpose of a virtual environment (venv / poetry)?",
+    "options": [
+      "It speeds up Python execution",
+      "It isolates project dependencies so different projects can use different package versions without conflict",
+      "It encrypts your source code",
+      "It automatically deploys the project to production"
+    ],
+    "answer_index": 1
+  },
+  {
+    "id": "T1-Q20",
+    "competency": "Python & Software Engineering",
+    "sub_competency": "T1.8 \u00b7 Tooling & environments",
+    "difficulty": "medium",
+    "discrimination": "medium",
+    "stem": "You accidentally committed an API key and pushed it to a shared remote. What is the correct remediation?",
+    "options": [
+      "Delete the file in a new commit \u2014 the key is now safe",
+      "Rotate/revoke the key immediately and purge it from history, since it remains in Git history and on the remote",
+      "Make the repository private \u2014 that removes the key",
+      "Add the file to .gitignore"
+    ],
+    "answer_index": 1
+  },
+  {
+    "id": "T2-Q02",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.1 \u00b7 Data wrangling (pandas/NumPy)",
+    "difficulty": "hard",
+    "discrimination": "high",
+    "stem": "What is the shape of the result of adding array A of shape (3, 1) to array B of shape (1, 4)?",
+    "options": [
+      "(3, 4)",
+      "(1, 1)",
+      "Error \u2014 the shapes are incompatible",
+      "(3, 3)"
+    ],
+    "answer_index": 0
+  },
+  {
+    "id": "T2-Q04",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.2 \u00b7 Cleaning & preprocessing",
+    "difficulty": "easy",
+    "discrimination": "low",
+    "stem": "You scale features with StandardScaler. To avoid data leakage you should:",
+    "options": [
+      "Fit the scaler on the entire dataset, then split into train/test",
+      "Fit the scaler on the training set only, then transform both train and test with it",
+      "Fit a separate scaler independently on train and on test",
+      "Scaling never causes leakage, so the order does not matter"
+    ],
+    "answer_index": 1
+  },
+  {
+    "id": "T2-Q05",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.2 \u00b7 Cleaning & preprocessing",
+    "difficulty": "medium",
+    "discrimination": "medium",
+    "stem": "A categorical feature 'city' has 500 unique values and feeds a linear model. Which encoding best avoids a huge sparse matrix AND avoids imposing a false ordering?",
+    "options": [
+      "Label-encode as integers 0\u2013499",
+      "One-hot encode into 500 columns",
+      "Target or frequency encoding (or hashing) to keep dimensionality manageable",
+      "Drop the feature entirely"
+    ],
+    "answer_index": 2
+  },
+  {
+    "id": "T2-Q08",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.3 \u00b7 EDA & visualization",
+    "difficulty": "hard",
+    "discrimination": "high",
+    "stem": "A correlation coefficient of r = -0.9 between two variables means:",
+    "options": [
+      "One variable causes the other to decrease",
+      "A strong negative linear relationship \u2014 as one rises, the other tends to fall",
+      "90% of the variance in one is explained by the other",
+      "The two variables are independent"
+    ],
+    "answer_index": 1
+  },
+  {
+    "id": "T2-Q10",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.4 \u00b7 SQL & querying",
+    "difficulty": "easy",
+    "discrimination": "low",
+    "stem": "You have users (all users) and orders. You want every user with their order count (0 if they never ordered). Which join?",
+    "options": [
+      "INNER JOIN users to orders",
+      "LEFT JOIN users to orders, then COUNT the orders",
+      "RIGHT JOIN orders to users",
+      "CROSS JOIN users and orders"
+    ],
+    "answer_index": 1
+  },
+  {
+    "id": "T2-Q11",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.5 \u00b7 Classical ML",
+    "difficulty": "medium",
+    "discrimination": "medium",
+    "stem": "You must predict whether a customer will churn (yes/no) AND output a probability. Which is appropriate?",
+    "options": [
+      "Linear Regression",
+      "K-Means clustering",
+      "Logistic Regression (or any classifier exposing predict_proba)",
+      "PCA"
+    ],
+    "answer_index": 2
+  },
+  {
+    "id": "T2-Q12",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.5 \u00b7 Classical ML",
+    "difficulty": "hard",
+    "discrimination": "high",
+    "stem": "Which of these is an UNSUPERVISED task?",
+    "options": [
+      "Predicting house prices from labelled past sales",
+      "Segmenting customers into groups with no predefined labels",
+      "Classifying emails as spam / not-spam from labelled data",
+      "Forecasting demand from historical labelled demand"
+    ],
+    "answer_index": 1
+  },
+  {
+    "id": "T2-Q16",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.6 \u00b7 Model evaluation & metrics",
+    "difficulty": "easy",
+    "discrimination": "low",
+    "stem": "A dataset is 99% negative, 1% positive (fraud). A model that always predicts 'negative' scores 99% accuracy. Which metric better reflects real performance?",
+    "options": [
+      "Accuracy",
+      "Precision, recall and F1 (or PR-AUC) on the positive class",
+      "R\u00b2",
+      "Mean Squared Error"
+    ],
+    "answer_index": 1
+  },
+  {
+    "id": "T2-Q17",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.7 \u00b7 Feature engineering",
+    "difficulty": "medium",
+    "discrimination": "medium",
+    "stem": "Which is an example of feature engineering that could help predict ride demand?",
+    "options": [
+      "Increasing the learning rate",
+      "Extracting 'hour of day' and 'is_weekend' from a raw timestamp",
+      "Adding more layers to the model",
+      "Lowering the train/test split ratio"
+    ],
+    "answer_index": 1
+  },
+  {
+    "id": "T2-Q20",
+    "competency": "Data & ML Foundations",
+    "sub_competency": "T2.8 \u00b7 Bias\u2013variance & regularization",
+    "difficulty": "hard",
+    "discrimination": "high",
+    "stem": "A model has low training error but high test error. This indicates:",
+    "options": [
+      "High bias (underfitting)",
+      "High variance (overfitting)",
+      "The data is perfectly separable",
+      "The learning rate is too low"
+    ],
+    "answer_index": 1
+  }
+]

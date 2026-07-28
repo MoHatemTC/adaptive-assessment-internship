@@ -1,0 +1,57 @@
+# Web framework
+fastapi>=0.115
+uvicorn[standard]>=0.32
+python-multipart>=0.0.9
+python-dotenv>=1.0
+websockets>=13.0
+
+# Config & validation
+pydantic>=2.9
+pydantic-settings>=2.0
+
+# Supabase (replaces SQLAlchemy + Alembic entirely)
+supabase>=2.9
+
+# LLM — all calls via LiteLLM proxy (OpenAI-compatible endpoint)
+openai>=1.50
+
+# Gemini SDK — direct, only for Live WebSocket API
+google-genai>=0.8
+
+# Agent orchestration
+langgraph>=0.2
+langchain>=0.3
+langchain-openai>=0.2
+
+# Vector DB
+qdrant-client>=1.9
+
+# Observability
+langfuse>=2.0
+
+# Email
+resend>=0.7
+
+# E2B code sandboxes
+e2b-code-interpreter>=1.0
+
+# PDF parsing & image processing
+pymupdf>=1.24.0
+pillow>=10.0.0
+
+# Task submission ZIP extraction
+python-docx>=1.1.0        # DOCX files inside ZIP
+openpyxl>=3.1.0           # XLSX files inside ZIP
+opencv-python-headless>=4.9.0  # Video key-frame extraction
+
+# Async file I/O
+aiofiles>=23.0.0
+
+# Utilities
+httpx>=0.27
+json-repair>=0.30
+
+# Testing
+pytest>=8.0
+pytest-asyncio>=0.23
+pytest-env>=1.1

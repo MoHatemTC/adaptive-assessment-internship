@@ -1,0 +1,18 @@
+# Upper bounds are deliberate. Unbounded, Streamlit Cloud resolved Python 3.14.6 with
+# numpy 2.5.1 / pandas 3.0.3 — a stack this app has never been tested against — and the
+# deploy crashed inside CPython 3.14's dataclasses while importing llm_client:
+#
+#   dataclasses.py:814  ns = sys.modules.get(cls.__module__).__dict__
+#   AttributeError: 'NoneType' object has no attribute '__dict__'
+#
+# That path is only reachable because `from __future__ import annotations` makes every
+# annotation a string, so @dataclass looks the defining module up in sys.modules to test
+# each one for KW_ONLY. During a Streamlit hot reload the module is transiently absent
+# and the lookup returns None. Pinning below 3.14 avoids it; requirements cannot pin the
+# interpreter, so ALSO set Python 3.12 in the Streamlit Cloud app's advanced settings.
+streamlit>=1.32.0,<2
+numpy>=1.26.0,<3
+pandas>=2.1.0,<3
+openai>=1.40.0,<3
+python-dotenv>=1.0.0,<2
+langfuse>=3.0.0,<5

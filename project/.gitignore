@@ -1,0 +1,41 @@
+# Environment secrets
+.env
+.env.local
+**/.env
+**/.env.local
+
+# Python bytecode
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyo
+
+# Python venvs
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+
+# Node / Next.js
+node_modules/
+**/node_modules/
+.next/
+out/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# TypeScript incremental build cache
+*.tsbuildinfo

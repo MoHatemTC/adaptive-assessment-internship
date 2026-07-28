@@ -1,0 +1,530 @@
+[
+ {
+  "id": "T5-Q01",
+  "competency": "MLOps & Productionization",
+  "sub_competency": "T5.1 · Serving & deployment",
+  "difficulty": "very_easy",
+  "discrimination": "low",
+  "stem": "Fraud scores must be computed on each transaction as it happens, within 100ms. This calls for:",
+  "options": [
+   "A synchronous real-time serving endpoint that scores each request",
+   "A daily export of scored transactions delivered to the risk team",
+   "A weekly notebook run that recomputes scores for all accounts",
+   "A nightly batch job that writes scores to a table for later lookup"
+  ],
+  "answer_index": 0,
+  "rationale": "A per-event decision with a sub-second budget requires synchronous online inference; every batch or scheduled option delivers scores long after the transaction is gone.",
+  "misconceptions": [
+   "CORRECT",
+   "Confuses analytical reporting delivery with operational, in-the-loop scoring",
+   "Treats ad-hoc notebook execution as a substitute for a running service",
+   "Assumes precomputed batch scores can cover events that have not happened yet"
+  ]
+ },
+ {
+  "id": "T5-Q02",
+  "competency": "MLOps & Productionization",
+  "sub_competency": "T5.1 · Serving & deployment",
+  "difficulty": "easy",
+  "discrimination": "high",
+  "stem": "A recommender must score all 50M users once per day to populate a cache that is read at page load. This is best served by:",
+  "options": [
+   "An analyst exporting scores from a notebook each morning by hand",
+   "A streaming pipeline that scores each user on every click event",
+   "A real-time endpoint invoked once per user request at page load",
+   "A scheduled batch inference job that scores all users overnight"
+  ],
+  "answer_index": 3,
+  "rationale": "Bulk, scheduled, latency-tolerant scoring of a fixed population is the canonical batch inference case; the cache is filled ahead of time, so no per-request serving is needed.",
+  "misconceptions": [
+   "Treats a manual, unrepeatable human step as a production pipeline",
+   "Confuses event-driven streaming with a fixed daily full-population refresh",
+   "Reaches for online serving even when the workload is bulk and offline",
+   "CORRECT"
+  ]
+ },
+ {
+  "id": "T5-Q21",
+  "competency": "MLOps & Productionization",
+  "sub_competency": "T5.1 · Serving & deployment",
+  "difficulty": "hard",
+  "discrimination": "high",
+  "stem": "You want to test a new model on genuine production traffic without its predictions ever affecting users. The right technique is:",
+  "options": [
+   "A/B test: split users between the models and compare business metrics",
+   "Canary release: route a small share of real users to the new model",
+   "Shadow mode: mirror live traffic to the new model, discard its output",
+   "Blue-green switch: cut all traffic over to the new model in one step"
+  ],
+  "answer_index": 2,
+  "rationale": "Shadow (mirrored) deployment is the only listed pattern where the candidate model sees real traffic while its predictions are never returned to any user.",
+  "misconceptions": [
+   "Overlooks that an A/B test deliberately serves the new model to a user arm",
+   "Overlooks that a canary still serves real users, so predictions do affect them",
+   "CORRECT",
+   "Overlooks that a blue-green cutover exposes 100% of users to the new model"
+  ]
+ },
+ {
+  "id": "T5-Q04",
+  "competency": "MLOps & Productionization",
+  "sub_competency": "T5.2 · Containerization",
+  "difficulty": "very_easy",
+  "discrimination": "low",
+  "stem": "The main benefit of containerizing an ML service is that:",
+  "options": [
+   "It compresses the model weights so the service uses less GPU memory",
+   "It removes the need for servers by running the model in the browser",
+   "It encrypts the application and its data while the container is running",
+   "It packages code, dependencies, and environment for consistent runs"
+  ],
+  "answer_index": 3,
+  "rationale": "A container image bundles the application with its dependency and OS-library environment, so the same artifact behaves identically across laptops, CI, and production.",
+  "misconceptions": [
+   "Confuses containerization with model compression techniques like quantization",
+   "Assumes containers are serverless and eliminate the underlying compute host",
+   "Assumes a container is a security boundary that encrypts workloads by default",
+   "CORRECT"
+  ]
+ },
+ {
+  "id": "T5-Q22",
+  "competency": "MLOps & Productionization",
+  "sub_competency": "T5.2 · Containerization",
+  "difficulty": "medium",
+  "discrimination": "high",
+  "stem": "Image rebuilds take 10 minutes because all dependencies reinstall on every small code change. The fix is:",
+  "options": [
+   "Copy the whole application directory first, then install the dependencies",
+   "Copy the dependency manifest and install packages before copying app code",
+   "Add a fresh build timestamp label near the top of the Dockerfile",
+   "Combine every instruction into a single RUN layer to shrink the image"
+  ],
+  "answer_index": 1,
+  "rationale": "Layer caching invalidates every layer after the first changed one, so installing dependencies before copying frequently-edited source keeps the expensive install layer cached.",
+  "misconceptions": [
+   "Gets the layer order backwards, so any code edit busts the install layer",
+   "CORRECT",
+   "Guarantees a cache miss on the very first layer, rebuilding everything",
+   "Confuses image size optimization with build-time cache reuse"
+  ]
+ },
+ {
+  "id": "T5-Q23",
+  "competency": "MLOps & Productionization",
+  "sub_competency": "T5.2 · Containerization",
+  "difficulty": "hard",
+  "discrimination": "high",
+  "stem": "A production image is 6GB because it carries compilers and training libraries. The most effective remedy is:",
+  "options": [
+   "Rebuild the image on a larger base distribution to consolidate layers",
+   "Use a multi-stage build so only runtime artifacts land in the final image",
+   "Mount the training libraries from a volume at container start-up instead",
+   "Delete the build tools in a later RUN step within the same Dockerfile"
+  ],
+  "answer_index": 1,
+  "rationale": "Multi-stage builds compile in a throwaway stage and copy only the needed artifacts forward, so build tooling never enters the shipped image's layer history.",
+  "misconceptions": [
+   "Confuses base image choice with removing build tooling from the image",
+   "CORRECT",
+   "Reintroduces the environment drift that containerization exists to remove",
+   "Misses that deleting files in a later layer leaves them in earlier layers"
+  ]
+ },
+ {
+  "id": "T5-Q05",
+  "competency": "MLOps & Productionization",
+  "sub_competency": "T5.3 · CI/CD",
+  "difficulty": "easy",
+  "discrimination": "medium",
+  "stem": "In a CI/CD pipeline for an ML service, a sound practice on each commit is to:",
+  "options": [
+   "Deploy the new container straight to production and watch the error rate",
+   "Retrain the model on a developer machine and upload the new weights",
+   "Merge to main and rely on the nightly manual QA pass to catch problems",
+   "Run automated tests and linting, build the image, then deploy to staging"
+  ],
+  "answer_index": 3,
+  "rationale": "Automated checks, a reproducible build, and promotion through staging give fast feedback and keep unverified changes out of production.",
+  "misconceptions": [
+   "Removes every gate, so defects reach users before any check has run",
+   "Reintroduces an unreproducible manual step outside the pipeline",
+   "Defers verification by a day and depends on humans rather than automation",
+   "CORRECT"
+  ]
+ },
+ {
+  "id": "T5-Q06",
+  "competency": "MLOps & Productionization",
+  "sub_competency": "T5.3 · CI/CD",
+  "difficulty": "medium",
+  "discrimination": "medium",
+  "stem": "What makes CI/CD for ML genuinely different from CI/CD for traditional software?",
+  "options": [
+   "Data and models must also be versioned and validated, not only the code",
+   "Deployment must be blocked until training loss reaches a fixed threshold",
+   "ML services cannot be tested automatically, so gates must be manual reviews",
+   "Model artifacts are just code, so ordinary unit tests cover the whole risk"
+  ],
+  "answer_index": 0,
+  "rationale": "ML systems have three changing inputs — code, data, and model — so the pipeline must version and validate datasets and model artifacts, not just run code tests.",
+  "misconceptions": [
+   "CORRECT",
+   "Mistakes an arbitrary training metric target for the difference in kind",
+   "Denies that data validation and model evaluation can be automated at all",
+   "Ignores that a model's behaviour depends on data the code tests never see"
+  ]
+ },
+ {
+  "id": "T5-Q24",
+  "competency": "MLOps & Productionization",
+  "sub_competency": "T5.3 · CI/CD",
+  "difficulty": "very_hard",
+  "discrimination": "high",
+  "stem": "Your pipeline auto-promotes a retrained model whenever it beats the incumbent on a fixed holdout set, yet live quality drifts down over months. The most likely flaw is:",
+  "options": [
+   "Retraining runs too frequently, so the weights progressively overfit noise",
+   "The holdout set is stale, so gains on it no longer reflect live traffic",
+   "Accuracy is computed inside the training image, not the serving image",
+   "The incumbent model was never given a version tag in the model registry"
+  ],
+  "answer_index": 1,
+  "rationale": "A frozen holdout drifts away from the live distribution, so it stops being a valid proxy — and repeated selection against it also overfits the gate itself.",
+  "misconceptions": [
+   "Assumes retraining frequency alone degrades weights, independent of the gate",
+   "CORRECT",
+   "Names a real skew risk that would not produce a slow multi-month decline",
+   "Confuses a registry bookkeeping gap with an invalid evaluation gate"
+  ]
+ },
+ {
+  "id": "T5-Q07",
+  "competency": "MLOps & Productionization",
+  "sub_competency": "T5.4 · Experiment tracking & versioning",
+  "difficulty": "very_easy",
+  "discrimination": "medium",
+  "stem": "The primary purpose of an experiment-tracking tool in an ML workflow is to:",
+  "options": [
+   "Store and label raw training data as the team's system of record",
+   "Log and compare runs — params, metrics, artifacts — for reproducibility",
+   "Tune hyperparameters automatically by searching a configured space",
+   "Serve the trained model behind a low-latency authenticated HTTP endpoint"
+  ],
+  "answer_index": 1,
+  "rationale": "Experiment tracking records the inputs and outputs of each run so results can be compared and reproduced later; it is a record-keeping layer, not a serving, storage, or search engine.",
+  "misconceptions": [
+   "Confuses run metadata tracking with a data warehouse or labelling platform",
+   "CORRECT",
+   "Confuses recording experiments with orchestrating a hyperparameter search",
+   "Confuses the tracking layer with the model serving layer"
+  ]
+ },
+ {
+  "id": "T5-Q08",
+  "competency": "MLOps & Productionization",
+  "sub_competency": "T5.4 · Experiment tracking & versioning",
+  "difficulty": "easy",
+  "discrimination": "high",
+  "stem": "Why keep versioned models in a model registry?",
+  "options": [
+   "To make the deployed model load faster by caching its weights on disk",
+   "To version the training code, since the artifacts themselves never change",
+   "To improve accuracy automatically as each new version gets registered",
+   "To know which model is live, enable rollback, and trace lineage"
+  ],
+  "answer_index": 3,
+  "rationale": "A registry gives each artifact an identity so you can tell what is deployed, revert to a known-good version, and link it back to the data and code that produced it.",
+  "misconceptions": [
+   "Confuses artifact governance with a runtime performance optimization",
+   "Assumes only code needs versions and that model artifacts are immutable",
+   "Assumes versioning itself improves a model rather than tracking it",
+   "CORRECT"
+  ]
+ },
+ {
+  "id": "T5-Q25",
+  "competency": "MLOps & Productionization",
+  "sub_competency": "T5.4 · Experiment tracking & versioning",
+  "difficulty": "very_hard",
+  "discrimination": "medium",
+  "stem": "A teammate reruns your training script at the same Git commit but gets noticeably different metrics. Which omission best explains it?",
+  "options": [
+   "The model artifact was not registered in the registry after training ended",
+   "The metrics were logged under a different experiment name in the tracker",
+   "The dataset snapshot and random seed were never pinned alongside the code",
+   "The tracking server wrote the run artifacts into a different storage bucket"
+  ],
+  "answer_index": 2,
+  "rationale": "Pinning the commit fixes only the code; without a pinned dataset version and seed, the data and the stochastic path both change, so the metrics legitimately differ.",
+  "misconceptions": [
+   "Confuses post-training artifact promotion with training-time reproducibility",
+   "Confuses where results are filed with what actually produced the results",
+   "CORRECT",
+   "Confuses artifact storage location with the determinism of the run itself"
+  ]
+ },
+ {
+  "id": "T5-Q11",
+  "competency": "MLOps & Productionization",
+  "sub_competency": "T5.5 · Monitoring & observability",
+  "difficulty": "easy",
+  "discrimination": "low",
+  "stem": "Which set of signals matters most to monitor for a deployed ML or LLM service?",
+  "options": [
+   "Repository size, commit count, and the number of open pull requests",
+   "Training-set accuracy recorded at the end of the last training run",
+   "Latency, error rate, throughput, plus input drift and output quality",
+   "Hardware purchase cost, licence expiry, and the vendor's support tier"
+  ],
+  "answer_index": 2,
+  "rationale": "Production monitoring must cover both operational health (latency, errors, throughput) and model health (input drift, output quality), since either can fail independently.",
+  "misconceptions": [
+   "Confuses repository activity metrics with runtime service behaviour",
+   "Mistakes a frozen offline training number for live production health",
+   "CORRECT",
+   "Confuses procurement and contract facts with service observability"
+  ]
+ },
+ {
+  "id": "T5-Q12",
+  "competency": "MLOps & Productionization",
+  "sub_competency": "T5.5 · Monitoring & observability",
+  "difficulty": "medium",
+  "discrimination": "high",
+  "stem": "Production accuracy decays over months although input feature distributions look unchanged. The most likely cause is:",
+  "options": [
+   "Training-serving skew — features are computed differently at serve time",
+   "Label leakage — a target-derived feature inflated the original scores",
+   "Data drift — the distribution of the input features has shifted over time",
+   "Concept drift — the input-to-target relationship itself has changed"
+  ],
+  "answer_index": 3,
+  "rationale": "When inputs are stable but performance falls, the mapping from inputs to the target has changed; that is concept drift by definition.",
+  "misconceptions": [
+   "Names a real failure that would show up at launch, not as slow monthly decay",
+   "Names a training-time defect that would have shown poor accuracy from day one",
+   "Ignores the stated evidence that the input distribution has not shifted",
+   "CORRECT"
+  ]
+ },
+ {
+  "id": "T5-Q26",
+  "competency": "MLOps & Productionization",
+  "sub_competency": "T5.5 · Monitoring & observability",
+  "difficulty": "very_hard",
+  "discrimination": "high",
+  "stem": "Mean request latency for your service sits flat at 80ms, yet users report frequent timeouts. What should you inspect first?",
+  "options": [
+   "Total request throughput, since heavier traffic must mean slower replies",
+   "The mean latency over a longer rolling window to get a stabler figure",
+   "Tail latency percentiles such as p95 and p99, which an average conceals",
+   "The model's offline accuracy, since weak quality lengthens each response"
+  ],
+  "answer_index": 2,
+  "rationale": "Averages hide the slow minority of requests that actually time out; tail percentiles expose the distribution's right edge where the user-visible failures live.",
+  "misconceptions": [
+   "Assumes throughput implies latency and still gives no view of the tail",
+   "Doubles down on the aggregate statistic that is already hiding the problem",
+   "CORRECT",
+   "Confuses a model quality metric with a request-latency distribution issue"
+  ]
+ },
+ {
+  "id": "T5-Q13",
+  "competency": "MLOps & Productionization",
+  "sub_competency": "T5.6 · Cloud & infra basics",
+  "difficulty": "easy",
+  "discrimination": "medium",
+  "stem": "Inference traffic is spiky and unpredictable, and you do not want to pay for idle capacity. A reasonable choice is:",
+  "options": [
+   "One always-on large VM sized for the highest spike you have observed",
+   "A fixed pool of small VMs with a queue absorbing every traffic burst",
+   "Manually resizing the existing VM whenever a spike gets reported to you",
+   "Autoscaling compute that adds and removes replicas as demand changes"
+  ],
+  "answer_index": 3,
+  "rationale": "Autoscaling matches provisioned capacity to actual demand, so spikes are absorbed while idle periods do not incur the cost of peak-sized capacity.",
+  "misconceptions": [
+   "Pays for peak capacity continuously, which is exactly the stated problem",
+   "Still provisions a fixed pool that idles, and queueing only defers the load",
+   "Relies on human reaction time, which cannot track unpredictable spikes",
+   "CORRECT"
+  ]
+ },
+ {
+  "id": "T5-Q14",
+  "competency": "MLOps & Productionization",
+  "sub_competency": "T5.6 · Cloud & infra basics",
+  "difficulty": "very_easy",
+  "discrimination": "high",
+  "stem": "You must store 10TB of training images cheaply and read them from many training jobs. The best fit is:",
+  "options": [
+   "A block volume attached to a single training VM's local filesystem",
+   "Object storage, which holds large files cheaply and scales elastically",
+   "An in-memory cache cluster sized to hold the entire dataset",
+   "A relational database, keeping each image inside a text column per row"
+  ],
+  "answer_index": 1,
+  "rationale": "Object storage is the standard cheap, elastic, network-accessible home for large immutable blobs that many jobs read.",
+  "misconceptions": [
+   "Ties the dataset to one machine's lifecycle and caps capacity at that disk",
+   "CORRECT",
+   "Pays memory prices for cold bulk data that is only streamed during training",
+   "Uses a transactional store for bulk blobs, which is costly and ill-suited"
+  ]
+ },
+ {
+  "id": "T5-Q27",
+  "competency": "MLOps & Productionization",
+  "sub_competency": "T5.6 · Cloud & infra basics",
+  "difficulty": "hard",
+  "discrimination": "medium",
+  "stem": "Staging and production have quietly diverged after months of manual console edits. The durable fix is:",
+  "options": [
+   "Write a runbook documenting each console step operators are to follow",
+   "Define both environments as version-controlled infrastructure-as-code",
+   "Grant console access to fewer engineers so fewer manual edits can happen",
+   "Snapshot production nightly and restore that image over staging weekly"
+  ],
+  "answer_index": 1,
+  "rationale": "Infrastructure-as-code makes the environment definition a reviewed, reproducible artifact, so both environments are provisioned from one source of truth rather than by hand.",
+  "misconceptions": [
+   "Documents a manual process rather than removing the manual process",
+   "CORRECT",
+   "Reduces who can cause drift but leaves the environment undefined and manual",
+   "Copies state periodically without capturing intent, so drift resumes at once"
+  ]
+ },
+ {
+  "id": "T5-Q15",
+  "competency": "MLOps & Productionization",
+  "sub_competency": "T5.7 · Scaling & optimization",
+  "difficulty": "medium",
+  "discrimination": "medium",
+  "stem": "Which approach most directly reduces LLM inference cost and latency at scale?",
+  "options": [
+   "Increase the maximum output token limit so each response finishes in one call",
+   "Cache repeats, batch requests, and route simple queries to a smaller model",
+   "Raise the sampling temperature so the model commits to its answers sooner",
+   "Send every request to the largest model, cutting retries caused by errors"
+  ],
+  "answer_index": 1,
+  "rationale": "Caching removes duplicate work, batching raises hardware efficiency, and routing easy traffic to cheaper models cuts per-request cost — all without changing the hard requests.",
+  "misconceptions": [
+   "Raises a cap that permits longer, slower, more expensive generations",
+   "CORRECT",
+   "Confuses a sampling parameter with anything affecting cost or speed",
+   "Maximizes per-request cost on the assumption that errors dominate the bill"
+  ]
+ },
+ {
+  "id": "T5-Q16",
+  "competency": "MLOps & Productionization",
+  "sub_competency": "T5.7 · Scaling & optimization",
+  "difficulty": "hard",
+  "discrimination": "medium",
+  "stem": "A team quantizes a model to int8: memory use halves, but inference latency is essentially unchanged. The most likely reason is:",
+  "options": [
+   "The runtime dequantizes to float for compute, so kernel work is unchanged",
+   "Int8 weights occupy more registers, which cancels out the memory savings",
+   "Batch size must be doubled before any of the quantization gains appear",
+   "Quantization only shrinks the artifact on disk and never the loaded weights"
+  ],
+  "answer_index": 0,
+  "rationale": "Without true int8 kernels the runtime unpacks weights back to float before the matmul, so quantization buys memory footprint but no arithmetic speedup.",
+  "misconceptions": [
+   "CORRECT",
+   "Invents a register-pressure effect that contradicts the observed halving",
+   "Invents a batching precondition for quantization's arithmetic benefits",
+   "Contradicts the stated observation that runtime memory use actually halved"
+  ]
+ },
+ {
+  "id": "T5-Q28",
+  "competency": "MLOps & Productionization",
+  "sub_competency": "T5.7 · Scaling & optimization",
+  "difficulty": "very_hard",
+  "discrimination": "high",
+  "stem": "Widening the server's dynamic batching window raises GPU throughput, yet user complaints about slowness increase. The most likely explanation is:",
+  "options": [
+   "Larger batches add queueing wait, so per-request tail latency gets worse",
+   "Larger batches force the model weights to be reloaded between each batch",
+   "Larger batches lower arithmetic precision, so the answers become less useful",
+   "Larger batches reduce GPU utilization, so each request is computed slower"
+  ],
+  "answer_index": 0,
+  "rationale": "A wider batching window makes early arrivals wait for the batch to fill, trading per-request latency for aggregate throughput — the classic batching trade-off.",
+  "misconceptions": [
+   "CORRECT",
+   "Invents weight reloading, which does not depend on batch composition",
+   "Confuses batching with quantization; batch size does not change precision",
+   "Contradicts the premise that throughput and thus utilization went up"
+  ]
+ },
+ {
+  "id": "T5-Q17",
+  "competency": "MLOps & Productionization",
+  "sub_competency": "T5.8 · Security, secrets & governance",
+  "difficulty": "very_easy",
+  "discrimination": "medium",
+  "stem": "How should database credentials and API keys be handled for a deployed service?",
+  "options": [
+   "Injected at runtime from a secrets manager and never committed to Git",
+   "Committed to the repository so that every deployment stays reproducible",
+   "Baked into the container image so the service starts without extra config",
+   "Printed at start-up so that on-call engineers can confirm the values"
+  ],
+  "answer_index": 0,
+  "rationale": "Secrets belong outside the artifact and outside version control, supplied at runtime from a managed store so they can be rotated and access-audited.",
+  "misconceptions": [
+   "CORRECT",
+   "Puts secrets in permanent, widely-readable history that cannot be rotated",
+   "Bakes secrets into a distributable artifact that anyone pulling it can read",
+   "Leaks secrets into logs, which are broadly readable and long-retained"
+  ]
+ },
+ {
+  "id": "T5-Q29",
+  "competency": "MLOps & Productionization",
+  "sub_competency": "T5.8 · Security, secrets & governance",
+  "difficulty": "hard",
+  "discrimination": "low",
+  "stem": "A batch job needs to read objects from exactly one storage bucket. Which grant follows least privilege?",
+  "options": [
+   "Administrator access to the storage service, held only while the job runs",
+   "Read-only access scoped to that single bucket, via a role owned by the job",
+   "Read-write access to every bucket in the account, granted to the job's role",
+   "The team's shared personal credentials, which already carry the needed read"
+  ],
+  "answer_index": 1,
+  "rationale": "Least privilege grants exactly the actions on exactly the resources the workload needs — read-only on one bucket, through the job's own identity.",
+  "misconceptions": [
+   "Assumes a time limit substitutes for narrowing permissions themselves",
+   "CORRECT",
+   "Widens both the action set and the resource scope far beyond the need",
+   "Reuses human identities, destroying attribution and over-granting access"
+  ]
+ },
+ {
+  "id": "T5-Q30",
+  "competency": "MLOps & Productionization",
+  "sub_competency": "T5.8 · Security, secrets & governance",
+  "difficulty": "very_hard",
+  "discrimination": "medium",
+  "stem": "Your service logs full request payloads to debug LLM outputs, and users routinely submit personal data. The correct control is:",
+  "options": [
+   "Sample only ten percent of payloads so most personal data is never stored",
+   "Keep whole payloads but restrict the log dashboard to the on-call rotation",
+   "Encrypt the log volume at rest, which removes the need to redact anything",
+   "Redact or hash personal fields before logging, with a retention limit set"
+  ],
+  "answer_index": 3,
+  "rationale": "Data minimization at write time is the control: personal data that is never written cannot leak, and a retention limit bounds what does exist.",
+  "misconceptions": [
+   "Reduces the volume of exposure but still stores real personal data indefinitely",
+   "Relies on access control while the sensitive data is still collected and kept",
+   "Confuses at-rest encryption with minimizing what is collected in the first place",
+   "CORRECT"
+  ]
+ }
+]
