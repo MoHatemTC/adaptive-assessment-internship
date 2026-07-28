@@ -19,6 +19,7 @@ from typing import Any
 from app.config.settings import settings
 from app.config.voice_settings import voice_settings
 from app.services.voice.prompts import INTERVIEWER_SYSTEM, TURN_TAKING_DIRECTOR
+from app.services.voice.language import looks_non_english
 from app.services.voice_live.audio_codec import (
     LIVE_INPUT_RATE,
     LIVE_OUTPUT_RATE,
@@ -51,6 +52,7 @@ class StreamlitLiteLLMLiveBridge:
         self.candidate_speech_seconds = 0.0
         self._turn_counter = 0
         self._closed = False
+        self._english_nudge_sent = False
 
     def _run_loop(self) -> None:
         asyncio.set_event_loop(self._loop)
@@ -106,6 +108,7 @@ class StreamlitLiteLLMLiveBridge:
         self.candidate_speech_seconds = 0.0
         self._turn_counter = 0
         self._closed = False
+        self._english_nudge_sent = False
 
         system = (
             INTERVIEWER_SYSTEM
@@ -116,7 +119,9 @@ class StreamlitLiteLLMLiveBridge:
             )
             + f"\nSession nonce: {uuid.uuid4().hex[:8]}\n"
             + "Respond with natural conversational audio only after end-of-turn. "
-            + "Conduct the interview in English only. "
+            + "Conduct the interview in English only (HARD). "
+            + "If the candidate answers in another language (including romanized "
+            + "Japanese), do NOT thank them or end — ask once to continue in English. "
             + f"You may ask at most {voice_settings.maximum_probes_default} short "
             + "clarifying probes, then thank them and stop."
         )
@@ -159,7 +164,26 @@ class StreamlitLiteLLMLiveBridge:
 
         await self._session.append_audio(pcm)
         await self._session.commit_audio()
-        return await self._collect_model_turn(role_label="interviewer", cand_id=cand_id)
+        reply = await self._collect_model_turn(role_label="interviewer", cand_id=cand_id)
+
+        cand_text = ""
+        for turn in reversed(self.turns):
+            if turn.get("turn_id") == cand_id:
+                cand_text = str(turn.get("text") or "")
+                break
+        if (
+            looks_non_english(cand_text)
+            and not self._english_nudge_sent
+            and self._session is not None
+        ):
+            self._english_nudge_sent = True
+            await self._session.send_text(
+                "DIRECTOR (not spoken to candidate): The candidate's last utterance was "
+                "NOT in English. Do NOT thank them or end. Ask once, briefly, to continue "
+                "in English, then LISTEN. Do not translate their answer."
+            )
+            reply = await self._collect_model_turn(role_label="interviewer")
+        return reply
 
     async def _collect_model_turn(
         self, *, role_label: str, cand_id: str | None = None, timeout: float = 90.0

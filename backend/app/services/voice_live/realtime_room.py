@@ -19,6 +19,7 @@ from app.config.voice_settings import voice_settings
 from app.services import observability
 from app.services.observability import LiveHandle
 from app.services.voice.prompts import CHAT_SYSTEM, INTERVIEWER_SYSTEM, TURN_TAKING_DIRECTOR
+from app.services.voice.language import looks_non_english
 from app.services.voice_live.audio_codec import LIVE_INPUT_RATE, pcm16_to_wav_bytes
 from app.services.voice_live.gemini_live import LiveInterviewResult
 from app.services.voice_live.litellm_realtime import AsyncLiteLLMLiveSession
@@ -92,6 +93,7 @@ class RealtimeLiveRoom:
         self._prime_draining = True
         self._question_opened = False  # True after interviewer speaks a real opener
         self._live_trace: LiveHandle | None = None
+        self._english_nudge_sent = False
 
     @classmethod
     def create(
@@ -169,12 +171,14 @@ class RealtimeLiveRoom:
         else:
             system += (
                 "Respond with natural conversational audio only after end-of-turn. "
-                "Conduct the interview in English only. "
+                "Conduct the interview in English only (HARD RULE). "
                 f"You may ask at most {voice_settings.maximum_probes_default} short clarifying "
                 "probes, and only for missing required parts — then thank them and stop. "
-                "If they answer in another language, ask once to continue in English. "
-                "If the first English answer already covers creation, behavior, and a "
-                "use-case, do not probe further."
+                "If they answer in another language (including romanized Japanese ASR), "
+                "do NOT thank them or say the answer covers the question — ask once to "
+                "continue in English, then listen. Never translate for them. "
+                "If the first English answer already covers the required parts, do not "
+                "probe further."
             )
 
         try:
@@ -349,6 +353,8 @@ class RealtimeLiveRoom:
                     await self._out_queue.put(
                         {"type": "transcript", "role": "candidate", "text": text}
                     )
+                    if looks_non_english(text):
+                        await self._nudge_english_only()
                 elif kind == "text":
                     text = (event.get("text") or "").strip()
                     if not text:
@@ -405,6 +411,24 @@ class RealtimeLiveRoom:
             self.state.error = str(exc)
             self._close_live_trace()
             await self._out_queue.put({"type": "error", "error": str(exc)})
+
+    async def _nudge_english_only(self) -> None:
+        """Force one English reminder instead of letting the model thank-and-close."""
+        if self._english_nudge_sent or self._session is None or self._closed:
+            return
+        self._english_nudge_sent = True
+        director = (
+            "DIRECTOR (not spoken to candidate): The candidate's last utterance was "
+            "NOT in English (or was non-English / romanized ASR). Do NOT thank them, "
+            "do NOT say their answer covers the question, and do NOT end the interview. "
+            "Say only a brief reminder to continue in English (≤ 12 words), then LISTEN. "
+            "Do not translate or paraphrase their non-English content."
+        )
+        try:
+            await self._session.send_text(director)
+            logger.info("english-only nudge sent room=%s", self.room_id)
+        except Exception:  # noqa: BLE001
+            logger.debug("english-only nudge failed room=%s", self.room_id, exc_info=True)
 
     def _append_turn(self, role: str, text: str) -> None:
         if role == "interviewer" and _is_ready_ack(text):

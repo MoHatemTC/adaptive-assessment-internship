@@ -10,6 +10,7 @@ from app.schemas.voice import GradedVoiceResponse, VoiceEvaluation, VoiceRespons
 from app.services import observability
 from app.services.adaptive.llm import LLMUnavailable, chat_json
 from app.services.voice.prompts import EVALUATOR_SYSTEM
+from app.services.voice.language import candidate_turns_non_english, looks_non_english
 from app.services.voice.rubrics import load_rubric
 from app.services.voice.validation import validate
 
@@ -67,6 +68,7 @@ async def evaluate(
         evaluation = _heuristic_from_rubric(
             item.item_id, rubric, package, flags=["HEURISTIC_FALLBACK"]
         )
+        evaluation = _apply_english_only_clamp(evaluation, package, rubric)
         return GradedVoiceResponse(package=package, evaluation=evaluation, rubric=rubric)
 
     payload = _build_payload(item, package, rubric)
@@ -84,6 +86,7 @@ async def evaluate(
         payload["previous_attempt_errors"] = evaluation.flags
         evaluation = await _call_grader(payload, item.item_id, rubric, package)
 
+    evaluation = _apply_english_only_clamp(evaluation, package, rubric)
     return GradedVoiceResponse(package=package, evaluation=evaluation, rubric=rubric)
 
 
@@ -112,6 +115,8 @@ async def _call_grader(
 
 
 def _build_payload(item: BankItem, package: VoiceResponsePackage, rubric: dict) -> dict:
+    non_en = candidate_turns_non_english(package.turns)
+    whole_non_en = looks_non_english(package.transcript)
     return {
         "item_id": item.item_id,
         "rubric_id": rubric.get("rubric_id"),
@@ -140,8 +145,67 @@ def _build_payload(item: BankItem, package: VoiceResponsePackage, rubric: dict) 
             "no_protected_attribute_language": True,
             "english_only": True,
             "non_english_answers_score_near_zero": True,
+            "non_english_candidate_turns": non_en[:4],
+            "transcript_flagged_non_english": whole_non_en or bool(non_en),
         },
     }
+
+
+def _apply_english_only_clamp(
+    evaluation: VoiceEvaluation,
+    package: VoiceResponsePackage,
+    rubric: dict,
+) -> VoiceEvaluation:
+    """Deterministic floor when candidate speech is non-English (prompt-only is soft)."""
+    non_en_turns = candidate_turns_non_english(package.turns)
+    whole = looks_non_english(package.transcript)
+    if not non_en_turns and not whole:
+        return evaluation
+
+    candidate_turns = [t for t in package.turns if t.role == "candidate" and t.text.strip()]
+    english_turns = [t for t in candidate_turns if not looks_non_english(t.text)]
+    # Entire answer non-English, or only non-English evidence → near-zero everything.
+    # Mixed: English first + non-English probe → keep modest credit from English turns only
+    # by capping required technical criteria hard when the last turn is non-English.
+    last_non_en = bool(candidate_turns) and looks_non_english(candidate_turns[-1].text)
+    only_non_en = not english_turns
+
+    flags = list(evaluation.flags)
+    if "NON_ENGLISH_SPEECH" not in flags:
+        flags.append("NON_ENGLISH_SPEECH")
+
+    capped = []
+    for ev in evaluation.criterion_evidence:
+        maximum = float(ev.maximum_score)
+        score = float(ev.raw_score)
+        cid = ev.criterion_id
+        if only_non_en or whole and not english_turns:
+            score = min(score, 0.15 * maximum)
+        elif last_non_en and cid in {
+            "technical_accuracy",
+            "completeness",
+            "reasoning_and_justification",
+        }:
+            # Probe answer was non-English — do not let that inflate technical credit.
+            score = min(score, 0.55 * maximum)
+        capped.append(ev.model_copy(update={"raw_score": round(score, 2)}))
+
+    rationale = evaluation.overall_rationale or ""
+    note = (
+        "Non-English candidate speech detected; technical credit clamped per "
+        "english_only policy."
+    )
+    if note not in rationale:
+        rationale = f"{rationale} {note}".strip()
+
+    return evaluation.model_copy(
+        update={
+            "criterion_evidence": capped,
+            "flags": flags,
+            "overall_rationale": rationale,
+            "evaluation_confidence": max(float(evaluation.evaluation_confidence), 0.75),
+        }
+    )
 
 
 def _rubric_from_payload(item: BankItem) -> dict:
