@@ -4,9 +4,10 @@ The gateway is often reached by IP (`https://3.75.224.129/...`) with a certifica
 whose SAN does not match that host. Set `LITELLM_SSL_VERIFY=false` in that case
 (equivalent to `curl --insecure`).
 
-Keepalive is intentionally short: a dead pooled connection shows up as an instant
-`APIConnectionError` (Langfuse ERROR span, then a successful retry). Prefer reconnecting
-over reusing a socket the proxy has already dropped.
+Keepalive is disabled for this gateway: exported Langfuse traces showed first attempts
+failing in 1-4 ms after idle periods, followed by successful retries. That signature is
+a dead pooled connection, not gateway unavailability. A fresh TLS connection costs less
+than a failed generation + retry and removes misleading ERROR spans.
 """
 
 from __future__ import annotations
@@ -18,12 +19,11 @@ from app.config.settings import settings
 _sync: httpx.Client | None = None
 _async: httpx.AsyncClient | None = None
 
-# Fresh connections beat stale keepalives against this proxy. 5s expiry is enough to
-# reuse within a single grade/picker burst without holding sockets across turns.
+# Fresh connections beat stale keepalives against this proxy. The gateway dominates request
+# latency anyway, so connection reuse is not worth intermittent instant failures.
 _LIMITS = httpx.Limits(
     max_connections=20,
-    max_keepalive_connections=5,
-    keepalive_expiry=5.0,
+    max_keepalive_connections=0,
 )
 
 
