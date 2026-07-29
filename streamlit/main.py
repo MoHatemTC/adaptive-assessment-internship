@@ -76,9 +76,16 @@ from app.services.orchestrator import variables as variables_module  # noqa: E40
 from app.services.adaptive.irt import expected_fisher_information  # noqa: E402
 from app.services.orchestrator.picker import criterion_for, information_for  # noqa: E402
 from app.services.orchestrator.competency import rollup_outcomes  # noqa: E402
+from app.services.competency_graph import load_default_competency_graph  # noqa: E402
+from app.services.competency_graph.coverage import unmeasured_required_nodes  # noqa: E402
+from app.services.competency_graph.graph import CompetencyGraphService  # noqa: E402
+from app.services.competency_graph.propagation import PropagationConfig  # noqa: E402
+from app.services.competency_graph.rollup import graph_rollup_outcomes  # noqa: E402
 from app.services.voice.evaluator import evaluate as evaluate_voice  # noqa: E402
 from app.services.voice.evaluator import package_from_text  # noqa: E402
 from app.services.voice_live.streamlit_live import StreamlitLiteLLMLiveBridge  # noqa: E402
+
+import graph_view  # noqa: E402 — Streamlit-local helper beside session_log
 
 
 def fisher_after(item, variable_state, variable) -> float:
@@ -368,8 +375,173 @@ def steps_frame() -> pd.DataFrame:
     return pd.DataFrame(st.session_state.get("steps", []))
 
 
+def graph_node_status(state, node_id: str) -> str:
+    """Live graph status first, then analysis-only shadow status."""
+    if node_id in getattr(state, "graph_contradicted_nodes", []):
+        return "contradicted"
+    if node_id in getattr(state, "graph_blocked_nodes", []):
+        return "blocked"
+    if node_id in getattr(state, "graph_direct_mastered_nodes", []):
+        return "mastered"
+    if node_id in getattr(state, "graph_direct_not_mastered_nodes", []):
+        return "direct not mastered"
+    if node_id in getattr(state, "graph_shadow_contradicted_nodes", []):
+        return "shadow · contradicted"
+    if node_id in getattr(state, "graph_shadow_blocked_nodes", []):
+        return "shadow · blocked"
+    if node_id in getattr(state, "graph_shadow_direct_mastered_nodes", []):
+        return "shadow · direct mastered"
+    if node_id in getattr(state, "graph_shadow_direct_not_mastered_nodes", []):
+        return "shadow · direct not mastered"
+    if node_id in getattr(state, "graph_shadow_inferred_mastered_nodes", []):
+        return "shadow · inferred mastered"
+    return "unknown"
+
+
+def render_competency_math(state) -> None:
+    """Live CAT mathematics: mains, related subs, item parameters, queued candidates."""
+    st.markdown("**Main competencies — live CAT estimates**")
+    st.latex(r"\hat\theta = \sum_k \theta_k\, p(\theta_k),\quad"
+             r"\mathrm{SE}=\sqrt{\sum_k(\theta_k-\hat\theta)^2 p(\theta_k)}")
+    st.caption(
+        "Each main competency holds a posterior on the shared θ grid. "
+        f"Precision stop targets SE ≤ {settings.cat_se_target} after at least "
+        f"{settings.cat_precision_min_questions} observations. "
+        "3PL item response: "
+    )
+    st.latex(r"P(\theta)=c+(1-c)\,\frac{1}{1+e^{-a(\theta-b)}}")
+
+    main_rows = []
+    for variable, vs in sorted(state.variables.items()):
+        level, band = ability_band(vs.theta_hat)
+        main_rows.append(
+            {
+                "main": variable,
+                "θ̂": round(vs.theta_hat, 4),
+                "SE": round(vs.standard_error, 4),
+                "precision index": round(variables_module.certainty(vs), 1),
+                "95% CI": (
+                    "—"
+                    if not vs.observations
+                    else "[{:.1f}, {:.1f}]".format(*variables_module.posterior_interval(vs))
+                ),
+                "n": vs.observations,
+                "criterion": criterion_for(vs.observations),
+                "level": level if vs.observations else None,
+                "band": band if vs.observations else "Not assessed",
+                "finalised": vs.finalised,
+                "stop": vs.stop_reason or "—",
+            }
+        )
+    st.dataframe(pd.DataFrame(main_rows), hide_index=True, **WIDE)
+
+    # Presenting item → related sub-competencies + CAT parameters
+    presenting = state.presenting
+    if presenting is not None:
+        item = bank().get(presenting.item_id)
+        st.markdown(
+            f"**Presenting item** `{presenting.item_id}` · {presenting.modality} · "
+            f"criterion `{presenting.criterion}`"
+        )
+        if item is not None:
+            st.latex(
+                rf"a={item.cat.a:.3f},\quad b={item.cat.b:.3f},\quad c={item.cat.c:.3f}"
+            )
+            vs = state.variables.get(presenting.variable)
+            if vs is not None:
+                info = information_for(item, vs, presenting.variable)
+                st.caption(
+                    f"Information under {presenting.criterion} at "
+                    f"θ̂={vs.theta_hat:+.3f}: **{info:.5f}** "
+                    f"(loading on {presenting.variable} = {item.loading(presenting.variable):.2f})"
+                )
+            measure_rows = [
+                {
+                    "sub-competency": m.variable,
+                    "loading w": m.weight,
+                    "main": m.variable.split(".")[0],
+                    "graph status": graph_node_status(state, m.variable),
+                }
+                for m in item.measures
+            ]
+            st.markdown("**Sub-competencies measured by this item**")
+            st.dataframe(pd.DataFrame(measure_rows), hide_index=True, **WIDE)
+
+    # Queued candidates — full CAT parameter + picker info
+    st.markdown("**Queued candidates — CAT parameters & picker math**")
+    if not state.queue:
+        st.caption("No queued candidates right now.")
+    else:
+        cand_rows = []
+        for variable, candidate in sorted(state.queue.items()):
+            item = bank().get(candidate.item_id)
+            vs = state.variables[variable]
+            cand_rows.append(
+                {
+                    "main": variable,
+                    "item": candidate.item_id,
+                    "modality": candidate.modality,
+                    "θ̂": round(vs.theta_hat, 4),
+                    "SE": round(vs.standard_error, 4),
+                    "n": vs.observations,
+                    "criterion": candidate.criterion,
+                    "I / utility": round(candidate.utility, 5),
+                    "best I": round(candidate.best_information, 5),
+                    "regret": round(candidate.normalized_regret, 4),
+                    "a": item.cat.a if item else None,
+                    "b": item.cat.b if item else None,
+                    "c": item.cat.c if item else None,
+                    "loading": item.loading(variable) if item else None,
+                    "subs": ", ".join(m.variable for m in item.measures) if item else "—",
+                    "by": "model" if candidate.chosen_by_llm else "engine",
+                    "reason": candidate.reason_code,
+                }
+            )
+        st.dataframe(pd.DataFrame(cand_rows), hide_index=True, **WIDE)
+
+    # Graph node ledger for session mains' related subs
+    try:
+        service = graph_view.graph_service()
+        session_mains = set(state.variables)
+        sub_rows = []
+        for nid, node in sorted(service.graph.nodes.items()):
+            if node.node_type != "sub_competency":
+                continue
+            mains = set(node.main_competencies) or {nid.split(".")[0]}
+            if not (mains & session_mains):
+                continue
+            parents = service.prerequisites_parents(nid)
+            children = service.prerequisites_children(nid)
+            sub_rows.append(
+                {
+                    "sub": nid,
+                    "title": node.title,
+                    "mains": ", ".join(mains),
+                    "critical": node.critical,
+                    "prerequisites": ", ".join(parents) or "—",
+                    "unlocks": ", ".join(children) or "—",
+                    "status": graph_node_status(state, nid),
+                }
+            )
+        if sub_rows:
+            st.markdown("**Related sub-competency nodes (graph)**")
+            st.dataframe(pd.DataFrame(sub_rows), hide_index=True, **WIDE)
+    except Exception as exc:  # noqa: BLE001
+        session_log.note_ui_error("graph_view", "failed to list related sub-nodes", exc=exc)
+        st.warning(f"Could not load graph sub-nodes: {exc}")
+
+
 def render_mathematics() -> None:
-    """Every update, in the order it happened."""
+    """Every update, in the order it happened — plus live CAT / graph math."""
+    state = st.session_state.get("run")
+    if state is not None:
+        render_competency_math(state)
+        st.markdown("---")
+
+    st.markdown("**Update history (fractional likelihood steps)**")
+    st.latex(
+        r"L(\theta)=\bigl[P(\theta)^{s}\,(1-P(\theta))^{1-s}\bigr]^{w}"
+    )
     frame = steps_frame()
     if frame.empty:
         st.caption("No questions answered yet.")
@@ -391,6 +563,163 @@ def render_mathematics() -> None:
     )
 
 
+def render_graph_dag(state) -> None:
+    """Realtime competency DAG focused on the current item path."""
+    st.markdown("**Competency dependency DAG**")
+    st.caption(
+        "Focus = nodes measured by the presenting item (or last graded item if no presenting item). "
+        "Path = prerequisites + descendants. "
+        "Mastered / blocked / contradicted come from persisted graph session state."
+    )
+    try:
+        service = graph_view.graph_service()
+    except Exception as exc:  # noqa: BLE001
+        session_log.note_ui_error("graph_view", "failed to load competency graph", exc=exc)
+        st.error(f"Graph failed to load: {exc}")
+        return
+
+    option_col1, option_col2 = st.columns(2)
+    with option_col1:
+        include_shadow = st.checkbox("Include shadow state", value=False)
+    with option_col2:
+        show_full_dag = st.checkbox(
+            "Show full DAG",
+            value=False,
+            help="Otherwise show only the current item's prerequisite and dependent path.",
+        )
+
+    focus: set[str] = set()
+    presenting = state.presenting
+    if presenting is not None:
+        item = bank().get(presenting.item_id)
+        if item is not None:
+            focus.update(m.variable for m in item.measures)
+        focus.add(presenting.variable)
+    else:
+        last = st.session_state.get("last_graded") or {}
+        for o in last.get("outcomes") or []:
+            if isinstance(o, dict) and o.get("variable"):
+                focus.add(str(o["variable"]))
+
+    if not focus:
+        # Session mains → their critical / own subs
+        for main in state.variables:
+            focus.add(main)
+            for nid, node in service.graph.nodes.items():
+                if main in node.main_competencies:
+                    focus.add(nid)
+
+    displayed_blocked = set(getattr(state, "graph_blocked_nodes", []))
+    displayed_mastered = set(getattr(state, "graph_direct_mastered_nodes", []))
+    displayed_not_mastered = set(getattr(state, "graph_direct_not_mastered_nodes", []))
+    displayed_contradicted = set(getattr(state, "graph_contradicted_nodes", []))
+
+    if include_shadow:
+        displayed_blocked |= set(getattr(state, "graph_shadow_blocked_nodes", []))
+        displayed_mastered |= set(getattr(state, "graph_shadow_direct_mastered_nodes", []))
+        displayed_mastered |= set(getattr(state, "graph_shadow_inferred_mastered_nodes", []))
+        displayed_not_mastered |= set(
+            getattr(state, "graph_shadow_direct_not_mastered_nodes", [])
+        )
+        displayed_contradicted |= set(getattr(state, "graph_shadow_contradicted_nodes", []))
+    diagram_focus = set() if show_full_dag else focus
+    diagram = graph_view.svg_for_subgraph(
+        service,
+        focus_nodes=diagram_focus,
+        blocked=displayed_blocked,
+        mastered=displayed_mastered,
+        not_mastered=displayed_not_mastered,
+        contradicted=displayed_contradicted,
+    )
+    graph_view.render_svg(diagram)
+    rendered_nodes, rendered_edges = graph_view.related_subgraph(service, diagram_focus)
+    if not rendered_nodes:
+        rendered_nodes = set(service.graph.nodes)
+        rendered_edges = [
+            (edge.from_id, edge.to_id, edge.relation) for edge in service.graph.edges
+        ]
+    st.caption(
+        f"Rendered {len(rendered_nodes)} nodes and {len(rendered_edges)} directed edges. "
+        "Scroll horizontally inside the graph when viewing the full DAG."
+    )
+    st.download_button(
+        "Download DAG as SVG",
+        data=diagram.encode("utf-8"),
+        file_name=f"{state.session_id}_competency_dag.svg",
+        mime="image/svg+xml",
+    )
+
+    col1, col2, col3, col4, col5 = st.columns(5)
+    col1.metric("Focus nodes", len(focus))
+    col2.metric("Mastered", len(displayed_mastered))
+    col3.metric("Not mastered", len(displayed_not_mastered))
+    col4.metric("Blocked", len(displayed_blocked))
+    col5.metric("Contradicted", len(displayed_contradicted))
+
+    with st.expander("Node status and dependency detail", expanded=True):
+        related_nodes, _ = graph_view.related_subgraph(service, diagram_focus)
+        if not related_nodes:
+            related_nodes = set(service.graph.nodes)
+        rows = []
+        for nid in sorted(related_nodes):
+            node = service.graph.nodes.get(nid)
+            status = "unknown"
+            if nid in displayed_contradicted:
+                status = "contradicted"
+            elif nid in displayed_blocked:
+                status = "blocked"
+            elif nid in displayed_mastered:
+                status = "mastered"
+            elif nid in displayed_not_mastered:
+                status = "direct not mastered"
+            elif nid in focus:
+                status = "focus"
+            rows.append(
+                {
+                    "node": nid,
+                    "title": node.title if node else "—",
+                    "type": node.node_type if node else "—",
+                    "status": status,
+                    "ancestors": ", ".join(sorted(service.ancestors(nid))) or "—",
+                    "descendants": ", ".join(sorted(service.descendants(nid))) or "—",
+                    "mains": ", ".join(service.mains_for_node(nid)) or "—",
+                }
+            )
+        st.dataframe(pd.DataFrame(rows), hide_index=True, **WIDE)
+
+
+def render_tracebook() -> None:
+    """Error / warning Tracebook — engine + graph + UI catch blocks."""
+    tally = session_log.counts()
+    err_count = sum(tally.get(k, 0) for k in ("WARNING", "ERROR", "CRITICAL"))
+    st.markdown("**Tracebook**")
+    st.caption(
+        f"{err_count} warning/error events · "
+        + (" · ".join(f"{k} {v}" for k, v in sorted(tally.items())) or "no events yet")
+    )
+
+    errors = session_log.errors()
+    if not errors:
+        st.success("No warnings or errors in this session yet.")
+        if observability.enabled():
+            st.caption("Langfuse tracing is on — engine generations are grouped by session id.")
+        return
+
+    for record in reversed(errors[-100:]):
+        header = f"`{record['time']}` **{record['level']}** · `{record['source']}`"
+        body = record["message"]
+        if record.get("exc_text"):
+            body = f"{body}\n\n```\n{record['exc_text'][-2000:]}\n```"
+        if record["level"] in ("ERROR", "CRITICAL"):
+            st.error(f"{header}\n\n{body}")
+        else:
+            st.warning(f"{header}\n\n{body}")
+
+    if st.button("Clear Tracebook"):
+        session_log.clear()
+        st.rerun()
+
+
 def render_trajectory(state) -> None:
     frame = steps_frame()
     if frame.empty:
@@ -407,15 +736,21 @@ def render_trajectory(state) -> None:
         st.caption("Ability on the −4 to +4 scale. Every competency is on the same scale "
                    "whichever modality measured it — that is what makes them comparable.")
     with right:
-        st.markdown("**Confidence by competency**")
+        st.markdown("**Posterior precision index by competency**")
+        precision_col = (
+            "precision index"
+            if "precision index" in frame.columns
+            else "confidence after"
+        )
         pivot = frame.pivot_table(
-            index="step", columns="competency", values="confidence after", aggfunc="last"
+            index="step", columns="competency", values=precision_col, aggfunc="last"
         ).ffill()
         st.line_chart(pivot)
         st.caption(
-            "Confidence tracks posterior SE, ramped while evidence is still thin "
+            "This is a remapped posterior SE (precision index), **not** a calibrated "
+            "probability that the band is correct. It ramps while evidence is thin "
             f"(below {settings.cat_precision_min_questions} items it stays provisional and "
-            f"under 90%). A competency finalises on precision only when SE ≤ "
+            f"under 90). A competency finalises on precision only when SE ≤ "
             f"{settings.cat_se_target} **and** at least "
             f"{settings.cat_precision_min_questions} items were answered — or when its "
             "band settles under the stable-band rule."
@@ -431,7 +766,14 @@ def render_trajectory(state) -> None:
                 "competency": variable,
                 "ability": round(variable_state.theta_hat, 4),
                 "std error": round(variable_state.standard_error, 4),
-                "confidence": f"{variables_module.certainty(variable_state):.1f}%",
+                "precision index": f"{variables_module.certainty(variable_state):.1f}",
+                "95% CI": (
+                    "—"
+                    if not measured
+                    else "[{:.1f}, {:.1f}]".format(
+                        *variables_module.posterior_interval(variable_state)
+                    )
+                ),
                 "level": str(level) if measured else "—",
                 "band": band if measured else "Not assessed",
                 "answers": variable_state.observations,
@@ -476,7 +818,7 @@ def render_diagnostics() -> None:
         pd.DataFrame(
             [
                 {"setting": "precision target (SE)", "value": str(settings.cat_se_target),
-                 "meaning": "posterior SD that maps to 90% measurement confidence; "
+                 "meaning": "posterior SD that maps to precision-index 90; "
                             "precision stop also needs the min-questions floor"},
                 {"setting": "precision min questions", "value": str(settings.cat_precision_min_questions),
                  "meaning": "precision stop cannot fire before this many scored items"},
@@ -503,6 +845,21 @@ def render_diagnostics() -> None:
                  "value": "langfuse" if observability.enabled() else "off",
                  "meaning": "every model call is traced and grouped by session id; "
                             "candidate source code is never sent"},
+                {"setting": "graph shadow mode",
+                 "value": str(settings.graph_shadow_mode),
+                 "meaning": "runs graph propagation in analysis-only mode (no posterior changes)"},
+                {"setting": "graph filtering",
+                 "value": str(settings.graph_filtering_enabled),
+                 "meaning": "filters candidate items using persisted blocked / mastered nodes"},
+                {"setting": "graph utility",
+                 "value": str(settings.graph_utility_enabled),
+                 "meaning": "adds graph-based utility modifiers on top of KL / E[Fisher]"},
+                {"setting": "graph shared-main rollup",
+                 "value": str(settings.graph_shared_main_rollup_enabled),
+                 "meaning": "injects inferred prerequisite evidence into main posterior updates"},
+                {"setting": "graph convergence gate",
+                 "value": str(settings.graph_convergence_gate_enabled),
+                 "meaning": "prevents finalisation while graph contradictions remain"},
             ]
         ),
         hide_index=True, **WIDE,
@@ -535,6 +892,57 @@ def render_diagnostics() -> None:
             hide_index=True, **WIDE,
         )
 
+    with st.expander("Graph-augmented CAT state"):
+        run_state = st.session_state["run"]
+        graph = graph_view.graph_service()
+        missing_by_main = {
+            main: sorted(
+                unmeasured_required_nodes(
+                    graph,
+                    main,
+                    measured=getattr(run_state, "graph_direct_measured_nodes", []),
+                    mastered=run_state.graph_direct_mastered_nodes,
+                    not_mastered=getattr(
+                        run_state, "graph_direct_not_mastered_nodes", []
+                    ),
+                    critical_only=settings.graph_coverage_critical_only,
+                )
+            )
+            for main in run_state.variables
+        }
+        st.caption(
+            "Operational Phase C+ state is listed first. Shadow fields are analysis-only "
+            "and do not affect CAT selection, posterior updates, or convergence."
+        )
+        st.json(
+            {
+                "blocked_nodes": run_state.graph_blocked_nodes,
+                "direct_measured_nodes": getattr(
+                    run_state, "graph_direct_measured_nodes", []
+                ),
+                "coverage_missing_by_main": missing_by_main,
+                "direct_mastered_nodes": run_state.graph_direct_mastered_nodes,
+                "direct_not_mastered_nodes": getattr(
+                    run_state, "graph_direct_not_mastered_nodes", []
+                ),
+                "contradicted_nodes": run_state.graph_contradicted_nodes,
+                "shadow_direct_mastered_nodes": (
+                    getattr(run_state, "graph_shadow_direct_mastered_nodes", [])
+                ),
+                "shadow_inferred_mastered_nodes": (
+                    getattr(run_state, "graph_shadow_inferred_mastered_nodes", [])
+                ),
+                "shadow_blocked_nodes": getattr(
+                    run_state, "graph_shadow_blocked_nodes", []
+                ),
+                "shadow_contradicted_nodes": (
+                    getattr(run_state, "graph_shadow_contradicted_nodes", [])
+                ),
+                "graph_last_affected_mains": run_state.graph_last_affected_mains,
+            },
+            expanded=False,
+        )
+
     with st.expander("Raw session state"):
         st.json(st.session_state["run"].model_dump(), expanded=False)
 
@@ -543,17 +951,26 @@ def render_diagnostics() -> None:
 def record(state, item, candidate, response) -> None:
     """Grade one response and record everything the tables need."""
     before = {v: s for v, s in state.variables.items()}
-    with observability.session(
-        state.session_id,
-        track=st.session_state.get("competencies"),
-        stage="grade",
-        item_id=item.item_id,
-        modality=item.modality,
-        variable=candidate.variable if candidate else None,
-        # The submission itself is never sent — see observability.redact_code.
-        submission=observability.redact_code(response) if isinstance(response, str) else None,
-    ):
-        new_state, graded = engine().record_response(state, item, response)
+    try:
+        with observability.session(
+            state.session_id,
+            track=st.session_state.get("competencies"),
+            stage="grade",
+            item_id=item.item_id,
+            modality=item.modality,
+            variable=candidate.variable if candidate else None,
+            # The submission itself is never sent — see observability.redact_code.
+            submission=observability.redact_code(response) if isinstance(response, str) else None,
+        ):
+            new_state, graded = engine().record_response(state, item, response)
+    except Exception as exc:  # noqa: BLE001
+        session_log.note_ui_error(
+            "streamlit.record",
+            f"grading failed for {item.item_id} ({item.modality}): {exc}",
+            exc=exc,
+        )
+        st.error(f"Grading failed — see Tracebook. `{type(exc).__name__}: {exc}`")
+        return
 
     step = len(st.session_state["steps"]) and max(r["step"] for r in st.session_state["steps"])
     step = step + 1
@@ -573,9 +990,21 @@ def record(state, item, candidate, response) -> None:
         )
     else:
         score_shown = 1.0 if detail.get("correct") else 0.0
+
+    session_variables = set(new_state.variables)
+    if settings.graph_shared_main_rollup_enabled and settings.graph_upward_inference_enabled:
+        graph = CompetencyGraphService(load_default_competency_graph())
+        rolled = graph_rollup_outcomes(
+            graded.outcomes,
+            session_variables=session_variables,
+            graph=graph,
+            config=PropagationConfig(),
+        )
+    else:
+        rolled = rollup_outcomes(graded.outcomes, session_variables)
     outcome_by_variable = {
         o.variable: o.__dict__
-        for o in rollup_outcomes(graded.outcomes, set(new_state.variables))
+        for o in rolled
     }
 
     for variable, after in sorted(new_state.variables.items()):
@@ -599,7 +1028,10 @@ def record(state, item, candidate, response) -> None:
                 "Δ ability": round(after.theta_hat - was.theta_hat, 4),
                 "std error before": round(was.standard_error, 4),
                 "std error after": round(after.standard_error, 4),
-                "confidence after": round(variables_module.certainty(after), 2),
+                "precision index": round(variables_module.certainty(after), 2),
+                "95% CI after": "[{:.1f}, {:.1f}]".format(
+                    *variables_module.posterior_interval(after)
+                ),
                 "level after": level if after.observations else None,
                 "band after": band if after.observations else "Not assessed",
                 "FI after": round(fisher_after(item, after, variable), 5),
@@ -616,6 +1048,7 @@ def record(state, item, candidate, response) -> None:
         "score": score_shown,
         "detail": detail,
         "flags": graded.flags,
+        "outcomes": list(graded.outcomes),
     }
 
     seed = st.session_state["rng_seed"]
@@ -650,10 +1083,11 @@ def open_text_fallback_allowed() -> bool:
 def native_live_bridge() -> StreamlitLiteLLMLiveBridge:
     """One turn-based LiteLLM Live session per Streamlit browser session."""
     bridge = st.session_state.get("native_live_bridge")
-    if bridge is None or not isinstance(bridge, StreamlitLiteLLMLiveBridge):
+    required_methods = ("start_interview", "send_candidate_audio", "finish", "abort")
+    if bridge is None or any(not callable(getattr(bridge, name, None)) for name in required_methods):
         bridge = StreamlitLiteLLMLiveBridge()
         st.session_state["native_live_bridge"] = bridge
-    return bridge
+    return bridge  # type: ignore[no-any-return]
 
 
 def render_open_text_fallback(state, item, candidate, *, reason: str) -> None:
@@ -721,8 +1155,10 @@ def record_live_package(state, item, candidate, package: VoiceResponsePackage) -
     st.session_state.pop("live_active_item", None)
     st.session_state.pop("native_live_item", None)
     st.session_state.pop("native_live_turns", None)
+    st.session_state.pop("native_live_result", None)
+    st.session_state.pop("native_live_started", None)
     bridge = st.session_state.get("native_live_bridge")
-    if isinstance(bridge, StreamlitLiteLLMLiveBridge):
+    if callable(getattr(bridge, "abort", None)):
         try:
             bridge.abort()
         except Exception:  # noqa: BLE001
@@ -741,13 +1177,14 @@ def render_native_live_interview(state, item, candidate) -> None:
     if st.session_state.get("native_live_item") != item.item_id:
         # Switching items — drop any prior bridge session.
         old = st.session_state.get("native_live_bridge")
-        if isinstance(old, StreamlitLiteLLMLiveBridge):
+        if callable(getattr(old, "abort", None)):
             try:
                 old.abort()
             except Exception:  # noqa: BLE001
                 pass
         st.session_state["native_live_item"] = item.item_id
         st.session_state["native_live_turns"] = []
+        st.session_state.pop("native_live_result", None)
         st.session_state.pop("native_live_started", None)
 
     turns: list[dict] = list(st.session_state.get("native_live_turns") or [])
@@ -758,8 +1195,14 @@ def render_native_live_interview(state, item, candidate) -> None:
         if st.button("Start live interview", type="primary", disabled=started):
             question = item.payload.get("prompt") or item.payload.get("question", "")
             try:
+                st.session_state.pop("native_live_result", None)
+                st.session_state.pop("last_audio_error", None)
                 with st.spinner("Connecting to LiteLLM Live and speaking the question…"):
-                    audio = native_live_bridge().start_interview(item.item_id, question)
+                    audio = native_live_bridge().start_interview(
+                        item.item_id,
+                        question,
+                        assessment_session_id=state.session_id,
+                    )
                 turns = []
                 if audio.wav_bytes:
                     turns.append(
@@ -775,17 +1218,28 @@ def render_native_live_interview(state, item, candidate) -> None:
                 st.session_state["native_live_started"] = True
                 st.rerun()
             except Exception as exc:  # noqa: BLE001
+                try:
+                    native_live_bridge().abort()
+                except Exception:  # noqa: BLE001
+                    pass
                 st.session_state["last_audio_error"] = (
                     f"{exc}\n{traceback.format_exc(limit=4)}"
                 )
                 st.error(f"Could not start Live interview: {exc}")
 
     with cols[1]:
-        finish_disabled = not started
+        cached_result = st.session_state.get("native_live_result")
+        finish_disabled = not started and cached_result is None
         if st.button("Finish & grade", type="primary", disabled=finish_disabled):
             try:
                 with st.spinner("Closing Live session and grading…"):
-                    result = native_live_bridge().finish()
+                    result = cached_result
+                    if result is None:
+                        result = native_live_bridge().finish()
+                        # Persist before grading. If grading fails or Streamlit reruns,
+                        # retry from this immutable transcript without requiring a live
+                        # websocket that finish() has already closed.
+                        st.session_state["native_live_result"] = result
                     package = result.as_package()
                     record_live_package(state, item, candidate, package)
                 st.rerun()
@@ -803,6 +1257,7 @@ def render_native_live_interview(state, item, candidate) -> None:
                 pass
             st.session_state["native_live_started"] = False
             st.session_state["native_live_turns"] = []
+            st.session_state.pop("native_live_result", None)
             st.rerun()
 
     if st.session_state.get("last_audio_error"):
@@ -862,7 +1317,18 @@ def render_native_live_interview(state, item, candidate) -> None:
             st.session_state["last_audio_error"] = (
                 f"{exc}\n{traceback.format_exc(limit=4)}"
             )
-            st.error(f"Could not send audio: {exc}")
+            # A closed realtime socket cannot recover in place. Reset the bridge and UI
+            # so the next click starts a fresh interview rather than repeatedly sending
+            # into the dead session.
+            try:
+                native_live_bridge().abort()
+            except Exception:  # noqa: BLE001
+                pass
+            st.session_state["native_live_started"] = False
+            st.error(
+                f"Could not send audio: {exc}. The closed Live session was reset; "
+                "click **Start live interview** to reconnect."
+            )
 
 
 def render_iframe_live_interview(state, item, candidate) -> None:
@@ -996,8 +1462,8 @@ def render_question(state) -> None:
 
     st.markdown(f"### {candidate.variable} · {item.modality.upper()}")
     st.caption(
-        f"Chosen because this competency has the lowest confidence "
-        f"({variables_module.certainty(variable_state):.1f}%). Item selected by "
+        f"Chosen because this competency has the lowest precision index "
+        f"({variables_module.certainty(variable_state):.1f}). Item selected by "
         f"{'the model' if candidate.chosen_by_llm else 'the engine'} using "
         f"{candidate.criterion}."
     )
@@ -1196,7 +1662,7 @@ def render_assessment() -> None:
         certainty = variables_module.certainty(variable_state)
         st.sidebar.progress(
             min(certainty / 100.0, 1.0),
-            text=f"{variable} — {certainty:.0f}%"
+            text=f"{variable} — precision {certainty:.0f}"
                  + (" ✓" if variable_state.finalised else ""),
         )
     st.sidebar.markdown("---")
@@ -1240,7 +1706,7 @@ def render_assessment() -> None:
                                           else "  (provisional)"),
                         "ability": v.theta_hat,
                         "std error": v.standard_error,
-                        "confidence": f"{v.certainty_pct:.1f}%",
+                        "precision index": f"{v.certainty_pct:.1f}",
                         "answers": v.observations,
                         "modalities": ", ".join(v.modalities_used) or "—",
                         "finalised": v.finalised,
@@ -1257,7 +1723,7 @@ def render_assessment() -> None:
             "when precision or band stability was reached. A band marked *provisional* "
             "comes from a competency that ran out of questions before reaching the "
             "precision target — the level is the best estimate available, not a measured "
-            "result, and the confidence column says how far short it fell."
+            "result, and the precision-index column says how far short the SE fell."
         )
     else:
         render_last_result()
@@ -1265,17 +1731,29 @@ def render_assessment() -> None:
 
     st.markdown("---")
     tabs = st.tabs(
-        ["Queue", "Mathematics", "Trajectory", "Engine log", "Diagnostics"]
+        [
+            "Queue",
+            "Mathematics",
+            "DAG",
+            "Trajectory",
+            "Engine log",
+            "Tracebook",
+            "Diagnostics",
+        ]
     )
     with tabs[0]:
         render_queue(state)
     with tabs[1]:
         render_mathematics()
     with tabs[2]:
-        render_trajectory(state)
+        render_graph_dag(state)
     with tabs[3]:
-        render_logs()
+        render_trajectory(state)
     with tabs[4]:
+        render_logs()
+    with tabs[5]:
+        render_tracebook()
+    with tabs[6]:
         render_diagnostics()
 
 

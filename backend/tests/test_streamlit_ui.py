@@ -112,8 +112,16 @@ class TestAssessmentScreen:
     def test_beginning_a_session_presents_a_question_and_the_panels(self, app):
         begin(app)
         assert not app.exception
-        # Queue, Mathematics, Trajectory, Engine log, Diagnostics
-        assert len(app.tabs) == 5
+        labels = [tab.label for tab in app.tabs]
+        assert labels == [
+            "Queue",
+            "Mathematics",
+            "DAG",
+            "Trajectory",
+            "Engine log",
+            "Tracebook",
+            "Diagnostics",
+        ]
 
     def test_a_whole_session_runs_to_completion_without_raising(self, app):
         begin(app)

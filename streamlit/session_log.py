@@ -13,6 +13,7 @@ logs from, and nothing in the engine changes to accommodate it.
 from __future__ import annotations
 
 import logging
+import traceback
 from collections import deque
 from datetime import datetime
 
@@ -24,7 +25,12 @@ WATCHED_LOGGERS = (
     "app.services.orchestrator",
     "app.services.adaptive",
     "app.services.code_adaptive",
+    "app.services.competency_graph",
+    "app.services.voice",
+    "app.services.voice_live",
 )
+
+ERROR_LEVELS = frozenset({"WARNING", "ERROR", "CRITICAL"})
 
 
 class _Collector(logging.Handler):
@@ -37,14 +43,16 @@ class _Collector(logging.Handler):
             message = record.getMessage()
         except Exception:  # pragma: no cover — a broken format string must not kill the UI
             message = repr(record.msg)
-        self.records.append(
-            {
-                "time": datetime.fromtimestamp(record.created).strftime("%H:%M:%S"),
-                "level": record.levelname,
-                "source": record.name.split(".")[-1],
-                "message": message,
-            }
-        )
+        entry = {
+            "time": datetime.fromtimestamp(record.created).strftime("%H:%M:%S"),
+            "level": record.levelname,
+            "source": record.name,
+            "message": message,
+            "exc_text": None,
+        }
+        if record.exc_info:
+            entry["exc_text"] = "".join(traceback.format_exception(*record.exc_info))
+        self.records.append(entry)
 
 
 _COLLECTOR = _Collector()
@@ -68,6 +76,11 @@ def records() -> list[dict]:
     return list(_COLLECTOR.records)
 
 
+def errors() -> list[dict]:
+    """WARNING / ERROR / CRITICAL only — the Tracebook feed."""
+    return [r for r in _COLLECTOR.records if r["level"] in ERROR_LEVELS]
+
+
 def counts() -> dict[str, int]:
     tally: dict[str, int] = {}
     for record in _COLLECTOR.records:
@@ -77,3 +90,19 @@ def counts() -> dict[str, int]:
 
 def clear() -> None:
     _COLLECTOR.records.clear()
+
+
+def note_ui_error(source: str, message: str, *, exc: BaseException | None = None) -> None:
+    """Append a synthetic Tracebook entry from Streamlit UI catch blocks."""
+    entry = {
+        "time": datetime.now().strftime("%H:%M:%S"),
+        "level": "ERROR",
+        "source": source,
+        "message": message,
+        "exc_text": None,
+    }
+    if exc is not None:
+        entry["exc_text"] = "".join(
+            traceback.format_exception(type(exc), exc, exc.__traceback__)
+        )
+    _COLLECTOR.records.append(entry)
