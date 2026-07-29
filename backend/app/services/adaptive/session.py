@@ -175,7 +175,7 @@ class AdaptiveSession:
             level=level,
             band=band,
             certainty_pct=convergence.certainty_pct(
-                state.standard_error, observations=state.observations
+                state.standard_error, observations=state.questions_answered
             ),
             questions_answered=state.questions_answered,
             stop_reason=stop.reason,

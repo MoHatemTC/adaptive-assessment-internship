@@ -33,12 +33,14 @@ class StopDecision:
 
 
 def measurement_certainty_pct(standard_error: float) -> float:
-    """SE → % confidence from the posterior width alone (no sample-size gate).
+    """SE → posterior *precision index* (0–100), not a calibrated probability.
 
-    Maps SE = TARGET to exactly 90% so the precision rule reads in the same units the
-    report uses, and saturates at 100% as SE falls further. Absolute in SE on purpose:
-    scaling by prior width made two candidates with the same posterior look different
-    purely because of intake.
+    Maps SE = TARGET to exactly 90 so the precision stop and the UI share one scale,
+    and saturates at 100 as SE falls further. This is a deterministic remapping of
+    posterior SD — not P(correct band), not a frequentist confidence level, and not
+    validated unless item parameters are empirically calibrated. Absolute in SE on
+    purpose: scaling by prior width made two candidates with the same posterior look
+    different purely because of intake.
     """
     se = max(float(standard_error), 1e-6)
     target = settings.cat_se_target
@@ -52,12 +54,12 @@ def certainty_pct(
     *,
     observations: int | None = None,
 ) -> float:
-    """Confidence shown after each question.
+    """Posterior precision index shown after each question (not statistical confidence).
 
-    Raw SE→% is the measurement signal. Before `cat_precision_min_questions` answers,
+    Raw SE→% is a width signal. Before `cat_precision_min_questions` answers,
     that signal is treated as *provisional*: a couple of high-`a` items can make SE look
-    like 90% certainty while the estimate has barely been corroborated. Reported
-    confidence therefore ramps with evidence count and is capped below 90% until the
+    like 90% while the estimate has barely been corroborated. The reported index
+    therefore ramps with evidence count and is capped below 90 until the
     precision floor is met — so the UI cannot read "done" before the stop rule would
     allow a precision stop.
     """
@@ -87,10 +89,13 @@ def evaluate(
     band_history: list[int],
     questions_answered: int,
     items_remaining: int,
+    *,
+    difficulty_corroborated: bool = True,
 ) -> StopDecision:
     """Apply the stopping rules in precedence order.
 
-    1. PRECISION — SE at/under target AND enough observations to trust that width.
+    1. PRECISION — SE at/under target, enough observations, and item difficulty that
+       corroborates the estimated level.
        A single high-discrimination hit can crush SE; the observation floor stops that
        from ending the competency before the estimate has been corroborated.
     2. STABLE BAND — the reported band has settled and the estimate is reasonably precise.
@@ -102,6 +107,7 @@ def evaluate(
         standard_error <= settings.cat_se_target
         and questions_answered
         >= getattr(settings, "cat_precision_min_questions", settings.cat_min_questions)
+        and difficulty_corroborated
     ):
         return StopDecision(True, "precision", converged=True)
 
@@ -109,6 +115,7 @@ def evaluate(
         questions_answered >= settings.cat_min_questions
         and standard_error <= settings.cat_stability_se_ceiling
         and band_is_stable(band_history, settings.cat_stable_window)
+        and difficulty_corroborated
     ):
         return StopDecision(True, "stable_band", converged=True)
 

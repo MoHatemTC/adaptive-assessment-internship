@@ -12,6 +12,7 @@ from app.services.adaptive.irt import (
     THETA_GRID,
     ability_band,
     ability_percentile,
+    credible_interval,
     expected_fisher_information,
     fisher_information,
     kullback_leibler_information,
@@ -131,3 +132,14 @@ def test_band_covers_the_scale():
 def test_grid_is_symmetric_and_centred():
     assert THETA_GRID[0] == pytest.approx(-THETA_GRID[-1])
     assert 0.0 in np.round(THETA_GRID, 10)
+
+
+def test_credible_interval_is_equal_tailed_on_the_grid():
+    posterior = prior_from_self_rating(5, 0.6)
+    low, high = credible_interval(posterior, mass=0.95)
+    assert low < high
+    assert low >= float(THETA_GRID[0])
+    assert high <= float(THETA_GRID[-1])
+    # A sharp high-ability prior should put most mass in the upper half.
+    assert low >= 0.0
+

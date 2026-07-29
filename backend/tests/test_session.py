@@ -145,6 +145,18 @@ def test_precision_stop_requires_observation_floor():
     assert ready.converged is True
 
 
+def test_precision_stop_requires_difficulty_corroboration():
+    """A narrow posterior from easy items must not claim the ability level is settled."""
+    held = evaluate(
+        standard_error=0.50,
+        band_history=[2] * settings.cat_precision_min_questions,
+        questions_answered=settings.cat_precision_min_questions,
+        items_remaining=20,
+        difficulty_corroborated=False,
+    )
+    assert held.should_stop is False
+
+
 @pytest.mark.asyncio
 async def test_bank_can_support_the_configured_precision_target(repository):
     """A bank whose items are individually weak cannot reach the target at any length.

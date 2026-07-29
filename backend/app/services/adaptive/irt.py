@@ -161,3 +161,30 @@ def ability_band(theta_hat: float) -> tuple[int, str]:
     level = int(np.clip(round(3 + theta_hat), 1, 5))
     labels = {1: "Novice", 2: "Developing", 3: "Competent", 4: "Proficient", 5: "Expert"}
     return level, labels[level]
+
+
+def credible_interval(
+    posterior: np.ndarray, *, mass: float = 0.95
+) -> tuple[float, float]:
+    """Equal-tailed credible interval from a discrete posterior on THETA_GRID.
+
+    This is a model-based interval under the current IRT posterior — not a frequentist
+    confidence interval, and not calibrated unless item parameters are. Prefer reporting
+    it alongside SE rather than a remapped "confidence %" when honesty matters.
+    """
+    if not 0.0 < mass < 1.0:
+        raise ValueError(f"mass must be in (0, 1), got {mass}")
+    weights = np.asarray(posterior, dtype=float)
+    if weights.shape != THETA_GRID.shape:
+        raise ValueError(
+            f"posterior length {weights.size} does not match THETA_GRID {THETA_GRID.size}"
+        )
+    total = float(weights.sum())
+    if total <= 0.0:
+        raise ValueError("posterior has non-positive mass")
+    cdf = np.cumsum(weights / total)
+    lower_q = (1.0 - mass) / 2.0
+    upper_q = 1.0 - lower_q
+    lower = float(THETA_GRID[min(int(np.searchsorted(cdf, lower_q)), THETA_GRID.size - 1)])
+    upper = float(THETA_GRID[min(int(np.searchsorted(cdf, upper_q)), THETA_GRID.size - 1)])
+    return lower, upper
