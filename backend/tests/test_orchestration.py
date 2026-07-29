@@ -98,6 +98,138 @@ class TestFractionalUpdate:
             GradedOutcome("T1.1", score=0.5, weight=-0.1)
 
 
+class TestGraphShadowState:
+    def test_direct_failure_is_not_reported_as_unknown(self, orchestrator, bank):
+        item = next(i for i in bank.all_items() if i.modality == "mcq")
+        state = orchestrator.begin([item.measures[0].variable.split(".")[0]])
+        wrong = (int(item.payload["answer_index"]) + 1) % len(item.payload["options"])
+
+        updated, _ = orchestrator.record_response(state, item, wrong)
+
+        assert (
+            item.measures[0].variable
+            in updated.graph_shadow_direct_not_mastered_nodes
+        )
+
+
+class TestGraphCoverageGate:
+    @pytest.mark.asyncio
+    async def test_picker_hard_prioritises_an_unmeasured_sub(
+        self, orchestrator, bank, monkeypatch
+    ):
+        from app.config import settings as settings_module
+
+        monkeypatch.setattr(
+            settings_module.settings, "graph_convergence_gate_enabled", True
+        )
+        monkeypatch.setattr(
+            settings_module.settings, "graph_coverage_critical_only", False
+        )
+        state = orchestrator.begin(["PY"])
+        state = state.model_copy(
+            update={
+                "graph_direct_measured_nodes": [
+                    f"PY.{index}" for index in range(1, 11) if index != 8
+                ]
+            }
+        )
+
+        updated = await orchestrator.fill_queue(
+            state, use_llm=False, rng=np.random.default_rng(0)
+        )
+        chosen = bank.get(updated.queue["PY"].item_id)
+        assert chosen is not None
+        assert "PY.8" in {measure.variable for measure in chosen.measures}
+
+    def test_precision_stop_waits_for_unmeasured_subs(self, orchestrator, bank, monkeypatch):
+        from app.config import settings as settings_module
+        from app.services.orchestrator import variables as variables_module
+
+        monkeypatch.setattr(
+            settings_module.settings, "graph_convergence_gate_enabled", True
+        )
+        monkeypatch.setattr(
+            settings_module.settings, "graph_coverage_critical_only", False
+        )
+
+        item = next(
+            i
+            for i in bank.all_items()
+            if i.modality == "mcq" and i.measures[0].variable.startswith("PY.")
+        )
+        main = item.measures[0].variable.split(".")[0]
+        state = orchestrator.begin([main])
+
+        # Pretend CAT math already wants to converge.
+        def force_precise(state, items_remaining, **kwargs):
+            return state.model_copy(
+                update={
+                    "finalised": True,
+                    "stop_reason": "precision",
+                    "converged": True,
+                }
+            )
+
+        monkeypatch.setattr(variables_module, "evaluate_finalisation", force_precise)
+
+        updated, _ = orchestrator.record_response(
+            state, item, int(item.payload["answer_index"])
+        )
+        assert updated.variables[main].finalised is False
+        assert item.measures[0].variable in updated.graph_direct_measured_nodes
+        assert item.measures[0].variable in (
+            updated.graph_direct_mastered_nodes
+            or updated.graph_shadow_direct_mastered_nodes
+        )
+
+    def test_budget_stop_still_finalises_without_full_coverage(
+        self, orchestrator, bank, monkeypatch
+    ):
+        from app.config import settings as settings_module
+        from app.services.orchestrator import variables as variables_module
+
+        monkeypatch.setattr(
+            settings_module.settings, "graph_convergence_gate_enabled", True
+        )
+
+        item = next(i for i in bank.all_items() if i.modality == "mcq")
+        main = item.measures[0].variable.split(".")[0]
+        state = orchestrator.begin([main])
+        variable_state = state.variables[main].model_copy(
+            update={
+                "observations": settings_module.settings.cat_max_questions - 1,
+                "band_history": [5]
+                * (settings_module.settings.cat_max_questions - 1),
+                "score_history": [1.0]
+                * (settings_module.settings.cat_max_questions - 1),
+            }
+        )
+        state = state.model_copy(
+            update={"variables": {main: variable_state}}
+        )
+
+        # Precision wins precedence in convergence.evaluate. The graph gate must restore
+        # the hard question budget when it vetoes precision for incomplete coverage.
+        def force_precision(state, items_remaining, **kwargs):
+            return state.model_copy(
+                update={
+                    "finalised": True,
+                    "stop_reason": "precision",
+                    "converged": True,
+                }
+            )
+
+        monkeypatch.setattr(
+            variables_module, "evaluate_finalisation", force_precision
+        )
+        updated, _ = orchestrator.record_response(
+            state, item, int(item.payload["answer_index"])
+        )
+        assert updated.variables[main].finalised is True
+        assert updated.variables[main].converged is False
+        assert updated.variables[main].stop_reason == "question_budget"
+
+
 class TestCalibration:
     def test_difficulty_maps_to_the_theta_where_success_is_even_odds(self):
         assert mastery_difficulty_to_theta(0.5) == pytest.approx(0.0)
@@ -226,6 +358,62 @@ class TestFinalisation:
         finalised = variables_module.evaluate_finalisation(state, items_remaining=10)
         assert finalised.finalised is True
         assert finalised.converged is True
+
+    def test_easy_items_do_not_finalise_a_candidate_still_succeeding(self):
+        state = VariableState(
+            variable="PY",
+            posterior=list(uniform_prior()),
+            theta_hat=-0.9462,
+            standard_error=0.4837,
+            observations=6,
+            band_history=[1, 1, 1, 2, 2, 2],
+            score_history=[0.0, 1.0, 1.0, 1.0, 1.0, 0.9594],
+        )
+        held = variables_module.evaluate_finalisation(
+            state,
+            items_remaining=20,
+            administered_difficulties=[-1.68, -2.38, -2.09, -1.49, -1.42, -1.45],
+        )
+        assert held.finalised is False
+        assert variables_module.upper_challenge_difficulty(state) == pytest.approx(-0.75)
+
+    def test_next_band_challenge_allows_precise_finalisation(self):
+        state = VariableState(
+            variable="PY",
+            posterior=list(uniform_prior()),
+            theta_hat=-0.9462,
+            standard_error=0.4837,
+            observations=6,
+            band_history=[1, 1, 1, 2, 2, 2],
+            score_history=[0.0, 1.0, 1.0, 1.0, 1.0, 0.9594],
+        )
+        finalised = variables_module.evaluate_finalisation(
+            state,
+            items_remaining=20,
+            administered_difficulties=[-1.68, -1.42, -0.50],
+        )
+        assert finalised.finalised is True
+        assert finalised.converged is True
+
+    def test_expert_corroboration_is_capped_at_bank_ceiling(self):
+        state = VariableState(
+            variable="PY",
+            posterior=list(uniform_prior()),
+            theta_hat=2.97,
+            standard_error=0.35,
+            observations=10,
+            band_history=[5] * 10,
+            score_history=[1.0] * 10,
+        )
+        assert variables_module.required_corroboration_difficulty(
+            state,
+            maximum_available_difficulty=2.69,
+        ) == pytest.approx(2.69)
+        assert variables_module.difficulty_is_corroborated(
+            state,
+            [2.69],
+            maximum_available_difficulty=2.69,
+        )
 
     def test_an_exhausted_variable_finalises_without_claiming_convergence(self):
         state = variables_module.seed_variable("T1.1")

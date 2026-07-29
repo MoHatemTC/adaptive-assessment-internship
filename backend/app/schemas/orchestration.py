@@ -109,6 +109,9 @@ class VariableState(BaseModel):
     observations: int = 0
     served_item_ids: list[str] = Field(default_factory=list)
     band_history: list[int] = Field(default_factory=list)
+    # Retained for adaptive challenge selection. Fractional open/code outcomes are kept
+    # as-is; this is evidence history, not a binary-correctness reconstruction.
+    score_history: list[float] = Field(default_factory=list)
 
     # Set once a stopping rule fires. A finalised variable is never picked for again.
     finalised: bool = False
@@ -159,6 +162,25 @@ class AssessmentState(BaseModel):
     items_administered: int = 0
     started_at: float = 0.0
     elapsed_minutes: float = 0.0
+
+    # --- graph-augmented CAT state (Phase C+) -------------------------------
+    # Persisted so eligibility decisions are stable across HTTP requests.
+    graph_processed_evidence_ids: list[str] = Field(default_factory=list)
+    graph_blocked_nodes: list[str] = Field(default_factory=list)
+    # Any direct scorable result, including partial credit. This is the coverage gate;
+    # mastery/not-mastery remain separate status classifications.
+    graph_direct_measured_nodes: list[str] = Field(default_factory=list)
+    graph_direct_mastered_nodes: list[str] = Field(default_factory=list)
+    graph_direct_not_mastered_nodes: list[str] = Field(default_factory=list)
+    graph_contradicted_nodes: list[str] = Field(default_factory=list)
+    # Shadow audit is persisted independently and never participates in CAT decisions.
+    graph_shadow_direct_mastered_nodes: list[str] = Field(default_factory=list)
+    graph_shadow_inferred_mastered_nodes: list[str] = Field(default_factory=list)
+    graph_shadow_direct_not_mastered_nodes: list[str] = Field(default_factory=list)
+    graph_shadow_blocked_nodes: list[str] = Field(default_factory=list)
+    graph_shadow_contradicted_nodes: list[str] = Field(default_factory=list)
+    # Set by record_response; after_response refills affected variables.
+    graph_last_affected_mains: list[str] = Field(default_factory=list)
 
     @property
     def open_variables(self) -> list[str]:

@@ -83,6 +83,7 @@ def rank(
     *,
     rng: np.random.Generator | None = None,
     top_k: int | None = None,
+    utility_modifiers_by_item_id: dict[str, float] | None = None,
 ) -> tuple[list[tuple[BankItem, float]], str]:
     """Rank a variable's shortlist best-first, and say which criterion produced it.
 
@@ -96,7 +97,12 @@ def rank(
     if not items:
         return [], criterion
 
-    scored = [(item, information_for(item, state, variable)) for item in items]
+    scored: list[tuple[BankItem, float]] = []
+    for item in items:
+        info = information_for(item, state, variable)
+        if utility_modifiers_by_item_id:
+            info *= 1.0 + float(utility_modifiers_by_item_id.get(item.item_id, 0.0))
+        scored.append((item, info))
     scored.sort(key=lambda pair: (pair[1], -abs(pair[0].cat.b - state.theta_hat)), reverse=True)
 
     k = settings.cat_exposure_top_k if top_k is None else top_k
@@ -138,6 +144,7 @@ async def pick(
     use_llm: bool = True,
     rng: np.random.Generator | None = None,
     top_k: int | None = None,
+    utility_modifiers_by_item_id: dict[str, float] | None = None,
 ) -> QueuedCandidate | None:
     """Choose one candidate for `variable`, or None when its pool is exhausted.
 
@@ -147,7 +154,14 @@ async def pick(
     choice, because there is always a correct next question and an infrastructure problem
     must not end a candidate's assessment.
     """
-    shortlist, criterion = rank(items, state, variable, rng=rng, top_k=top_k)
+    shortlist, criterion = rank(
+        items,
+        state,
+        variable,
+        rng=rng,
+        top_k=top_k,
+        utility_modifiers_by_item_id=utility_modifiers_by_item_id,
+    )
     if not shortlist:
         return None
 

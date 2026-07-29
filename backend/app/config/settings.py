@@ -86,7 +86,14 @@ class Settings(BaseSettings):
     cat_stable_window: int = Field(default=3, ge=2)
     # ...and may not fire above this standard error, so "the band stopped moving" cannot
     # be mistaken for "the estimate is precise" while it is still vague.
-    cat_stability_se_ceiling: float = Field(default=0.80, gt=0.0)
+    cat_stability_se_ceiling: float = Field(default=0.55, gt=0.0)
+
+    # A narrow posterior based only on easy items is not enough to classify the candidate.
+    # Before convergence, require an administered item near the estimate; after a streak
+    # of strong answers, require a challenge near the next ability-band boundary.
+    cat_difficulty_corroboration_slack: float = Field(default=0.25, ge=0.0)
+    # Keep a challenge near that boundary rather than jumping several levels at once.
+    cat_challenge_difficulty_window: float = Field(default=0.75, gt=0.0)
 
     # Blueprint coverage. Among items carrying at least this fraction of the best
     # available information, the least-served sub-competency wins. Expressed as a
@@ -174,6 +181,25 @@ class Settings(BaseSettings):
     # engine's convergence rule; this is the outer bound.
     orchestrator_max_items: int = Field(default=60, ge=1)
     orchestrator_time_limit_minutes: int = Field(default=90, ge=1)
+
+    # --- competency graph layer (graph-augmented CAT) ------------------------
+    # Default to safe no-op: the graph can be loaded + shadow-processed without affecting
+    # posterior measurement, selection, or queueing.
+    competency_graph_enabled: bool = False
+    graph_shadow_mode: bool = True
+
+    # Phase 3+: filtering / inference / utility stay off until explicitly enabled.
+    graph_filtering_enabled: bool = False
+    graph_upward_inference_enabled: bool = False
+    graph_descendant_blocking_enabled: bool = False
+    graph_shared_main_rollup_enabled: bool = False
+    graph_utility_enabled: bool = False
+    # On by default: a main may not claim precision/stable-band convergence until every
+    # required sub-competency has direct success or failure evidence. Budget stops still
+    # finalise without that claim.
+    graph_convergence_gate_enabled: bool = True
+    # False = every sub under the main must be directly measured; True = critical only.
+    graph_coverage_critical_only: bool = False
 
     # --- observability: Langfuse -----------------------------------------------
     # Traces every model call and groups them by assessment session. Off unless both keys

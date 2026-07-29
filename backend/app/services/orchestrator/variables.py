@@ -21,11 +21,13 @@ import logging
 
 import numpy as np
 
+from app.config.settings import settings
 from app.schemas.orchestration import VariableState
 from app.services.adaptive import convergence
 from app.services.adaptive.irt import (
     THETA_GRID,
     ability_band,
+    credible_interval,
     prior_from_self_rating,
     uniform_prior,
 )
@@ -38,6 +40,8 @@ logger = logging.getLogger(__name__)
 PRIOR_SD_CONFIDENT = 1.1
 PRIOR_SD_TENTATIVE = 1.7
 PRIOR_SD_NO_RATING = 2.0
+STRONG_STREAK_LENGTH = 3
+STRONG_SCORE_FLOOR = 0.85
 
 
 def seed_variable(
@@ -62,15 +66,77 @@ def seed_variable(
 
 
 def certainty(state: VariableState) -> float:
-    """Confidence in this estimate, 0-100.
+    """Posterior precision index for this estimate, 0-100.
 
-    Measurement width still comes from SE alone (two variables with the same posterior
-    SD compare equal on that axis). Observation count only gates *reported* confidence
-    while the precision floor has not been met, so a short burst of high-`a` items cannot
-    look like a finished measurement in the UI.
+    Not a calibrated confidence probability. Width still comes from SE alone (two
+    variables with the same posterior SD compare equal on that axis). Observation count
+    only gates the *reported* index while the precision floor has not been met, so a
+    short burst of high-`a` items cannot look like a finished measurement in the UI.
+    Prefer ``posterior_interval`` when an honest uncertainty range is needed.
     """
     return convergence.certainty_pct(
         state.standard_error, observations=state.observations
+    )
+
+
+def posterior_interval(
+    state: VariableState, *, mass: float = 0.95
+) -> tuple[float, float]:
+    """Equal-tailed credible interval from the live posterior."""
+    return credible_interval(np.asarray(state.posterior, dtype=float), mass=mass)
+
+
+def upper_challenge_difficulty(state: VariableState) -> float | None:
+    """Difficulty needed to test whether a strong candidate belongs in the next band."""
+    if len(state.score_history) < STRONG_STREAK_LENGTH:
+        return None
+    if any(score < STRONG_SCORE_FLOOR for score in state.score_history[-STRONG_STREAK_LENGTH:]):
+        return None
+
+    level, _ = ability_band(state.theta_hat)
+    if level >= 5:
+        return None
+
+    # ability_band uses round(3 + theta): boundaries into levels 2..5 are
+    # -1.5, -0.5, +0.5, +1.5 respectively.
+    next_band_boundary = level - 2.5
+    return next_band_boundary - settings.cat_difficulty_corroboration_slack
+
+
+def required_corroboration_difficulty(
+    state: VariableState,
+    *,
+    maximum_available_difficulty: float | None = None,
+) -> float:
+    """Minimum administered ``b`` needed before finalisation.
+
+    At the top of the theta scale, ``theta - slack`` can exceed every item in a finite
+    bank. Requiring an impossible item turns a precision rule into guaranteed budget
+    exhaustion, so the requirement is capped at the hardest available item.
+    """
+    challenge = upper_challenge_difficulty(state)
+    required = (
+        challenge
+        if challenge is not None
+        else state.theta_hat - settings.cat_difficulty_corroboration_slack
+    )
+    if maximum_available_difficulty is not None:
+        required = min(required, float(maximum_available_difficulty))
+    return required
+
+
+def difficulty_is_corroborated(
+    state: VariableState,
+    administered_difficulties: list[float],
+    *,
+    maximum_available_difficulty: float | None = None,
+) -> bool:
+    """True when at least one administered item tested the claimed ability region."""
+    if not administered_difficulties:
+        return False
+    return max(administered_difficulties) >= required_corroboration_difficulty(
+        state,
+        maximum_available_difficulty=maximum_available_difficulty,
     )
 
 
@@ -105,11 +171,18 @@ def apply_outcome(
             "observations": state.observations + 1,
             "served_item_ids": [*state.served_item_ids, item_id],
             "band_history": [*state.band_history, level],
+            "score_history": [*state.score_history, float(outcome.score)],
         }
     )
 
 
-def evaluate_finalisation(state: VariableState, items_remaining: int) -> VariableState:
+def evaluate_finalisation(
+    state: VariableState,
+    items_remaining: int,
+    *,
+    administered_difficulties: list[float] | None = None,
+    maximum_available_difficulty: float | None = None,
+) -> VariableState:
     """Apply the stopping rules and finalise if any fires.
 
     Reuses the MCQ engine's `convergence.evaluate` unchanged, so precision, band stability
@@ -120,8 +193,21 @@ def evaluate_finalisation(state: VariableState, items_remaining: int) -> Variabl
     if state.finalised:
         return state
 
+    corroborated = (
+        True
+        if administered_difficulties is None
+        else difficulty_is_corroborated(
+            state,
+            administered_difficulties,
+            maximum_available_difficulty=maximum_available_difficulty,
+        )
+    )
     stop = convergence.evaluate(
-        state.standard_error, state.band_history, state.observations, items_remaining
+        state.standard_error,
+        state.band_history,
+        state.observations,
+        items_remaining,
+        difficulty_corroborated=corroborated,
     )
     if not stop.should_stop:
         return state
