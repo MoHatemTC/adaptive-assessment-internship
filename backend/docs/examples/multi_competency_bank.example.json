@@ -1,0 +1,204 @@
+{
+  "schema_version": 2,
+  "items": [
+    {
+      "item_id": "PY-Q100",
+      "modality": "mcq",
+      "status": "active",
+      "competency": "Python Engineering",
+      "sub_competency": "PY.1 \u00b7 Syntax",
+      "measures": [
+        {
+          "variable": "PY.1",
+          "weight": 1.0
+        }
+      ],
+      "cat": {
+        "a": 1.8,
+        "b": -1.2,
+        "c": 0.15
+      },
+      "mcq": {
+        "stem": "Which literal is an empty dict?",
+        "options": [
+          "[]",
+          "{}",
+          "()",
+          "set()"
+        ],
+        "answer_index": 1,
+        "rationale": "An empty dict is written with curly braces {}.",
+        "misconceptions": [
+          "[] is an empty list, not a dict.",
+          "CORRECT",
+          "() is an empty tuple.",
+          "set() creates an empty set; {} is a dict."
+        ]
+      }
+    },
+    {
+      "item_id": "PY-C010",
+      "modality": "code",
+      "status": "active",
+      "competency": "Python Engineering",
+      "sub_competency": "PY.5 \u00b7 Functions, arguments & scope",
+      "measures": [
+        {
+          "variable": "PY.5",
+          "weight": 0.8
+        },
+        {
+          "variable": "PY.1",
+          "weight": 0.2
+        }
+      ],
+      "cat": {
+        "a": 1.4,
+        "b": 0.3,
+        "c": 0.0
+      },
+      "code": {
+        "title": "Add two numbers",
+        "prompt": "Implement `add(a, b)` returning the sum of a and b.\n\nSignature: def add(a, b):",
+        "language": "python",
+        "function_name": "add",
+        "starter_code": "def add(a, b):\n    ...\n",
+        "difficulty": 0.45,
+        "discrimination": 1.4,
+        "rubric_criteria": [
+          {
+            "criterion_id": "functional_correctness",
+            "maximum_score": 8
+          },
+          {
+            "criterion_id": "edge_case_handling",
+            "maximum_score": 5
+          },
+          {
+            "criterion_id": "algorithm_choice",
+            "maximum_score": 4
+          },
+          {
+            "criterion_id": "code_quality",
+            "maximum_score": 3
+          }
+        ],
+        "tests": [
+          {
+            "test_id": "t1",
+            "visibility": "public",
+            "weight": 1.0,
+            "input": [
+              1,
+              2
+            ],
+            "expected": 3
+          },
+          {
+            "test_id": "h1",
+            "visibility": "hidden",
+            "weight": 1.0,
+            "input": [
+              -1,
+              1
+            ],
+            "expected": 0
+          }
+        ],
+        "reference_solution": "def add(a, b):\n    return a + b\n"
+      }
+    },
+    {
+      "item_id": "BE-Q001",
+      "modality": "mcq",
+      "status": "active",
+      "competency": "Backend Engineering",
+      "sub_competency": "BE.1 \u00b7 HTTP & REST",
+      "measures": [
+        {
+          "variable": "BE.1",
+          "weight": 1.0
+        }
+      ],
+      "cat": {
+        "a": 1.6,
+        "b": -0.5,
+        "c": 0.2
+      },
+      "mcq": {
+        "stem": "Which status code means resource created?",
+        "options": [
+          "200",
+          "201",
+          "204",
+          "400"
+        ],
+        "answer_index": 1,
+        "rationale": "201 Created indicates a new resource was successfully created.",
+        "misconceptions": [
+          "200 is a generic success for an existing resource.",
+          "CORRECT",
+          "204 means success with no content body.",
+          "400 is a client error."
+        ]
+      }
+    },
+    {
+      "item_id": "BE-O003",
+      "modality": "open",
+      "status": "active",
+      "competency": "Backend Engineering",
+      "sub_competency": "BE.2 \u00b7 Auth",
+      "measures": [
+        {
+          "variable": "BE.2",
+          "weight": 1.0
+        }
+      ],
+      "cat": {
+        "a": 1.2,
+        "b": 0.8,
+        "c": 0.0
+      },
+      "open": {
+        "question": "Explain how JWT access tokens differ from refresh tokens. Cover purpose, typical lifetime, and one security implication of mixing them up.",
+        "answer_format": "Spoken or written technical answer (~150-300 words).",
+        "reference_answer": "Access tokens authorize API calls and are short-lived. Refresh tokens obtain new access tokens, are longer-lived, and must be stored/rotated more carefully. Treating a refresh token as an API credential expands blast radius if leaked.",
+        "expected_answer_points": [
+          "Access tokens authorize API calls and are short-lived.",
+          "Refresh tokens obtain new access tokens and are longer-lived.",
+          "Mixing them up increases blast radius / weakens rotation strategy."
+        ],
+        "rubric_criteria": [
+          {
+            "criterion_id": "technical_accuracy",
+            "competency_id": "BE.2",
+            "maximum_score": 8,
+            "descriptor": "Correctly distinguishes access vs refresh purpose and lifetime."
+          },
+          {
+            "criterion_id": "completeness",
+            "competency_id": "BE.2",
+            "maximum_score": 5,
+            "descriptor": "Covers purpose, lifetime, and a security implication."
+          },
+          {
+            "criterion_id": "reasoning_and_justification",
+            "competency_id": "BE.2",
+            "maximum_score": 4,
+            "descriptor": "Explains why the split exists (blast radius / UX)."
+          },
+          {
+            "criterion_id": "clarity_and_communication",
+            "competency_id": "BE.2",
+            "maximum_score": 3,
+            "descriptor": "Clear structured English."
+          }
+        ],
+        "common_pitfalls": [
+          "Treats refresh tokens as ordinary API authorization credentials."
+        ]
+      }
+    }
+  ]
+}
