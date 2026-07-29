@@ -17,7 +17,8 @@ class VoiceTurn(BaseModel):
     turn_id: str
     role: Literal["candidate", "interviewer"]
     text: str
-    transcript_confidence: float = 1.0
+    # None = ASR provider did not supply a confidence; do not invent 0.9/0.95.
+    transcript_confidence: float | None = None
     truncated: bool = False
 
 
@@ -29,7 +30,8 @@ class VoiceResponsePackage(BaseModel):
     reason_code: str = ""
     turns: list[VoiceTurn] = Field(default_factory=list)
     total_speech_seconds: float = 0.0
-    mean_transcript_confidence: float = 1.0
+    # None when no turn carried a measured ASR confidence.
+    mean_transcript_confidence: float | None = None
     word_count: int = 0
     explicit_decline: bool = False
     cut_off: bool = False

@@ -64,7 +64,11 @@ class LiveInterviewResult:
                 turn_id=str(t.get("turn_id", f"t{i}")),
                 role=t.get("role", "candidate"),  # type: ignore[arg-type]
                 text=t.get("text", ""),
-                transcript_confidence=float(t.get("transcript_confidence", 0.9)),
+                transcript_confidence=(
+                    None
+                    if t.get("transcript_confidence") is None
+                    else float(t["transcript_confidence"])
+                ),
             )
             for i, t in enumerate(self.turns)
             if t.get("text")
@@ -72,13 +76,20 @@ class LiveInterviewResult:
         candidate_text = "\n".join(
             t.text for t in voice_turns if t.role == "candidate"
         ).strip()
+        known = [
+            float(t.transcript_confidence)
+            for t in voice_turns
+            if t.role == "candidate" and t.transcript_confidence is not None
+        ]
         return VoiceResponsePackage(
             item_id=self.item_id,
             outcome_status=self.outcome_status,  # type: ignore[arg-type]
             reason_code=self.reason_code,
             turns=voice_turns,
             total_speech_seconds=self.total_speech_seconds,
-            mean_transcript_confidence=0.9,
+            mean_transcript_confidence=(
+                sum(known) / len(known) if known else None
+            ),
             word_count=len(candidate_text.split()),
             live_text=candidate_text,
             final_text=candidate_text,
@@ -298,7 +309,7 @@ class ConversationalLiveSession:
                 "turn_id": cand_id,
                 "role": "candidate",
                 "text": "",
-                "transcript_confidence": 0.85,
+                "transcript_confidence": None,
             }
         )
         audio = await self._collect_model_audio(role_label="interviewer")
@@ -351,7 +362,7 @@ class ConversationalLiveSession:
                     "turn_id": turn_id,
                     "role": role_label,
                     "text": transcript,
-                    "transcript_confidence": 0.95,
+                    "transcript_confidence": None,
                 }
             )
 

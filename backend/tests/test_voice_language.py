@@ -15,6 +15,13 @@ def test_english_answer_not_flagged() -> None:
     assert looks_non_english(text) is False
 
 
+def test_short_technical_english_with_are_not_flagged() -> None:
+    # Common English word that previously collided with romanized-Japanese marker
+    # causing false non-English flags on short correct answers.
+    text = "Lists are mutable, tuples are not."
+    assert looks_non_english(text) is False
+
+
 def test_romanized_japanese_probe_flagged() -> None:
     # Representative of the Live ASR dump that was incorrectly accepted as a finish.
     text = (
@@ -30,3 +37,11 @@ def test_romanized_japanese_probe_flagged() -> None:
 
 def test_cjk_flagged() -> None:
     assert looks_non_english("タプルはイミュータブルなので代入できません。") is True
+
+
+def test_interviewer_prompt_defers_language_nudges_to_director() -> None:
+    from app.services.voice.prompts import INTERVIEWER_SYSTEM
+
+    assert "DIRECTOR message" in INTERVIEWER_SYSTEM
+    assert "Do NOT judge the candidate's language yourself" in INTERVIEWER_SYSTEM
+    assert "never say \"continue in English\"" in INTERVIEWER_SYSTEM

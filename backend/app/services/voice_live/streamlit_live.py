@@ -18,6 +18,8 @@ from typing import Any
 
 from app.config.settings import settings
 from app.config.voice_settings import voice_settings
+from app.services import observability
+from app.services.observability import LiveHandle
 from app.services.voice.prompts import INTERVIEWER_SYSTEM, TURN_TAKING_DIRECTOR
 from app.services.voice.language import looks_non_english
 from app.services.voice_live.audio_codec import (
@@ -28,6 +30,7 @@ from app.services.voice_live.audio_codec import (
 )
 from app.services.voice_live.gemini_live import InterviewTurnAudio, LiveInterviewResult
 from app.services.voice_live.litellm_realtime import AsyncLiteLLMLiveSession
+from app.services.voice_live.transcribe import transcribe_audio_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +56,9 @@ class StreamlitLiteLLMLiveBridge:
         self._turn_counter = 0
         self._closed = False
         self._english_nudge_sent = False
+        self._live_trace: LiveHandle | None = None
+        self._finished_result: LiveInterviewResult | None = None
+        self.assessment_session_id: str = ""
 
     def _run_loop(self) -> None:
         asyncio.set_event_loop(self._loop)
@@ -70,8 +76,20 @@ class StreamlitLiteLLMLiveBridge:
     def model(self) -> str:
         return settings.litellm_live_preview_model
 
-    def start_interview(self, item_id: str, question_text: str) -> InterviewTurnAudio:
-        return self._submit(self._start(item_id, question_text))
+    def start_interview(
+        self,
+        item_id: str,
+        question_text: str,
+        *,
+        assessment_session_id: str = "",
+    ) -> InterviewTurnAudio:
+        return self._submit(
+            self._start(
+                item_id,
+                question_text,
+                assessment_session_id=assessment_session_id,
+            )
+        )
 
     def send_candidate_audio(self, wav_bytes: bytes) -> InterviewTurnAudio:
         if self._session is None:
@@ -80,35 +98,70 @@ class StreamlitLiteLLMLiveBridge:
 
     def finish(self) -> LiveInterviewResult:
         if self._session is None:
+            if self._finished_result is not None:
+                return self._finished_result
             raise RuntimeError("no active interview")
         try:
             return self._submit(self._finish())
+        except Exception as exc:
+            self._close_live_trace(
+                outcome_status="error",
+                reason_code="FINISH_FAILED",
+                error=str(exc),
+            )
+            raise
         finally:
             self._session = None
             self.session_id = None
 
     def abort(self) -> None:
-        if self._session is None:
-            return
-        try:
-            self._submit(self._close_session(), timeout=30.0)
-        except Exception:  # noqa: BLE001
-            logger.debug("abort streamlit live session failed", exc_info=True)
-        finally:
-            self._session = None
-            self.session_id = None
+        if self._session is not None:
+            try:
+                self._submit(self._close_session(), timeout=30.0)
+            except Exception:  # noqa: BLE001
+                logger.debug("abort streamlit live session failed", exc_info=True)
+        self._close_live_trace(
+            outcome_status="error",
+            reason_code="ABORTED",
+            error="interview aborted",
+        )
+        self._finished_result = None
+        self._session = None
+        self.session_id = None
 
-    async def _start(self, item_id: str, question_text: str) -> InterviewTurnAudio:
+    async def _start(
+        self,
+        item_id: str,
+        question_text: str,
+        *,
+        assessment_session_id: str = "",
+    ) -> InterviewTurnAudio:
         await self._close_session()
+        self._close_live_trace(
+            outcome_status="error",
+            reason_code="SUPERSEDED",
+            error="replaced by new interview",
+        )
         self.item_id = item_id
         self.question = question_text
         self.session_id = uuid.uuid4().hex[:12]
+        self.assessment_session_id = (assessment_session_id or "").strip()
         self.turns = []
         self.interviewer_wavs = []
         self.candidate_speech_seconds = 0.0
         self._turn_counter = 0
         self._closed = False
         self._english_nudge_sent = False
+        self._finished_result = None
+        self._live_trace = observability.start_live(
+            model=settings.litellm_live_preview_model,
+            room_id=self.session_id,
+            item_id=item_id,
+            assessment_session_id=self.assessment_session_id or None,
+            mode="interview",
+            question=question_text,
+            via="streamlit_native",
+        )
 
         system = (
             INTERVIEWER_SYSTEM
@@ -120,8 +173,9 @@ class StreamlitLiteLLMLiveBridge:
             + f"\nSession nonce: {uuid.uuid4().hex[:8]}\n"
             + "Respond with natural conversational audio only after end-of-turn. "
             + "Conduct the interview in English only (HARD). "
-            + "If the candidate answers in another language (including romanized "
-            + "Japanese), do NOT thank them or end — ask once to continue in English. "
+            + "Do NOT judge language yourself — accented technical English is English. "
+            + "Issue a language reminder ONLY when a DIRECTOR message says the last "
+            + "utterance was NOT in English; then ask once to continue in English. "
             + f"You may ask at most {voice_settings.maximum_probes_default} short "
             + "clarifying probes, then thank them and stop."
         )
@@ -130,25 +184,49 @@ class StreamlitLiteLLMLiveBridge:
             voice=voice_settings.gemini_live_voice,
             model=settings.litellm_live_preview_model,
         )
-        await session.connect()
-        self._session = session
+        try:
+            await session.connect()
+            self._session = session
 
-        # Drain the one-word Ready acknowledgement from session prime.
-        await self._drain_ready(timeout=8.0)
+            # Drain the one-word Ready acknowledgement from session prime.
+            await self._drain_ready(timeout=8.0)
 
-        director = (
-            "DIRECTOR (not spoken to candidate): Begin the interview now. "
-            "Read the following assessment question clearly and naturally, then LISTEN. "
-            "Do not add scoring advice.\n\n"
-            f"QUESTION:\n{question_text}"
-        )
-        await session.send_text(director)
-        return await self._collect_model_turn(role_label="interviewer")
+            director = (
+                "DIRECTOR (not spoken to candidate): Begin the interview now. "
+                "Read the following assessment question clearly and naturally, then LISTEN. "
+                "Do not add scoring advice.\n\n"
+                f"QUESTION:\n{question_text}"
+            )
+            await session.send_text(director)
+            return await self._collect_model_turn(role_label="interviewer")
+        except Exception as exc:
+            self._session = None
+            try:
+                await session.close()
+            except Exception:  # noqa: BLE001
+                logger.debug("close litellm live session after start failure", exc_info=True)
+            self._close_live_trace(
+                outcome_status="error",
+                reason_code="CONNECT_FAILED",
+                error=str(exc),
+            )
+            raise
 
     async def _ingest(self, wav_bytes: bytes) -> InterviewTurnAudio:
         assert self._session is not None
         pcm, duration = wav_bytes_to_pcm16(wav_bytes, LIVE_INPUT_RATE)
         self.candidate_speech_seconds += duration
+        # Gemini Live's conversational transcript is useful for turn-taking, but it may
+        # auto-detect the wrong language for accented technical English. Run the dedicated
+        # English-hinted STT path in parallel and use it as the grading transcript.
+        english_stt = asyncio.create_task(
+            asyncio.to_thread(
+                transcribe_audio_bytes,
+                wav_bytes,
+                f"{self.item_id or 'answer'}-{self._turn_counter + 1}.wav",
+                language="en",
+            )
+        )
 
         self._turn_counter += 1
         cand_id = f"c{self._turn_counter}"
@@ -158,17 +236,35 @@ class StreamlitLiteLLMLiveBridge:
                 "turn_id": cand_id,
                 "role": "candidate",
                 "text": "",
-                "transcript_confidence": 0.85,
+                # Unknown until a provider supplies a real score — never invent 0.85/0.95.
+                "transcript_confidence": None,
             }
         )
 
         await self._session.append_audio(pcm)
         await self._session.commit_audio()
-        reply = await self._collect_model_turn(role_label="interviewer", cand_id=cand_id)
+        try:
+            reply = await self._collect_model_turn(role_label="interviewer", cand_id=cand_id)
+        except Exception:
+            english_stt.cancel()
+            raise
+
+        try:
+            authoritative_text = (await english_stt).strip()
+        except Exception as exc:  # noqa: BLE001
+            authoritative_text = ""
+            logger.warning(
+                "English-hinted candidate transcription failed; using Live transcript (%s)",
+                exc,
+            )
 
         cand_text = ""
         for turn in reversed(self.turns):
             if turn.get("turn_id") == cand_id:
+                if authoritative_text:
+                    turn["text"] = authoritative_text
+                    # Dedicated STT returned text but not a calibrated confidence score.
+                    turn["transcript_confidence"] = None
                 cand_text = str(turn.get("text") or "")
                 break
         if (
@@ -179,8 +275,10 @@ class StreamlitLiteLLMLiveBridge:
             self._english_nudge_sent = True
             await self._session.send_text(
                 "DIRECTOR (not spoken to candidate): The candidate's last utterance was "
-                "NOT in English. Do NOT thank them or end. Ask once, briefly, to continue "
-                "in English, then LISTEN. Do not translate their answer."
+                "NOT in English per the application language detector. Do NOT thank them "
+                "or end. Ask once, briefly, to continue in English, then LISTEN. Do not "
+                "translate their answer. Without a DIRECTOR message like this, never "
+                "raise a language issue."
             )
             reply = await self._collect_model_turn(role_label="interviewer")
         return reply
@@ -237,7 +335,7 @@ class StreamlitLiteLLMLiveBridge:
                     "turn_id": f"i{self._turn_counter}",
                     "role": role_label,
                     "text": transcript,
-                    "transcript_confidence": 0.95,
+                    "transcript_confidence": None,
                 }
             )
 
@@ -292,7 +390,11 @@ class StreamlitLiteLLMLiveBridge:
             reason_code=reason,
             interviewer_wavs=list(self.interviewer_wavs),
         )
+        # Cache before closing transport. Streamlit reruns and grading retries may call
+        # finish again after the realtime socket has already been closed.
+        self._finished_result = result
         await self._close_session()
+        self._close_live_trace(result=result)
         return result
 
     async def _close_session(self) -> None:
@@ -303,3 +405,32 @@ class StreamlitLiteLLMLiveBridge:
                 await session.close()
             except Exception:  # noqa: BLE001
                 logger.debug("close litellm live session failed", exc_info=True)
+
+    def _close_live_trace(
+        self,
+        *,
+        result: LiveInterviewResult | None = None,
+        outcome_status: str = "",
+        reason_code: str = "",
+        error: str = "",
+    ) -> None:
+        if self._live_trace is None or self._live_trace.ended:
+            return
+        candidate_turns = sum(1 for t in self.turns if t.get("role") == "candidate")
+        interviewer_turns = sum(1 for t in self.turns if t.get("role") == "interviewer")
+        observability.end_live(
+            self._live_trace,
+            outcome_status=(
+                result.outcome_status
+                if result is not None
+                else (outcome_status or ("error" if error else "unknown"))
+            ),
+            reason_code=(result.reason_code if result is not None else reason_code),
+            error=error,
+            candidate_turns=candidate_turns,
+            interviewer_turns=interviewer_turns,
+            speech_seconds=self.candidate_speech_seconds,
+            transcript=(result.transcript if result is not None else ""),
+        )
+        observability.flush()
+        self._live_trace = None

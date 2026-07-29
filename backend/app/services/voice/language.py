@@ -18,7 +18,9 @@ _NON_LATIN = re.compile(
 # Common romanized Japanese / filler that appears when ASR latinizes 日本語.
 _ROMAJI_MARKERS = re.compile(
     r"\b("
-    r"etto|ano|desu|masu|arimasu|watashi|watashiwa|kore|sore|are|"
+    # NOTE: do NOT include ultra-common English tokens here (e.g. `are`). Those
+    # create high false-positive rates on short but correct English answers.
+    r"etto|ano|desu|masu|arimasu|watashi|watashiwa|kore|sore|"
     r"nani|doushite|chotto|dakara|demo|kara|node|deshita|shimashita|"
     r"hai|iie|onegaishimasu|sumimasen|wakarimasen|tappuru|imyutaburu|"
     r"chan|totte|towaku|bushin|suzai|teresu|dinti"

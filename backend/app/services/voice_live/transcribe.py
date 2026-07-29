@@ -30,7 +30,12 @@ def reset_client() -> None:
     _client = None
 
 
-def transcribe_audio_bytes(audio_bytes: bytes, filename: str = "answer.wav") -> str:
+def transcribe_audio_bytes(
+    audio_bytes: bytes,
+    filename: str = "answer.wav",
+    *,
+    language: str | None = "en",
+) -> str:
     """Return transcript text from recorded audio bytes.
 
     Uses `settings.litellm_transcribe_model` through the same LiteLLM gateway.
@@ -43,10 +48,20 @@ def transcribe_audio_bytes(audio_bytes: bytes, filename: str = "answer.wav") -> 
     stream = BytesIO(audio_bytes)
     stream.name = filename
     try:
-        response = _stt_client().audio.transcriptions.create(
-            model=settings.litellm_transcribe_model,
-            file=stream,
-        )
+        kwargs = {
+            "model": settings.litellm_transcribe_model,
+            "file": stream,
+            # The assessment is English-only. Supplying the ISO-639-1 hint prevents
+            # technical English from being decoded as romanized speech in another
+            # language, which would otherwise trigger the deterministic score clamp.
+            "prompt": (
+                "English technical interview about Python and software engineering. "
+                "Preserve programming terms, identifiers, and code syntax."
+            ),
+        }
+        if language:
+            kwargs["language"] = language
+        response = _stt_client().audio.transcriptions.create(**kwargs)
     except APIConnectionError as exc:
         raise RuntimeError(
             "LiteLLM transcription connection failed. "

@@ -174,9 +174,10 @@ class RealtimeLiveRoom:
                 "Conduct the interview in English only (HARD RULE). "
                 f"You may ask at most {voice_settings.maximum_probes_default} short clarifying "
                 "probes, and only for missing required parts — then thank them and stop. "
-                "If they answer in another language (including romanized Japanese ASR), "
-                "do NOT thank them or say the answer covers the question — ask once to "
-                "continue in English, then listen. Never translate for them. "
+                "Do NOT judge language yourself — accented technical English is English. "
+                "Issue a language reminder ONLY when a DIRECTOR message says the last "
+                "utterance was NOT in English; then ask once to continue in English. "
+                "Never translate for them. "
                 "If the first English answer already covers the required parts, do not "
                 "probe further."
             )
@@ -419,10 +420,11 @@ class RealtimeLiveRoom:
         self._english_nudge_sent = True
         director = (
             "DIRECTOR (not spoken to candidate): The candidate's last utterance was "
-            "NOT in English (or was non-English / romanized ASR). Do NOT thank them, "
+            "NOT in English per the application language detector. Do NOT thank them, "
             "do NOT say their answer covers the question, and do NOT end the interview. "
             "Say only a brief reminder to continue in English (≤ 12 words), then LISTEN. "
-            "Do not translate or paraphrase their non-English content."
+            "Do not translate or paraphrase their non-English content. Without a DIRECTOR "
+            "message like this, never raise a language issue."
         )
         try:
             await self._session.send_text(director)
@@ -445,7 +447,8 @@ class RealtimeLiveRoom:
                 "turn_id": f"t{len(self.state.turns)}",
                 "role": role,
                 "text": text,
-                "transcript_confidence": 0.9,
+                # Live ASR rarely exposes calibrated confidence; leave unknown.
+                "transcript_confidence": None,
             }
         )
 

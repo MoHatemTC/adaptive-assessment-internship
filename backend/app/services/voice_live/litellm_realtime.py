@@ -102,8 +102,13 @@ class AsyncLiteLLMLiveSession:
             additional_headers={"Authorization": f"Bearer {self.api_key}"},
             max_size=None,
             open_timeout=self.connect_timeout,
-            ping_interval=20,
-            ping_timeout=30,
+            # Gemini Live can be busy emitting / processing audio long enough that the
+            # peer doesn't answer the websockets library's protocol ping before its
+            # timeout. That closes a healthy interview with code 1011. The same transport
+            # policy is already required by the direct Gemini Live client.
+            ping_interval=None,
+            ping_timeout=None,
+            close_timeout=15,
             ssl=ssl_ctx,
         )
         await self._ws.send(json.dumps(self._session_update()))
@@ -143,7 +148,14 @@ class AsyncLiteLLMLiveSession:
         session: dict[str, Any] = {
             "modalities": ["audio"],
             "voice": self.voice,
-            "input_audio_transcription": {"model": "gemini-live"},
+            "input_audio_transcription": {
+                "model": "gemini-live",
+                "language": "en",
+                "prompt": (
+                    "English technical interview. Preserve Python terminology and "
+                    "programming identifiers."
+                ),
+            },
         }
         if self.instructions.strip():
             session["instructions"] = self.instructions.strip()

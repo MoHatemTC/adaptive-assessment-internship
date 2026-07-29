@@ -30,9 +30,10 @@ def package_from_text(
     return VoiceResponsePackage(
         item_id=item_id,
         outcome_status=outcome_status,  # type: ignore[arg-type]
-        turns=[VoiceTurn(turn_id="t0", role="candidate", text=text, transcript_confidence=0.95)],
+        # Typed text is exact — not ASR — so confidence 1.0 is honest here.
+        turns=[VoiceTurn(turn_id="t0", role="candidate", text=text, transcript_confidence=1.0)],
         total_speech_seconds=float(secs),
-        mean_transcript_confidence=0.95,
+        mean_transcript_confidence=1.0,
         word_count=len(words),
         live_text=text,
         final_text=text,

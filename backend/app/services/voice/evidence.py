@@ -31,7 +31,10 @@ def evidence_strength(package: VoiceResponsePackage, evaluation: VoiceEvaluation
         if package.word_count < 12 and len(package.transcript.split()) < 12:
             return 0.0
 
-    if package.mean_transcript_confidence < voice_settings.transcript_confidence_floor:
+    if (
+        package.mean_transcript_confidence is not None
+        and package.mean_transcript_confidence < voice_settings.transcript_confidence_floor
+    ):
         strength = 0.25
     elif package.cut_off or package.outcome_status == "truncated":
         strength = 0.4
