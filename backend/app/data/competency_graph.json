@@ -2,227 +2,170 @@
   "version": "1.0",
   "nodes": [
     {
-      "competency_id": "PY",
-      "title": "Python Engineering",
+      "competency_id": "DA",
+      "title": "Prepare and Analyze Data",
       "node_type": "main",
       "critical": true,
       "context_specific": false,
       "main_competencies": []
     },
     {
-      "competency_id": "PY.1",
-      "title": "Syntax, variables & built-in types",
+      "competency_id": "DA.1",
+      "title": "Data loading & inspection",
       "node_type": "sub_competency",
       "critical": true,
       "context_specific": false,
-      "main_competencies": ["PY"]
+      "main_competencies": ["DA"]
     },
     {
-      "competency_id": "PY.2",
-      "title": "Numbers, strings & formatting",
+      "competency_id": "DA.2",
+      "title": "Python data manipulation (functions, collections, comprehensions)",
       "node_type": "sub_competency",
       "critical": true,
       "context_specific": false,
-      "main_competencies": ["PY"]
+      "main_competencies": ["DA"]
     },
     {
-      "competency_id": "PY.3",
-      "title": "Lists, tuples, sets & dicts",
+      "competency_id": "DA.3",
+      "title": "Cleaning, outliers & consistency",
       "node_type": "sub_competency",
       "critical": false,
       "context_specific": false,
-      "main_competencies": ["PY"]
+      "main_competencies": ["DA"]
     },
     {
-      "competency_id": "PY.4",
-      "title": "Control flow & comprehensions",
+      "competency_id": "DA.4",
+      "title": "Transforming, aggregating & feature engineering",
       "node_type": "sub_competency",
       "critical": false,
       "context_specific": false,
-      "main_competencies": ["PY"]
+      "main_competencies": ["DA"]
     },
     {
-      "competency_id": "PY.5",
-      "title": "Functions, arguments & scope",
+      "competency_id": "DA.5",
+      "title": "EDA & visualization",
       "node_type": "sub_competency",
       "critical": false,
       "context_specific": false,
-      "main_competencies": ["PY"]
+      "main_competencies": ["DA"]
     },
     {
-      "competency_id": "PY.6",
-      "title": "Closures & decorators",
+      "competency_id": "DA.6",
+      "title": "Pipelines, validation & leakage prevention",
       "node_type": "sub_competency",
       "critical": false,
       "context_specific": false,
-      "main_competencies": ["PY"]
-    },
-    {
-      "competency_id": "PY.7",
-      "title": "OOP: classes, inheritance & dunder methods",
-      "node_type": "sub_competency",
-      "critical": false,
-      "context_specific": false,
-      "main_competencies": ["PY"]
-    },
-    {
-      "competency_id": "PY.8",
-      "title": "Iterators, generators & itertools",
-      "node_type": "sub_competency",
-      "critical": false,
-      "context_specific": false,
-      "main_competencies": ["PY"]
-    },
-    {
-      "competency_id": "PY.9",
-      "title": "Exceptions & context managers",
-      "node_type": "sub_competency",
-      "critical": false,
-      "context_specific": false,
-      "main_competencies": ["PY"]
-    },
-    {
-      "competency_id": "PY.10",
-      "title": "Modules, typing, dataclasses & the stdlib",
-      "node_type": "sub_competency",
-      "critical": false,
-      "context_specific": false,
-      "main_competencies": ["PY"]
+      "main_competencies": ["DA"]
     }
   ],
   "edges": [
     {
-      "from": "PY.1",
-      "to": "PY.2",
-      "relation": "PREREQUISITE",
-      "strength": 0.9,
-      "allow_upward_inference": true,
-      "allow_downward_blocking": true
-    },
-    {
-      "from": "PY.1",
-      "to": "PY.3",
+      "from": "DA.1",
+      "to": "DA.3",
       "relation": "PREREQUISITE",
       "strength": 0.85,
       "allow_upward_inference": true,
       "allow_downward_blocking": true
     },
     {
-      "from": "PY.1",
-      "to": "PY.4",
+      "from": "DA.2",
+      "to": "DA.3",
       "relation": "PREREQUISITE",
       "strength": 0.8,
       "allow_upward_inference": true,
       "allow_downward_blocking": true
     },
     {
-      "from": "PY.4",
-      "to": "PY.5",
+      "from": "DA.1",
+      "to": "DA.4",
+      "relation": "PREREQUISITE",
+      "strength": 0.85,
+      "allow_upward_inference": true,
+      "allow_downward_blocking": true
+    },
+    {
+      "from": "DA.2",
+      "to": "DA.4",
       "relation": "PREREQUISITE",
       "strength": 0.8,
       "allow_upward_inference": true,
       "allow_downward_blocking": true
     },
     {
-      "from": "PY.5",
-      "to": "PY.6",
+      "from": "DA.3",
+      "to": "DA.4",
       "relation": "PREREQUISITE",
       "strength": 0.75,
       "allow_upward_inference": true,
       "allow_downward_blocking": true
     },
     {
-      "from": "PY.5",
-      "to": "PY.7",
+      "from": "DA.1",
+      "to": "DA.5",
+      "relation": "PREREQUISITE",
+      "strength": 0.8,
+      "allow_upward_inference": true,
+      "allow_downward_blocking": true
+    },
+    {
+      "from": "DA.4",
+      "to": "DA.5",
       "relation": "PREREQUISITE",
       "strength": 0.75,
       "allow_upward_inference": true,
       "allow_downward_blocking": true
     },
     {
-      "from": "PY.4",
-      "to": "PY.8",
+      "from": "DA.3",
+      "to": "DA.6",
       "relation": "PREREQUISITE",
-      "strength": 0.7,
+      "strength": 0.8,
       "allow_upward_inference": true,
       "allow_downward_blocking": true
     },
     {
-      "from": "PY.5",
-      "to": "PY.8",
+      "from": "DA.4",
+      "to": "DA.6",
       "relation": "PREREQUISITE",
-      "strength": 0.7,
+      "strength": 0.85,
       "allow_upward_inference": true,
       "allow_downward_blocking": true
     },
     {
-      "from": "PY.4",
-      "to": "PY.9",
-      "relation": "PREREQUISITE",
-      "strength": 0.65,
-      "allow_upward_inference": true,
-      "allow_downward_blocking": true
+      "from": "DA.1",
+      "to": "DA",
+      "relation": "CONTRIBUTES_TO",
+      "weight": 0.17
     },
     {
-      "from": "PY.1",
-      "to": "PY",
+      "from": "DA.2",
+      "to": "DA",
       "relation": "CONTRIBUTES_TO",
-      "weight": 0.1
+      "weight": 0.17
     },
     {
-      "from": "PY.2",
-      "to": "PY",
+      "from": "DA.3",
+      "to": "DA",
       "relation": "CONTRIBUTES_TO",
-      "weight": 0.1
+      "weight": 0.17
     },
     {
-      "from": "PY.3",
-      "to": "PY",
+      "from": "DA.4",
+      "to": "DA",
       "relation": "CONTRIBUTES_TO",
-      "weight": 0.1
+      "weight": 0.17
     },
     {
-      "from": "PY.4",
-      "to": "PY",
+      "from": "DA.5",
+      "to": "DA",
       "relation": "CONTRIBUTES_TO",
-      "weight": 0.1
+      "weight": 0.16
     },
     {
-      "from": "PY.5",
-      "to": "PY",
+      "from": "DA.6",
+      "to": "DA",
       "relation": "CONTRIBUTES_TO",
-      "weight": 0.1
-    },
-    {
-      "from": "PY.6",
-      "to": "PY",
-      "relation": "CONTRIBUTES_TO",
-      "weight": 0.1
-    },
-    {
-      "from": "PY.7",
-      "to": "PY",
-      "relation": "CONTRIBUTES_TO",
-      "weight": 0.1
-    },
-    {
-      "from": "PY.8",
-      "to": "PY",
-      "relation": "CONTRIBUTES_TO",
-      "weight": 0.1
-    },
-    {
-      "from": "PY.9",
-      "to": "PY",
-      "relation": "CONTRIBUTES_TO",
-      "weight": 0.1
-    },
-    {
-      "from": "PY.10",
-      "to": "PY",
-      "relation": "CONTRIBUTES_TO",
-      "weight": 0.1
+      "weight": 0.16
     }
   ]
 }
-
