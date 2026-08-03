@@ -27,6 +27,8 @@ from app.services.adaptive import convergence
 from app.services.adaptive.irt import (
     THETA_GRID,
     ability_band,
+    band_lower_bound,
+    band_probabilities,
     credible_interval,
     prior_from_self_rating,
     uniform_prior,
@@ -37,7 +39,17 @@ logger = logging.getLogger(__name__)
 
 # Prior width by how much the self-rating is worth believing, matching the MCQ engine.
 # A rating sets where the search starts, never where it ends.
-PRIOR_SD_CONFIDENT = 1.1
+# Flattened from 1.1 (review A9/T7). Simulated on this module's own update: a candidate
+# whose true theta is 0 but who self-rates 5 lands at +0.42 after the full six-observation
+# floor at SD 1.1, and at +0.23 at SD 1.5. Bands are 1.0 logits wide and the nearest
+# boundary is 0.5 away, so at 1.1 the SELF-RATING ALONE moves the estimate 42% of a band
+# width — in the direction the candidate rated themselves, at full precision, not as an
+# early-session artefact. Self-assessment differs systematically by background, so an
+# instrument used for placement imports that difference into a certified level.
+#
+# Costs one extra item per variable for confident self-raters: about +3.75 minutes across
+# three mains, against 13.5 minutes of slack in the time budget.
+PRIOR_SD_CONFIDENT = 1.5
 PRIOR_SD_TENTATIVE = 1.7
 PRIOR_SD_NO_RATING = 2.0
 STRONG_STREAK_LENGTH = 3
@@ -79,6 +91,11 @@ def certainty(state: VariableState) -> float:
     )
 
 
+def band_probability(state: VariableState) -> dict[int, float]:
+    """P(theta in each ability band) under the current posterior."""
+    return band_probabilities(np.asarray(state.posterior, dtype=float))
+
+
 def posterior_interval(
     state: VariableState, *, mass: float = 0.95
 ) -> tuple[float, float]:
@@ -97,9 +114,12 @@ def upper_challenge_difficulty(state: VariableState) -> float | None:
     if level >= 5:
         return None
 
-    # ability_band uses round(3 + theta): boundaries into levels 2..5 are
-    # -1.5, -0.5, +0.5, +1.5 respectively.
-    next_band_boundary = level - 2.5
+    # Read from the band definition rather than re-deriving it. This used to be
+    # `level - 2.5`, an inverse of the old rounding rule written out by hand — the kind of
+    # thing that keeps working silently after the bands it inverts have moved.
+    next_band_boundary = band_lower_bound(level + 1)
+    if next_band_boundary is None:
+        return None
     return next_band_boundary - settings.cat_difficulty_corroboration_slack
 
 
@@ -214,6 +234,18 @@ def evaluate_finalisation(
 
     return state.model_copy(
         update={"finalised": True, "stop_reason": stop.reason, "converged": stop.converged}
+    )
+
+
+def mark_time_exhausted(state: VariableState) -> VariableState:
+    """No remaining item fits the clock.
+
+    Distinct from `bank_exhausted` on purpose: "we ran out of questions" and "we ran out
+    of time" are different facts about a session, and reporting one as the other describes
+    a stop that did not happen.
+    """
+    return state.model_copy(
+        update={"finalised": True, "stop_reason": "time_budget", "converged": False}
     )
 
 

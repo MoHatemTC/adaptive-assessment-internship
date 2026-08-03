@@ -24,11 +24,13 @@ from __future__ import annotations
 import logging
 import time
 import uuid
+from datetime import datetime, timezone
 
 import numpy as np
 
 from app.config.settings import settings
 from app.schemas.orchestration import (
+    DEFAULT_SECONDS_BY_MODALITY,
     AssessmentReport,
     AssessmentState,
     BankItem,
@@ -37,23 +39,35 @@ from app.schemas.orchestration import (
     VariableReport,
     VariableState,
 )
+from app.services.adaptive import personfit
 from app.services.adaptive.irt import ability_band
+from app.services.orchestrator import budget
 from app.services.orchestrator import variables as variables_module
 from app.services.orchestrator.bank import UnifiedBankRepository
-from app.services.orchestrator.competency import affected_mains, rollup_outcomes
+from app.services.orchestrator.competency import (
+    affected_mains,
+    main_competency,
+    rollup_outcomes,
+)
 from app.services.orchestrator.grader import GraderAgent
 from app.services.orchestrator.picker import pick
 from app.services.orchestrator.queue import CandidateQueue
-from app.services.competency_graph import load_default_competency_graph
+from app.services.competency_graph import config as graph_config
 from app.services.competency_graph.coverage import (
     coverage_allows_convergence,
     unmeasured_required_nodes,
 )
-from app.services.competency_graph.evidence import EvidenceEvent
+from app.services.competency_graph.evidence import (
+    DEFAULT_CONFIDENCE,
+    EvidenceEvent,
+    evidence_id_for,
+)
 from app.services.competency_graph.graph import CompetencyGraphService
-from app.services.competency_graph.propagation import PropagationConfig, shadow_apply_events
-from app.services.competency_graph.rollup import graph_rollup_outcomes
-from app.services.competency_graph.rollup import infer_upward_inferred_nodes
+from app.services.competency_graph.ledger import EvidenceLedger
+from app.services.competency_graph.propagation import apply_direct_evidence
+from app.services.competency_graph.report import build_main_report, build_node_reports
+from app.services.competency_graph.state import CompetencyGraphState
+from app.services.orchestrator.graph_delta import GraphDelta
 
 logger = logging.getLogger(__name__)
 
@@ -61,10 +75,82 @@ logger = logging.getLogger(__name__)
 class Orchestrator:
     """Drives one multi-variable, multi-modality assessment."""
 
-    def __init__(self, bank: UnifiedBankRepository, grader: GraderAgent) -> None:
+    def __init__(
+        self,
+        bank: UnifiedBankRepository,
+        grader: GraderAgent,
+        *,
+        graph: CompetencyGraphService | None = None,
+        coverage_critical_only: bool | None = None,
+    ) -> None:
+        """`graph` is the competency graph that belongs to `bank`.
+
+        Injected rather than loaded, because a graph is only meaningful against the bank
+        it was authored for: the coverage gate asks the graph what a main requires and the
+        bank what measures it, so a mismatched pair marks every required node unmeasured
+        and vetoes convergence forever. Left None, a deprecated fallback loads the active
+        bank's graph and `_graph` checks whether it actually matches.
+        """
         self._bank = bank
         self._grader = grader
-        self._graph_service: CompetencyGraphService | None = None
+        self._graph_service = graph
+        self._coverage_critical_only = coverage_critical_only
+        self._graph_checked = False
+
+    # --- graph and coverage policy -----------------------------------------
+    def _graph(self) -> CompetencyGraphService | None:
+        """The competency graph for this session's bank, or None when unusable.
+
+        Fails OPEN on a bank/graph mismatch. A mismatched graph otherwise produces a
+        silent, permanent convergence veto that presents as a measurement problem; a loud
+        log plus an ungated engine is the recoverable failure.
+        """
+        if self._graph_service is None and not self._graph_checked:
+            from app.services.orchestrator.registry import get_graph_service
+
+            logger.warning(
+                "orchestrator built without a graph — falling back to the active bank's "
+                "(%s). Pass graph=registry.get_graph_service(bank_id) instead.",
+                settings.active_bank,
+            )
+            try:
+                self._graph_service = get_graph_service()
+            except (KeyError, OSError, ValueError):
+                logger.error("no usable competency graph for the active bank", exc_info=True)
+                self._graph_service = None
+
+        if self._graph_service is not None and not self._graph_checked:
+            self._graph_checked = True
+            if not self._graph_covers_bank(self._graph_service):
+                self._graph_service = None
+        self._graph_checked = True
+        return self._graph_service
+
+    def _graph_covers_bank(self, graph: CompetencyGraphService) -> bool:
+        bank_mains = set(self._bank.variables())
+        graph_mains = {
+            nid for nid, node in graph.graph.nodes.items() if node.node_type == "main"
+        }
+        graph_mains |= {nid.split(".", 1)[0] for nid in graph.graph.nodes}
+        if bank_mains & graph_mains:
+            return True
+        logger.error(
+            "graph/bank mismatch: bank measures %s, graph declares %s — running without "
+            "graph gating for this session rather than vetoing every convergence",
+            sorted(bank_mains),
+            sorted(graph_mains),
+        )
+        return False
+
+    def coverage_critical_only(self) -> bool:
+        """Whether coverage requires only the critical sub-competencies.
+
+        Per bank, because the right answer depends on how many sub-nodes a main declares
+        against how many questions the budget allows.
+        """
+        if self._coverage_critical_only is not None:
+            return self._coverage_critical_only
+        return settings.graph_coverage_critical_only
 
     # --- lifecycle ---------------------------------------------------------
     def begin(
@@ -88,6 +174,10 @@ class Orchestrator:
         unknown = [v for v in target_variables if v not in available]
         if unknown:
             raise ValueError(f"no bank coverage for: {unknown}")
+
+        # Loudly, at the start, rather than as a session that runs long and is cut off
+        # mid-answer. Never raises: the check is about configuration, not this candidate.
+        budget.warn_if_infeasible(len(target_variables))
 
         intake = intake or {}
         confidence = confidence or {}
@@ -122,6 +212,7 @@ class Orchestrator:
         queue = CandidateQueue(state.queue)
         served = set(state.served_item_ids)
         exhausted: list[str] = []
+        out_of_time: list[str] = []
         presenting = state.presenting.variable if state.presenting else None
 
         for variable in state.open_variables:
@@ -134,19 +225,23 @@ class Orchestrator:
 
             all_available = self._bank.shortlist(variable, exclude=set())
             pool = self._bank.shortlist(variable, exclude=served | queue.queued_item_ids())
-            pool = self._filter_pool_by_competency_graph(pool=pool, state=state)
+            bank_had_items = bool(pool)
+            pool, time_filtered = self._time_admissible(
+                pool=pool, state=state, variable=variable
+            )
+            if not pool and bank_had_items and time_filtered:
+                out_of_time.append(variable)
+                continue
             coverage_pending = False
-            if settings.graph_convergence_gate_enabled:
-                if self._graph_service is None:
-                    g = load_default_competency_graph()
-                    self._graph_service = CompetencyGraphService(g)
+            graph = self._graph() if graph_config.convergence_gate_enabled() else None
+            if graph is not None:
                 unmeasured = unmeasured_required_nodes(
-                    self._graph_service,
+                    graph,
                     variable,
                     measured=set(state.graph_direct_measured_nodes),
                     mastered=set(state.graph_direct_mastered_nodes),
                     not_mastered=set(state.graph_direct_not_mastered_nodes),
-                    critical_only=settings.graph_coverage_critical_only,
+                    critical_only=self.coverage_critical_only(),
                 )
                 coverage_pool = [
                     item
@@ -165,8 +260,36 @@ class Orchestrator:
                         sorted(unmeasured),
                         len(pool),
                     )
+            probe_pool = self._unblocking_probe_pool(
+                pool=pool, state=state, variable=variable
+            )
+            probing = False
+            if not coverage_pending and probe_pool:
+                pool = probe_pool
+                probing = True
+                logger.info(
+                    "unblocking probe for %s: %d candidates measuring a blocked node",
+                    variable,
+                    len(pool),
+                )
+
+            modality_pending = False
+            if not probing:
+                deficit_pool = self._modality_deficit_pool(
+                    pool=pool, state=state, variable=variable, available=all_available
+                )
+                if deficit_pool:
+                    # Coverage and the blueprint are orthogonal: coverage decides WHICH
+                    # node must be measured, the blueprint WHICH modality measures it.
+                    # When the coverage pool spans the owed modality, both are satisfied
+                    # at once — and on a bank whose coverage requirement fills the whole
+                    # observation floor, that intersection is the only chance the
+                    # blueprint ever gets. Coverage still wins when they cannot both hold.
+                    pool = deficit_pool
+                    modality_pending = True
+
             corroboration_pending = False
-            if not coverage_pending and all_available:
+            if not coverage_pending and not probing and not modality_pending and all_available:
                 administered_difficulties = [
                     float(served_item.cat.b)
                     for served_item_id in state.variables[variable].served_item_ids
@@ -196,7 +319,7 @@ class Orchestrator:
                         )
             challenge_b = (
                 None
-                if coverage_pending or corroboration_pending
+                if coverage_pending or corroboration_pending or probing or modality_pending
                 else variables_module.upper_challenge_difficulty(
                     state.variables[variable]
                 )
@@ -222,18 +345,9 @@ class Orchestrator:
                         challenge_b,
                     )
                     pool = challenge_pool
-            utility_modifiers: dict[str, float] | None = None
-            if settings.graph_utility_enabled and state.graph_contradicted_nodes:
-                contradicted = set(state.graph_contradicted_nodes)
-                # Give a small utility presence to items that touch any contradicted node.
-                utility_modifiers = {
-                    item.item_id: (
-                        0.25
-                        if any(m.variable in contradicted for m in item.measures)
-                        else 0.0
-                    )
-                    for item in pool
-                }
+            utility_modifiers = self._graph_utility_modifiers(
+                pool=pool, state=state, variable=variable
+            )
             candidate = await pick(
                 pool,
                 state.variables[variable],
@@ -252,64 +366,244 @@ class Orchestrator:
             logger.info("no items remain for %s — finalising as exhausted", variable)
             updated[variable] = variables_module.mark_exhausted(updated[variable])
             queue.release(variable)
+        for variable in out_of_time:
+            logger.info("no item fits the remaining time for %s — finalising", variable)
+            updated[variable] = variables_module.mark_time_exhausted(updated[variable])
+            queue.release(variable)
 
         return state.model_copy(update={"queue": queue.pending(), "variables": updated})
 
-    def _filter_pool_by_competency_graph(
+    def _time_admissible(
+        self, *, pool: list[BankItem], state: AssessmentState, variable: str
+    ) -> tuple[list[BankItem], bool]:
+        """Items that still fit the clock. Returns (pool, filtered_anything).
+
+        RESERVING UP FRONT is the point. Without it a session spends its last nine minutes
+        on a tenth multiple-choice item and then has no room for the code item its own
+        blueprint requires. Every other open main's unmet minimum is held back before this
+        main is allowed to spend.
+
+        The flag is reported separately because an empty pool means two different things:
+        the BANK ran out, or the CLOCK did. Reporting a time stop as `bank_exhausted`
+        names a constraint that was not the one that bound.
+        """
+        if not settings.orchestrator_time_aware_selection_enabled or not state.started_at:
+            return pool, False
+
+        limit_seconds = settings.orchestrator_time_limit_minutes * 60.0
+        remaining = (
+            limit_seconds
+            - state.elapsed_minutes * 60.0
+            - settings.orchestrator_time_reserve_seconds
+        )
+
+        minimums = settings.modality_minimums()
+        reserved = 0.0
+        for other in state.open_variables:
+            if other == variable:
+                continue
+            served = {
+                item.modality
+                for item_id in state.variables[other].served_item_ids
+                if (item := self._bank.get(item_id)) is not None
+            }
+            for modality, required in minimums.items():
+                if required > 0 and modality not in served:
+                    reserved += DEFAULT_SECONDS_BY_MODALITY.get(modality, 0.0)
+
+        budget = remaining - reserved
+        admissible = [item for item in pool if item.expected_seconds <= budget]
+        if not admissible and pool:
+            logger.info(
+                "no item fits %s's remaining budget (%.0fs after reserving %.0fs)",
+                variable,
+                remaining,
+                reserved,
+            )
+        return admissible, len(admissible) != len(pool)
+
+    def _modality_deficit_pool(
         self,
         *,
         pool: list[BankItem],
         state: AssessmentState,
+        variable: str,
+        available: list[BankItem] | None = None,
     ) -> list[BankItem]:
-        """Filter candidates so they don't violate blocked prerequisites.
+        """Items in a modality this main still owes, when time is running out to get one.
 
-        Phase C only uses persisted *blocking* state (no inferred-upward mastery).
+        WHY A CONSTRAINT AND NOT A BONUS. Measured on the live bank, ranking by
+        information per minute puts MCQ ahead of code by about 6.6x. No soft weight
+        survives that ratio, so a "mixed" assessment quietly becomes a multiple-choice
+        test — which is not the instrument anyone agreed to, and is a different construct.
+        The existing coverage constraint makes the same argument for the same reason.
+
+        Triggered off the OBSERVATION FLOOR rather than the question cap, so the minimums
+        are met before any convergence stop can fire. At a floor of six and two minimums
+        that is the last two picks: four free information-per-minute choices, then the
+        code item, then the voice item.
         """
-        if not settings.graph_filtering_enabled:
-            return pool
+        minimums = settings.modality_minimums()
+        if not minimums:
+            return []
 
-        if self._graph_service is None:
-            g = load_default_competency_graph()
-            self._graph_service = CompetencyGraphService(g)
+        # What this main has been ASKED, not what moved its estimate. Counting only
+        # scoring responses creates a feedback loop: an unscorable modality — a sandbox
+        # that is down, a microphone that fails — never clears its deficit, so the
+        # blueprint re-serves it for the rest of the session and measures nothing.
+        served_modalities: dict[str, int] = {}
+        for item_id in state.administered_by_variable.get(variable, []):
+            served = self._bank.get(item_id)
+            if served is not None:
+                served_modalities[served.modality] = (
+                    served_modalities.get(served.modality, 0) + 1
+                )
 
+        unmet = {
+            modality: required - served_modalities.get(modality, 0)
+            for modality, required in minimums.items()
+            if served_modalities.get(modality, 0) < required
+        }
+        # A minimum the bank cannot supply is not a deficit, it is a bank fact. Enforcing
+        # one is how a single missing modality starves every other pick for the rest of
+        # the session: the constraint can never be satisfied, so it never releases.
+        if available is not None:
+            supplied = {item.modality for item in available}
+            unmeetable = sorted(set(unmet) - supplied)
+            if unmeetable:
+                logger.debug(
+                    "%s cannot supply %s — that minimum is waived for this bank",
+                    variable,
+                    unmeetable,
+                )
+            unmet = {m: n for m, n in unmet.items() if m in supplied}
+        if not unmet:
+            return []
+
+        # The deficit is enforced for the WHOLE session, not only as the observation floor
+        # approaches. Measured on this bank, information per minute favours multiple
+        # choice by about 6.6x, so an unenforced slot is never spent on anything else: a
+        # session that merely *could* have mixed reliably does not. The only question is
+        # WHEN to spend the slot, and spending it late buys a better-targeted item because
+        # the estimate has moved by then.
+        #
+        # `urgency` is how many slots remain before the deficit becomes unmeetable. Below
+        # the floor there is still room to choose freely; at or past it, the constraint
+        # binds every pick until the mix is satisfied.
+        observations = state.variables[variable].observations
+        slots_to_floor = settings.cat_precision_min_questions - observations
+        slots_to_cap = settings.cat_max_questions - observations
+        owed = sum(unmet.values())
+        if slots_to_floor > owed and slots_to_cap > owed + settings.cat_precision_min_questions:
+            return []
+
+        deficit_pool = [item for item in pool if item.modality in unmet]
+        if deficit_pool:
+            logger.info(
+                "modality blueprint for %s: owes %s, %d slots to the floor, %d to the cap",
+                variable,
+                unmet,
+                slots_to_floor,
+                slots_to_cap,
+            )
+        return deficit_pool
+
+    def _graph_utility_modifiers(
+        self, *, pool: list[BankItem], state: AssessmentState, variable: str
+    ) -> dict[str, float] | None:
+        """Per-item selection penalties and bonuses from graph state.
+
+        PENALTIES, NOT EXCLUSIONS (review C13/A4). These two classes used to be dropped
+        from the pool outright:
+
+          - an item whose measured node has a blocked prerequisite ancestor
+          - an item all of whose measured nodes are non-critical and already mastered
+
+        Both are usually the right item to skip, and occasionally the most informative one
+        available. Hard exclusion starves a thin bank and pushes sessions toward the
+        bank-exhausted stop; worse, an item that is never served can never disprove the
+        block, which is precisely why contradiction recovery could not fire. A large
+        penalty says "almost never" without saying "never".
+        """
+        modifiers: dict[str, float] = {}
+        contradicted = set(state.graph_contradicted_nodes)
         blocked = set(state.graph_blocked_nodes)
-        direct_mastered = set(state.graph_direct_mastered_nodes)
+        mastered = set(state.graph_direct_mastered_nodes)
 
-        eligible: list[BankItem] = []
-        for item in pool:
-            measured_nodes = [m.variable for m in item.measures]
-
-            # 1) Exclude items whose measured nodes have blocked prerequisite ancestors.
-            blocked_prereq = False
-            for nid in measured_nodes:
-                if nid not in self._graph_service.graph.nodes:
+        graph = self._graph() if graph_config.filtering_enabled() else None
+        if graph is not None and (blocked or mastered):
+            for item in pool:
+                measured = [m.variable for m in item.measures if m.variable in graph.graph.nodes]
+                if not measured:
                     continue
-                ancestors = self._graph_service.ancestors(nid, include_self=True)
-                if blocked & ancestors:
-                    blocked_prereq = True
-                    break
-            if blocked_prereq:
-                continue
+                if any(blocked & graph.ancestors(nid, include_self=True) for nid in measured):
+                    modifiers[item.item_id] = (
+                        modifiers.get(item.item_id, 0.0) + settings.graph_blocked_penalty
+                    )
+                    continue
+                redundant = all(
+                    not graph.graph.nodes[nid].critical and nid in mastered
+                    for nid in measured
+                )
+                if redundant:
+                    modifiers[item.item_id] = (
+                        modifiers.get(item.item_id, 0.0)
+                        + settings.graph_mastered_noncritical_penalty
+                    )
 
-            # 2) Skip redundant mastered noncritical nodes.
-            if measured_nodes:
-                measured_in_graph = [nid for nid in measured_nodes if nid in self._graph_service.graph.nodes]
-                if measured_in_graph:
-                    redundant_for_item = True
-                    for nid in measured_in_graph:
-                        node = self._graph_service.graph.nodes[nid]
-                        if node.critical:
-                            redundant_for_item = False
-                            break
-                        if nid not in direct_mastered:
-                            redundant_for_item = False
-                            break
-                    if redundant_for_item:
-                        continue
+        if graph_config.utility_enabled() and contradicted:
+            for item in pool:
+                if any(m.variable in contradicted for m in item.measures):
+                    modifiers[item.item_id] = (
+                        modifiers.get(item.item_id, 0.0)
+                        + settings.graph_contradiction_bonus
+                    )
 
-            eligible.append(item)
+        # SHARED-MAIN GAIN. Ranking is per variable, so an item that also evidences
+        # another main competency the session is still measuring delivers value this
+        # variable's information score cannot see. Without the correction the sharing is
+        # real but never chosen: measured on this bank, evidence reuse sat at 0.98 main
+        # updates per item — the machinery present and doing nothing.
+        #
+        # It is a bonus and not a constraint because the extra evidence is genuinely
+        # partial: a secondary loading of 0.5 is half a measurement, not a second one.
+        if graph_config.utility_enabled() and settings.graph_shared_main_gain > 0:
+            open_mains = {
+                v for v in state.open_variables if v != variable
+            }
+            for item in pool:
+                extra = {
+                    main_competency(measure.variable) for measure in item.measures
+                } & open_mains
+                if extra:
+                    modifiers[item.item_id] = (
+                        modifiers.get(item.item_id, 0.0)
+                        + settings.graph_shared_main_gain * len(extra)
+                    )
 
-        return eligible
+        return modifiers or None
+
+    def _unblocking_probe_pool(
+        self, *, pool: list[BankItem], state: AssessmentState, variable: str
+    ) -> list[BankItem]:
+        """Items that would re-test a blocked node, when a probe is due.
+
+        The graph's blocked-node claim is a prediction, and a prediction nothing ever
+        tests is not falsifiable. A probe at a fixed low rate is the only way a false
+        block becomes visible in production rather than in an offline study — which is
+        what makes the false-blocking rate measurable at all.
+
+        Deterministic on the observation count, not random: this design commits to
+        replayable sessions, and an RNG here would make two runs of the same responses
+        disagree about which items were served.
+        """
+        blocked = set(state.graph_blocked_nodes)
+        if not blocked or settings.graph_unblocking_probe_period <= 0:
+            return []
+        observations = state.variables[variable].observations
+        if observations == 0 or observations % settings.graph_unblocking_probe_period:
+            return []
+        return [item for item in pool if any(m.variable in blocked for m in item.measures)]
 
     # --- step 3: choose the variable --------------------------------------
     def choose_variable(self, state: AssessmentState) -> str | None:
@@ -348,7 +642,11 @@ class Orchestrator:
         if candidate is None:
             return state
         return state.model_copy(
-            update={"presenting": candidate, "queue": queue.pending()}
+            update={
+                "presenting": candidate,
+                "queue": queue.pending(),
+                "presenting_since": time.time(),
+            }
         )
 
     def next_item(self, state: AssessmentState) -> tuple[BankItem, QueuedCandidate] | None:
@@ -362,6 +660,101 @@ class Orchestrator:
             return None
         return item, candidate
 
+    # --- graph evidence ----------------------------------------------------
+    def _apply_graph_evidence(
+        self, state: AssessmentState, item: BankItem, graded: GradedResponse
+    ) -> GraphDelta:
+        """Apply every outcome of one response to the graph, all or nothing.
+
+        COMPUTE, THEN MERGE. Every consequence accumulates in a local delta and only
+        reaches the session state once all of them succeeded. The previous version marked
+        an evidence id as processed BEFORE doing the work, inside a broad exception
+        handler — so a failure on the second of three outcomes left the first applied, the
+        second permanently marked as done, and no way to retry it.
+
+        Returns an empty delta when the graph is off or unusable. A graph problem must
+        cost the candidate nothing.
+        """
+        delta = GraphDelta.restore(state)
+        graph = self._graph() if graph_config.graph_enabled() else None
+        if graph is None:
+            return delta
+
+        config = graph_config.propagation_config_from_settings()
+        # Distinguishes re-administrations of one item. Computed before `served` grows.
+        attempt_no = state.served_item_ids.count(item.item_id) + 1
+        now = datetime.now(timezone.utc).isoformat()
+
+        seen_variables: set[str] = set()
+        events: list[EvidenceEvent] = []
+        for outcome in graded.outcomes:
+            target_node = str(outcome.get("variable") or "")
+            if not target_node:
+                continue
+            if target_node in seen_variables:
+                # Two outcomes for one variable would collide on the evidence id and the
+                # second would be silently dropped as a duplicate. Refuse instead: the
+                # grader is expected to aggregate per competency before it gets here.
+                raise ValueError(
+                    f"{item.item_id}: two outcomes for {target_node!r} in one response"
+                )
+            seen_variables.add(target_node)
+            modality = str(outcome.get("modality") or item.modality)
+            events.append(
+                EvidenceEvent(
+                    evidence_id=evidence_id_for(
+                        session_id=state.session_id,
+                        item_id=item.item_id,
+                        attempt_no=attempt_no,
+                        modality=modality,
+                        target_node=target_node,
+                    ),
+                    session_id=state.session_id,
+                    item_id=item.item_id,
+                    modality=modality,
+                    target_node=target_node,
+                    score=float(outcome.get("score", 0.0)),
+                    weight=float(outcome.get("weight", 1.0)),
+                    confidence=float(outcome.get("confidence", DEFAULT_CONFIDENCE)),
+                    source=str(outcome.get("source_item_id") or item.item_id),
+                    evidence_kind="direct",
+                    directly_tested=True,
+                )
+            )
+
+        try:
+            graph_state = CompetencyGraphState.from_dict(state.graph_node_states)
+            graph_state.ensure_nodes(set(graph.graph.nodes))
+            ledger = EvidenceLedger.from_ids(state.graph_processed_evidence_ids)
+
+            results = []
+            for event in events:
+                if ledger.contains(event.evidence_id):
+                    continue
+                results.append(
+                    apply_direct_evidence(
+                        graph,
+                        graph_state,
+                        event,
+                        ledger=ledger,
+                        config=config,
+                        now=now,
+                        item_minimum_confidence=item.minimum_success_confidence,
+                    )
+                )
+        except Exception:  # noqa: BLE001 — the graph never fails an assessment
+            logger.exception("graph evidence discarded for %s", item.item_id)
+            return delta
+
+        delta.absorb(
+            graph=graph,
+            graph_state=graph_state,
+            ledger=ledger,
+            results=results,
+            session_variables=set(state.variables),
+        )
+        return delta
+
     # --- steps 5-7: grade, update, finalise --------------------------------
     def record_response(
         self, state: AssessmentState, item: BankItem, response: object
@@ -374,228 +767,59 @@ class Orchestrator:
         """
         graded = self._grader.grade(item, response)
 
-        shadow_direct_mastered = set(
-            getattr(state, "graph_shadow_direct_mastered_nodes", [])
-        )
-        shadow_inferred_mastered = set(
-            getattr(state, "graph_shadow_inferred_mastered_nodes", [])
-        )
-        shadow_direct_not_mastered = set(
-            getattr(state, "graph_shadow_direct_not_mastered_nodes", [])
-        )
-        shadow_blocked = set(getattr(state, "graph_shadow_blocked_nodes", []))
-        shadow_contradicted = set(
-            getattr(state, "graph_shadow_contradicted_nodes", [])
-        )
-
-        # Graph shadow update is analysis-only: it must never alter CAT posterior
-        # math, picker ranking, queue contents, or convergence decisions.
-        if settings.graph_shadow_mode:
-            try:
-                if self._graph_service is None:
-                    g = load_default_competency_graph()
-                    self._graph_service = CompetencyGraphService(g)
-
-                events: list[EvidenceEvent] = []
-                for o in graded.outcomes:
-                    modality = str(o.get("modality") or item.modality)
-                    variable = str(o.get("variable") or "")
-                    evidence_id = (
-                        f"{state.session_id}:{item.item_id}:{modality}:{variable}"
-                    )
-                    events.append(
-                        EvidenceEvent(
-                            evidence_id=evidence_id,
-                            session_id=state.session_id,
-                            item_id=item.item_id,
-                            modality=modality,
-                            target_node=variable,
-                            score=float(o.get("score", 0.0)),
-                            weight=float(o.get("weight", 1.0)),
-                            confidence=float(o.get("confidence", 1.0)),
-                            source=str(o.get("source_item_id") or ""),
-                            evidence_kind="direct",
-                            source_node=None,
-                            propagation_distance=0,
-                            directly_tested=True,
-                            rubric_criterion_id=None,
-                            evaluator_version=None,
-                            metadata={},
-                        )
-                    )
-
-                updates = shadow_apply_events(
-                    self._graph_service,
-                    events,
-                    config=PropagationConfig(),
-                )
-                if updates:
-                    cfg = PropagationConfig()
-                    success_targets = {
-                        event.target_node
-                        for event in events
-                        if event.score >= cfg.strong_success_threshold
-                        and event.confidence >= cfg.minimum_propagation_confidence
-                        and event.weight > 0.0
-                    }
-                    failure_targets = {
-                        event.target_node
-                        for event in events
-                        if event.score <= cfg.strong_failure_threshold
-                        and event.confidence >= cfg.downward_block_confidence
-                        and event.weight > 0.0
-                    }
-                    shadow_direct_mastered.update(success_targets)
-                    shadow_direct_not_mastered.difference_update(success_targets)
-                    shadow_direct_not_mastered.update(failure_targets)
-                    shadow_inferred_mastered.update(
-                        inferred.target_node
-                        for update in updates
-                        for inferred in update.inferred_updates
-                    )
-                    # Node status is exclusive: direct evidence supersedes inferred
-                    # mastery, including direct negative evidence.
-                    shadow_inferred_mastered -= (
-                        shadow_direct_mastered | shadow_direct_not_mastered
-                    )
-                    shadow_blocked.update(
-                        node for update in updates for node in update.blocked_nodes
-                    )
-                    shadow_contradicted = (
-                        shadow_direct_mastered | shadow_inferred_mastered
-                    ) & (shadow_blocked | shadow_direct_not_mastered)
-                    changed_nodes = {n for u in updates for n in u.changed_nodes}
-                    blocked = {n for u in updates for n in u.blocked_nodes}
-                    logger.debug(
-                        "graph_shadow item=%s events=%d changed=%d inferred=%d blocked=%d",
-                        item.item_id,
-                        len(events),
-                        len(changed_nodes),
-                        sum(len(update.inferred_updates) for update in updates),
-                        len(blocked),
-                    )
-            except Exception:  # noqa: BLE001
-                logger.debug("graph_shadow_failed", exc_info=True)
-
         session_variables = set(state.variables)
         touched = affected_mains(item, session_variables)
-
-        # Phase C: live graph blocking / mastered-node tracking used by eligibility
-        # filtering and queue invalidation. It must not change posterior math.
-        graph_processed_ids = set(state.graph_processed_evidence_ids)
-        graph_blocked_nodes = set(state.graph_blocked_nodes)
-        graph_direct_measured_nodes = set(state.graph_direct_measured_nodes)
-        graph_direct_mastered_nodes = set(state.graph_direct_mastered_nodes)
-        graph_direct_not_mastered_nodes = set(state.graph_direct_not_mastered_nodes)
-        graph_contradicted_nodes = set(state.graph_contradicted_nodes)
-        graph_last_affected_mains: set[str] = set()
-
-        if settings.graph_filtering_enabled or settings.graph_convergence_gate_enabled or settings.graph_utility_enabled:
-            try:
-                if self._graph_service is None:
-                    g = load_default_competency_graph()
-                    self._graph_service = CompetencyGraphService(g)
-
-                cfg = PropagationConfig()
-
-                for o in graded.outcomes:
-                    modality = str(o.get("modality") or item.modality)
-                    target_node = str(o.get("variable") or "")
-                    evidence_id = (
-                        f"{state.session_id}:{item.item_id}:{modality}:{target_node}"
-                    )
-                    if evidence_id in graph_processed_ids:
-                        continue
-
-                    graph_processed_ids.add(evidence_id)
-
-                    score = float(o.get("score", 0.0))
-                    weight = float(o.get("weight", 1.0))
-                    confidence = float(o.get("confidence", 0.0))
-
-                    if weight <= 0.0 or confidence <= 0.0 or not target_node:
-                        continue
-                    if target_node in self._graph_service.graph.nodes:
-                        graph_direct_measured_nodes.add(target_node)
-
-                    strong_success = (
-                        score >= cfg.strong_success_threshold
-                        and confidence >= cfg.minimum_propagation_confidence
-                    )
-                    strong_failure = (
-                        score <= cfg.strong_failure_threshold
-                        and confidence >= cfg.downward_block_confidence
-                    )
-
-                    if strong_success:
-                        graph_direct_mastered_nodes.add(target_node)
-                        graph_direct_not_mastered_nodes.discard(target_node)
-                        if settings.graph_filtering_enabled:
-                            graph_last_affected_mains.update(
-                                self._graph_service.mains_for_node(target_node)
-                            )
-
-                        if settings.graph_upward_inference_enabled:
-                            direct_effective = weight * confidence
-                            inferred = infer_upward_inferred_nodes(
-                                graph=self._graph_service,
-                                target_node=target_node,
-                                direct_effective=direct_effective,
-                                confidence=confidence,
-                                score=score,
-                                config=cfg,
-                            )
-                            for anc in inferred:
-                                graph_direct_mastered_nodes.add(anc)
-                                graph_direct_not_mastered_nodes.discard(anc)
-                                if settings.graph_filtering_enabled:
-                                    graph_last_affected_mains.update(
-                                        self._graph_service.mains_for_node(anc)
-                                    )
-
-                    if strong_failure:
-                        graph_direct_not_mastered_nodes.add(target_node)
-                        graph_direct_mastered_nodes.discard(target_node)
-                        if settings.graph_descendant_blocking_enabled:
-                            for desc in self._graph_service.descendants(
-                                target_node, include_self=False
-                            ):
-                                graph_blocked_nodes.add(desc)
-                                if settings.graph_filtering_enabled:
-                                    graph_last_affected_mains.update(
-                                        self._graph_service.mains_for_node(desc)
-                                    )
-            except Exception:  # noqa: BLE001
-                logger.debug("graph_phase_c_failed", exc_info=True)
-
-        graph_last_affected_mains &= session_variables
-        graph_contradicted_nodes = (
-            graph_direct_mastered_nodes
-            & (graph_blocked_nodes | graph_direct_not_mastered_nodes)
-        )
+        graph_delta = self._apply_graph_evidence(state, item, graded)
 
         queue = CandidateQueue(state.queue)
-        for variable in touched | graph_last_affected_mains:
+        for variable in touched | graph_delta.selection_affected_mains:
             queue.release(variable)
 
         served = [*state.served_item_ids, item.item_id]
-        updated = dict(state.variables)
-        if settings.graph_shared_main_rollup_enabled and settings.graph_upward_inference_enabled:
-            if self._graph_service is None:
-                g = load_default_competency_graph()
-                self._graph_service = CompetencyGraphService(g)
-            rolled = graph_rollup_outcomes(
-                graded.outcomes,
-                session_variables=session_variables,
-                graph=self._graph_service,
-                config=PropagationConfig(),
-            )
-        else:
-            rolled = rollup_outcomes(graded.outcomes, session_variables)
+        # An item is administered FOR the variable it was presented for, and it evidences
+        # every main it measures. Both are recorded: an unscorable response is still a
+        # question the candidate answered, and the blueprint must not ask again for a
+        # modality it already spent a slot on.
+        administered = {k: list(v) for k, v in state.administered_by_variable.items()}
+        asked_for = set(touched)
+        if state.presenting is not None:
+            asked_for.add(state.presenting.variable)
+        for variable in asked_for:
+            entries = administered.setdefault(variable, [])
+            if item.item_id not in entries:
+                entries.append(item.item_id)
 
+        updated = dict(state.variables)
+
+        # ONE path from a graded response to a posterior, and only direct evidence is on
+        # it. Inferred consequences reach selection and the report; they never multiply a
+        # likelihood, because a deduction FROM a response is not a second response.
+        rolled = rollup_outcomes(graded.outcomes, session_variables)
+
+        aberrant = list(state.aberrant_responses)
         for outcome in rolled:
             if outcome.variable not in updated:
                 continue
+            if outcome.moves_the_estimate:
+                # BEFORE the update: posterior-predictive means predictive of an
+                # observation not yet absorbed. Computing it after would make it
+                # self-referential and hide exactly the responses it exists to surface.
+                fit = personfit.residual(
+                    variable=outcome.variable,
+                    item_id=item.item_id,
+                    posterior=np.asarray(updated[outcome.variable].posterior, dtype=float),
+                    a=item.cat.a,
+                    b=item.cat.b,
+                    c=item.cat.c,
+                    score=outcome.score,
+                    weight=outcome.weight,
+                )
+                if fit.aberrant:
+                    logger.info(
+                        "aberrant response on %s: scored %.2f where %.2f was expected (z=%.2f)",
+                        outcome.variable, fit.score, fit.expected, fit.z,
+                    )
+                    aberrant.append(fit.as_dict())
             updated[outcome.variable] = variables_module.apply_outcome(
                 updated[outcome.variable],
                 outcome,
@@ -604,6 +828,10 @@ class Orchestrator:
                 item.cat.c,
                 item.item_id,
             )
+
+        # Required nodes a main was finalised without, recorded rather than inferred
+        # later from the absence of a set membership.
+        waived: dict[str, list[str]] = dict(state.graph_waived_nodes)
 
         # Convergence after every question, for every competency in the session.
         for variable, variable_state in list(updated.items()):
@@ -629,34 +857,32 @@ class Orchestrator:
                 administered_difficulties=administered_difficulties,
                 maximum_available_difficulty=maximum_available_difficulty,
             )
-            if (
-                candidate_state.finalised
-                and candidate_state.converged
-                and settings.graph_convergence_gate_enabled
-            ):
-                if self._graph_service is None:
-                    g = load_default_competency_graph()
-                    self._graph_service = CompetencyGraphService(g)
-
+            gate_graph = (
+                self._graph()
+                if (
+                    candidate_state.finalised
+                    and candidate_state.converged
+                    and graph_config.convergence_gate_enabled()
+                )
+                else None
+            )
+            if gate_graph is not None:
                 if not coverage_allows_convergence(
-                    self._graph_service,
+                    gate_graph,
                     variable,
-                    measured=graph_direct_measured_nodes,
-                    mastered=graph_direct_mastered_nodes,
-                    not_mastered=graph_direct_not_mastered_nodes,
-                    critical_only=settings.graph_coverage_critical_only,
+                    measured=graph_delta.measured,
+                    mastered=graph_delta.mastered,
+                    not_mastered=graph_delta.not_mastered,
+                    critical_only=self.coverage_critical_only(),
                 ):
                     missing = unmeasured_required_nodes(
-                        self._graph_service,
+                        gate_graph,
                         variable,
-                        measured=graph_direct_measured_nodes,
-                        mastered=graph_direct_mastered_nodes,
-                        not_mastered=graph_direct_not_mastered_nodes,
-                        critical_only=settings.graph_coverage_critical_only,
+                        measured=graph_delta.measured,
+                        mastered=graph_delta.mastered,
+                        not_mastered=graph_delta.not_mastered,
+                        critical_only=self.coverage_critical_only(),
                     )
-                    # Precision has precedence inside convergence.evaluate(). If coverage
-                    # vetoes that precision stop, restore the hard budget semantics rather
-                    # than repeatedly vetoing forever past CAT_MAX_QUESTIONS.
                     if remaining <= 0:
                         candidate_state = variable_state.model_copy(
                             update={
@@ -665,13 +891,26 @@ class Orchestrator:
                                 "converged": False,
                             }
                         )
+                        waived[variable] = sorted(missing)
                     elif variable_state.observations >= settings.cat_max_questions:
+                        # NOT `question_budget`. Measurement DID converge; the graph
+                        # refused to certify it because required nodes were never seen.
+                        # Reporting that as "ran out of questions" describes a stop the
+                        # session did not make, and makes the deadlock rate — a stated
+                        # rollout target — unmeasurable, because the two are then
+                        # indistinguishable in the record.
                         candidate_state = variable_state.model_copy(
                             update={
                                 "finalised": True,
-                                "stop_reason": "question_budget",
+                                "stop_reason": "graph_gates_waived",
                                 "converged": False,
                             }
+                        )
+                        waived[variable] = sorted(missing)
+                        logger.warning(
+                            "%s finalised with coverage waived — unmeasured=%s",
+                            variable,
+                            sorted(missing),
                         )
                     else:
                         logger.info(
@@ -690,6 +929,14 @@ class Orchestrator:
                 )
 
         elapsed = (time.time() - state.started_at) / 60.0 if state.started_at else 0.0
+        item_seconds = dict(state.item_seconds)
+        if state.presenting_since:
+            item_seconds[item.item_id] = round(time.time() - state.presenting_since, 2)
+        # What this item actually delivered, against what selection predicted it would.
+        # The only way the expected-weight table stops being an assertion.
+        realized = dict(state.realized_weight_by_item)
+        if rolled:
+            realized[item.item_id] = round(max(o.weight for o in rolled), 4)
         return (
             state.model_copy(
                 update={
@@ -699,22 +946,13 @@ class Orchestrator:
                     "served_item_ids": served,
                     "items_administered": state.items_administered + 1,
                     "elapsed_minutes": round(elapsed, 3),
-                    "graph_processed_evidence_ids": sorted(graph_processed_ids),
-                    "graph_blocked_nodes": sorted(graph_blocked_nodes),
-                    "graph_direct_measured_nodes": sorted(graph_direct_measured_nodes),
-                    "graph_direct_mastered_nodes": sorted(graph_direct_mastered_nodes),
-                    "graph_direct_not_mastered_nodes": sorted(
-                        graph_direct_not_mastered_nodes
-                    ),
-                    "graph_contradicted_nodes": sorted(graph_contradicted_nodes),
-                    "graph_shadow_direct_mastered_nodes": sorted(shadow_direct_mastered),
-                    "graph_shadow_inferred_mastered_nodes": sorted(shadow_inferred_mastered),
-                    "graph_shadow_direct_not_mastered_nodes": sorted(
-                        shadow_direct_not_mastered
-                    ),
-                    "graph_shadow_blocked_nodes": sorted(shadow_blocked),
-                    "graph_shadow_contradicted_nodes": sorted(shadow_contradicted),
-                    "graph_last_affected_mains": sorted(graph_last_affected_mains),
+                    "administered_by_variable": administered,
+                    "item_seconds": item_seconds,
+                    "realized_weight_by_item": realized,
+                    "presenting_since": 0.0,
+                    "aberrant_responses": aberrant,
+                    "graph_waived_nodes": waived,
+                    **graph_delta.as_state_update(),
                 }
             ),
             graded,
@@ -730,10 +968,10 @@ class Orchestrator:
     ) -> AssessmentState:
         """Refill queue slots for competencies whose estimates just moved."""
         touched = affected_mains(item, set(state.variables))
-        if settings.graph_filtering_enabled and state.graph_last_affected_mains:
+        if graph_config.filtering_enabled() and state.graph_last_affected_mains:
             touched = set(touched) | set(state.graph_last_affected_mains)
         updated = await self.fill_queue(state, use_llm=use_llm, rng=rng, only=touched)
-        if settings.graph_filtering_enabled:
+        if graph_config.filtering_enabled():
             updated = updated.model_copy(update={"graph_last_affected_mains": []})
         return updated
 
@@ -747,10 +985,13 @@ class Orchestrator:
         """
         if not state.open_variables:
             return True, "all_variables_finalised"
-        if state.items_administered >= settings.orchestrator_max_items:
-            return True, "item_budget"
+        # Time first: it is the constraint that actually binds, and a session that hit the
+        # clock must not be reported as having exhausted a question budget it never
+        # approached.
         if state.started_at and state.elapsed_minutes >= settings.orchestrator_time_limit_minutes:
             return True, "time_limit"
+        if state.items_administered >= settings.orchestrator_max_items:
+            return True, "item_budget"
         if state.presenting is None and not state.queue:
             return True, "no_candidates_available"
         return False, ""
@@ -760,33 +1001,102 @@ class Orchestrator:
         """The end-of-assessment report. Nothing here is inferred."""
         by_item = {i.item_id: i for i in self._bank.all_items()}
 
-        def modalities_for(variable_state: VariableState) -> list[str]:
+        def modalities_for(variable: str) -> list[str]:
+            """Every modality this main was ASKED in.
+
+            From the administered record rather than the scoring one: a voice answer that
+            failed to transcribe was still a voice question the candidate sat, and a
+            report that omits it describes an assessment that did not happen.
+            """
             return sorted(
                 {
                     by_item[item_id].modality
-                    for item_id in variable_state.served_item_ids
+                    for item_id in state.administered_by_variable.get(variable, [])
                     if item_id in by_item
                 }
             )
 
+        graph = self._graph()
+        aberrant_by_variable: dict[str, int] = {}
+        for record in state.aberrant_responses:
+            key = str(record.get("variable", ""))
+            aberrant_by_variable[key] = aberrant_by_variable.get(key, 0) + 1
+
         reports: list[VariableReport] = []
         for variable, variable_state in sorted(state.variables.items()):
             level, band = ability_band(variable_state.theta_hat)
+            measured = variable_state.observations > 0
+            bands = variables_module.band_probability(variable_state)
+            most_probable = max(bands, key=lambda k: bands[k]) if bands else None
+
+            unmeasured: list[str] = []
+            if graph is not None:
+                unmeasured = sorted(
+                    unmeasured_required_nodes(
+                        graph,
+                        variable,
+                        measured=set(state.graph_direct_measured_nodes),
+                        mastered=set(state.graph_direct_mastered_nodes),
+                        not_mastered=set(state.graph_direct_not_mastered_nodes),
+                        critical_only=self.coverage_critical_only(),
+                    )
+                )
+
+            precision_index = round(variables_module.certainty(variable_state), 1)
             reports.append(
                 VariableReport(
                     variable=variable,
                     theta_hat=round(variable_state.theta_hat, 4),
                     standard_error=round(variable_state.standard_error, 4),
-                    certainty_pct=round(variables_module.certainty(variable_state), 1),
-                    level=level if variable_state.observations else None,
-                    band=band if variable_state.observations else "Not assessed",
+                    precision_index_pct=precision_index,
+                    certainty_pct=precision_index,
+                    level=level if measured else None,
+                    band=band if measured else "Not assessed",
+                    p_reported_band=round(bands.get(level, 0.0), 4) if measured else 0.0,
+                    band_probability=round(max(bands.values()), 4) if bands else 0.0,
+                    most_probable_band=most_probable if measured else None,
+                    credible_interval_95=(
+                        tuple(round(x, 3) for x in variables_module.posterior_interval(variable_state))
+                        if measured
+                        else None
+                    ),
+                    aberrant_response_count=aberrant_by_variable.get(variable, 0),
+                    graph_coverage_satisfied=not unmeasured,
+                    graph_unmeasured_nodes=unmeasured,
                     observations=variable_state.observations,
                     finalised=variable_state.finalised,
                     converged=variable_state.converged,
                     stop_reason=variable_state.stop_reason,
-                    modalities_used=modalities_for(variable_state),
+                    modalities_used=modalities_for(variable),
                 )
             )
+
+        graph_report: dict = {}
+        if graph is not None:
+            graph_state = CompetencyGraphState.from_dict(state.graph_node_states)
+            graph_report = {
+                "nodes": [n.as_dict() for n in build_node_reports(graph, graph_state)],
+                "mains": [
+                    build_main_report(
+                        graph,
+                        graph_state,
+                        report.variable,
+                        unmeasured_nodes=report.graph_unmeasured_nodes,
+                        preview_inferred=state.graph_preview_inferred_nodes,
+                        preview_blocked=set(state.graph_preview_blocked_nodes),
+                    ).as_dict()
+                    for report in reports
+                ],
+                "contradictions": list(state.graph_contradictions),
+                "waived_nodes": dict(state.graph_waived_nodes),
+                "unblocking_probes": list(state.graph_unblocking_probes),
+                # The unvalidated-edge forecast. Present in every report, whatever the
+                # enforcement flags say — a record that only appears once a feature is
+                # enabled cannot be used to decide whether to enable it.
+                "preview_inferred_nodes": dict(state.graph_preview_inferred_nodes),
+                "preview_blocked_nodes": list(state.graph_preview_blocked_nodes),
+                "preview_refuted_nodes": list(state.graph_preview_refuted_nodes),
+            }
 
         return AssessmentReport(
             session_id=state.session_id,
@@ -794,4 +1104,7 @@ class Orchestrator:
             variables=reports,
             all_finalised=not state.open_variables,
             stop_reason=stop_reason,
+            graph=graph_report,
+            aberrant_responses=list(state.aberrant_responses),
+            seconds_by_item=dict(state.item_seconds),
         )

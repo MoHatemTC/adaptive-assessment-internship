@@ -64,10 +64,42 @@ def rollup_outcomes(
             GradedOutcome(
                 variable=main,
                 score=score,
-                weight=min(total_w, 1.0),
+                weight=combined_weight([g.weight for g in moving]),
                 confidence=max(g.confidence for g in moving),
                 source_item_id=moving[0].source_item_id,
                 modality=moving[0].modality,
             )
         )
     return rolled
+
+
+def combined_weight(weights: list[float]) -> float:
+    """How much evidence ONE response carries about one main competency.
+
+    Every outcome in a rollup comes from a single administered item, so summing their
+    weights adds one response to itself. `min(1, sum)` hid that behind a cap and made it
+    worse rather than better: a code question measuring two sub-competencies at 0.70 and
+    0.65 saturated at exactly 1.0 — the same posterior weight as a flawless full-credit
+    multiple-choice answer — so past the cap the whole fractional-weight apparatus stopped
+    distinguishing anything at all.
+
+    A probabilistic union instead:
+
+        w = 1 - prod(1 - w_i)
+
+    Three properties, and all three are why:
+
+    - **Bounded by one response.** Two partial measurements can never outweigh one whole
+      one, however many nodes an item touches.
+    - **Monotone.** Measuring a second sub-competency still adds evidence — 0.70 and 0.65
+      give 0.895, more than either alone — so an item that tests more is still worth more.
+    - **Exact at the edges.** A single outcome returns its own weight unchanged, so every
+      single-node item, which is every multiple-choice item, updates exactly as before.
+
+    It reads each sub-competency as partially independent evidence about the main, which
+    is the same assumption the weighted-mean score above already makes.
+    """
+    remaining = 1.0
+    for weight in weights:
+        remaining *= 1.0 - min(max(float(weight), 0.0), 1.0)
+    return 1.0 - remaining
