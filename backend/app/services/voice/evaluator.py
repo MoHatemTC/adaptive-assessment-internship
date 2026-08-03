@@ -73,7 +73,9 @@ async def evaluate(
         return GradedVoiceResponse(package=package, evaluation=evaluation, rubric=rubric)
 
     payload = _build_payload(item, package, rubric)
-    evaluation = await _call_grader(payload, item.item_id, rubric, package)
+    evaluation = await _call_grader(
+        payload, item.item_id, rubric, package, modality=item.modality
+    )
     coverage = len(evaluation.criterion_evidence) / max(len(rubric.get("criteria", [])), 1)
 
     if (
@@ -85,14 +87,21 @@ async def evaluate(
         or not evaluation.criterion_evidence
     ):
         payload["previous_attempt_errors"] = evaluation.flags
-        evaluation = await _call_grader(payload, item.item_id, rubric, package)
+        evaluation = await _call_grader(
+            payload, item.item_id, rubric, package, modality=item.modality
+        )
 
     evaluation = _apply_english_only_clamp(evaluation, package, rubric)
     return GradedVoiceResponse(package=package, evaluation=evaluation, rubric=rubric)
 
 
 async def _call_grader(
-    payload: dict, item_id: str, rubric: dict, package: VoiceResponsePackage
+    payload: dict,
+    item_id: str,
+    rubric: dict,
+    package: VoiceResponsePackage,
+    *,
+    modality: str = "open",
 ) -> VoiceEvaluation:
     try:
         # Async OpenAI + custom httpx is not auto-patched by langfuse.openai; pass
@@ -106,7 +115,11 @@ async def _call_grader(
                 item_id=item_id,
                 rubric_id=rubric.get("rubric_id"),
                 stage="grade",
-                modality="open",
+                # Threaded in, not read off an `item` this function never receives. It
+                # takes `item_id`, so `item.modality` was a NameError on the only path
+                # that reaches the grader — one that needs a live gateway, and so is
+                # invisible to every offline test.
+                modality=modality,
             ),
         )
     except (LLMUnavailable, ValueError, TypeError) as exc:
@@ -241,9 +254,20 @@ def _rubric_from_payload(item: BankItem) -> dict:
         "rubric_id": payload.get("rubric_id", f"inline_{item.item_id}"),
         "version": "1.0",
         "criteria": criteria,
-        "expected_answer_points": payload.get("expected_answer_points", []),
+        # Voice items author the same two things under different names. Without the
+        # aliases the grader prompt loses the answer checklist and the worked exemplar,
+        # and still returns a grade — a quietly worse one.
+        "expected_answer_points": (
+            payload.get("expected_answer_points")
+            or payload.get("evaluation_criteria")
+            or []
+        ),
         "common_pitfalls": payload.get("common_pitfalls", []),
-        "reference_answer": payload.get("reference_answer", ""),
+        "reference_answer": (
+            payload.get("reference_answer")
+            or payload.get("sample_strong_answer")
+            or ""
+        ),
     }
 
 

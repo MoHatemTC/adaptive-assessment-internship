@@ -2,17 +2,23 @@
 
 from __future__ import annotations
 
-from app.schemas.orchestration import GradedResponse
+from app.schemas.orchestration import GradedResponse, Modality
 from app.schemas.voice import GradedVoiceResponse
 from app.services.orchestrator.outcome import GradedOutcome
 from app.services.voice.evidence import project_competency_evidence
 
 
-def grade_voice(graded: GradedVoiceResponse) -> GradedResponse:
+def grade_voice(
+    graded: GradedVoiceResponse, *, modality: Modality = "open"
+) -> GradedResponse:
     """Turn a pre-evaluated voice response into GradedOutcomes.
 
     Loading is NOT multiplied again — it is folded into the criterion→competency
     projection, matching `_grade_code`.
+
+    `modality` is carried through to every outcome so a report can say whether the answer
+    was spoken or typed. The grading itself is identical for both: same evaluator, same
+    rubric criteria, same projection. Defaulting to "open" keeps every existing caller.
     """
     package = graded.package
     evaluation = graded.evaluation
@@ -27,7 +33,7 @@ def grade_voice(graded: GradedVoiceResponse) -> GradedResponse:
             else 0.0,
             confidence=float(e.confidence),
             source_item_id=package.item_id,
-            modality="open",
+            modality=modality,
         )
         for e in evidence
     ]
@@ -42,14 +48,14 @@ def grade_voice(graded: GradedVoiceResponse) -> GradedResponse:
                 weight=0.0,
                 confidence=0.0,
                 source_item_id=package.item_id,
-                modality="open",
+                modality=modality,
             )
             for cid in sorted(seen)
         ]
 
     return GradedResponse(
         item_id=package.item_id,
-        modality="open",
+        modality=modality,
         outcomes=[o.__dict__ for o in outcomes],
         detail={
             "outcome_status": package.outcome_status,

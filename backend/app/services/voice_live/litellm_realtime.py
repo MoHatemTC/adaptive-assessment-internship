@@ -16,6 +16,7 @@ from typing import Any, AsyncIterator
 from urllib.parse import quote, urlparse, urlunparse
 
 import websockets
+from websockets.exceptions import ConnectionClosed
 
 from app.config.settings import settings
 
@@ -242,6 +243,17 @@ class AsyncLiteLLMLiveSession:
                 self._dispatch(event)
         except asyncio.CancelledError:
             raise
+        except ConnectionClosed as exc:
+            # The REMOTE end hung up. Almost always a gateway keepalive expiring while the
+            # candidate is reading or thinking — an infrastructure event, not a fault in
+            # the interview. Reporting it as an `error` made `_collect_model_turn` raise
+            # and buried a routine disconnect under a traceback, when what the caller
+            # needs is to stop collecting and grade whatever was already captured.
+            logger.warning(
+                "LiteLLM realtime connection closed by the server (%s) — "
+                "ending the turn and keeping the transcript so far",
+                exc,
+            )
         except Exception as exc:  # noqa: BLE001
             logger.exception("LiteLLM realtime read failed")
             await self._events.put({"type": "error", "message": f"{type(exc).__name__}: {exc}"})

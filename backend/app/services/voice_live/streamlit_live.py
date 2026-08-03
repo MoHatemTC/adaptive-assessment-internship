@@ -37,6 +37,24 @@ logger = logging.getLogger(__name__)
 _READY_ACK = re.compile(r"^\s*ready[.!]?\s*$", re.IGNORECASE)
 
 
+# How long to wait for a turn's TRANSCRIPT after its audio has finished. Gemini Live
+# sometimes sends the two out of order; without this the question is recorded untexted and
+# its transcript reappears after the answer.
+TEXT_AFTER_AUDIO_GRACE_SECONDS = 2.5
+
+# How long to keep listening after a transcript CHUNK. The transcript does not arrive as
+# one message: a question came through as "You're facing" and then, separately, "an
+# intermittent bug that only shows up in production under load…". Closing the turn on the
+# first chunk records a fragment as the whole question and leaves the remainder to be
+# collected during the NEXT turn — so the transcript reads
+# `question-fragment / answer / question-remainder / answer`, which is the bug the grace
+# window was added to fix, one chunk further along.
+#
+# Short, because it is paid on every turn once the text has started arriving. The full
+# grace above still applies while there is no text at all.
+TEXT_CHUNK_QUIET_SECONDS = 0.6
+
+
 class StreamlitLiteLLMLiveBridge:
     """Sync façade over a background asyncio LiteLLM Live session."""
 
@@ -289,10 +307,33 @@ class StreamlitLiteLLMLiveBridge:
         assert self._session is not None
         pcm_chunks: list[bytes] = []
         text_parts: list[str] = []
-        deadline = asyncio.get_running_loop().time() + timeout
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        # Set once the turn is otherwise finished but its TEXT has not arrived. Gemini
+        # Live can deliver a question as audio and follow it with the transcript a moment
+        # later; breaking the instant audio stops means the turn is recorded with no text
+        # — and the text then lands inside the NEXT collection, so the question appears
+        # in the transcript AFTER the answer to it. Waiting briefly is what keeps the
+        # record in the order the conversation actually happened.
+        text_grace_deadline: float | None = None
 
-        async for event in self._session.events():
-            if asyncio.get_running_loop().time() > deadline:
+        # EVERY WAIT IS BOUNDED. `events()` blocks on an unbounded queue get, so a
+        # deadline checked only when an event arrives is not a deadline at all: if the
+        # stream goes quiet the collector waits forever and the caller sees nothing but a
+        # spinner until its own timeout fires, minutes later. Polling the queue with an
+        # explicit limit — the same thing `_drain_ready` does — means the worst case is
+        # `timeout`, always.
+        while True:
+            now = loop.time()
+            limit = deadline if text_grace_deadline is None else min(deadline, text_grace_deadline)
+            remaining = limit - now
+            if remaining <= 0:
+                break
+            try:
+                event = await asyncio.wait_for(
+                    self._session._events.get(), timeout=remaining
+                )
+            except asyncio.TimeoutError:
                 break
             kind = event.get("type")
             if kind == "audio":
@@ -303,6 +344,14 @@ class StreamlitLiteLLMLiveBridge:
                 piece = (event.get("text") or "").strip()
                 if piece and not _READY_ACK.match(piece):
                     text_parts.append(piece)
+                    if text_grace_deadline is not None:
+                        # The text we were waiting for — but not necessarily all of it.
+                        # Keep listening for a short quiet window instead of closing on
+                        # the first chunk; a question that arrives in two parts must be
+                        # recorded as one turn, before the answer to it.
+                        text_grace_deadline = min(
+                            loop.time() + TEXT_CHUNK_QUIET_SECONDS, deadline
+                        )
             elif kind == "user_transcript":
                 piece = (event.get("text") or "").strip()
                 if piece and cand_id:
@@ -315,8 +364,18 @@ class StreamlitLiteLLMLiveBridge:
                             )
                             break
             elif kind == "done":
-                if pcm_chunks or text_parts:
+                # `done` is not the last word on the transcript — text arrives after it,
+                # and in pieces. Breaking here because SOME text has landed is what let a
+                # half-transcribed question close a turn. Wait out a window instead: a
+                # short one when text is already flowing, the full grace when none has
+                # arrived at all.
+                if not pcm_chunks and not text_parts:
                     break
+                window = (
+                    TEXT_CHUNK_QUIET_SECONDS if text_parts else TEXT_AFTER_AUDIO_GRACE_SECONDS
+                )
+                text_grace_deadline = min(loop.time() + window, deadline)
+                continue
             elif kind in {"error", "closed"}:
                 if kind == "error":
                     raise RuntimeError(event.get("message") or "LiteLLM Live error")
@@ -328,13 +387,17 @@ class StreamlitLiteLLMLiveBridge:
         if wav:
             self.interviewer_wavs.append(wav)
 
-        if transcript:
+        if transcript or wav:
+            # Recorded even when the transcript never arrived. The candidate HEARD this
+            # turn, so leaving it out of the record misrepresents the interview — and it
+            # is what let a later text event attach itself to the wrong place.
             self._turn_counter += 1
             self.turns.append(
                 {
                     "turn_id": f"i{self._turn_counter}",
                     "role": role_label,
                     "text": transcript,
+                    "audio_only": not transcript,
                     "transcript_confidence": None,
                 }
             )

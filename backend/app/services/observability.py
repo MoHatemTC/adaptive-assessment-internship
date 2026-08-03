@@ -47,6 +47,7 @@ at once.
 from __future__ import annotations
 
 import logging
+import sys
 import time
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
@@ -127,16 +128,39 @@ def session(session_id: str, **attributes: Any) -> Iterator[None]:
     """Group everything traced inside this block under one assessment session.
 
     Yields unconditionally: a collector problem must not skip the work the block does.
+
+    IT ALSO MUST NOT SWALLOW OR DISGUISE THE BLOCK'S OWN FAILURE. This used to wrap the
+    `yield` in `try/except Exception` and then yield a second time — so any exception from
+    the body was thrown into the generator, caught here, and answered with another yield,
+    which `contextlib` reports as `RuntimeError: generator didn't stop after throw()`.
+    The real error was replaced by a message about generators, and a NameError on the
+    grading path read as a bug in the tracer.
+
+    The context is therefore entered and exited by hand: a failure to START or FINISH
+    tracing is swallowed and logged, and anything the body raises passes straight
+    through untouched.
     """
     if not configure() or _propagate is None:
         yield
         return
+
     try:
-        with _propagate(session_id=session_id, metadata=_clean(attributes)):
-            yield
+        context = _propagate(session_id=session_id, metadata=_clean(attributes))
+        context.__enter__()
     except Exception as exc:  # noqa: BLE001
-        logger.warning("langfuse session context failed (%s) — continuing untraced", exc)
+        logger.warning("langfuse session could not start (%s) — continuing untraced", exc)
         yield
+        return
+
+    try:
+        yield
+    finally:
+        try:
+            # The in-flight exception, so the collector records that the block failed —
+            # and the return value is ignored, because a tracer may not suppress it.
+            context.__exit__(*sys.exc_info())
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("langfuse session could not close (%s)", exc)
 
 
 def generation(name: str, **metadata: Any) -> dict[str, Any]:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -17,7 +18,7 @@ from app.config.settings import settings
 from app.schemas.orchestration import AssessmentState, BankItem
 from app.services import observability
 from app.services.code_adaptive import CodeAdaptiveSession, JsonQuestionRepository
-from app.services.orchestrator.bank import JsonUnifiedBank
+from app.services.orchestrator import registry, session_dump
 from app.services.orchestrator.grader import GraderAgent
 from app.services.orchestrator.orchestrator import Orchestrator
 from app.services.voice.evaluator import evaluate as evaluate_voice
@@ -66,6 +67,8 @@ class CreateRoomResponse(BaseModel):
 
 
 class CreateCatSessionRequest(BaseModel):
+    # Which registered bank to assess against. None uses `settings.active_bank`.
+    bank_id: str | None = None
     target_variables: list[str] | None = None
     intake: dict[str, int] | None = None
     confidence: dict[str, bool] | None = None
@@ -82,10 +85,31 @@ class CatAnswerRequest(BaseModel):
     seed: int = 0
 
 
-_cat_bank = JsonUnifiedBank()
 _cat_code_engine = CodeAdaptiveSession(JsonQuestionRepository())
-_cat_orchestrator = Orchestrator(_cat_bank, GraderAgent(code_engine=_cat_code_engine))
-_cat_sessions: dict[str, AssessmentState] = {}
+# The bank id travels with the session state, not with the request: a client that created
+# a session against one bank must not be able to answer it against another, and re-sending
+# the id on every call would make that possible by omission.
+_cat_sessions: dict[str, tuple[str, AssessmentState]] = {}
+_finished_sessions: set[str] = set()
+
+
+@lru_cache(maxsize=None)
+def _orchestrator_for(bank_id: str) -> Orchestrator:
+    """One orchestrator per bank, holding that bank's graph and coverage policy."""
+    return Orchestrator(
+        registry.get_bank(bank_id),
+        GraderAgent(code_engine=_cat_code_engine),
+        graph=registry.get_graph_service(bank_id),
+        coverage_critical_only=registry.profile(bank_id).coverage_critical_only,
+    )
+
+
+def _session(session_id: str) -> tuple[str, Orchestrator, AssessmentState]:
+    entry = _cat_sessions.get(session_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="session not found")
+    bank_id, state = entry
+    return bank_id, _orchestrator_for(bank_id), state
 
 
 def _ui_item(item: BankItem) -> dict:
@@ -95,6 +119,7 @@ def _ui_item(item: BankItem) -> dict:
         "modality": item.modality,
         "competency": item.competency,
         "sub_competency": item.sub_competency,
+        "estimated_time_seconds": item.expected_seconds,
     }
     if item.modality == "mcq":
         base.update(
@@ -112,11 +137,14 @@ def _ui_item(item: BankItem) -> dict:
                 "starter_code": payload.get("reference_solution", ""),
             }
         )
-    elif item.modality == "open":
+    elif item.modality in ("open", "voice"):
         base.update(
             {
                 "question": payload.get("question") or payload.get("prompt") or "",
                 "answer_format": payload.get("answer_format") or "spoken",
+                # Voice is answered by speaking; open may be typed. The client needs to
+                # know which without inspecting the payload.
+                "spoken": item.modality == "voice",
             }
         )
     return base
@@ -124,15 +152,17 @@ def _ui_item(item: BankItem) -> dict:
 
 def _cat_state_response(
     state: AssessmentState,
+    orchestrator: Orchestrator,
+    bank_id: str,
     *,
     stop_reason: str = "",
     last_graded: dict | None = None,
     open_debug: dict | None = None,
 ) -> dict:
-    stop, reason = _cat_orchestrator.should_stop(state)
+    stop, reason = orchestrator.should_stop(state)
     reason = stop_reason or reason
     presenting = None
-    pair = _cat_orchestrator.next_item(state)
+    pair = orchestrator.next_item(state)
     if pair is not None:
         item, candidate = pair
         presenting = {
@@ -140,9 +170,14 @@ def _cat_state_response(
             "criterion": candidate.criterion,
             "item": _ui_item(item),
         }
-    report = _cat_orchestrator.summarise(state, reason).model_dump() if stop else None
+    report = orchestrator.summarise(state, reason).model_dump() if stop else None
+    if stop and state.session_id not in _finished_sessions:
+        # Once per session: a poll of GET /sessions/{id} must not append it again.
+        _finished_sessions.add(state.session_id)
+        session_dump.record_session(state, bank_id, stop_reason=reason)
     return {
         "session_id": state.session_id,
+        "bank_id": bank_id,
         "stop": stop,
         "stop_reason": reason if stop else "",
         "items_administered": state.items_administered,
@@ -193,32 +228,45 @@ def live_config():
     }
 
 
+@app.get("/api/banks")
+def list_banks():
+    """Registered banks, so a client discovers them instead of hardcoding one."""
+    return {"active": settings.active_bank, "banks": registry.describe()}
+
+
 @app.post("/api/cat/sessions")
 async def create_cat_session(body: CreateCatSessionRequest):
-    targets = body.target_variables or _cat_bank.variables()
-    state = _cat_orchestrator.begin(
-        targets,
-        intake=body.intake or {},
-        confidence=body.confidence or {},
-    )
-    state = await _cat_orchestrator.fill_queue(
+    try:
+        bank_id = registry.resolve_bank_id(body.bank_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    orchestrator = _orchestrator_for(bank_id)
+    targets = body.target_variables or registry.get_bank(bank_id).variables()
+    try:
+        state = orchestrator.begin(
+            targets,
+            intake=body.intake or {},
+            confidence=body.confidence or {},
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    state = await orchestrator.fill_queue(
         state,
         use_llm=body.use_llm,
         rng=np.random.default_rng(body.seed),
     )
-    state = _cat_orchestrator.ensure_presenting(state)
-    _cat_sessions[state.session_id] = state
-    return _cat_state_response(state)
+    state = orchestrator.ensure_presenting(state)
+    _cat_sessions[state.session_id] = (bank_id, state)
+    return _cat_state_response(state, orchestrator, bank_id)
 
 
 @app.get("/api/cat/sessions/{session_id}")
 async def get_cat_session(session_id: str):
-    state = _cat_sessions.get(session_id)
-    if state is None:
-        raise HTTPException(status_code=404, detail="session not found")
-    state = _cat_orchestrator.ensure_presenting(state)
-    _cat_sessions[session_id] = state
-    return _cat_state_response(state)
+    bank_id, orchestrator, state = _session(session_id)
+    state = orchestrator.ensure_presenting(state)
+    _cat_sessions[session_id] = (bank_id, state)
+    return _cat_state_response(state, orchestrator, bank_id)
 
 
 @app.post("/api/cat/sessions/{session_id}/answer")
@@ -233,15 +281,13 @@ async def submit_cat_answer(
     seed_form: int | None = Form(default=None, alias="seed"),
     audio: UploadFile | None = File(default=None),
 ):
-    state = _cat_sessions.get(session_id)
-    if state is None:
-        raise HTTPException(status_code=404, detail="session not found")
+    bank_id, orchestrator, state = _session(session_id)
 
-    state = _cat_orchestrator.ensure_presenting(state)
-    pair = _cat_orchestrator.next_item(state)
+    state = orchestrator.ensure_presenting(state)
+    pair = orchestrator.next_item(state)
     if pair is None:
-        _cat_sessions[session_id] = state
-        return _cat_state_response(state)
+        _cat_sessions[session_id] = (bank_id, state)
+        return _cat_state_response(state, orchestrator, bank_id)
     item, _candidate = pair
 
     content_type = request.headers.get("content-type", "")
@@ -271,12 +317,12 @@ async def submit_cat_answer(
     if item.modality == "mcq":
         if chosen_index is None:
             raise HTTPException(status_code=400, detail="chosen_index is required for mcq")
-        new_state, graded = _cat_orchestrator.record_response(state, item, chosen_index)
+        new_state, graded = orchestrator.record_response(state, item, chosen_index)
     elif item.modality == "code":
         if not code:
             raise HTTPException(status_code=400, detail="code is required for code modality")
-        new_state, graded = _cat_orchestrator.record_response(state, item, code)
-    elif item.modality == "open":
+        new_state, graded = orchestrator.record_response(state, item, code)
+    elif item.modality in ("open", "voice"):
         transcript_text = (transcript or "").strip()
         filename = "answer.wav"
         if audio is not None:
@@ -288,11 +334,11 @@ async def submit_cat_answer(
         if not transcript_text:
             raise HTTPException(
                 status_code=400,
-                detail="transcript or audio file is required for open modality",
+                detail=f"transcript or audio file is required for {item.modality} modality",
             )
         package = package_from_text(item.item_id, transcript_text)
         graded_voice = await evaluate_voice(item, package, use_llm=use_llm)
-        new_state, graded = _cat_orchestrator.record_response(state, item, graded_voice)
+        new_state, graded = orchestrator.record_response(state, item, graded_voice)
         open_debug = {
             "transcript": transcript_text,
             "word_count": package.word_count,
@@ -301,16 +347,18 @@ async def submit_cat_answer(
     else:  # pragma: no cover
         raise HTTPException(status_code=400, detail=f"unsupported modality {item.modality}")
 
-    new_state = await _cat_orchestrator.after_response(
+    new_state = await orchestrator.after_response(
         new_state,
         item,
         use_llm=use_llm,
         rng=np.random.default_rng(seed),
     )
-    new_state = _cat_orchestrator.ensure_presenting(new_state)
-    _cat_sessions[session_id] = new_state
+    new_state = orchestrator.ensure_presenting(new_state)
+    _cat_sessions[session_id] = (bank_id, new_state)
     return _cat_state_response(
         new_state,
+        orchestrator,
+        bank_id,
         last_graded={
             "item_id": graded.item_id,
             "modality": graded.modality,

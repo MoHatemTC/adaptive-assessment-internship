@@ -21,9 +21,23 @@ logger = logging.getLogger(__name__)
 class VoiceAssessmentRunner:
     """Drives a multi-competency open/voice assessment."""
 
-    def __init__(self, bank: JsonUnifiedBank | None = None) -> None:
-        self.bank = bank or JsonUnifiedBank()
-        self.orchestrator = Orchestrator(self.bank, GraderAgent())
+    def __init__(
+        self,
+        bank: JsonUnifiedBank | None = None,
+        *,
+        bank_id: str | None = None,
+    ) -> None:
+        from app.services.orchestrator import registry
+
+        resolved = registry.resolve_bank_id(bank_id)
+        self.bank_id = resolved
+        self.bank = bank or registry.get_bank(resolved)
+        self.orchestrator = Orchestrator(
+            self.bank,
+            GraderAgent(),
+            graph=registry.get_graph_service(resolved),
+            coverage_critical_only=registry.profile(resolved).coverage_critical_only,
+        )
         self._started = 0.0
 
     def begin(
