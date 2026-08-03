@@ -23,7 +23,11 @@ class StopDecision:
     """
 
     should_stop: bool
-    reason: str = ""  # precision | stable_band | question_budget | bank_exhausted
+    # precision | stable_band | band_probability | question_budget | bank_exhausted
+    # The orchestrator adds two more it alone can know about: `time_budget` when no item
+    # fits the clock, and `graph_gates_waived` when measurement converged but required
+    # sub-competencies were never measured.
+    reason: str = ""
     converged: bool = False
 
     @property
@@ -84,6 +88,20 @@ def band_is_stable(band_history: list[int], window: int) -> bool:
     return len(set(band_history[-window:])) == 1
 
 
+def band_probability_stop_available(
+    band_probability: float | None, questions_answered: int, difficulty_corroborated: bool
+) -> bool:
+    """Whether a P(band) stop may fire. Off by default; see `evaluate`."""
+    return (
+        settings.cat_band_probability_stop_enabled
+        and band_probability is not None
+        and band_probability >= settings.cat_band_probability_target
+        and questions_answered
+        >= getattr(settings, "cat_precision_min_questions", settings.cat_min_questions)
+        and difficulty_corroborated
+    )
+
+
 def evaluate(
     standard_error: float,
     band_history: list[int],
@@ -91,9 +109,19 @@ def evaluate(
     items_remaining: int,
     *,
     difficulty_corroborated: bool = True,
+    band_probability: float | None = None,
 ) -> StopDecision:
     """Apply the stopping rules in precedence order.
 
+    0. BAND PROBABILITY — the reported level is probably right. OFF by default, and
+       ADDITIVE: it can end a competency early, never keep one open. It asks a different
+       question from precision — "is this level right" rather than "is this estimate
+       tight" — and near a band cut point it demands materially more evidence for the
+       same standard error (0.57 against 0.85 at the SE target). That is the rule
+       working, but it changes test length in a way that wants measuring before it is
+       trusted, which is why it ships off.
+       Keeps the observation floor regardless: a prior is not a measurement, however
+       concentrated it happens to look.
     1. PRECISION — SE at/under target, enough observations, and item difficulty that
        corroborates the estimated level.
        A single high-discrimination hit can crush SE; the observation floor stops that
@@ -103,6 +131,11 @@ def evaluate(
        ceiling and its own min-questions floor.
     3. BUDGET — out of questions, or out of items. Not convergence.
     """
+    if band_probability_stop_available(
+        band_probability, questions_answered, difficulty_corroborated
+    ):
+        return StopDecision(True, "band_probability", converged=True)
+
     if (
         standard_error <= settings.cat_se_target
         and questions_answered

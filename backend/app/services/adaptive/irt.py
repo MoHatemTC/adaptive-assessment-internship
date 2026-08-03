@@ -156,11 +156,79 @@ def ability_percentile(theta_hat: float) -> float:
     return float(np.clip(100.0 * 0.5 * (1.0 + erf(float(theta_hat) / sqrt(2.0))), 0.0, 100.0))
 
 
+BAND_LABELS = {1: "Novice", 2: "Developing", 3: "Competent", 4: "Proficient", 5: "Expert"}
+
+# Interior bands 1.6 logits wide. THE SINGLE SOURCE OF TRUTH for where a level begins —
+# anything that needs the inverse (the difficulty of the next band up, say) reads these
+# rather than re-deriving them, which is how a hardcoded inverse drifts out of step.
+#
+# WHY 1.6 AND NOT 1.0. A reported level is only worth reporting if it is probably right.
+# At the SE target, measured on this grid:
+#
+#     band width   P(reported band is the true band), at a band centre
+#     1.0          0.639
+#     1.2          0.719
+#     1.4          0.799
+#     1.6          0.850
+#
+# 1.0-wide bands over a [-4, 4] scale are as narrow as the eight-level scale the review
+# criticised, so five LABELS bought none of the honesty five BANDS were supposed to. The
+# instrument cannot resolve a tenth of a logit at six to twelve observations; claiming a
+# level that fine was a claim about precision nobody had.
+#
+# Near a cut point no width helps much (0.569 at 1.6) — a candidate sitting on a boundary
+# is genuinely between two levels. `p_reported_band` in the report says so.
+BAND_WIDTH = 1.6
+BAND_CUTS: tuple[float, ...] = (-2.4, -0.8, 0.8, 2.4)
+
+
 def ability_band(theta_hat: float) -> tuple[int, str]:
-    """Coarse 1-5 level and its label, for reporting alongside the percentile."""
-    level = int(np.clip(round(3 + theta_hat), 1, 5))
-    labels = {1: "Novice", 2: "Developing", 3: "Competent", 4: "Proficient", 5: "Expert"}
-    return level, labels[level]
+    """Coarse 1-5 level and its label, for reporting alongside the percentile.
+
+    `np.digitize` is right-open: a theta exactly on a cut point falls in the HIGHER band,
+    consistently, in both this function and `band_probabilities`. The previous
+    `round(3 + theta)` used banker's rounding, so -0.5 tied down to level 2 while +0.5
+    tied up to level 4 — an asymmetry with no meaning behind it.
+    """
+    level = int(np.digitize(float(theta_hat), BAND_CUTS)) + 1
+    return level, BAND_LABELS[level]
+
+
+def band_lower_bound(level: int) -> float | None:
+    """Where `level` begins on theta. None for the lowest band, which is unbounded."""
+    if level <= 1:
+        return None
+    if level - 2 < len(BAND_CUTS):
+        return BAND_CUTS[level - 2]
+    return None
+
+
+def band_probabilities(posterior: np.ndarray) -> dict[int, float]:
+    """P(theta in each band), summed over the grid.
+
+    Derived from `ability_band`'s OWN rule, applied per grid point, so the reported level
+    and its probability cannot disagree about where a boundary is.
+
+    This is the number a reader assumes `certainty_percent` already was. It is not: at
+    SE 0.55 the certainty scale reports 90 while P(the reported band is the true band) is
+    about 0.64 at a band centre and 0.47 near a boundary. Both are honest quantities; only
+    one of them answers "how likely is this level right".
+    """
+    weights = np.asarray(posterior, dtype=float)
+    if weights.shape != THETA_GRID.shape:
+        raise ValueError(
+            f"posterior length {weights.size} does not match THETA_GRID {THETA_GRID.size}"
+        )
+    total = float(weights.sum())
+    if total <= 0.0:
+        raise ValueError("posterior has non-positive mass")
+
+    levels = np.digitize(THETA_GRID, BAND_CUTS) + 1
+    normalised = weights / total
+    return {
+        int(level): float(normalised[levels == level].sum())
+        for level in sorted(set(levels.tolist()))
+    }
 
 
 def credible_interval(
