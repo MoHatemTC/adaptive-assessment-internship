@@ -7,13 +7,13 @@ import pytest
 from app.config.settings import settings
 from app.services.code_adaptive import trial
 from app.services.code_adaptive.execution import ExecutionEvidence, TestOutcome
-from app.services.orchestrator.bank import JsonUnifiedBank
+from app.services.orchestrator import registry
 from app.services.orchestrator.grader import GraderAgent
 
 
 @pytest.fixture
-def bank() -> JsonUnifiedBank:
-    return JsonUnifiedBank()
+def bank():
+    return registry.get_bank("DA")
 
 
 # --- tracks ------------------------------------------------------------------
@@ -48,7 +48,7 @@ def test_every_track_can_actually_be_assessed(bank):
 
 
 # --- trial runs --------------------------------------------------------------
-def _code_question(bank: JsonUnifiedBank) -> dict:
+def _code_question(bank) -> dict:
     item = next(i for i in bank.all_items() if i.modality == "code")
     return GraderAgent.as_code_question(item)
 

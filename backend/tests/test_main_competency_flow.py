@@ -5,9 +5,11 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from app.services.orchestrator.bank import JsonUnifiedBank
+from app.services.orchestrator import registry
+from tests.conftest import orchestrator_for
 from app.services.orchestrator.competency import (
     affected_mains,
+    combined_weight,
     main_competency,
     rollup_outcomes,
 )
@@ -17,13 +19,13 @@ from app.services.orchestrator.outcome import GradedOutcome
 
 
 @pytest.fixture(scope="module")
-def bank() -> JsonUnifiedBank:
-    return JsonUnifiedBank()
+def bank():
+    return registry.get_bank("DA")
 
 
 @pytest.fixture
 def orchestrator(bank) -> Orchestrator:
-    return Orchestrator(bank, GraderAgent())
+    return orchestrator_for("DA")
 
 
 def test_main_competency_prefix():
@@ -40,6 +42,48 @@ def test_rollup_combines_sub_competencies_under_one_main():
     assert len(rolled) == 1
     assert rolled[0].variable == "T1"
     assert rolled[0].score == pytest.approx(0.8 / 1.4)
+
+
+class TestCombinedWeight:
+    """One response carries one response's worth of evidence about a main.
+
+    It used to be `min(1, sum(w_i))`, which made an item measuring two sub-competencies at
+    0.70 and 0.65 count for exactly as much as a flawless full-credit multiple-choice
+    answer — and past the cap stopped distinguishing anything at all.
+    """
+
+    def test_two_partial_measurements_never_outweigh_one_whole_one(self):
+        raw = [
+            GradedOutcome("T1.1", score=1.0, weight=0.70).__dict__,
+            GradedOutcome("T1.2", score=1.0, weight=0.65).__dict__,
+        ]
+        rolled = rollup_outcomes(raw, {"T1"})
+        single_node = rollup_outcomes(
+            [GradedOutcome("T1.1", score=1.0, weight=1.0).__dict__], {"T1"}
+        )
+
+        assert rolled[0].weight == pytest.approx(0.895)
+        assert rolled[0].weight < single_node[0].weight
+
+    def test_measuring_more_still_counts_for_more(self):
+        """Monotone: a second sub-competency adds evidence, it does not merely cap."""
+        one = combined_weight([0.70])
+        two = combined_weight([0.70, 0.65])
+        three = combined_weight([0.70, 0.65, 0.40])
+
+        assert one < two < three < 1.0
+
+    def test_a_single_outcome_is_unchanged(self):
+        """Every multiple-choice item measures one node, and must update exactly as before."""
+        for weight in (0.25, 0.7, 1.0):
+            assert combined_weight([weight]) == pytest.approx(weight)
+
+    def test_it_is_bounded_by_one(self):
+        assert combined_weight([1.0, 0.5]) == pytest.approx(1.0)
+        assert combined_weight([0.9] * 8) <= 1.0
+
+    def test_an_unscorable_outcome_contributes_nothing(self):
+        assert combined_weight([0.6, 0.0]) == pytest.approx(0.6)
 
 
 class TestPresentingQueue:
@@ -61,8 +105,8 @@ class TestPresentingQueue:
         from app.services.code_adaptive.bank import JsonQuestionRepository
         from app.services.code_adaptive.session import CodeAdaptiveSession
 
-        orchestrator = Orchestrator(
-            bank, GraderAgent(CodeAdaptiveSession(JsonQuestionRepository()))
+        orchestrator = orchestrator_for(
+            "DA", GraderAgent(CodeAdaptiveSession(JsonQuestionRepository()))
         )
         cross = next(
             (

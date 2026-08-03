@@ -20,7 +20,24 @@ from pathlib import Path
 
 import pytest
 
+from app.config.settings import settings
+from app.config.voice_settings import voice_settings
 from app.services.code_adaptive import session as code_session
+from app.services.voice import evaluator as voice_evaluator
+
+
+async def _stub_open_evaluation(item, package, *, use_llm: bool = True):
+    """Grade an open answer with the deterministic heuristic, never the model."""
+    from app.schemas.voice import GradedVoiceResponse
+
+    rubric = voice_evaluator._rubric_from_payload(item)
+    return GradedVoiceResponse(
+        package=package,
+        evaluation=voice_evaluator._heuristic_from_rubric(
+            item.item_id, rubric, package, flags=["STUBBED"]
+        ),
+        rubric=rubric,
+    )
 from app.services.code_adaptive.execution import ExecutionEvidence, TestOutcome
 from app.services.code_adaptive.llm_evaluator import LLMEvaluation
 
@@ -49,15 +66,65 @@ def stub_boundaries(monkeypatch):
 
 
 @pytest.fixture
-def app(stub_boundaries):
+def app(stub_boundaries, monkeypatch):
+    """The tester on the DA bank.
+
+    Pinned, and not because the UI cannot serve a multi-competency bank — it can; see
+    `TestMultiCompetencyBank`. AppTest keeps widget nodes from screens that stopped
+    rendering, and a setup screen with one slider per chosen competency leaves more than
+    one such node behind, at which point the harness raises while re-submitting widget
+    state. Pinning keeps these tests about the FLOW, which is what they were written for.
+    """
     from streamlit.testing.v1 import AppTest
 
+    monkeypatch.setattr(settings, "active_bank", "DA")
+    # The DA bank contains open items. Live voice needs a gateway and a microphone, so the
+    # typed fallback — the same grading path, a different way of collecting the words — is
+    # what makes an offline end-to-end run possible at all.
+    monkeypatch.setattr(settings, "litellm_api_key", "")
+    monkeypatch.setattr(voice_settings, "allow_text_fallback", True)
+    monkeypatch.setattr(
+        voice_evaluator, "evaluate", _stub_open_evaluation, raising=True
+    )
     return AppTest.from_file(str(APP), default_timeout=180).run()
+
+
+def _pin_stale_widgets(app) -> None:
+    """Keep the setup screen's widget state readable after setup stops rendering.
+
+    AppTest holds a node for every widget it has ever seen and re-submits their state on
+    each `run()`. Streamlit, meanwhile, garbage-collects state belonging to widgets that
+    stopped rendering — so once setup is replaced the harness walks nodes whose keys are
+    gone and raises. That is a limitation of the harness, not of the app: a browser never
+    re-reads a widget that is not on screen.
+
+    The pinned value is arbitrary. Nothing reads it: everything the setup screen collected
+    was copied into plain session keys at Begin, which is the whole reason the widget keys
+    are free to disappear.
+    """
+    for widget in [*app.multiselect, *app.selectbox, *app.radio, *app.slider]:
+        key = getattr(widget, "key", None)
+        if not key:
+            continue
+        try:
+            widget.value
+            continue
+        except (KeyError, ValueError):
+            pass
+        options = list(getattr(widget, "options", ()) or ())
+        if widget in list(app.multiselect):
+            app.session_state[key] = options[:1]
+        elif options:
+            app.session_state[key] = options[0]
+        else:
+            app.session_state[key] = getattr(widget, "min", 1)
 
 
 def begin(app):
     """Start a session. By label, because setup is no longer the only screen with buttons."""
     next(b for b in app.button if b.label == "Begin assessment").click().run()
+    # Setup will never render again; pin its widget state before the next run walks it.
+    _pin_stale_widgets(app)
     return app
 
 
@@ -69,16 +136,24 @@ def answer_everything(app, limit: int = 30) -> int:
     session — once setup grew a track selector and per-competency confidence radios, that
     stopped being the answer control and the helper started driving the setup screen.
     """
+    _pin_stale_widgets(app)
     answered = 0
     for _ in range(limit):
         if app.exception or any("Assessment complete" in t.value for t in app.title):
             break
         answer = [r for r in app.radio if r.label == "Your answer"]
         solution = [t for t in app.text_area if t.label == "Your solution"]
+        written = [t for t in app.text_area if t.label == "Written answer (fallback)"]
         if answer:
             answer[0].set_value(answer[0].options[0])
         elif solution:
             solution[0].set_value("def f():\n    return 1\n")
+        elif written:
+            written[0].set_value(
+                "I would inspect the schema and the null counts first, confirm the "
+                "dtypes match what the join expects, and check the index for "
+                "duplicates before trusting any aggregate computed from it."
+            )
         submit = [b for b in app.button if b.label.startswith("Submit")]
         if not submit:
             break
@@ -94,10 +169,19 @@ class TestSetupScreen:
         assert app.slider, "no self-rating"
         assert any(b.label == "Begin assessment" for b in app.button)
 
-    def test_the_competency_choice_offers_all_ten(self, app):
-        options = app.multiselect[0].options
-        assert len(options) == 10
-        assert all(f"C{i}" in "".join(options) for i in range(1, 11))
+    def test_the_competency_choice_offers_every_main_the_bank_can_assess(self, app):
+        """Whatever the bank measures is offered — no hardcoded competency list.
+
+        This used to assert ten C-codes, from a bank that no longer ships. A selector that
+        silently omits a main a candidate could have been assessed on is the bug worth
+        catching, and it is bank-independent.
+        """
+        from app.services.orchestrator import registry
+
+        options = "".join(app.multiselect[0].options)
+        expected = registry.get_bank("DA").variables()
+        assert expected
+        assert all(code in options for code in expected)
 
     def test_it_defaults_to_at_least_one_main_competency(self, app):
         assert app.multiselect[0].value
@@ -248,3 +332,29 @@ class TestDeploymentRequirements:
             if backend[name] != ui[name]
         }
         assert not disagreements, f"constraints differ: {disagreements}"
+
+
+class TestMultiCompetencyBank:
+    """The default bank has three mains. Setup must offer all three and start cleanly.
+
+    Deliberately stops after Begin: driving a long session through AppTest trips its own
+    stale-widget handling once setup renders more than one per-competency slider, which
+    says nothing about the UI (see the `app` fixture).
+    """
+
+    def test_setup_offers_every_main_and_begins_without_raising(self, stub_boundaries):
+        from streamlit.testing.v1 import AppTest
+
+        from app.services.orchestrator import registry
+
+        app = AppTest.from_file(str(APP), default_timeout=180).run()
+        assert not app.exception
+
+        options = "".join(app.multiselect[0].options)
+        for code in registry.get_bank("AIE").variables():
+            assert code in options, f"{code} missing from the competency selector"
+
+        next(b for b in app.button if b.label == "Begin assessment").click().run()
+        assert not app.exception
+        # The session screen, with a question presented against a three-main bank.
+        assert [tab.label for tab in app.tabs][:3] == ["Queue", "Mathematics", "DAG"]

@@ -6,7 +6,7 @@ import asyncio
 from dataclasses import dataclass
 
 from app.schemas.orchestration import BankItem
-from app.services.orchestrator.bank import JsonUnifiedBank
+from app.services.orchestrator import registry
 from app.services.orchestrator.grader import GraderAgent
 from app.services.voice.evaluator import evaluate, package_from_text
 from app.services.voice.grader import grade_voice
@@ -45,13 +45,13 @@ class _FakeCodeEngine:
 
 
 def test_bank_contains_all_three_modalities():
-    items = JsonUnifiedBank().all_items()
+    items = registry.get_bank("DA").all_items()
     modalities = {i.modality for i in items}
     assert {"mcq", "code", "open"}.issubset(modalities)
 
 
 def test_open_items_carry_voice_or_inline_rubric():
-    opens = [i for i in JsonUnifiedBank().all_items() if i.modality == "open"]
+    opens = [i for i in registry.get_bank("DA").all_items() if i.modality == "open"]
     assert opens
     for item in opens:
         payload = item.payload
@@ -62,7 +62,7 @@ def test_open_items_carry_voice_or_inline_rubric():
 
 
 def test_open_heuristic_path_grades_without_llm():
-    item = next(i for i in JsonUnifiedBank().all_items() if i.modality == "open")
+    item = next(i for i in registry.get_bank("DA").all_items() if i.modality == "open")
     package = package_from_text(
         item.item_id,
         "Lists are mutable while tuples are immutable. I use tuples for fixed records.",
@@ -74,7 +74,7 @@ def test_open_heuristic_path_grades_without_llm():
 
 
 def test_code_grader_uses_injected_code_engine():
-    item: BankItem = next(i for i in JsonUnifiedBank().all_items() if i.modality == "code")
+    item: BankItem = next(i for i in registry.get_bank("DA").all_items() if i.modality == "code")
     grader = GraderAgent(code_engine=_FakeCodeEngine())  # type: ignore[arg-type]
     graded = grader.grade(item, "def solve():\n    return 1\n")
     assert graded.modality == "code"

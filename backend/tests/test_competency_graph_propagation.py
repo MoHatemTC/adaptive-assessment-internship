@@ -43,8 +43,13 @@ def test_code_success_can_infer_enabled_prerequisites() -> None:
         config=PropagationConfig(),
     )
 
-    inferred = {event.target_node for event in update.inferred_updates}
+    # `.node`, not `.target_node`: an inferred signal is deliberately NOT an evidence
+    # event. It carries no score and no weight, so it cannot become a graded outcome.
+    inferred = {signal.node for signal in update.inferred_signals}
     assert inferred == {"DA.1", "DA.2", "DA.3", "DA.4"}
+    assert all(signal.source_node == "DA.6" for signal in update.inferred_signals)
+    assert not hasattr(update.inferred_signals[0], "score")
+    assert not hasattr(update.inferred_signals[0], "weight")
 
 
 def test_non_strong_score_does_not_mark_mastery_or_propagate() -> None:

@@ -15,15 +15,16 @@ from app.services.code_adaptive.execution import ExecutionEvidence, TestOutcome
 from app.services.code_adaptive.llm_evaluator import LLMEvaluation
 from app.services.code_adaptive.session import CodeAdaptiveSession
 from app.services.orchestrator import orchestrator as orchestrator_module
-from app.services.orchestrator.bank import JsonUnifiedBank
+from app.services.orchestrator import registry
+from tests.conftest import orchestrator_for
 from app.services.orchestrator.grader import GraderAgent
 from app.services.orchestrator.orchestrator import Orchestrator
 from app.services.code_adaptive import session as code_session_module
 
 
 @pytest.fixture(scope="module")
-def bank() -> JsonUnifiedBank:
-    return JsonUnifiedBank()
+def bank():
+    return registry.get_bank("DA")
 
 
 @pytest.fixture
@@ -47,7 +48,7 @@ def stub_boundaries(monkeypatch):
 
 @pytest.fixture
 def engine(bank, stub_boundaries) -> Orchestrator:
-    return Orchestrator(bank, GraderAgent(CodeAdaptiveSession(JsonQuestionRepository())))
+    return orchestrator_for("DA", GraderAgent(CodeAdaptiveSession(JsonQuestionRepository())))
 
 
 @pytest.fixture(scope="module")
@@ -59,11 +60,44 @@ def targets(bank) -> list[str]:
     return mixed + single
 
 
+ANSWER_TEXT = (
+    "A dataframe is a two dimensional labelled structure. I would inspect the schema "
+    "first, check the null counts per column, then confirm the dtypes match what the "
+    "downstream join expects, because a silent type coercion there is what usually "
+    "produces the wrong row count later. I would also check the index for duplicates."
+)
+
+
 def answer_for(item, correct: bool = True):
-    """A response of the right shape for the item's modality."""
+    """A response of the right shape for the item's modality.
+
+    Open and voice items arrive pre-evaluated — `GraderAgent` grades, it does not
+    evaluate, and evaluation is async. The heuristic evaluator is the deterministic,
+    offline path the production code already falls back to when the grader is
+    unreachable, so it is what a stubbed session should use.
+    """
     if item.modality == "mcq":
         index = int(item.payload["answer_index"])
         return index if correct else (index + 1) % len(item.payload["options"])
+    if item.modality in ("open", "voice"):
+        from app.schemas.voice import GradedVoiceResponse
+        from app.services.voice.evaluator import (
+            _heuristic_from_rubric,
+            _rubric_from_payload,
+            package_from_text,
+        )
+
+        rubric = _rubric_from_payload(item)
+        package = package_from_text(
+            item.item_id, ANSWER_TEXT if correct else "I do not know."
+        )
+        return GradedVoiceResponse(
+            package=package,
+            evaluation=_heuristic_from_rubric(
+                item.item_id, rubric, package, flags=["STUBBED"]
+            ),
+            rubric=rubric,
+        )
     return "def solution(*args, **kwargs):\n    return None\n"
 
 
@@ -173,7 +207,7 @@ class TestInfrastructureFailure:
         monkeypatch.setattr(
             code_session_module, "llm_evaluate", lambda *a, **k: LLMEvaluation(available=False)
         )
-        engine = Orchestrator(bank, GraderAgent(CodeAdaptiveSession(JsonQuestionRepository())))
+        engine = orchestrator_for("DA", GraderAgent(CodeAdaptiveSession(JsonQuestionRepository())))
 
         # Administered directly rather than through the queue: the point is what an
         # infrastructure failure does to an estimate, not which item selection happened to
@@ -208,10 +242,22 @@ class TestGrader:
         with pytest.raises(ValueError, match="out of range"):
             GraderAgent().grade(item, 99)
 
-    def test_open_ended_grading_is_refused_not_guessed(self, bank):
+    def test_an_unknown_modality_is_refused_not_guessed(self, bank):
+        """A modality with no grader must raise, never fall through to a default."""
+        item = next(i for i in bank.all_items() if i.modality == "mcq")
+        faked = item.model_copy(update={"modality": "telepathy"})
+        with pytest.raises(NotImplementedError):
+            GraderAgent().grade(faked, "an essay")
+
+    def test_an_open_item_will_not_grade_raw_text(self, bank):
+        """`open`/`voice` are graded, not evaluated, here — the caller must evaluate first.
+
+        Accepting a bare string would mean the grader inventing an evaluation, which is
+        precisely the boundary the design forbids.
+        """
         item = next(i for i in bank.all_items() if i.modality == "mcq")
         faked = item.model_copy(update={"modality": "open", "open": {}})
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(TypeError, match="GradedVoiceResponse"):
             GraderAgent().grade(faked, "an essay")
 
 

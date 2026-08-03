@@ -100,10 +100,10 @@ async def test_the_picker_falls_back_when_the_gateway_refuses(monkeypatch):
 
     monkeypatch.setattr(llm_module, "_one_call", _refuse)
 
-    from app.services.orchestrator.bank import JsonUnifiedBank
+    from app.services.orchestrator import registry
     from app.services.orchestrator.variables import seed_variable
 
-    pool = JsonUnifiedBank().shortlist("DA", exclude=set())
+    pool = registry.get_bank("DA").shortlist("DA", exclude=set())
     state = seed_variable("DA", self_rating=3)
 
     candidate = await picker_module.pick(pool, state, "DA", use_llm=True)
@@ -133,10 +133,10 @@ async def test_the_picker_sends_serialised_text(monkeypatch):
 
     monkeypatch.setattr(llm_module, "_one_call", _capture)
 
-    from app.services.orchestrator.bank import JsonUnifiedBank
+    from app.services.orchestrator import registry
     from app.services.orchestrator.variables import seed_variable
 
-    pool = JsonUnifiedBank().shortlist("DA", exclude=set())
+    pool = registry.get_bank("DA").shortlist("DA", exclude=set())
     state = seed_variable("DA", self_rating=3)
 
     await picker_module.pick(pool, state, "DA", use_llm=True)

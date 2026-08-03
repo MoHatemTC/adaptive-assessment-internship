@@ -13,7 +13,8 @@ import pytest
 from app.schemas.orchestration import BankItem, VariableState
 from app.services.adaptive.irt import posterior_update, uniform_prior
 from app.services.orchestrator import variables as variables_module
-from app.services.orchestrator.bank import JsonUnifiedBank
+from app.services.orchestrator import registry
+from tests.conftest import orchestrator_for
 from app.services.orchestrator.calibration import (
     code_cat_parameters,
     mastery_difficulty_to_theta,
@@ -28,13 +29,14 @@ from app.services.orchestrator.queue import CandidateQueue
 
 
 @pytest.fixture(scope="module")
-def bank() -> JsonUnifiedBank:
-    return JsonUnifiedBank()
+def bank():
+    """Pinned to DA: these assertions are about a one-track bank."""
+    return registry.get_bank("DA")
 
 
 @pytest.fixture
 def orchestrator(bank) -> Orchestrator:
-    return Orchestrator(bank, GraderAgent())
+    return orchestrator_for("DA")
 
 
 @pytest.fixture(scope="module")
@@ -182,9 +184,16 @@ class TestGraphCoverageGate:
             or updated.graph_shadow_direct_mastered_nodes
         )
 
-    def test_budget_stop_still_finalises_without_full_coverage(
+    def test_a_coverage_veto_at_the_cap_reports_waived_gates_not_a_budget_stop(
         self, orchestrator, bank, monkeypatch
     ):
+        """The distinction the review's C5 asks for.
+
+        Measurement DID converge; the graph refused to certify it because required nodes
+        were never measured. Calling that `question_budget` describes a stop the session
+        did not make, and makes the deadlock rate unmeasurable — the two cases become
+        indistinguishable in the record.
+        """
         from app.config import settings as settings_module
         from app.services.orchestrator import variables as variables_module
 
@@ -208,8 +217,8 @@ class TestGraphCoverageGate:
             update={"variables": {main: variable_state}}
         )
 
-        # Precision wins precedence in convergence.evaluate. The graph gate must restore
-        # the hard question budget when it vetoes precision for incomplete coverage.
+        # Precision wins precedence in convergence.evaluate. The graph gate vetoes it,
+        # and must then finalise rather than veto forever past CAT_MAX_QUESTIONS.
         def force_precision(state, items_remaining, **kwargs):
             return state.model_copy(
                 update={
@@ -227,7 +236,10 @@ class TestGraphCoverageGate:
         )
         assert updated.variables[main].finalised is True
         assert updated.variables[main].converged is False
-        assert updated.variables[main].stop_reason == "question_budget"
+        assert updated.variables[main].stop_reason == "graph_gates_waived"
+        # And it records WHAT was waived, so the omission is auditable rather than
+        # reconstructed later from the absence of a set membership.
+        assert updated.graph_waived_nodes[main]
 
 
 class TestCalibration:
@@ -385,7 +397,7 @@ class TestFinalisation:
             administered_difficulties=[-1.68, -2.38, -2.09, -1.49, -1.42, -1.45],
         )
         assert held.finalised is False
-        assert variables_module.upper_challenge_difficulty(state) == pytest.approx(-0.75)
+        assert variables_module.upper_challenge_difficulty(state) == pytest.approx(-1.05)
 
     def test_next_band_challenge_allows_precise_finalisation(self):
         state = VariableState(
