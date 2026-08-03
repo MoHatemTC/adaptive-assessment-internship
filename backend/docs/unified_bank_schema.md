@@ -77,7 +77,7 @@ How the engine discovers mains:
 | Field | Type | Rules |
 |-------|------|-------|
 | `item_id` | string | **Unique** across the whole file |
-| `modality` | `"mcq"` \| `"code"` \| `"open"` | Must match which payload key is present |
+| `modality` | `"mcq"` \| `"code"` \| `"open"` \| `"voice"` | Must match which payload key is present |
 | `status` | string | Use `"active"` to include in selection; anything else is ignored |
 | `competency` | string | Main / track display name |
 | `sub_competency` | string | Human label for the primary sub |
@@ -86,9 +86,23 @@ How the engine discovers mains:
 | `measures[].weight` | float | `(0, 1]` loading on that variable |
 | `cat.a` | float | Discrimination `(0, 3]` |
 | `cat.b` | float | Difficulty on θ `[-4, 4]` |
-| `cat.c` | float | Guessing floor `[0, 1)`; use `0.0` for code/open |
+| `cat.c` | float | Guessing floor `[0, 1)`; use `0.0` for code/open/voice |
+| `estimated_time_seconds` | float | Optional but **strongly wanted** for code and voice. Selection ranks on information per MINUTE, so an item without one is scored against a per-modality default rather than its real cost |
+| `minimum_success_confidence` | float | Optional. A stricter grader-confidence floor for THIS item before the graph may infer from it. Only ever tightens the global floor |
 
-Exactly **one** of `mcq`, `code`, or `open` must be non-null and match `modality`.
+Exactly **one** of `mcq`, `code`, `open`, or `voice` must be non-null and match `modality`.
+
+### `open` versus `voice`
+
+They grade identically — same evaluator, same four rubric criteria, same competency
+projection. The difference is how the answer is collected and how the report describes it:
+
+- `open` may be typed. `voice` is a spoken interview, and selects the live-interview path.
+- The report distinguishes them, so a reader can tell 35 minutes of spoken interview from
+  a typed essay. That is the whole reason they are separate.
+
+A `voice` payload may use `evaluation_criteria` and `sample_strong_answer` in place of
+`expected_answer_points` and `reference_answer`; the evaluator accepts either.
 
 ### CAT parameter guidance for authors
 
@@ -374,13 +388,15 @@ Answers are graded in **English only**. Non-English speech is clamped near zero.
 
 For **each main** you ship (`PY`, `BE`, …):
 
-1. At least one active item in **each modality** you want assessed (mcq / code / open), or accept that modality will never appear.
+1. At least one active item in **each modality** you want assessed (mcq / code / open / voice), or accept that modality will never appear.
 2. Difficulty (`cat.b`) spans easy → hard so CAT can escalate.
 3. Sub-competencies have enough items that early repeats are unlikely within ~12 questions.
 4. All `item_id`s unique; all `measures[].variable` use the agreed ID scheme.
 5. Code items: public + hidden tests; public tests never leak the full key.
 6. Open items: reference answer + expected points + rubric descriptors filled in.
-7. Optional: companion `competency_graph.json` using the same IDs (`MAIN`, `MAIN.N`).
+7. **`sub_competency` labels must be consistent per variable id.** The same `C6.8` must mean the same thing in every modality. This is not cosmetic: the engine keys on the ID, so two authors numbering differently silently records one candidate's answer as evidence about a different skill. It happened — see `app/data/AIE_competency_map.md`.
+8. `estimated_time_seconds` on every code and voice item. Selection divides information by it, so an unstated time is a guess that decides the modality mix.
+9. Optional: companion `competency_graph.json` using the same IDs (`MAIN`, `MAIN.N`). If you ship prerequisite edges, ship them with `allow_upward_inference` and `allow_downward_blocking` set to `false` until they have been validated against real response data.
 
 ---
 
@@ -393,5 +409,15 @@ For **each main** you ship (`PY`, `BE`, …):
 | (Optional) Graph | `competency_graph.json` | Prerequisites / contributes_to |
 | QA notes | markdown | Known weak items, calibration TODOs |
 
-Hand the bank file to engineering as a drop-in replacement for
-`backend/app/data/question_bank.json` (or a path passed to `JsonUnifiedBank`).
+Banks are registered, not replaced. Add a row to `BANK_REGISTRY` in
+`app/services/orchestrator/registry.py` naming the bank file and its competency graph, and
+set `ACTIVE_BANK` to make it the default. Existing banks stay on disk and stay selectable —
+a session names its bank at creation and the choice is locked for that session.
+
+A bank and its graph are selected **together**. Pairing a bank with another bank's graph
+makes every required coverage node unmeasurable and vetoes convergence for the whole
+session, which presents as a measurement fault rather than a configuration one.
+
+Before shipping, check the coverage arithmetic: covering `R` required sub-competencies
+costs `R` questions when each item measures one node, and the per-competency cap is 12.
+`tests/test_bank_registry.py` fails the build when `R > cap - 2`.

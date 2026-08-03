@@ -107,12 +107,13 @@ async def main() -> None:
     parser.add_argument("--sessions", type=int, default=10)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--max-steps", type=int, default=30)
+    parser.add_argument("--bank", default=None, help="registered bank id (default: ACTIVE_BANK)")
+    parser.add_argument("--mains", type=int, default=2, help="how many main competencies to run")
 
     # Graph flags
     parser.add_argument("--graph-filtering", action="store_true")
     parser.add_argument("--graph-upward-inference", action="store_true")
     parser.add_argument("--graph-descendant-blocking", action="store_true")
-    parser.add_argument("--graph-shared-main-rollup", action="store_true")
     parser.add_argument("--graph-utility", action="store_true")
     parser.add_argument("--graph-convergence-gate", action="store_true")
     parser.add_argument("--graph-shadow-mode", action="store_true")
@@ -123,7 +124,6 @@ async def main() -> None:
     _set_env_bool("GRAPH_FILTERING_ENABLED", args.graph_filtering)
     _set_env_bool("GRAPH_UPWARD_INFERENCE_ENABLED", args.graph_upward_inference)
     _set_env_bool("GRAPH_DESCENDANT_BLOCKING_ENABLED", args.graph_descendant_blocking)
-    _set_env_bool("GRAPH_SHARED_MAIN_ROLLUP_ENABLED", args.graph_shared_main_rollup)
     _set_env_bool("GRAPH_UTILITY_ENABLED", args.graph_utility)
     _set_env_bool("GRAPH_CONVERGENCE_GATE_ENABLED", args.graph_convergence_gate)
     _set_env_bool("GRAPH_SHADOW_MODE", args.graph_shadow_mode)
@@ -133,17 +133,25 @@ async def main() -> None:
 
     from app.config.settings import settings
     from app.services.code_adaptive import CodeAdaptiveSession, JsonQuestionRepository
-    from app.services.orchestrator.bank import JsonUnifiedBank
+    from app.services.orchestrator import registry
     from app.services.orchestrator.grader import GraderAgent
     from app.services.orchestrator.orchestrator import Orchestrator
 
-    base_bank = JsonUnifiedBank()
+    bank_id = registry.resolve_bank_id(args.bank)
+    base_bank = registry.get_bank(bank_id)
+    # Open/voice items need a networked evaluator, so the simulation runs on the
+    # deterministic modalities only. Reported below, never silently assumed.
     bank = FilteredBank(base_bank, allowed_modalities={"mcq", "code"})
 
     code_engine = CodeAdaptiveSession(JsonQuestionRepository())
-    orchestrator = Orchestrator(bank, GraderAgent(code_engine=code_engine))
+    orchestrator = Orchestrator(
+        bank,
+        GraderAgent(code_engine=code_engine),
+        graph=registry.get_graph_service(bank_id),
+        coverage_critical_only=registry.profile(bank_id).coverage_critical_only,
+    )
 
-    targets = base_bank.variables()[:2]
+    targets = base_bank.variables()[: max(1, args.mains)]
     if not targets:
         raise SystemExit("No variables available in bank.")
 
@@ -162,11 +170,13 @@ async def main() -> None:
     mean_finalised = float(np.mean([r.variables_finalised for r in results])) if results else 0.0
 
     summary = {
+        "bank_id": bank_id,
+        "simulated_modalities": ["mcq", "code"],
         "settings": {
             "graph_filtering_enabled": settings.graph_filtering_enabled,
             "graph_upward_inference_enabled": settings.graph_upward_inference_enabled,
             "graph_descendant_blocking_enabled": settings.graph_descendant_blocking_enabled,
-            "graph_shared_main_rollup_enabled": settings.graph_shared_main_rollup_enabled,
+            "competency_graph_enabled": settings.competency_graph_enabled,
             "graph_utility_enabled": settings.graph_utility_enabled,
             "graph_convergence_gate_enabled": settings.graph_convergence_gate_enabled,
             "graph_shadow_mode": settings.graph_shadow_mode,
