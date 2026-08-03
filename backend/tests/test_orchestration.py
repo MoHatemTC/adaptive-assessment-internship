@@ -116,15 +116,17 @@ class TestCalibration:
         """Nobody guesses their way to a passing test suite."""
         assert code_cat_parameters(0.4, 1.2)["c"] == 0.0
 
-    def test_open_ended_calibration_is_refused_not_guessed(self):
-        with pytest.raises(NotImplementedError):
-            open_cat_parameters(0.5, 1.0)
+    def test_open_ended_calibration_uses_rubric_floor_not_guessing(self):
+        params = open_cat_parameters(0.5, 1.0)
+        assert params["c"] == pytest.approx(0.15)
+        assert params["b"] == pytest.approx(0.0)
+        assert params["a"] == pytest.approx(1.0)
 
 
 class TestUnifiedBank:
-    def test_both_modalities_are_present(self, bank):
+    def test_all_modalities_are_present(self, bank):
         modalities = {i.modality for i in bank.all_items()}
-        assert modalities == {"mcq", "code"}
+        assert modalities == {"mcq", "code", "voice"}
 
     def test_every_item_carries_theta_parameters(self, bank):
         """The invariant that makes cross-modality ranking valid."""

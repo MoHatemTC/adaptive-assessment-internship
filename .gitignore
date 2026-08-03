@@ -9,3 +9,7 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
+
+# Graphify local knowledge-graph outputs
+graphify-out/
+**/graphify-out/

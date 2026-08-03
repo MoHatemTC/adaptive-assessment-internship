@@ -13,7 +13,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-Modality = Literal["mcq", "code", "open"]
+Modality = Literal["mcq", "code", "open", "voice"]
 
 
 class CatParameters(BaseModel):
@@ -55,12 +55,18 @@ class BankItem(BaseModel):
     measures: list[MeasuredVariable] = Field(min_length=1)
     cat: CatParameters
 
+    # How long this item is expected to take (optional; AIE bank authors it on the envelope).
+    estimated_time_seconds: float | None = Field(default=None, gt=0.0)
+
     # Exactly one of these is populated, matching `modality`. Kept as open dicts because
     # the grader owns their shape: forcing them through a union here would make every new
     # modality a change to this file and to everything that imports it.
     mcq: dict[str, Any] | None = None
     code: dict[str, Any] | None = None
     open: dict[str, Any] | None = None
+    # `voice` grades exactly like `open` — same evaluator / Live path. Separate so reports
+    # can distinguish a spoken interview from a typed essay.
+    voice: dict[str, Any] | None = None
 
     @model_validator(mode="after")
     def _payload_matches_modality(self) -> "BankItem":

@@ -561,7 +561,7 @@ def record(state, item, candidate, response) -> None:
     detail = graded.detail or {}
     if graded.modality == "code":
         score_shown = detail.get("overall_score")
-    elif graded.modality == "open":
+    elif graded.modality in {"open", "voice"}:
         # Show the graded ability score, not grader self-confidence (those often look
         # like 0.99 even when the answer scored near zero).
         outcome_scores = [
@@ -1012,7 +1012,7 @@ def render_question(state) -> None:
             st.rerun()
         return
 
-    if item.modality == "open":
+    if item.modality in {"open", "voice"}:
         st.markdown(payload.get("prompt") or payload.get("question", ""))
         if payload.get("answer_format"):
             st.info(payload["answer_format"])
@@ -1125,7 +1125,7 @@ def render_last_result() -> None:
                 st.warning("Misconceptions: " + ", ".join(detail["misconception_codes"]))
             if detail.get("diagnostic"):
                 st.caption(detail["diagnostic"])
-        elif last["modality"] == "open":
+        elif last["modality"] in {"open", "voice"}:
             detail = last.get("detail") or {}
             columns = st.columns(3)
             columns[0].metric("Eval confidence", f"{float(detail.get('evaluation_confidence') or 0):.2f}")

@@ -17,11 +17,9 @@ def bank() -> JsonUnifiedBank:
 
 
 # --- tracks ------------------------------------------------------------------
-def test_the_bank_offers_ten_main_competencies(bank):
+def test_the_bank_offers_aie_main_competencies(bank):
     tracks = bank.tracks()
-    assert [t["code"] for t in tracks] == [
-        f"C{i}" for i in range(1, 11)
-    ]
+    assert [t["code"] for t in tracks] == ["C1", "C3", "C6"]
     for track in tracks:
         assert track["name"], f"{track['code']} has no name to show a candidate"
         assert track["items"] > 0
@@ -31,7 +29,7 @@ def test_a_track_is_named_by_the_items_that_are_about_it(bank):
     """Not by every item that touches it."""
     names = {t["code"]: t["name"] for t in bank.tracks()}
     assert "Software" in names["C1"]
-    assert "Data" in names["C2"]
+    assert "Machine Learning" in names["C3"]
     assert "LLM" in names["C6"]
 
 

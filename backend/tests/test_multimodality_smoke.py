@@ -1,4 +1,4 @@
-"""Smoke tests for mixed-modality CAT wiring (mcq + code + open)."""
+"""Smoke tests for mixed-modality CAT wiring (mcq + code + voice)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ from app.schemas.orchestration import BankItem
 from app.services.orchestrator.bank import JsonUnifiedBank
 from app.services.orchestrator.grader import GraderAgent
 from app.services.voice.evaluator import evaluate, package_from_text
-from app.services.voice.grader import grade_voice
 
 
 @dataclass
@@ -47,13 +46,13 @@ class _FakeCodeEngine:
 def test_bank_contains_all_three_modalities():
     items = JsonUnifiedBank().all_items()
     modalities = {i.modality for i in items}
-    assert {"mcq", "code", "open"}.issubset(modalities)
+    assert {"mcq", "code", "voice"}.issubset(modalities)
 
 
-def test_open_items_carry_voice_or_inline_rubric():
-    opens = [i for i in JsonUnifiedBank().all_items() if i.modality == "open"]
-    assert opens
-    for item in opens:
+def test_voice_items_carry_voice_or_inline_rubric():
+    voices = [i for i in JsonUnifiedBank().all_items() if i.modality == "voice"]
+    assert voices
+    for item in voices:
         payload = item.payload
         assert payload.get("prompt") or payload.get("question")
         has_rubric_id = bool(payload.get("rubric_id"))
@@ -61,15 +60,15 @@ def test_open_items_carry_voice_or_inline_rubric():
         assert has_rubric_id or has_inline
 
 
-def test_open_heuristic_path_grades_without_llm():
-    item = next(i for i in JsonUnifiedBank().all_items() if i.modality == "open")
+def test_voice_heuristic_path_grades_without_llm():
+    item = next(i for i in JsonUnifiedBank().all_items() if i.modality == "voice")
     package = package_from_text(
         item.item_id,
         "Lists are mutable while tuples are immutable. I use tuples for fixed records.",
     )
     graded_voice = asyncio.run(evaluate(item, package, use_llm=False))
-    graded = grade_voice(graded_voice)
-    assert graded.modality == "open"
+    graded = GraderAgent().grade(item, graded_voice)
+    assert graded.modality == "voice"
     assert graded.outcomes
 
 

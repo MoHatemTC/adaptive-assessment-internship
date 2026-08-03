@@ -31,7 +31,7 @@ class GraderAgent:
             return self._grade_mcq(item, response)
         if item.modality == "code":
             return self._grade_code(item, response)
-        if item.modality == "open":
+        if item.modality in {"open", "voice"}:
             return self._grade_open(item, response)
         raise NotImplementedError(f"no grader for modality {item.modality!r}")
 
@@ -39,10 +39,13 @@ class GraderAgent:
         """Sync. Expects a GradedVoiceResponse produced by VoiceResponseEvaluator.evaluate."""
         if not isinstance(response, GradedVoiceResponse):
             raise TypeError(
-                f"{item.item_id}: open response must be GradedVoiceResponse "
+                f"{item.item_id}: {item.modality} response must be GradedVoiceResponse "
                 f"(got {type(response).__name__}) — evaluate() first"
             )
-        return grade_voice(response)
+        graded = grade_voice(response)
+        if item.modality == "voice" and graded.modality != "voice":
+            return graded.model_copy(update={"modality": "voice"})
+        return graded
 
     def _grade_mcq(self, item: BankItem, response: object) -> GradedResponse:
         try:
