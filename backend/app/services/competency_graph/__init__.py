@@ -17,9 +17,31 @@ _PACKAGE_ROOT = Path(__file__).resolve().parents[2]  # backend/app
 DEFAULT_GRAPH_PATH = _PACKAGE_ROOT / "data" / "competency_graph.json"
 
 
+def load_competency_graph(path: str | Path) -> CompetencyGraph:
+    """Load and validate the graph at `path`.
+
+    Caching belongs to `services.orchestrator.registry`, which knows which graph pairs
+    with which bank; this function always reads from disk.
+    """
+    return load_and_validate_graph(path)
+
+
 def load_default_competency_graph() -> CompetencyGraph:
+    """The Data Analysis graph, by path.
+
+    Retained for callers that predate the registry. Anything that also touches a bank
+    should use `registry.get_graph_service(bank_id)` instead — a graph loaded without
+    reference to a bank is how the coverage gate ends up evaluating the wrong nodes.
+    """
     return load_and_validate_graph(DEFAULT_GRAPH_PATH)
 
 
-__all__ = ["CompetencyGraph", "CompetencyGraphService", "load_and_validate_graph", "load_default_competency_graph", "DEFAULT_GRAPH_PATH"]
+__all__ = [
+    "CompetencyGraph",
+    "CompetencyGraphService",
+    "load_and_validate_graph",
+    "load_competency_graph",
+    "load_default_competency_graph",
+    "DEFAULT_GRAPH_PATH",
+]
 

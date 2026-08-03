@@ -59,9 +59,15 @@ class CompetencyEdge:
 
 @dataclass(frozen=True)
 class CompetencyGraph:
+    """The authored graph, exactly as it was written. No derived structure.
+
+    Precomputed edge lists live on `graph.GraphIndexes` instead. A derived field here was
+    populated by nothing and defaulted to empty, so every consumer of it saw a graph with
+    no prerequisite edges — and any caller constructing this dataclass directly, as tests
+    do, silently recreated that.
+    """
+
     schema_version: str
     nodes: dict[str, CompetencyNode]
     edges: tuple[CompetencyEdge, ...]
-    # Precomputed edge lists; still safe to hold on the immutable graph.
-    prerequisite_edges: tuple[CompetencyEdge, ...] = ()
 

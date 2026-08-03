@@ -1,266 +1,292 @@
+"""Apply one evidence event to the graph.
+
+ONE ALGORITHM, TWO PROJECTIONS
+
+"Shadow" means the RESULT is recorded but not enforced. It never meant a different
+algorithm, and when it did the two disagreed: the enforced path inferred from a
+multiple-choice hit that shadow mode explicitly refused, and blocked descendants through
+edges shadow mode would not have blocked through. There is one function; the caller
+decides which consumers read its output.
+
+WHAT THIS NEVER DOES
+
+It does not touch the CAT posterior. Inferred consequences come back as
+`InferredNodeSignal`, which carries no score and no weight and therefore cannot be turned
+into a graded outcome. See `inference.py`.
+"""
+
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Iterable
+from dataclasses import dataclass, field
 
+from .config import PropagationConfig
 from .evidence import EvidenceEvent
+from .graph import CompetencyGraphService
+from .inference import InferredNodeSignal, infer_ancestors
 from .ledger import EvidenceLedger
 from .models import CompetencyStatus
+from .prerequisite_rules import is_scorable, is_strong_failure, is_strong_success
 from .state import CompetencyGraphState
-from .graph import CompetencyGraphService
-
-
-@dataclass(frozen=True)
-class PropagationConfig:
-    """Propagation thresholds and policies.
-
-    Phase A only needs the scaffolding; later phases tune the defaults and behavior.
-    """
-
-    strong_success_threshold: float = 0.8
-    strong_failure_threshold: float = 0.2
-    minimum_propagation_confidence: float = 0.8
-
-    upward_decay: float = 0.7
-    minimum_inferred_weight: float = 0.15
-    maximum_inferred_weight: float = 0.6
-
-    downward_block_confidence: float = 0.85
-    maximum_propagation_depth: int = 4
-
-    allow_mcq_single_hit_upward_inference: bool = False
-    allow_code_upward_inference: bool = True
-    allow_voice_upward_inference: bool = True
 
 
 @dataclass(frozen=True)
 class GraphUpdateResult:
-    """Result of applying one root evidence event.
-
-    Phase A scaffolds the model; Phase B+ will fill the logic.
-    """
+    """What one evidence event did to the graph."""
 
     direct_updates: tuple[EvidenceEvent, ...] = ()
-    inferred_updates: tuple[EvidenceEvent, ...] = ()
+    inferred_signals: tuple[InferredNodeSignal, ...] = ()
     blocked_nodes: frozenset[str] = frozenset()
     reopened_nodes: frozenset[str] = frozenset()
     contradicted_nodes: frozenset[str] = frozenset()
+
+    # SCORE-affecting nodes only. Drives main-competency rollup, so a node whose status
+    # changed without its score moving must not appear here (review C17): a blocked
+    # descendant is a reason to re-pick, not a reason to recompute an estimate.
     changed_nodes: frozenset[str] = frozenset()
     affected_mains: frozenset[str] = frozenset()
 
+    # Nodes whose ELIGIBILITY changed — blocked, reopened, contradicted. Drives queue
+    # invalidation only.
+    status_changed_nodes: frozenset[str] = frozenset()
+    selection_affected_mains: frozenset[str] = frozenset()
 
-def _path_strength_product(
-    graph: CompetencyGraphService, *, start: str, end: str, max_depth: int
-) -> tuple[int, float] | None:
-    """Compute (distance, strength_product) along the strongest prerequisite path.
+    # REPORTING ONLY. What the same event would have concluded had the unvalidated
+    # PREREQUISITE edges been trusted. No node state was written for these, no main is
+    # affected by them, and no consumer may act on them — see `_preview` below.
+    preview_inferred_signals: tuple[InferredNodeSignal, ...] = ()
+    preview_blocked_nodes: frozenset[str] = frozenset()
 
-    This is phase scaffolding: it returns the best strength product among all paths up to
-    max_depth. In later phases this can be replaced by a precomputed all-pairs index.
-    """
-    best: dict[str, float] = {start: 1.0}
-    best_dist: dict[str, int] = {start: 0}
-    # DFS stack: (node, strength_product, depth)
-    stack: list[tuple[str, float, int]] = [(start, 1.0, 0)]
-    while stack:
-        cur, strength_so_far, depth = stack.pop()
-        if depth >= max_depth:
-            continue
-        # Upward inference walks from an advanced node to its prerequisite parents.
-        for parent in graph.prerequisites_parents(cur):
-            edge = next(
-                (
-                    e
-                    for e in graph.graph.edges
-                    if e.relation == "PREREQUISITE"
-                    and e.from_id == parent
-                    and e.to_id == cur
-                ),
-                None,
-            )
-            if edge is None:
-                continue
-            if not edge.allow_upward_inference:
-                continue
-            next_strength = strength_so_far * float(edge.strength)
-            if parent not in best or next_strength > best[parent]:
-                best[parent] = next_strength
-                best_dist[parent] = depth + 1
-            stack.append((parent, next_strength, depth + 1))
+    unscorable: bool = False
+    audit: dict = field(default_factory=dict)
 
-    if end not in best:
-        return None
-    return best_dist[end], best[end]
+    @property
+    def inferred_updates(self) -> tuple[InferredNodeSignal, ...]:
+        """Retained name for readers that predate the signal/outcome split."""
+        return self.inferred_signals
 
 
-def _upward_inference_allowed(modality: str, config: PropagationConfig) -> bool:
-    """Whether one direct hit in this modality may imply prerequisite mastery."""
-    normalized = (modality or "").strip().lower()
-    if normalized == "mcq":
-        return config.allow_mcq_single_hit_upward_inference
-    if normalized == "code":
-        return config.allow_code_upward_inference
-    if normalized in {"open", "voice", "audio"}:
-        return config.allow_voice_upward_inference
-    return False
-
-
-def _blockable_descendants(
-    graph: CompetencyGraphService,
-    start: str,
-    *,
-    max_depth: int,
-) -> set[str]:
-    """Descendants reachable only through edges that permit downward blocking."""
-    blocked: set[str] = set()
-    stack: list[tuple[str, int]] = [(start, 0)]
-    while stack:
-        current, depth = stack.pop()
-        if depth >= max_depth:
-            continue
-        for edge in graph.graph.prerequisite_edges:
-            if (
-                edge.from_id != current
-                or not edge.allow_downward_blocking
-            ):
-                continue
-            if edge.to_id not in blocked:
-                blocked.add(edge.to_id)
-                stack.append((edge.to_id, depth + 1))
-    return blocked
-
-
-def shadow_apply_direct_event(
+def apply_direct_evidence(
     graph: CompetencyGraphService,
     graph_state: CompetencyGraphState,
     event: EvidenceEvent,
     *,
     ledger: EvidenceLedger,
     config: PropagationConfig,
+    now: str | None = None,
+    item_minimum_confidence: float | None = None,
 ) -> GraphUpdateResult:
-    """Apply one evidence event in shadow mode.
+    """Apply one direct evidence event. Idempotent through `ledger`.
 
-    Shadow mode is *analysis-only*: it never affects CAT posterior math.
+    `now` is passed in rather than read from the clock so a replay produces the same
+    record it produced the first time.
     """
     ledger.assert_new(event.evidence_id)
     graph_state.ensure_nodes({event.target_node})
 
     node_state = graph_state.nodes[event.target_node]
+    prior_status = node_state.status
+    prior_blockers = frozenset(node_state.blocked_by)
+
     weight = float(event.weight)
     confidence = float(event.confidence)
     score = float(event.score)
 
-    if weight <= 0.0 or confidence <= 0.0:
-        # Unscorable/infrastructure failed: no updates or propagation.
+    if not is_scorable(weight, confidence):
+        # An unscorable response is not a wrong answer. It changes nothing, and it must
+        # not report a changed node: doing so invalidates queue slots and triggers a
+        # rollup for a main where no score moved.
         ledger.commit(event.evidence_id)
         return GraphUpdateResult(
             direct_updates=(event,),
-            inferred_updates=(),
-            blocked_nodes=frozenset(),
-            reopened_nodes=frozenset(),
-            contradicted_nodes=frozenset(),
-            changed_nodes=frozenset({event.target_node}),
-            affected_mains=frozenset(graph.mains_for_node(event.target_node)),
+            unscorable=True,
+            audit={"event": event.evidence_id, "outcome": "unscorable"},
         )
 
     direct_effective = weight * confidence
-
-    strong_success = (
-        score >= config.strong_success_threshold and confidence >= config.minimum_propagation_confidence
+    strong_success = is_strong_success(
+        score, confidence, config=config, item_minimum_confidence=item_minimum_confidence
     )
-    strong_failure = (
-        score <= config.strong_failure_threshold and confidence >= config.downward_block_confidence
+    strong_failure = is_strong_failure(
+        score, confidence, config=config, item_minimum_confidence=item_minimum_confidence
     )
 
-    direct_updates: list[EvidenceEvent] = [event]
-    inferred_updates: list[EvidenceEvent] = []
-    blocked_nodes: set[str] = set()
+    inferred: list[InferredNodeSignal] = []
+    blocked: set[str] = set()
+    reopened: set[str] = set()
+
+    node_state.direct_observations += 1
+    node_state.status_confidence = confidence
+    node_state.last_direct_update_at = now
+    node_state.direct_evidence_ids.add(event.evidence_id)
 
     if strong_success:
         node_state.status = CompetencyStatus.DIRECT_MASTERED
-        node_state.direct_observations += 1
-        node_state.mastery = max(node_state.mastery, float(score))
-        node_state.uncertainty = min(node_state.uncertainty, 1.0 - float(confidence))
+        node_state.mastery = max(node_state.mastery, score)
+        node_state.uncertainty = min(node_state.uncertainty, 1.0 - confidence)
 
-        if _upward_inference_allowed(event.modality, config):
-            # Upward inference through strict prerequisite ancestors.
-            for anc in graph.ancestors(event.target_node, include_self=False):
-                path = _path_strength_product(
-                    graph,
-                    start=event.target_node,
-                    end=anc,
-                    max_depth=config.maximum_propagation_depth,
-                )
-                if path is None:
-                    continue
-                distance, path_strength = path
-                inferred_weight = (
-                    direct_effective
-                    * float(path_strength)
-                    * (config.upward_decay ** distance)
-                )
-                inferred_weight = min(inferred_weight, config.maximum_inferred_weight)
-                if inferred_weight < config.minimum_inferred_weight:
-                    continue
-                inferred_id = f"{event.evidence_id}::inferred::{anc}"
-                inferred_updates.append(
-                    EvidenceEvent(
-                        evidence_id=inferred_id,
-                        session_id=event.session_id,
-                        item_id=event.item_id,
-                        modality=event.modality,
-                        target_node=anc,
-                        score=event.score,
-                        weight=float(inferred_weight),
-                        confidence=event.confidence,
-                        source=event.source,
-                        evidence_kind="inferred_upward",
-                        source_node=event.target_node,
-                        propagation_distance=distance,
-                        directly_tested=False,
-                        rubric_criterion_id=event.rubric_criterion_id,
-                        evaluator_version=event.evaluator_version,
-                        metadata={"shadow": True},
-                    )
-                )
-                graph_state.ensure_nodes({anc})
-                graph_state.nodes[anc].status = CompetencyStatus.INFERRED_MASTERED
-                graph_state.nodes[anc].inferred_observations += 1
+        # Direct evidence overrides a block. A node reached this state because a
+        # prerequisite failed; passing it directly says the block was wrong, and the node
+        # must become eligible again or the contradiction can never be resolved.
+        if prior_status is CompetencyStatus.BLOCKED:
+            reopened.add(event.target_node)
+            node_state.blocked_by.clear()
+
+        inferred = infer_ancestors(
+            graph,
+            target_node=event.target_node,
+            direct_effective=direct_effective,
+            modality=event.modality,
+            source_evidence_id=event.evidence_id,
+            config=config,
+        )
+        for signal in inferred:
+            graph_state.ensure_nodes({signal.node})
+            ancestor = graph_state.nodes[signal.node]
+            # Inferred mastery never overwrites a direct verdict, in either direction.
+            if ancestor.status in (
+                CompetencyStatus.DIRECT_MASTERED,
+                CompetencyStatus.DIRECT_NOT_MASTERED,
+            ):
+                continue
+            ancestor.status = CompetencyStatus.INFERRED_MASTERED
+            ancestor.inferred_observations += 1
+            ancestor.inferred_evidence_ids.add(signal.source_evidence_id)
+            ancestor.last_inferred_update_at = now
 
     elif strong_failure:
         node_state.status = CompetencyStatus.DIRECT_NOT_MASTERED
-        node_state.direct_observations += 1
-        node_state.mastery = min(node_state.mastery, float(score))
-        node_state.uncertainty = min(node_state.uncertainty, 1.0 - float(confidence))
+        node_state.mastery = min(node_state.mastery, score)
+        node_state.uncertainty = min(node_state.uncertainty, 1.0 - confidence)
 
-        # Descendant blocking: mark dependent descendants as BLOCKED.
-        for desc in _blockable_descendants(
-            graph,
-            event.target_node,
-            max_depth=config.maximum_propagation_depth,
+        for descendant in graph.blockable_descendants(
+            event.target_node, max_depth=config.maximum_propagation_depth
         ):
-            blocked_nodes.add(desc)
-            graph_state.ensure_nodes({desc})
-            graph_state.nodes[desc].status = CompetencyStatus.BLOCKED
-            graph_state.nodes[desc].blocked_by.add(event.target_node)
+            graph_state.ensure_nodes({descendant})
+            state = graph_state.nodes[descendant]
+            # A node already demonstrated directly is not blocked by a later failure
+            # upstream: it is evidence AGAINST the edge, not a reason to hide the node.
+            if state.status is CompetencyStatus.DIRECT_MASTERED:
+                continue
+            blocked.add(descendant)
+            state.status = CompetencyStatus.BLOCKED
+            state.blocked_by.add(event.target_node)
 
-    # Commit ledger after computing.
+    # The same two conclusions, drawn again with the per-edge validation gates waived and
+    # written NOWHERE. A bank whose edges all ship inert otherwise reports zero inferred
+    # and zero blocked nodes for every session it will ever run, which is exactly what a
+    # broken inference engine reports — and leaves no evidence on which to judge an edge
+    # short of enabling it on live candidates.
+    preview_inferred: tuple[InferredNodeSignal, ...] = ()
+    preview_blocked: frozenset[str] = frozenset()
+    if config.preview_unvalidated_edges:
+        if strong_success:
+            preview_inferred = tuple(
+                infer_ancestors(
+                    graph,
+                    target_node=event.target_node,
+                    direct_effective=direct_effective,
+                    modality=event.modality,
+                    source_evidence_id=event.evidence_id,
+                    config=config,
+                    ignore_edge_validation=True,
+                )
+            )
+        elif strong_failure:
+            preview_blocked = frozenset(
+                descendant
+                for descendant in graph.blockable_descendants(
+                    event.target_node,
+                    max_depth=config.maximum_propagation_depth,
+                    ignore_edge_validation=True,
+                )
+                # Mirrors the enforced rule: a node already demonstrated directly is
+                # evidence against the edge, not something the edge gets to hide.
+                if graph_state.nodes.get(descendant) is None
+                or graph_state.nodes[descendant].status
+                is not CompetencyStatus.DIRECT_MASTERED
+            )
+
     ledger.commit(event.evidence_id)
 
-    changed_nodes = {event.target_node, *blocked_nodes, *(e.target_node for e in inferred_updates)}
-    affected_mains: set[str] = set()
-    for nid in changed_nodes:
-        for m in graph.mains_for_node(nid):
-            affected_mains.add(m)
+    from .conflicts import detect_contradictions
+
+    contradictions = detect_contradictions(
+        prior_status=prior_status,
+        prior_blocked_by=prior_blockers,
+        event=event,
+        strong_success=strong_success,
+        strong_failure=strong_failure,
+        graph_state=graph_state,
+        now=now,
+    )
+    contradicted = frozenset(c.node for c in contradictions)
+    for contradiction in contradictions:
+        graph_state.ensure_nodes({contradiction.node})
+        graph_state.nodes[contradiction.node].contradictions.append(contradiction.as_dict())
+
+    changed = frozenset({event.target_node})
+    status_changed = frozenset(blocked | reopened | contradicted) - changed
 
     return GraphUpdateResult(
-        direct_updates=tuple(direct_updates),
-        inferred_updates=tuple(inferred_updates),
-        blocked_nodes=frozenset(blocked_nodes),
-        reopened_nodes=frozenset(),
-        contradicted_nodes=frozenset(),
-        changed_nodes=frozenset(changed_nodes),
-        affected_mains=frozenset(affected_mains),
+        direct_updates=(event,),
+        inferred_signals=tuple(inferred),
+        blocked_nodes=frozenset(blocked),
+        reopened_nodes=frozenset(reopened),
+        contradicted_nodes=contradicted,
+        changed_nodes=changed,
+        affected_mains=frozenset(graph.mains_for_nodes(changed)),
+        status_changed_nodes=status_changed,
+        selection_affected_mains=frozenset(graph.mains_for_nodes(status_changed)),
+        preview_inferred_signals=preview_inferred,
+        preview_blocked_nodes=preview_blocked,
+        audit={
+            "event": event.evidence_id,
+            "target": event.target_node,
+            "status": str(graph_state.nodes[event.target_node].status),
+            "inferred": [s.node for s in inferred],
+            "blocked": sorted(blocked),
+            "reopened": sorted(reopened),
+            "contradicted": sorted(contradicted),
+            "preview_inferred": [s.node for s in preview_inferred],
+            "preview_blocked": sorted(preview_blocked),
+        },
     )
+
+
+def apply_events(
+    graph: CompetencyGraphService,
+    events: list[EvidenceEvent],
+    *,
+    config: PropagationConfig,
+    graph_state: CompetencyGraphState | None = None,
+    ledger: EvidenceLedger | None = None,
+    now: str | None = None,
+) -> tuple[list[GraphUpdateResult], CompetencyGraphState, EvidenceLedger]:
+    """Apply several events, returning the state and ledger so a caller can persist them.
+
+    The state used to be built and discarded here, which meant node status, evidence
+    provenance and contradiction history were computed and then thrown away every
+    response, and the ledger deduplicated only within a single item.
+    """
+    if graph_state is None:
+        graph_state = CompetencyGraphState()
+        graph_state.ensure_nodes(set(graph.graph.nodes))
+    if ledger is None:
+        ledger = EvidenceLedger()
+
+    updates = [
+        apply_direct_evidence(
+            graph, graph_state, event, ledger=ledger, config=config, now=now
+        )
+        for event in events
+    ]
+    return updates, graph_state, ledger
+
+
+# Retained names. The old ones said "shadow", which described how the caller used the
+# result rather than what the function did — and invited the divergence this module exists
+# to remove.
+shadow_apply_direct_event = apply_direct_evidence
 
 
 def shadow_apply_events(
@@ -269,26 +295,5 @@ def shadow_apply_events(
     *,
     config: PropagationConfig,
 ) -> list[GraphUpdateResult]:
-    """Apply many evidence events and return update results for logging."""
-    graph_state = CompetencyGraphState()
-    ledger = EvidenceLedger()
-    updates: list[GraphUpdateResult] = []
-    # Ensure all nodes exist for cleaner state transitions later.
-    graph_state.ensure_nodes(set(graph.graph.nodes.keys()))
-    for e in events:
-        try:
-            updates.append(
-                shadow_apply_direct_event(
-                    graph,
-                    graph_state,
-                    e,
-                    ledger=ledger,
-                    config=config,
-                )
-            )
-        except Exception:
-            # Shadow mode should never break CAT; loggers in caller can report if desired.
-            raise
+    updates, _state, _ledger = apply_events(graph, events, config=config)
     return updates
-
-
