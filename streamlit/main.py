@@ -71,16 +71,13 @@ from app.services.code_adaptive import (  # noqa: E402
     JsonQuestionRepository,
 )
 from app.services.code_adaptive import trial  # noqa: E402
-from app.services.orchestrator import GraderAgent, JsonUnifiedBank, Orchestrator  # noqa: E402
+from app.services.orchestrator import GraderAgent, Orchestrator  # noqa: E402
+from app.services.orchestrator import registry, session_dump  # noqa: E402
 from app.services.orchestrator import variables as variables_module  # noqa: E402
 from app.services.adaptive.irt import expected_fisher_information  # noqa: E402
 from app.services.orchestrator.picker import criterion_for, information_for  # noqa: E402
 from app.services.orchestrator.competency import rollup_outcomes  # noqa: E402
-from app.services.competency_graph import load_default_competency_graph  # noqa: E402
 from app.services.competency_graph.coverage import unmeasured_required_nodes  # noqa: E402
-from app.services.competency_graph.graph import CompetencyGraphService  # noqa: E402
-from app.services.competency_graph.propagation import PropagationConfig  # noqa: E402
-from app.services.competency_graph.rollup import graph_rollup_outcomes  # noqa: E402
 from app.services.voice.evaluator import evaluate as evaluate_voice  # noqa: E402
 from app.services.voice.evaluator import package_from_text  # noqa: E402
 from app.services.voice_live.streamlit_live import StreamlitLiteLLMLiveBridge  # noqa: E402
@@ -124,16 +121,30 @@ CRITERION_EXPLAINED = {
 
 
 # --- engine wiring ----------------------------------------------------------
+def active_bank_id() -> str:
+    """The bank this run is administered against.
+
+    Read from a plain session key fixed at Begin, for the same reason as `use_llm()`:
+    Streamlit garbage-collects keys belonging to widgets that stopped rendering, and a
+    measurement must not be able to change which bank it is measuring against halfway
+    through. Before Begin it falls back to the configured default.
+    """
+    return st.session_state.get("bank_id") or registry.resolve_bank_id()
+
+
 @st.cache_resource
-def engine() -> Orchestrator:
+def engine(bank_id: str) -> Orchestrator:
     return Orchestrator(
-        JsonUnifiedBank(), GraderAgent(CodeAdaptiveSession(JsonQuestionRepository()))
+        registry.get_bank(bank_id),
+        GraderAgent(CodeAdaptiveSession(JsonQuestionRepository())),
+        graph=registry.get_graph_service(bank_id),
+        coverage_critical_only=registry.profile(bank_id).coverage_critical_only,
     )
 
 
 @st.cache_resource
-def bank() -> JsonUnifiedBank:
-    return JsonUnifiedBank()
+def bank(bank_id: str):
+    return registry.get_bank(bank_id)
 
 
 def run_async(coro):
@@ -224,8 +235,32 @@ def render_setup() -> None:
         "easily evidence overrides it. Neither is ever reported as a measurement."
     )
 
-    coverage = bank().coverage()
-    tracks = bank().tracks()
+    st.markdown("#### 0 · Question bank")
+    catalogue = [b for b in registry.describe() if "error" not in b]
+    if not catalogue:
+        st.error("No question bank could be loaded.")
+        return
+    bank_ids = [b["bank_id"] for b in catalogue]
+    by_bank = {b["bank_id"]: b for b in catalogue}
+    default_bank = registry.resolve_bank_id()
+    selected_bank = st.selectbox(
+        "Bank",
+        options=bank_ids,
+        index=bank_ids.index(default_bank) if default_bank in bank_ids else 0,
+        format_func=lambda b: (
+            f"{b} · {by_bank[b]['title']} — {by_bank[b]['items']} questions, "
+            f"{', '.join(by_bank[b]['mains'])}"
+        ),
+        key="bank_choice",
+        help="A bank and its competency graph are selected together. The choice is "
+             "locked once the assessment begins.",
+    )
+    # Read through the plain key, not the widget key: the widget stops rendering after
+    # Begin and Streamlit collects its state (see `use_llm`).
+    st.session_state["bank_id"] = selected_bank
+
+    coverage = bank(active_bank_id()).coverage()
+    tracks = bank(active_bank_id()).tracks()
     if not coverage or not tracks:
         st.error("The question bank is empty.")
         return
@@ -279,7 +314,7 @@ def render_setup() -> None:
         wants_llm = render_tester_options(st, locked=False)
 
     if st.button("Begin assessment", type="primary"):
-        state = engine().begin(chosen, intake=intake, confidence=confident)
+        state = engine(active_bank_id()).begin(chosen, intake=intake, confidence=confident)
         session_log.clear()
         st.session_state.update(
             run=state, steps=[], rng_seed=0, finished=False, stop_reason="", pending=None,
@@ -287,6 +322,7 @@ def render_setup() -> None:
             competency_names={c: by_code[c]["name"] for c in chosen},
             trials={},
             picker_uses_llm=wants_llm,
+            bank_id=selected_bank,
         )
         st.rerun()
 
@@ -309,7 +345,7 @@ def render_queue(state) -> None:
 
     rows = []
     for variable, candidate in sorted(state.queue.items()):
-        item = bank().get(candidate.item_id)
+        item = bank(active_bank_id()).get(candidate.item_id)
         rows.append(
             {
                 "competency": variable,
@@ -341,7 +377,7 @@ def render_queue(state) -> None:
             variable_state = state.variables[variable]
             shortlist_rows = []
             for rank, item_id in enumerate(candidate.shortlist_ids, start=1):
-                item = bank().get(item_id)
+                item = bank(active_bank_id()).get(item_id)
                 if item is None:
                     continue
                 shortlist_rows.append(
@@ -395,6 +431,12 @@ def graph_node_status(state, node_id: str) -> str:
         return "shadow · direct not mastered"
     if node_id in getattr(state, "graph_shadow_inferred_mastered_nodes", []):
         return "shadow · inferred mastered"
+    # Last, and named as a forecast. Every state above it was computed from evidence the
+    # engine acted on; this one is what an untrusted edge would have said.
+    if node_id in (getattr(state, "graph_preview_inferred_nodes", {}) or {}):
+        return "preview · would be inferred"
+    if node_id in getattr(state, "graph_preview_blocked_nodes", []):
+        return "preview · would be blocked"
     return "unknown"
 
 
@@ -438,7 +480,7 @@ def render_competency_math(state) -> None:
     # Presenting item → related sub-competencies + CAT parameters
     presenting = state.presenting
     if presenting is not None:
-        item = bank().get(presenting.item_id)
+        item = bank(active_bank_id()).get(presenting.item_id)
         st.markdown(
             f"**Presenting item** `{presenting.item_id}` · {presenting.modality} · "
             f"criterion `{presenting.criterion}`"
@@ -474,7 +516,7 @@ def render_competency_math(state) -> None:
     else:
         cand_rows = []
         for variable, candidate in sorted(state.queue.items()):
-            item = bank().get(candidate.item_id)
+            item = bank(active_bank_id()).get(candidate.item_id)
             vs = state.variables[variable]
             cand_rows.append(
                 {
@@ -501,7 +543,7 @@ def render_competency_math(state) -> None:
 
     # Graph node ledger for session mains' related subs
     try:
-        service = graph_view.graph_service()
+        service = graph_view.graph_service(active_bank_id())
         session_mains = set(state.variables)
         sub_rows = []
         for nid, node in sorted(service.graph.nodes.items()):
@@ -563,6 +605,87 @@ def render_mathematics() -> None:
     )
 
 
+def render_edge_preview(
+    service,
+    preview_inferred: dict,
+    preview_blocked: set[str],
+    preview_refuted: list[dict],
+) -> None:
+    """What the unvalidated prerequisite edges would have concluded, and what refuted it.
+
+    Every edge in this bank ships with `allow_upward_inference` and
+    `allow_downward_blocking` false, because the numbering order they encode is an
+    authoring convention and not measured dependency data. So the live inferred and
+    blocked counts are structurally zero, and will stay zero until a corpus says an edge
+    is real. This panel is how that corpus gets built: it runs the same inference with the
+    validation gate waived, records the result, and marks every belief the session went on
+    to measure and disprove.
+    """
+    with st.expander(
+        f"Unvalidated-edge forecast — {len(preview_inferred)} would be inferred, "
+        f"{len(preview_blocked)} would be blocked, {len(preview_refuted)} refuted",
+        expanded=bool(preview_refuted),
+    ):
+        st.caption(
+            "Reporting only. Nothing here reached the ability estimate, the item "
+            "selection or the coverage gate — it is what WOULD have happened had the "
+            "prerequisite edges been trusted. `scripts/validate_prerequisite_edges.py` "
+            "turns a corpus of these into a per-edge verdict."
+        )
+        if not preview_inferred and not preview_blocked:
+            st.caption(
+                "Nothing yet. Inference needs a strong success on a node that has a "
+                "prerequisite parent, in a modality permitted to infer — one multiple-"
+                "choice hit is not."
+            )
+            return
+
+        refuted_kind = {row.get("node"): row.get("kind") for row in preview_refuted}
+        rows = [
+            {
+                "node": nid,
+                "title": service.graph.nodes[nid].title if nid in service.graph.nodes else nid,
+                "would be": "blocked" if nid in preview_blocked else "inferred mastered",
+                "from": provenance.get("source_node", "—"),
+                "hops": provenance.get("distance"),
+                "strength": provenance.get("strength"),
+                "via": provenance.get("modality", "—"),
+                "refuted by direct evidence": refuted_kind.get(nid, "—"),
+            }
+            for nid, provenance in sorted(preview_inferred.items())
+        ]
+        rows.extend(
+            {
+                "node": nid,
+                "title": service.graph.nodes[nid].title if nid in service.graph.nodes else nid,
+                "would be": "blocked",
+                "from": "—",
+                "hops": None,
+                "strength": None,
+                "via": "—",
+                "refuted by direct evidence": refuted_kind.get(nid, "—"),
+            }
+            for nid in sorted(preview_blocked - set(preview_inferred))
+        )
+        st.dataframe(pd.DataFrame(rows), hide_index=True, **WIDE)
+
+        wrong = [r for r in preview_refuted if r.get("kind") == "wrong_inference"]
+        false_blocks = [r for r in preview_refuted if r.get("kind") == "false_block"]
+        if wrong:
+            st.warning(
+                f"{len(wrong)} node(s) the graph would have called mastered were measured "
+                "directly and failed. Each is evidence against the edge that carried the "
+                "inference — and, had that edge been live, a competency the candidate "
+                "would never have been asked about."
+            )
+        if false_blocks:
+            st.warning(
+                f"{len(false_blocks)} node(s) the graph would have declared unreachable "
+                "were reached. This is the false-blocking rate, and it is measurable only "
+                "because the block was never enforced: the item was still served."
+            )
+
+
 def render_graph_dag(state) -> None:
     """Realtime competency DAG focused on the current item path."""
     st.markdown("**Competency dependency DAG**")
@@ -572,10 +695,13 @@ def render_graph_dag(state) -> None:
         "Mastered / blocked / contradicted come from persisted graph session state."
     )
     try:
-        service = graph_view.graph_service()
+        service = graph_view.graph_service(active_bank_id())
     except Exception as exc:  # noqa: BLE001
         session_log.note_ui_error("graph_view", "failed to load competency graph", exc=exc)
         st.error(f"Graph failed to load: {exc}")
+        return
+    if service is None:
+        st.info(f"Bank `{active_bank_id()}` declares no competency graph.")
         return
 
     option_col1, option_col2 = st.columns(2)
@@ -591,7 +717,7 @@ def render_graph_dag(state) -> None:
     focus: set[str] = set()
     presenting = state.presenting
     if presenting is not None:
-        item = bank().get(presenting.item_id)
+        item = bank(active_bank_id()).get(presenting.item_id)
         if item is not None:
             focus.update(m.variable for m in item.measures)
         focus.add(presenting.variable)
@@ -613,11 +739,21 @@ def render_graph_dag(state) -> None:
     displayed_mastered = set(getattr(state, "graph_direct_mastered_nodes", []))
     displayed_not_mastered = set(getattr(state, "graph_direct_not_mastered_nodes", []))
     displayed_contradicted = set(getattr(state, "graph_contradicted_nodes", []))
+    # Inferred is its own colour, never folded into mastered. The whole point of the
+    # direct/inferred split is that a deduction did not enter the estimate; a view that
+    # paints them the same hides exactly what a reviewer is here to check.
+    displayed_inferred = set(getattr(state, "graph_inferred_mastered_nodes", []))
+    # The unvalidated-edge forecast, in its own colour and its own metric. Every AI
+    # Engineer prerequisite edge ships inert, so `displayed_inferred` is empty for every
+    # session this bank will ever run — which looks exactly like inference being broken.
+    preview_inferred = dict(getattr(state, "graph_preview_inferred_nodes", {}) or {})
+    preview_blocked = set(getattr(state, "graph_preview_blocked_nodes", []))
+    preview_refuted = list(getattr(state, "graph_preview_refuted_nodes", []))
 
     if include_shadow:
         displayed_blocked |= set(getattr(state, "graph_shadow_blocked_nodes", []))
         displayed_mastered |= set(getattr(state, "graph_shadow_direct_mastered_nodes", []))
-        displayed_mastered |= set(getattr(state, "graph_shadow_inferred_mastered_nodes", []))
+        displayed_inferred |= set(getattr(state, "graph_shadow_inferred_mastered_nodes", []))
         displayed_not_mastered |= set(
             getattr(state, "graph_shadow_direct_not_mastered_nodes", [])
         )
@@ -629,6 +765,9 @@ def render_graph_dag(state) -> None:
         blocked=displayed_blocked,
         mastered=displayed_mastered,
         not_mastered=displayed_not_mastered,
+        inferred=displayed_inferred,
+        preview_inferred=set(preview_inferred),
+        preview_blocked=preview_blocked,
         contradicted=displayed_contradicted,
     )
     graph_view.render_svg(diagram)
@@ -649,12 +788,20 @@ def render_graph_dag(state) -> None:
         mime="image/svg+xml",
     )
 
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
     col1.metric("Focus nodes", len(focus))
-    col2.metric("Mastered", len(displayed_mastered))
-    col3.metric("Not mastered", len(displayed_not_mastered))
-    col4.metric("Blocked", len(displayed_blocked))
-    col5.metric("Contradicted", len(displayed_contradicted))
+    col2.metric("Mastered", len(displayed_mastered), help="Directly measured.")
+    col3.metric("Not mastered", len(displayed_not_mastered), help="Directly measured.")
+    col4.metric(
+        "Inferred",
+        len(displayed_inferred),
+        help="Deduced from a prerequisite relationship. Never measured, and never folded "
+             "into the ability estimate.",
+    )
+    col5.metric("Blocked", len(displayed_blocked))
+    col6.metric("Contradicted", len(displayed_contradicted))
+
+    render_edge_preview(service, preview_inferred, preview_blocked, preview_refuted)
 
     with st.expander("Node status and dependency detail", expanded=True):
         related_nodes, _ = graph_view.related_subgraph(service, diagram_focus)
@@ -672,6 +819,10 @@ def render_graph_dag(state) -> None:
                 status = "mastered"
             elif nid in displayed_not_mastered:
                 status = "direct not mastered"
+            elif nid in preview_inferred:
+                status = "preview · would be inferred"
+            elif nid in preview_blocked:
+                status = "preview · would be blocked"
             elif nid in focus:
                 status = "focus"
             rows.append(
@@ -680,6 +831,11 @@ def render_graph_dag(state) -> None:
                     "title": node.title if node else "—",
                     "type": node.node_type if node else "—",
                     "status": status,
+                    # An unmeasured node is only a gap if coverage required it. This bank
+                    # gates on critical nodes only — C6 declares more sub-competencies than
+                    # a session has questions — so most "unknown" rows are budget, not a
+                    # hole. Without this column the two are indistinguishable.
+                    "required for coverage": bool(node.critical) if node else False,
                     "ancestors": ", ".join(sorted(service.ancestors(nid))) or "—",
                     "descendants": ", ".join(sorted(service.descendants(nid))) or "—",
                     "mains": ", ".join(service.mains_for_node(nid)) or "—",
@@ -854,9 +1010,9 @@ def render_diagnostics() -> None:
                 {"setting": "graph utility",
                  "value": str(settings.graph_utility_enabled),
                  "meaning": "adds graph-based utility modifiers on top of KL / E[Fisher]"},
-                {"setting": "graph shared-main rollup",
-                 "value": str(settings.graph_shared_main_rollup_enabled),
-                 "meaning": "injects inferred prerequisite evidence into main posterior updates"},
+                {"setting": "graph master switch",
+                 "value": str(settings.competency_graph_enabled),
+                 "meaning": "off disables every graph effect below, whatever they say"},
                 {"setting": "graph convergence gate",
                  "value": str(settings.graph_convergence_gate_enabled),
                  "meaning": "prevents finalisation while graph contradictions remain"},
@@ -873,7 +1029,7 @@ def render_diagnostics() -> None:
         "even at full loading, which is a problem with the item parameters themselves. "
         "Coding items carry authored parameters, not ones fitted to real responses."
     )
-    parity = bank().parity_report()
+    parity = bank(active_bank_id()).parity_report()
     if parity:
         st.dataframe(
             pd.DataFrame(
@@ -894,7 +1050,7 @@ def render_diagnostics() -> None:
 
     with st.expander("Graph-augmented CAT state"):
         run_state = st.session_state["run"]
-        graph = graph_view.graph_service()
+        graph = graph_view.graph_service(active_bank_id())
         missing_by_main = {
             main: sorted(
                 unmeasured_required_nodes(
@@ -962,7 +1118,7 @@ def record(state, item, candidate, response) -> None:
             # The submission itself is never sent — see observability.redact_code.
             submission=observability.redact_code(response) if isinstance(response, str) else None,
         ):
-            new_state, graded = engine().record_response(state, item, response)
+            new_state, graded = engine(active_bank_id()).record_response(state, item, response)
     except Exception as exc:  # noqa: BLE001
         session_log.note_ui_error(
             "streamlit.record",
@@ -978,7 +1134,7 @@ def record(state, item, candidate, response) -> None:
     detail = graded.detail or {}
     if graded.modality == "code":
         score_shown = detail.get("overall_score")
-    elif graded.modality == "open":
+    elif graded.modality in ("open", "voice"):
         # Show the graded ability score, not grader self-confidence (those often look
         # like 0.99 even when the answer scored near zero).
         outcome_scores = [
@@ -992,16 +1148,9 @@ def record(state, item, candidate, response) -> None:
         score_shown = 1.0 if detail.get("correct") else 0.0
 
     session_variables = set(new_state.variables)
-    if settings.graph_shared_main_rollup_enabled and settings.graph_upward_inference_enabled:
-        graph = CompetencyGraphService(load_default_competency_graph())
-        rolled = graph_rollup_outcomes(
-            graded.outcomes,
-            session_variables=session_variables,
-            graph=graph,
-            config=PropagationConfig(),
-        )
-    else:
-        rolled = rollup_outcomes(graded.outcomes, session_variables)
+    # Direct evidence only. Inference shapes selection and the report; it does not enter
+    # a posterior, so the tester shows exactly the update the engine performed.
+    rolled = rollup_outcomes(graded.outcomes, session_variables)
     outcome_by_variable = {
         o.variable: o.__dict__
         for o in rolled
@@ -1060,7 +1209,7 @@ def record(state, item, candidate, response) -> None:
         item_id=item.item_id,
     ):
         new_state = run_async(
-            engine().after_response(
+            engine(active_bank_id()).after_response(
                 new_state, item, use_llm=use_llm(), rng=np.random.default_rng(seed)
             )
         )
@@ -1454,7 +1603,7 @@ def render_live_interview(state, item, candidate) -> None:
 
 def render_question(state) -> None:
     """Present whatever the orchestrator chose, and collect an answer."""
-    nxt = engine().next_item(state)
+    nxt = engine(active_bank_id()).next_item(state)
     if nxt is None:
         return
     item, candidate = nxt
@@ -1478,7 +1627,9 @@ def render_question(state) -> None:
             st.rerun()
         return
 
-    if item.modality == "open":
+    if item.modality in ("open", "voice"):
+        # Without this branch a `voice` item falls through to the code renderer below and
+        # is presented as a programming exercise with a solution box.
         st.markdown(payload.get("prompt") or payload.get("question", ""))
         if payload.get("answer_format"):
             st.info(payload["answer_format"])
@@ -1591,7 +1742,7 @@ def render_last_result() -> None:
                 st.warning("Misconceptions: " + ", ".join(detail["misconception_codes"]))
             if detail.get("diagnostic"):
                 st.caption(detail["diagnostic"])
-        elif last["modality"] == "open":
+        elif last["modality"] in ("open", "voice"):
             detail = last.get("detail") or {}
             columns = st.columns(3)
             columns[0].metric("Eval confidence", f"{float(detail.get('evaluation_confidence') or 0):.2f}")
@@ -1628,16 +1779,17 @@ def render_assessment() -> None:
             items_administered=state.items_administered,
         ):
             state = run_async(
-                engine().fill_queue(
+                engine(active_bank_id()).fill_queue(
                     state, use_llm=use_llm(), rng=np.random.default_rng(seed)
                 )
             )
-        state = engine().ensure_presenting(state)
+        state = engine(active_bank_id()).ensure_presenting(state)
         st.session_state["run"] = state
 
-        stop, reason = engine().should_stop(state)
+        stop, reason = engine(active_bank_id()).should_stop(state)
         if stop:
             st.session_state.update(finished=True, stop_reason=reason)
+            session_dump.record_session(state, active_bank_id(), stop_reason=reason)
             # The session is over; push whatever is still buffered rather than waiting for
             # the interval flush that a stopped Streamlit script may never reach.
             observability.flush()
@@ -1689,7 +1841,7 @@ def render_assessment() -> None:
 
     # --- main
     if finished:
-        report = engine().summarise(state, st.session_state["stop_reason"])
+        report = engine(active_bank_id()).summarise(state, st.session_state["stop_reason"])
         st.title("Assessment complete")
         st.success(
             f"Stopped: **{report.stop_reason}** after {report.items_administered} questions. "

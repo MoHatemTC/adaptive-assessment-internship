@@ -11,12 +11,16 @@ import re
 
 import streamlit as st
 
-from app.services.competency_graph import load_default_competency_graph
 from app.services.competency_graph.graph import CompetencyGraphService
+from app.services.orchestrator import registry
+
+# Right edge of the fixed legend row, plus a margin.
+LEGEND_WIDTH = 1200
 
 
-def graph_service() -> CompetencyGraphService:
-    return CompetencyGraphService(load_default_competency_graph())
+def graph_service(bank_id: str | None = None) -> CompetencyGraphService | None:
+    """The graph paired with `bank_id`. None when that bank declares none."""
+    return registry.get_graph_service(bank_id)
 
 
 def related_subgraph(
@@ -137,6 +141,69 @@ def mermaid_for_subgraph(
     return "\n".join(lines)
 
 
+def _prerequisite_order(
+    service: CompetencyGraphService, members: list[str], edges: list[tuple[str, str, str]]
+) -> list[str]:
+    """Members sorted by longest prerequisite depth, then by id.
+
+    Depth first so a chain reads left to right in teaching order; id second so the layout
+    is stable across renders and two sessions of the same graph look the same.
+    """
+    member_set = set(members)
+    depth = {nid: 0 for nid in members}
+    prerequisites = [
+        (frm, to)
+        for frm, to, relation in edges
+        if relation == "PREREQUISITE" and frm in member_set and to in member_set
+    ]
+    for _ in range(len(members)):
+        changed = False
+        for frm, to in prerequisites:
+            if depth[frm] + 1 > depth[to]:
+                depth[to] = depth[frm] + 1
+                changed = True
+        if not changed:
+            break
+    return sorted(members, key=lambda nid: (depth[nid], nid))
+
+
+def _bands(
+    service: CompetencyGraphService,
+    nodes: set[str],
+    edges: list[tuple[str, str, str]],
+) -> list[tuple[str | None, list[str]]]:
+    """Group sub-competencies under the main they contribute to.
+
+    ONE LANE PER MAIN, rather than one global column per prerequisite depth. A bank whose
+    sub-competencies form a chain — which is what an authored numbering order produces —
+    puts every node in its own depth, so a depth-major layout renders sixteen columns of
+    one node each, nearly five thousand pixels wide and unreadable. Competencies are what
+    a reader is looking for; depth is a detail within one.
+    """
+    mains = [nid for nid in sorted(nodes) if service.graph.nodes[nid].node_type == "main"]
+    by_main: dict[str | None, list[str]] = {main: [] for main in mains}
+    orphans: list[str] = []
+
+    for nid in sorted(nodes):
+        if nid in by_main:
+            continue
+        owners = [m for m in service.mains_for_node(nid) if m in by_main]
+        if not owners and "." in nid and nid.split(".", 1)[0] in by_main:
+            owners = [nid.split(".", 1)[0]]
+        if owners:
+            by_main[owners[0]].append(nid)
+        else:
+            orphans.append(nid)
+
+    bands: list[tuple[str | None, list[str]]] = [
+        (main, _prerequisite_order(service, members, edges))
+        for main, members in by_main.items()
+    ]
+    if orphans:
+        bands.append((None, _prerequisite_order(service, orphans, edges)))
+    return bands
+
+
 def svg_for_subgraph(
     service: CompetencyGraphService,
     *,
@@ -144,74 +211,75 @@ def svg_for_subgraph(
     blocked: set[str] | None = None,
     mastered: set[str] | None = None,
     not_mastered: set[str] | None = None,
+    inferred: set[str] | None = None,
+    preview_inferred: set[str] | None = None,
+    preview_blocked: set[str] | None = None,
     contradicted: set[str] | None = None,
+    max_columns: int = 6,
 ) -> str:
     """Render a dependency graph as self-contained SVG.
 
     This intentionally has no JavaScript or CDN dependency. Streamlit can render the SVG
     directly, so corporate content filters and Mermaid parser/version differences cannot
     turn the assessment graph into a blank iframe or a syntax-error message.
+
+    Laid out as one band per main competency, wrapping at `max_columns`, so the width
+    stays bounded however many sub-competencies a bank declares.
     """
     blocked = blocked or set()
     mastered = mastered or set()
     not_mastered = not_mastered or set()
+    inferred = (inferred or set()) - mastered - not_mastered
     contradicted = contradicted or set()
+    # A forecast from edges nobody has validated. It ranks below every measured state, so
+    # a node the session actually asked about is never painted as a guess — and it is
+    # drawn dashed, because the one thing a reader must not do is read it as a result.
+    preview_inferred = (preview_inferred or set()) - mastered - not_mastered - inferred
+    preview_blocked = (preview_blocked or set()) - mastered - not_mastered - blocked
     nodes, edges = related_subgraph(service, focus_nodes)
     if not nodes:
         nodes = set(service.graph.nodes)
         edges = [(e.from_id, e.to_id, e.relation) for e in service.graph.edges]
 
     mains = {nid for nid in nodes if service.graph.nodes[nid].node_type == "main"}
-    prerequisite_edges = [
-        (frm, to) for frm, to, relation in edges if relation == "PREREQUISITE"
-    ]
+    bands = _bands(service, nodes, edges)
 
-    # Longest prerequisite distance gives a stable left-to-right topological layout.
-    level = {nid: 0 for nid in nodes if nid not in mains}
-    for _ in range(max(len(nodes), 1)):
-        changed = False
-        for frm, to in prerequisite_edges:
-            candidate = level.get(frm, 0) + 1
-            if candidate > level.get(to, 0):
-                level[to] = candidate
-                changed = True
-        if not changed:
-            break
-    main_level = max(level.values(), default=0) + 1
-    for nid in mains:
-        level[nid] = main_level
+    box_w, box_h = 196, 62
+    x_gap, y_gap = 44, 26
+    margin_x, margin_y = 26, 56
+    band_gap = 30
+    main_column_w = box_w + 56
 
-    columns: dict[int, list[str]] = {}
-    for nid in sorted(nodes):
-        columns.setdefault(level.get(nid, 0), []).append(nid)
-
-    box_w, box_h = 210, 66
-    x_gap, y_gap = 70, 34
-    margin_x, margin_y = 30, 52
-    max_rows = max((len(column) for column in columns.values()), default=1)
-    width = max(
-        760,
-        margin_x * 2 + (max(columns, default=0) + 1) * box_w
-        + max(max(columns, default=0), 0) * x_gap,
-    )
-    height = margin_y * 2 + max_rows * box_h + max(max_rows - 1, 0) * y_gap
+    columns = max(1, min(max_columns, max((len(members) for _main, members in bands), default=1)))
+    width = margin_x * 2 + main_column_w + columns * box_w + (columns - 1) * x_gap
+    # The legend is a fixed-width row. A graph narrower than it would clip its own key.
+    width = max(width, LEGEND_WIDTH)
 
     positions: dict[str, tuple[float, float]] = {}
-    for col, column_nodes in columns.items():
-        column_height = len(column_nodes) * box_h + max(len(column_nodes) - 1, 0) * y_gap
-        top = (height - column_height) / 2
-        for row, nid in enumerate(column_nodes):
+    band_extents: list[tuple[str | None, float, float]] = []
+    y = margin_y
+    for main, members in bands:
+        rows = max(1, -(-len(members) // columns))  # ceiling division
+        band_h = rows * box_h + (rows - 1) * y_gap
+        if main is not None:
+            positions[main] = (margin_x, y + (band_h - box_h) / 2)
+        for index, nid in enumerate(members):
+            row, col = divmod(index, columns)
             positions[nid] = (
-                margin_x + col * (box_w + x_gap),
-                top + row * (box_h + y_gap),
+                margin_x + main_column_w + col * (box_w + x_gap),
+                y + row * (box_h + y_gap),
             )
+        band_extents.append((main, y - 10, band_h + 20))
+        y += band_h + band_gap
+    height = y - band_gap + margin_y
 
-    def colors(nid: str) -> tuple[str, str, int]:
+    def colors(nid: str) -> tuple[str, str, int, str]:
         # Fill encodes persisted state; focus is rendered as a blue stroke halo
         # that must remain visible even when the node is mastered/blocked.
         fill = "#ffffff"
         stroke = "#6c757d"
         stroke_width = 2
+        dash = ""
 
         if nid in contradicted:
             fill, stroke, stroke_width = "#f8d7da", "#842029", 3
@@ -221,28 +289,35 @@ def svg_for_subgraph(
             fill, stroke, stroke_width = "#fff3cd", "#664d03", 3
         elif nid in mastered:
             fill, stroke, stroke_width = "#d1e7dd", "#0f5132", 3
+        elif nid in inferred:
+            # Deliberately NOT the mastered colour. An inference is a deduction from
+            # another answer, it never entered the estimate, and an assessor reading this
+            # graph must be able to tell the two apart at a glance.
+            fill, stroke, stroke_width = "#e7f0e9", "#0f5132", 2
+        elif nid in preview_blocked:
+            fill, stroke, stroke_width, dash = "#fffaf0", "#664d03", 2, "5 4"
+        elif nid in preview_inferred:
+            fill, stroke, stroke_width, dash = "#f2f7f3", "#4b7a5c", 2, "5 4"
         elif nid in mains:
             fill, stroke, stroke_width = "#f8f9fa", "#212529", 3
         elif nid in focus_nodes:
-            # focus-only nodes (not mastered/blocked/contradicted): keep existing
-            # purple-blue fill for readability.
             fill, stroke, stroke_width = "#cfe2ff", "#084298", 3
 
         if nid in focus_nodes:
             stroke, stroke_width = "#084298", 4
 
-        return fill, stroke, stroke_width
+        return fill, stroke, stroke_width, dash
 
     parts = [
         f'<svg viewBox="0 0 {width} {height}" width="100%" '
-        f'height="{min(max(height, 420), 760)}" role="img" '
+        f'height="{min(max(height, 420), 900)}" role="img" '
         'aria-label="Competency dependency graph" xmlns="http://www.w3.org/2000/svg">',
         "<defs>",
         '<marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" '
         'markerWidth="7" markerHeight="7" orient="auto-start-reverse">'
         '<path d="M 0 0 L 10 5 L 0 10 z" fill="#56606a"/></marker>',
         "</defs>",
-        '<rect width="100%" height="100%" fill="#fafafa" rx="10"/>',
+        f'<rect width="{width}" height="{height}" fill="#fafafa" rx="10"/>',
         '<g aria-label="Graph legend" font-family="system-ui, sans-serif" '
         'font-size="11" fill="#333">',
         '<rect x="22" y="16" width="13" height="13" rx="2" fill="#cfe2ff" '
@@ -259,36 +334,63 @@ def svg_for_subgraph(
         'stroke-dasharray="7 5"/><text x="521" y="27">contributes to</text>',
         '<rect x="620" y="16" width="13" height="13" rx="2" fill="#fde2e1" '
         'stroke="#b42318"/><text x="639" y="27">not mastered</text>',
+        '<rect x="717" y="16" width="13" height="13" rx="2" fill="#e7f0e9" '
+        'stroke="#0f5132" stroke-dasharray="3 2"/>'
+        '<text x="736" y="27">inferred (never measured)</text>',
+        '<rect x="890" y="16" width="13" height="13" rx="2" fill="#f2f7f3" '
+        'stroke="#4b7a5c" stroke-width="2" stroke-dasharray="5 4"/>'
+        '<text x="909" y="27">would be inferred (unvalidated edge)</text>',
         "</g>",
     ]
+
+    # Band backgrounds first, so every edge and node draws on top of them.
+    for main, band_y, band_h in band_extents:
+        if main is None:
+            continue
+        parts.append(
+            f'<rect x="{margin_x - 12}" y="{band_y}" width="{width - 2 * margin_x + 24}" '
+            f'height="{band_h}" rx="12" fill="#ffffff" stroke="#e6e9ec"/>'
+        )
+
     for frm, to, relation in edges:
         if frm not in positions or to not in positions:
             continue
         x1, y1 = positions[frm]
         x2, y2 = positions[to]
         dashed = ' stroke-dasharray="7 5"' if relation == "CONTRIBUTES_TO" else ""
+        # Same row: edge along the row. Different row (a wrap, or a contribution to the
+        # main on the left): centre to centre, which stays readable without a router.
+        if abs(y1 - y2) < 1 and x2 > x1:
+            start_x, start_y, end_x, end_y = x1 + box_w, y1 + box_h / 2, x2, y2 + box_h / 2
+        else:
+            start_x, start_y = x1 + box_w / 2, y1 + box_h / 2
+            end_x, end_y = x2 + box_w / 2, y2 + box_h / 2
         parts.append(
-            f'<line x1="{x1 + box_w}" y1="{y1 + box_h / 2}" x2="{x2}" '
-            f'y2="{y2 + box_h / 2}" stroke="#56606a" stroke-width="2"{dashed} '
-            'marker-end="url(#arrow)"/>'
+            f'<line x1="{start_x:.1f}" y1="{start_y:.1f}" x2="{end_x:.1f}" '
+            f'y2="{end_y:.1f}" stroke="#56606a" stroke-width="2"{dashed} '
+            'marker-end="url(#arrow)" opacity="0.55"/>'
         )
 
     for nid in sorted(nodes):
-        x, y = positions[nid]
-        fill, stroke, stroke_width = colors(nid)
+        if nid not in positions:
+            continue
+        x, y_pos = positions[nid]
+        fill, stroke, stroke_width, dash = colors(nid)
+        dash_attr = f' stroke-dasharray="{dash}"' if dash else ""
         node = service.graph.nodes[nid]
         title = node.title
-        if len(title) > 29:
-            title = title[:27].rstrip() + "…"
+        if len(title) > 26:
+            title = title[:24].rstrip() + "…"
         parts.extend(
             [
                 f'<g><title>{escape(nid)}: {escape(node.title)}</title>',
-                f'<rect x="{x}" y="{y}" width="{box_w}" height="{box_h}" rx="10" '
-                f'fill="{fill}" stroke="{stroke}" stroke-width="{stroke_width}"/>',
-                f'<text x="{x + 12}" y="{y + 25}" font-family="system-ui, sans-serif" '
-                f'font-size="16" font-weight="700" fill="#111">{escape(nid)}</text>',
-                f'<text x="{x + 12}" y="{y + 48}" font-family="system-ui, sans-serif" '
-                f'font-size="12" fill="#333">{escape(title)}</text></g>',
+                f'<rect x="{x}" y="{y_pos}" width="{box_w}" height="{box_h}" rx="10" '
+                f'fill="{fill}" stroke="{stroke}" stroke-width="{stroke_width}"'
+                f"{dash_attr}/>",
+                f'<text x="{x + 11}" y="{y_pos + 24}" font-family="system-ui, sans-serif" '
+                f'font-size="15" font-weight="700" fill="#111">{escape(nid)}</text>',
+                f'<text x="{x + 11}" y="{y_pos + 45}" font-family="system-ui, sans-serif" '
+                f'font-size="11" fill="#333">{escape(title)}</text></g>',
             ]
         )
     parts.append("</svg>")
