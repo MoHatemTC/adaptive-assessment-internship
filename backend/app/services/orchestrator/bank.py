@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import json
 import logging
-from functools import lru_cache
 from pathlib import Path
 from typing import Protocol
 
@@ -39,20 +38,47 @@ def _sorted_main_codes(codes: set[str] | list[str]) -> list[str]:
 
 
 class UnifiedBankRepository(Protocol):
+    """What the ENGINE needs. Deliberately four methods: a filtered or simulated bank
+    should be substitutable without also implementing the reporting surface."""
+
     def all_items(self) -> list[BankItem]: ...
     def get(self, item_id: str) -> BankItem | None: ...
     def shortlist(self, variable: str, exclude: set[str]) -> list[BankItem]: ...
     def variables(self) -> list[str]: ...
 
 
+class BankReporting(UnifiedBankRepository, Protocol):
+    """What the UI and the diagnostics need, on top of the engine seam."""
+
+    def coverage(self) -> dict[str, dict[str, int]]: ...
+    def tracks(self) -> list[dict]: ...
+    def main_competencies(self) -> list[dict]: ...
+    def information_parity(self, variable: str) -> dict: ...
+    def parity_report(self) -> list[dict]: ...
+
+
 class JsonUnifiedBank:
-    """Reads the bundled unified bank. Parsed and validated once per process."""
+    """Reads one unified bank file. Parsed and validated once per instance."""
 
     def __init__(self, path: Path | str = BANK_PATH) -> None:
         self._path = Path(path)
+        # An instance memo rather than `@lru_cache` on the method: that decorator keys on
+        # `self`, so it pins every instance ever constructed for the life of the process
+        # and, at maxsize=1, re-reads the file whenever two instances are used in turn.
+        # With a registry there is normally one instance per bank id, but a hand-built
+        # `JsonUnifiedBank(path)` should not be a performance trap either.
+        self._items: tuple[BankItem, ...] | None = None
 
-    @lru_cache(maxsize=1)  # noqa: B019 — one repository per path, bounded by construction
+    @property
+    def path(self) -> Path:
+        return self._path
+
     def _load(self) -> tuple[BankItem, ...]:
+        if self._items is None:
+            self._items = self._parse()
+        return self._items
+
+    def _parse(self) -> tuple[BankItem, ...]:
         raw = json.loads(self._path.read_text(encoding="utf-8"))
         entries = raw["items"] if isinstance(raw, dict) else raw
 
