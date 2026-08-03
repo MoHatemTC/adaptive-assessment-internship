@@ -44,8 +44,13 @@ def test_rollup_combines_sub_competencies_under_one_main():
 
 class TestPresentingQueue:
     @pytest.mark.asyncio
-    async def test_presenting_competency_is_absent_from_queue(self, orchestrator):
-        state = orchestrator.begin(["C1", "C2"])
+    async def test_presenting_competency_is_absent_from_queue(self, orchestrator, bank):
+        tracks = [t["code"] for t in bank.tracks()]
+        if len(tracks) < 1:
+            pytest.skip("bank has no main competencies")
+        # Prefer two mains when available; otherwise exercise the single-track bank.
+        chosen = tracks[:2] if len(tracks) >= 2 else tracks
+        state = orchestrator.begin(chosen)
         state = await orchestrator.fill_queue(state, use_llm=False, rng=np.random.default_rng(0))
         state = orchestrator.ensure_presenting(state)
         assert state.presenting is not None

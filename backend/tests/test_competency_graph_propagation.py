@@ -27,11 +27,11 @@ def test_single_mcq_hit_does_not_infer_prerequisite_mastery() -> None:
     graph = CompetencyGraphService(load_default_competency_graph())
     [update] = shadow_apply_events(
         graph,
-        [_event(target="PY.7", modality="mcq")],
+        [_event(target="DA.4", modality="mcq")],
         config=PropagationConfig(),
     )
 
-    assert update.direct_updates[0].target_node == "PY.7"
+    assert update.direct_updates[0].target_node == "DA.4"
     assert update.inferred_updates == ()
 
 
@@ -39,19 +39,19 @@ def test_code_success_can_infer_enabled_prerequisites() -> None:
     graph = CompetencyGraphService(load_default_competency_graph())
     [update] = shadow_apply_events(
         graph,
-        [_event(target="PY.8", modality="code")],
+        [_event(target="DA.6", modality="code")],
         config=PropagationConfig(),
     )
 
     inferred = {event.target_node for event in update.inferred_updates}
-    assert inferred == {"PY.1", "PY.4", "PY.5"}
+    assert inferred == {"DA.1", "DA.2", "DA.3", "DA.4"}
 
 
 def test_non_strong_score_does_not_mark_mastery_or_propagate() -> None:
     graph = CompetencyGraphService(load_default_competency_graph())
     [update] = shadow_apply_events(
         graph,
-        [_event(target="PY.9", modality="open", score=0.5274)],
+        [_event(target="DA.5", modality="open", score=0.5274)],
         config=PropagationConfig(),
     )
 

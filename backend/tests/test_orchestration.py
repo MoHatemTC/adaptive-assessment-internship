@@ -125,11 +125,11 @@ class TestGraphCoverageGate:
         monkeypatch.setattr(
             settings_module.settings, "graph_coverage_critical_only", False
         )
-        state = orchestrator.begin(["PY"])
+        state = orchestrator.begin(["DA"])
         state = state.model_copy(
             update={
                 "graph_direct_measured_nodes": [
-                    f"PY.{index}" for index in range(1, 11) if index != 8
+                    f"DA.{index}" for index in range(1, 7) if index != 5
                 ]
             }
         )
@@ -137,9 +137,9 @@ class TestGraphCoverageGate:
         updated = await orchestrator.fill_queue(
             state, use_llm=False, rng=np.random.default_rng(0)
         )
-        chosen = bank.get(updated.queue["PY"].item_id)
+        chosen = bank.get(updated.queue["DA"].item_id)
         assert chosen is not None
-        assert "PY.8" in {measure.variable for measure in chosen.measures}
+        assert "DA.5" in {measure.variable for measure in chosen.measures}
 
     def test_precision_stop_waits_for_unmeasured_subs(self, orchestrator, bank, monkeypatch):
         from app.config import settings as settings_module
@@ -155,7 +155,7 @@ class TestGraphCoverageGate:
         item = next(
             i
             for i in bank.all_items()
-            if i.modality == "mcq" and i.measures[0].variable.startswith("PY.")
+            if i.modality == "mcq" and i.measures[0].variable.startswith("DA.")
         )
         main = item.measures[0].variable.split(".")[0]
         state = orchestrator.begin([main])
@@ -248,15 +248,25 @@ class TestCalibration:
         """Nobody guesses their way to a passing test suite."""
         assert code_cat_parameters(0.4, 1.2)["c"] == 0.0
 
-    def test_open_ended_calibration_is_refused_not_guessed(self):
-        with pytest.raises(NotImplementedError):
-            open_cat_parameters(0.5, 1.0)
+    def test_open_ended_items_carry_authored_theta_parameters(self, bank):
+        """Open items ship with envelope `cat` params; calibration helper is a fallback."""
+        opens = [i for i in bank.all_items() if i.modality == "open"]
+        assert opens
+        for item in opens:
+            assert 0.0 < item.cat.a <= 3.0
+            assert -4.0 <= item.cat.b <= 4.0
+            assert item.cat.c == 0.0
+        # Fallback helper still produces a usable provisional triple when needed.
+        params = open_cat_parameters(0.5, 1.0)
+        assert params["a"] > 0
+        assert -4.0 <= params["b"] <= 4.0
+        assert 0.0 <= params["c"] < 1.0
 
 
 class TestUnifiedBank:
     def test_both_modalities_are_present(self, bank):
         modalities = {i.modality for i in bank.all_items()}
-        assert modalities == {"mcq", "code"}
+        assert modalities == {"mcq", "code", "open"}
 
     def test_every_item_carries_theta_parameters(self, bank):
         """The invariant that makes cross-modality ranking valid."""

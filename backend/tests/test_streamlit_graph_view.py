@@ -20,19 +20,19 @@ def test_focused_dag_is_valid_self_contained_svg() -> None:
 
     svg = graph_view.svg_for_subgraph(
         service,
-        focus_nodes={"PY.5"},
-        mastered={"PY.1"},
-        not_mastered={"PY.5"},
-        blocked={"PY.6"},
-        contradicted={"PY.7"},
+        focus_nodes={"DA.5"},
+        mastered={"DA.1"},
+        not_mastered={"DA.5"},
+        blocked={"DA.4"},
+        contradicted={"DA.3"},
     )
 
     root = ElementTree.fromstring(svg)
     assert root.tag.endswith("svg")
     assert root.attrib["aria-label"] == "Competency dependency graph"
-    assert "PY.5" in svg
-    assert "PY.1" in svg
-    assert "PY.6" in svg
+    assert "DA.5" in svg
+    assert "DA.1" in svg
+    assert "DA.4" in svg
     assert "Graph legend" in svg
     assert "not mastered" in svg
     assert "#b42318" in svg

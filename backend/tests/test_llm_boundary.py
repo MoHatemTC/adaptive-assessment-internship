@@ -103,10 +103,10 @@ async def test_the_picker_falls_back_when_the_gateway_refuses(monkeypatch):
     from app.services.orchestrator.bank import JsonUnifiedBank
     from app.services.orchestrator.variables import seed_variable
 
-    pool = JsonUnifiedBank().shortlist("C1", exclude=set())
-    state = seed_variable("C1", self_rating=3)
+    pool = JsonUnifiedBank().shortlist("DA", exclude=set())
+    state = seed_variable("DA", self_rating=3)
 
-    candidate = await picker_module.pick(pool, state, "C1", use_llm=True)
+    candidate = await picker_module.pick(pool, state, "DA", use_llm=True)
     assert candidate is not None
     assert candidate.chosen_by_llm is False
     assert candidate.item_id in {item.item_id for item in pool}
@@ -136,9 +136,9 @@ async def test_the_picker_sends_serialised_text(monkeypatch):
     from app.services.orchestrator.bank import JsonUnifiedBank
     from app.services.orchestrator.variables import seed_variable
 
-    pool = JsonUnifiedBank().shortlist("C1", exclude=set())
-    state = seed_variable("C1", self_rating=3)
+    pool = JsonUnifiedBank().shortlist("DA", exclude=set())
+    state = seed_variable("DA", self_rating=3)
 
-    await picker_module.pick(pool, state, "C1", use_llm=True)
+    await picker_module.pick(pool, state, "DA", use_llm=True)
     assert isinstance(seen["user"], str)
-    assert json.loads(seen["user"])["variable_under_test"] == "C1"
+    assert json.loads(seen["user"])["variable_under_test"] == "DA"
