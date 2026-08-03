@@ -1,0 +1,1072 @@
+{
+ "version": "1.1",
+ "bank_id": "AIE",
+ "notes": "Four sub-competencies serve two main competencies each (C1.6, C6.3, C3.9, C3.10). One node holds one authoritative state; every main it contributes to is recalculated from it. PREREQUISITE edges encode the authored numbering order within a node's home main and nothing else — they ship with upward inference and downward blocking DISABLED and validation_status=unvalidated. Only scripts/validate_prerequisite_edges.py --apply, against a real session corpus, may enable one.",
+ "nodes": [
+  {
+   "competency_id": "C1",
+   "title": "Software and AI Application Engineering",
+   "node_type": "main",
+   "critical": true,
+   "context_specific": false,
+   "main_competencies": []
+  },
+  {
+   "competency_id": "C3",
+   "title": "Machine Learning and Statistical Engineering",
+   "node_type": "main",
+   "critical": true,
+   "context_specific": false,
+   "main_competencies": []
+  },
+  {
+   "competency_id": "C6",
+   "title": "LLM, Prompt, RAG and Knowledge Engineering",
+   "node_type": "main",
+   "critical": true,
+   "context_specific": false,
+   "main_competencies": []
+  },
+  {
+   "competency_id": "C1.1",
+   "title": "Core Python & programming fundamentals",
+   "node_type": "sub_competency",
+   "critical": true,
+   "context_specific": false,
+   "main_competencies": [
+    "C1"
+   ],
+   "shared": false
+  },
+  {
+   "competency_id": "C1.2",
+   "title": "Data structures & algorithms",
+   "node_type": "sub_competency",
+   "critical": true,
+   "context_specific": false,
+   "main_competencies": [
+    "C1"
+   ],
+   "shared": false
+  },
+  {
+   "competency_id": "C1.3",
+   "title": "Code quality & engineering workflow",
+   "node_type": "sub_competency",
+   "critical": false,
+   "context_specific": false,
+   "main_competencies": [
+    "C1"
+   ],
+   "shared": false
+  },
+  {
+   "competency_id": "C1.4",
+   "title": "Backend services & APIs",
+   "node_type": "sub_competency",
+   "critical": true,
+   "context_specific": false,
+   "main_competencies": [
+    "C1"
+   ],
+   "shared": false
+  },
+  {
+   "competency_id": "C1.5",
+   "title": "Persistence & access control",
+   "node_type": "sub_competency",
+   "critical": false,
+   "context_specific": false,
+   "main_competencies": [
+    "C1"
+   ],
+   "shared": false
+  },
+  {
+   "competency_id": "C1.6",
+   "title": "AI application integration",
+   "node_type": "sub_competency",
+   "critical": true,
+   "context_specific": false,
+   "main_competencies": [
+    "C1",
+    "C6"
+   ],
+   "shared": true
+  },
+  {
+   "competency_id": "C3.1",
+   "title": "Probability, linear algebra & optimisation",
+   "node_type": "sub_competency",
+   "critical": true,
+   "context_specific": false,
+   "main_competencies": [
+    "C3"
+   ],
+   "shared": false
+  },
+  {
+   "competency_id": "C3.2",
+   "title": "Classical ML algorithms & ensembles",
+   "node_type": "sub_competency",
+   "critical": true,
+   "context_specific": false,
+   "main_competencies": [
+    "C3"
+   ],
+   "shared": false
+  },
+  {
+   "competency_id": "C3.3",
+   "title": "Feature engineering & training data",
+   "node_type": "sub_competency",
+   "critical": false,
+   "context_specific": false,
+   "main_competencies": [
+    "C3"
+   ],
+   "shared": false
+  },
+  {
+   "competency_id": "C3.4",
+   "title": "Baselines & algorithm selection",
+   "node_type": "sub_competency",
+   "critical": false,
+   "context_specific": false,
+   "main_competencies": [
+    "C3"
+   ],
+   "shared": false
+  },
+  {
+   "competency_id": "C3.5",
+   "title": "Training, tuning & inference efficiency",
+   "node_type": "sub_competency",
+   "critical": false,
+   "context_specific": false,
+   "main_competencies": [
+    "C3"
+   ],
+   "shared": false
+  },
+  {
+   "competency_id": "C3.6",
+   "title": "Bias, variance & regularisation",
+   "node_type": "sub_competency",
+   "critical": false,
+   "context_specific": false,
+   "main_competencies": [
+    "C3"
+   ],
+   "shared": false
+  },
+  {
+   "competency_id": "C3.7",
+   "title": "Overfitting & generalisation",
+   "node_type": "sub_competency",
+   "critical": true,
+   "context_specific": false,
+   "main_competencies": [
+    "C3"
+   ],
+   "shared": false
+  },
+  {
+   "competency_id": "C3.8",
+   "title": "Dataset splitting & cross-validation",
+   "node_type": "sub_competency",
+   "critical": false,
+   "context_specific": false,
+   "main_competencies": [
+    "C3"
+   ],
+   "shared": false
+  },
+  {
+   "competency_id": "C3.9",
+   "title": "Metric selection & model comparison",
+   "node_type": "sub_competency",
+   "critical": true,
+   "context_specific": false,
+   "main_competencies": [
+    "C3",
+    "C6"
+   ],
+   "shared": true
+  },
+  {
+   "competency_id": "C3.10",
+   "title": "Error analysis & model calibration",
+   "node_type": "sub_competency",
+   "critical": false,
+   "context_specific": false,
+   "main_competencies": [
+    "C3",
+    "C6"
+   ],
+   "shared": true
+  },
+  {
+   "competency_id": "C3.11",
+   "title": "Robustness, fairness & interpretation",
+   "node_type": "sub_competency",
+   "critical": false,
+   "context_specific": false,
+   "main_competencies": [
+    "C3"
+   ],
+   "shared": false
+  },
+  {
+   "competency_id": "C6.1",
+   "title": "LLM internals, embeddings & sampling",
+   "node_type": "sub_competency",
+   "critical": true,
+   "context_specific": false,
+   "main_competencies": [
+    "C6"
+   ],
+   "shared": false
+  },
+  {
+   "competency_id": "C6.2",
+   "title": "Model families & capabilities",
+   "node_type": "sub_competency",
+   "critical": false,
+   "context_specific": false,
+   "main_competencies": [
+    "C6"
+   ],
+   "shared": false
+  },
+  {
+   "competency_id": "C6.3",
+   "title": "Model sourcing & serving",
+   "node_type": "sub_competency",
+   "critical": false,
+   "context_specific": false,
+   "main_competencies": [
+    "C6",
+    "C1"
+   ],
+   "shared": true
+  },
+  {
+   "competency_id": "C6.4",
+   "title": "Model selection, routing & cost",
+   "node_type": "sub_competency",
+   "critical": false,
+   "context_specific": false,
+   "main_competencies": [
+    "C6"
+   ],
+   "shared": false
+  },
+  {
+   "competency_id": "C6.5",
+   "title": "Instruction & few-shot prompting",
+   "node_type": "sub_competency",
+   "critical": true,
+   "context_specific": false,
+   "main_competencies": [
+    "C6"
+   ],
+   "shared": false
+  },
+  {
+   "competency_id": "C6.6",
+   "title": "Structured output, chaining & tools",
+   "node_type": "sub_competency",
+   "critical": false,
+   "context_specific": false,
+   "main_competencies": [
+    "C6"
+   ],
+   "shared": false
+  },
+  {
+   "competency_id": "C6.7",
+   "title": "Context assembly & token budgeting",
+   "node_type": "sub_competency",
+   "critical": false,
+   "context_specific": false,
+   "main_competencies": [
+    "C6"
+   ],
+   "shared": false
+  },
+  {
+   "competency_id": "C6.8",
+   "title": "Prompt versioning & evaluation",
+   "node_type": "sub_competency",
+   "critical": false,
+   "context_specific": false,
+   "main_competencies": [
+    "C6"
+   ],
+   "shared": false
+  },
+  {
+   "competency_id": "C6.9",
+   "title": "Trusted context & injection defence",
+   "node_type": "sub_competency",
+   "critical": false,
+   "context_specific": false,
+   "main_competencies": [
+    "C6"
+   ],
+   "shared": false
+  },
+  {
+   "competency_id": "C6.10",
+   "title": "RAG design & document processing",
+   "node_type": "sub_competency",
+   "critical": true,
+   "context_specific": false,
+   "main_competencies": [
+    "C6"
+   ],
+   "shared": false
+  },
+  {
+   "competency_id": "C6.11",
+   "title": "Vector stores & hybrid search",
+   "node_type": "sub_competency",
+   "critical": true,
+   "context_specific": false,
+   "main_competencies": [
+    "C6"
+   ],
+   "shared": false
+  },
+  {
+   "competency_id": "C6.12",
+   "title": "Metadata & permission-aware filtering",
+   "node_type": "sub_competency",
+   "critical": false,
+   "context_specific": false,
+   "main_competencies": [
+    "C6"
+   ],
+   "shared": false
+  },
+  {
+   "competency_id": "C6.13",
+   "title": "Query rewriting & reranking",
+   "node_type": "sub_competency",
+   "critical": false,
+   "context_specific": false,
+   "main_competencies": [
+    "C6"
+   ],
+   "shared": false
+  },
+  {
+   "competency_id": "C6.14",
+   "title": "Grounding & citations",
+   "node_type": "sub_competency",
+   "critical": true,
+   "context_specific": false,
+   "main_competencies": [
+    "C6"
+   ],
+   "shared": false
+  },
+  {
+   "competency_id": "C6.15",
+   "title": "Retrieval evaluation",
+   "node_type": "sub_competency",
+   "critical": false,
+   "context_specific": false,
+   "main_competencies": [
+    "C6"
+   ],
+   "shared": false
+  },
+  {
+   "competency_id": "C6.16",
+   "title": "Multi-hop & graph RAG",
+   "node_type": "sub_competency",
+   "critical": false,
+   "context_specific": false,
+   "main_competencies": [
+    "C6"
+   ],
+   "shared": false
+  }
+ ],
+ "edges": [
+  {
+   "from": "C1.1",
+   "to": "C1",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.1429
+  },
+  {
+   "from": "C1.2",
+   "to": "C1",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.1429
+  },
+  {
+   "from": "C1.3",
+   "to": "C1",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.1429
+  },
+  {
+   "from": "C1.4",
+   "to": "C1",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.1429
+  },
+  {
+   "from": "C1.5",
+   "to": "C1",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.1429
+  },
+  {
+   "from": "C1.6",
+   "to": "C1",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.1429
+  },
+  {
+   "from": "C6.3",
+   "to": "C1",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.1426
+  },
+  {
+   "from": "C3.1",
+   "to": "C3",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.0909
+  },
+  {
+   "from": "C3.2",
+   "to": "C3",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.0909
+  },
+  {
+   "from": "C3.3",
+   "to": "C3",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.0909
+  },
+  {
+   "from": "C3.4",
+   "to": "C3",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.0909
+  },
+  {
+   "from": "C3.5",
+   "to": "C3",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.0909
+  },
+  {
+   "from": "C3.6",
+   "to": "C3",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.0909
+  },
+  {
+   "from": "C3.7",
+   "to": "C3",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.0909
+  },
+  {
+   "from": "C3.8",
+   "to": "C3",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.0909
+  },
+  {
+   "from": "C3.9",
+   "to": "C3",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.0909
+  },
+  {
+   "from": "C3.10",
+   "to": "C3",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.0909
+  },
+  {
+   "from": "C3.11",
+   "to": "C3",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.091
+  },
+  {
+   "from": "C1.6",
+   "to": "C6",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.0526
+  },
+  {
+   "from": "C3.9",
+   "to": "C6",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.0526
+  },
+  {
+   "from": "C3.10",
+   "to": "C6",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.0526
+  },
+  {
+   "from": "C6.1",
+   "to": "C6",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.0526
+  },
+  {
+   "from": "C6.2",
+   "to": "C6",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.0526
+  },
+  {
+   "from": "C6.3",
+   "to": "C6",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.0526
+  },
+  {
+   "from": "C6.4",
+   "to": "C6",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.0526
+  },
+  {
+   "from": "C6.5",
+   "to": "C6",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.0526
+  },
+  {
+   "from": "C6.6",
+   "to": "C6",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.0526
+  },
+  {
+   "from": "C6.7",
+   "to": "C6",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.0526
+  },
+  {
+   "from": "C6.8",
+   "to": "C6",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.0526
+  },
+  {
+   "from": "C6.9",
+   "to": "C6",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.0526
+  },
+  {
+   "from": "C6.10",
+   "to": "C6",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.0526
+  },
+  {
+   "from": "C6.11",
+   "to": "C6",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.0526
+  },
+  {
+   "from": "C6.12",
+   "to": "C6",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.0526
+  },
+  {
+   "from": "C6.13",
+   "to": "C6",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.0526
+  },
+  {
+   "from": "C6.14",
+   "to": "C6",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.0526
+  },
+  {
+   "from": "C6.15",
+   "to": "C6",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.0526
+  },
+  {
+   "from": "C6.16",
+   "to": "C6",
+   "relation": "CONTRIBUTES_TO",
+   "weight": 0.0532
+  },
+  {
+   "from": "C1.1",
+   "to": "C1.2",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  },
+  {
+   "from": "C1.2",
+   "to": "C1.3",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  },
+  {
+   "from": "C1.3",
+   "to": "C1.4",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  },
+  {
+   "from": "C1.4",
+   "to": "C1.5",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  },
+  {
+   "from": "C1.5",
+   "to": "C1.6",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  },
+  {
+   "from": "C3.1",
+   "to": "C3.2",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  },
+  {
+   "from": "C3.2",
+   "to": "C3.3",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  },
+  {
+   "from": "C3.3",
+   "to": "C3.4",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  },
+  {
+   "from": "C3.4",
+   "to": "C3.5",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  },
+  {
+   "from": "C3.5",
+   "to": "C3.6",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  },
+  {
+   "from": "C3.6",
+   "to": "C3.7",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  },
+  {
+   "from": "C3.7",
+   "to": "C3.8",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  },
+  {
+   "from": "C3.8",
+   "to": "C3.9",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  },
+  {
+   "from": "C3.9",
+   "to": "C3.10",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  },
+  {
+   "from": "C3.10",
+   "to": "C3.11",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  },
+  {
+   "from": "C6.1",
+   "to": "C6.2",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  },
+  {
+   "from": "C6.2",
+   "to": "C6.3",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  },
+  {
+   "from": "C6.3",
+   "to": "C6.4",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  },
+  {
+   "from": "C6.4",
+   "to": "C6.5",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  },
+  {
+   "from": "C6.5",
+   "to": "C6.6",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  },
+  {
+   "from": "C6.6",
+   "to": "C6.7",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  },
+  {
+   "from": "C6.7",
+   "to": "C6.8",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  },
+  {
+   "from": "C6.8",
+   "to": "C6.9",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  },
+  {
+   "from": "C6.9",
+   "to": "C6.10",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  },
+  {
+   "from": "C6.10",
+   "to": "C6.11",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  },
+  {
+   "from": "C6.11",
+   "to": "C6.12",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  },
+  {
+   "from": "C6.12",
+   "to": "C6.13",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  },
+  {
+   "from": "C6.13",
+   "to": "C6.14",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  },
+  {
+   "from": "C6.14",
+   "to": "C6.15",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  },
+  {
+   "from": "C6.15",
+   "to": "C6.16",
+   "relation": "PREREQUISITE",
+   "strength": 0.5,
+   "allow_upward_inference": false,
+   "allow_downward_blocking": false,
+   "metadata": {
+    "validation_status": "unvalidated",
+    "basis": "sub_competency_numbering_order",
+    "authored_at": "2026-08-03",
+    "n_parent_failures": 0,
+    "p_pass_child_given_fail_parent": null
+   }
+  }
+ ]
+}
