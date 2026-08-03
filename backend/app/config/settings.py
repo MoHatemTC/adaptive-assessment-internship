@@ -61,6 +61,27 @@ class Settings(BaseSettings):
     # Gateway often reached by IP with a cert SAN mismatch — set LITELLM_SSL_VERIFY=false.
     litellm_ssl_verify: bool = True
 
+    # --- bank selection ---------------------------------------------------------
+    # Which registered bank a session uses when the caller does not name one. Resolved by
+    # `services.orchestrator.registry`, which owns the id -> (bank file, graph file) map;
+    # this module deliberately does not import it, since settings is imported by nearly
+    # everything and the registry imports the item schema.
+    #
+    # A bank and its competency graph are selected TOGETHER. Pairing an AI Engineer bank
+    # with the Data Analysis graph makes every required coverage node unmeasurable and
+    # vetoes convergence forever, which reads as a measurement fault rather than a
+    # configuration one.
+    active_bank: str = "AIE"
+
+    # Where finished assessment states are appended, one JSON line per session, as
+    # `{dir}/{bank_id}.jsonl`. Empty disables it.
+    #
+    # This is the only corpus `scripts/validate_prerequisite_edges.py` can compute edge
+    # validity from — P(pass child | fail parent) needs sessions where both nodes received
+    # direct evidence, and nothing else in the system persists a finished session. Off by
+    # default because a dump of assessment states is candidate data.
+    cat_session_dump_dir: str = ""
+
     # --- CAT policy -------------------------------------------------------------
     # Target posterior standard error. Reaching it (after the precision floor below) is
     # the stop that counts as measured precision. Validate a bank against this before
@@ -112,6 +133,21 @@ class Settings(BaseSettings):
     # the guard can only check surface fidelity — it cannot prove difficulty was
     # preserved. Opt in when studying the feature, not by accident.
     cat_rephrasing_enabled: bool = False
+
+    # Stop when the reported LEVEL is probably right, rather than when the estimate is
+    # precise. OFF, and additive: it can end a competency early, never hold one open.
+    #
+    # Secondary because it asks a different question from precision and, near a band cut
+    # point, demands materially more evidence for the same standard error. That is the
+    # rule working — but it changes test length, and that wants measuring before it is
+    # trusted.
+    cat_band_probability_stop_enabled: bool = False
+    cat_band_probability_target: float = Field(default=0.80, gt=0.0, lt=1.0)
+
+    # Flag a response that the current posterior did not expect. Report-only: no branch
+    # may read it and change an estimate.
+    cat_aberrant_residual_threshold: float = Field(default=2.0, gt=0.0)
+    cat_aberrance_drives_verification: bool = False
 
     # --- code engine: scoring policy ------------------------------------------
     # B is the measured default: on 150 seeded submissions with known defects it separated
@@ -179,27 +215,112 @@ class Settings(BaseSettings):
     orchestrator_minimum_relative_utility: float = Field(default=0.75, ge=0.0, le=1.0)
     # Whole-assessment budget, across every variable. Per-variable stopping is the MCQ
     # engine's convergence rule; this is the outer bound.
-    orchestrator_max_items: int = Field(default=60, ge=1)
+    # A runaway guard, not a budget. At three mains and a twelve-question cap the session
+    # can administer at most 36 items, so this never binds — TIME does. Raised from 60 so
+    # it stops looking like the operative limit.
+    orchestrator_max_items: int = Field(default=120, ge=1)
     orchestrator_time_limit_minutes: int = Field(default=90, ge=1)
+    # Held back for the report and wrap-up, and excluded from item admissibility.
+    orchestrator_time_reserve_seconds: int = Field(default=120, ge=0)
+
+    # Rank on information PER MINUTE, weighted by the evidence a modality carries.
+    #
+    # ON by default because without it the 90-minute limit is arithmetically unreachable:
+    # eighteen code items — the bare observation floor for three mains under a code-heavy
+    # diet — is 147 minutes. OFF restores ranking on raw information exactly.
+    orchestrator_time_aware_selection_enabled: bool = True
+
+    # JSON. How much evidence a response in each modality typically carries. MCQ is exact
+    # (the grader sets weight from the item loading at confidence 1.0, with no degradation
+    # path); the others are read off the graders' discount rungs, NOT measured. They set
+    # the modality mix and therefore session length — measure them at the first pilot.
+    orchestrator_expected_weight_by_modality: str = ""
+    # JSON. Per-modality wall clock. Empty means "use the measured calibration if there
+    # is one, else the documented default" — see `services.orchestrator.selection_calibration`.
+    orchestrator_item_seconds_by_modality: str = ""
+
+    # Guarantee a mix. Pure information-per-minute makes the top twelve items all MCQ on
+    # the live bank — measured, a 6.6x advantage — so a "mixed" assessment quietly stops
+    # being one. Enforced as a pool constraint before the observation floor is reached, for
+    # the same reason coverage is: a soft bonus cannot survive that ratio.
+    orchestrator_modality_minimums: str = '{"code": 1, "voice": 1}'
 
     # --- competency graph layer (graph-augmented CAT) ------------------------
-    # Default to safe no-op: the graph can be loaded + shadow-processed without affecting
-    # posterior measurement, selection, or queueing.
-    competency_graph_enabled: bool = False
+    # THE MASTER SWITCH. Every graph entry point checks it first, through
+    # `competency_graph.config.graph_enabled()`; off means the engine behaves as though no
+    # graph existed, whatever the sub-flags say.
+    #
+    # It defaults True because the coverage gate below is already live by default, so the
+    # graph layer is already load-bearing — a switch that claimed to disable it while it
+    # kept running is worse than no switch, because an operator will reach for it during
+    # an incident and nothing will happen.
+    competency_graph_enabled: bool = True
     graph_shadow_mode: bool = True
 
-    # Phase 3+: filtering / inference / utility stay off until explicitly enabled.
+    # Inference / filtering / utility stay off until measured. The edges they would read
+    # are unvalidated (see scripts/validate_prerequisite_edges.py).
     graph_filtering_enabled: bool = False
     graph_upward_inference_enabled: bool = False
     graph_descendant_blocking_enabled: bool = False
-    graph_shared_main_rollup_enabled: bool = False
     graph_utility_enabled: bool = False
     # On by default: a main may not claim precision/stable-band convergence until every
     # required sub-competency has direct success or failure evidence. Budget stops still
     # finalise without that claim.
     graph_convergence_gate_enabled: bool = True
     # False = every sub under the main must be directly measured; True = critical only.
+    # Overridden per bank by `BankProfile.coverage_critical_only` — the right answer
+    # depends on how many sub-competencies a main declares against the question budget.
     graph_coverage_critical_only: bool = False
+
+    # REPORTING ONLY. Runs inference and blocking again with the per-edge validation gates
+    # waived, so a session records what the unvalidated PREREQUISITE edges WOULD have
+    # concluded. Nothing reads it: not the posterior, not selection, not coverage.
+    #
+    # Without it a bank whose edges all ship inert reports zero inferred and zero blocked
+    # nodes forever, which is indistinguishable from inference being broken — and leaves no
+    # way to judge an edge until someone enables it on live candidates. See
+    # `scripts/validate_prerequisite_edges.py`, which turns this record into a verdict.
+    graph_edge_preview_enabled: bool = True
+
+    # --- propagation policy ---------------------------------------------------
+    # The specification's suggested values, none of which has been calibrated against
+    # candidate data. Exposed because they are precisely the numbers an operator needs to
+    # move while watching a metric, and they used to be literals at five call sites.
+    graph_strong_success_threshold: float = Field(default=0.80, ge=0.0, le=1.0)
+    graph_strong_failure_threshold: float = Field(default=0.20, ge=0.0, le=1.0)
+    graph_minimum_propagation_confidence: float = Field(default=0.80, ge=0.0, le=1.0)
+    # Blocking is a stronger claim than inferring: it denies a candidate the chance to
+    # demonstrate a skill, so it demands more confidence.
+    graph_downward_block_confidence: float = Field(default=0.85, ge=0.0, le=1.0)
+    graph_upward_decay: float = Field(default=0.70, gt=0.0, le=1.0)
+    graph_minimum_inferred_weight: float = Field(default=0.15, ge=0.0, le=1.0)
+    graph_maximum_inferred_weight: float = Field(default=0.60, ge=0.0, le=1.0)
+    graph_maximum_propagation_depth: int = Field(default=4, ge=1)
+    # One multiple-choice hit does not imply prerequisite mastery. The specification asks
+    # for two confirming items first; that is not implemented, so one hit implies nothing.
+    graph_allow_mcq_single_hit_inference: bool = False
+    graph_allow_code_upward_inference: bool = True
+    graph_allow_voice_upward_inference: bool = True
+
+    # --- graph selection effects ----------------------------------------------
+    # Penalties, not exclusions. An excluded item can never disprove the belief that
+    # excluded it, which is how a false block becomes permanent and unmeasurable. At
+    # -0.90 a blocked item wins only when it is more than ten times better than anything
+    # else available — rare, and exactly the case a hard filter destroys.
+    #
+    # Both must stay strictly above -1.0: at -1.0 the ranking key is zero and the
+    # tie-break decides selection; below it, the ranking inverts.
+    graph_blocked_penalty: float = Field(default=-0.90, gt=-1.0, le=0.0)
+    # "We already know this" is a weaker claim than "we believe this is unreachable".
+    graph_mastered_noncritical_penalty: float = Field(default=-0.60, gt=-1.0, le=0.0)
+    graph_contradiction_bonus: float = Field(default=0.25, ge=0.0)
+    # Specification section 27's S(q). Per ADDITIONAL open main an item also evidences.
+    # Ranking is per variable, so without this an item measuring two open competencies is
+    # scored as though it measured one, and the shared-evidence design never pays off.
+    graph_shared_main_gain: float = Field(default=0.20, ge=0.0)
+    # Serve a blocked-node item every Nth observation, so the block is testable. 0 is off,
+    # and off means the false-blocking rate cannot be measured in production at all.
+    graph_unblocking_probe_period: int = Field(default=5, ge=0)
 
     # --- observability: Langfuse -----------------------------------------------
     # Traces every model call and groups them by assessment session. Off unless both keys
@@ -215,6 +336,49 @@ class Settings(BaseSettings):
     def langfuse_enabled(self) -> bool:
         """Both keys, or nothing. A public key alone cannot authenticate."""
         return bool(self.langfuse_public_key and self.langfuse_secret_key)
+
+    def _parsed_float_map(self, raw: str, name: str) -> dict[str, float]:
+        """A JSON object of modality -> float. Never raises.
+
+        A typo in an environment variable must not silently change how items are ranked.
+        """
+        raw = (raw or "").strip()
+        if not raw:
+            return {}
+        try:
+            parsed = json.loads(raw)
+            return {str(k).lower(): float(v) for k, v in parsed.items()}
+        except (ValueError, TypeError, AttributeError):
+            logger.warning("%s is not valid JSON (%r) — ignoring it", name, raw[:80])
+            return {}
+
+    def expected_weight_override(self) -> dict[str, float]:
+        """Operator-pinned expected weights. Empty means "decide from data or default"."""
+        return self._parsed_float_map(
+            self.orchestrator_expected_weight_by_modality,
+            "ORCHESTRATOR_EXPECTED_WEIGHT_BY_MODALITY",
+        )
+
+    def item_seconds_by_modality(self) -> dict[str, float]:
+        """Operator-pinned item durations. Empty means "decide from data or default"."""
+        return self._parsed_float_map(
+            self.orchestrator_item_seconds_by_modality,
+            "ORCHESTRATOR_ITEM_SECONDS_BY_MODALITY",
+        )
+
+    def modality_minimums(self) -> dict[str, int]:
+        """Parsed per-main modality floor. Never raises."""
+        raw = (self.orchestrator_modality_minimums or "").strip()
+        if not raw:
+            return {}
+        try:
+            parsed = json.loads(raw)
+            return {str(k): int(v) for k, v in parsed.items() if int(v) > 0}
+        except (ValueError, TypeError, AttributeError):
+            logger.warning(
+                "ORCHESTRATOR_MODALITY_MINIMUMS is not valid JSON (%r) — ignoring", raw[:80]
+            )
+            return {}
 
     def llm_share_override(self) -> dict[str, float]:
         """Parsed `code_llm_shares`, or {} when unset or malformed.
