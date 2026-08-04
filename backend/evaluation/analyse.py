@@ -448,11 +448,17 @@ def dag_safety(records: list[dict], cohort: Cohort) -> dict:
             "upper_95": round(stats.clopper_pearson_upper(k, n), 5) if n else None,
         }
 
-    # S-02 PREMATURE CONVERGENCE. The plan's definition is a disjunction of five clauses,
-    # three of which need a counterfactual continuation. The operational version here is
-    # the sharpest available and needs none: a competency that CLAIMED convergence, and
-    # whose own 95% credible interval excludes the truth. That is the session asserting a
-    # precision it did not have — which is what "premature" means.
+    # U-02 INTERVAL NON-COVERAGE, formerly reported as "premature convergence".
+    #
+    # It counts converged competencies whose own 95% credible interval excludes the truth.
+    # That is a coverage statistic, and naming it premature stopping was wrong twice over:
+    # it measures calibration rather than stopping, and it was gated at <2% when a
+    # perfectly calibrated 95% interval excludes the truth 5% of the time by construction.
+    # No well-calibrated estimator could ever have passed.
+    #
+    # A real premature-stop metric needs a counterfactual continuation — force k more
+    # items past the trigger and count band changes — which the harness does not run.
+    # Reported as absent rather than approximated by this.
     converged = premature = 0
     over_converged = over_convergence_denominator = 0
     for record in records:
@@ -475,7 +481,7 @@ def dag_safety(records: list[dict], cohort: Cohort) -> dict:
     return {
         "sessions": len(records),
         "sessions_with_inference": sessions_with_inference,
-        "S-02_premature_stop": rate(premature, converged),
+        "U-02_interval_non_coverage": rate(premature, converged),
         "C-DAG-15_over_convergence": rate(over_converged, over_convergence_denominator),
         "C-DAG-03_wrong_inference": rate(inferred_wrong, inferred_total),
         "C-DAG-01_inference_precision": (
@@ -494,7 +500,7 @@ SAFETY_KEYS = {
     "C-DAG-04": "C-DAG-04_false_blocking",
     "C-DAG-05": "C-DAG-05_missed_blocking",
     "C-DAG-11": "C-DAG-11_duplicate_evidence",
-    "S-02": "S-02_premature_stop",
+    "U-02": "U-02_interval_non_coverage",
     "C-DAG-15": "C-DAG-15_over_convergence",
 }
 

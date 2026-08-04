@@ -156,8 +156,64 @@ def ability_percentile(theta_hat: float) -> float:
     return float(np.clip(100.0 * 0.5 * (1.0 + erf(float(theta_hat) / sqrt(2.0))), 0.0, 100.0))
 
 
+BAND_LABELS = {1: "Novice", 2: "Developing", 3: "Competent", 4: "Proficient", 5: "Expert"}
+
+# Interior bands 1.6 logits wide. THE SINGLE SOURCE OF TRUTH for where a level begins.
+#
+# WHY THIS REPLACED `int(clip(round(3 + theta), 1, 5))`. That rule left bands 1 and 5
+# UNBOUNDED while the interior three were 1.0 wide, so "Novice" covered everything below
+# -1.5 and "Expert" everything above +1.5. Accuracy in an open-ended band is nearly free,
+# and measured on the evaluation cohort the engine reported 0.818 exact-level accuracy
+# where the same theta estimates earned 0.644 on an even scale. A level that means a
+# 1.0-logit range in the middle and an unbounded one at the ends is not one scale.
+#
+# 1.6 rather than 1.0 because a reported level is only worth reporting if it is probably
+# right: at the SE target, P(reported band is the true band) at a band centre runs 0.639
+# at width 1.0 and 0.850 at width 1.6. The instrument cannot resolve a tenth of a logit at
+# six to twelve observations.
+BAND_WIDTH = 1.6
+BAND_CUTS: tuple[float, ...] = (-2.4, -0.8, 0.8, 2.4)
+
+
 def ability_band(theta_hat: float) -> tuple[int, str]:
-    """Coarse 1-5 level and its label, for reporting alongside the percentile."""
-    level = int(np.clip(round(3 + theta_hat), 1, 5))
-    labels = {1: "Novice", 2: "Developing", 3: "Competent", 4: "Proficient", 5: "Expert"}
-    return level, labels[level]
+    """Coarse 1-5 level and its label, for reporting alongside the percentile.
+
+    `np.digitize` is right-open, so a theta exactly on a cut point falls in the HIGHER
+    band, consistently, here and in `band_probabilities`. The previous `round(3 + theta)`
+    used banker's rounding, so -0.5 tied down to level 2 while +0.5 tied up to level 4.
+    """
+    level = int(np.digitize(float(theta_hat), BAND_CUTS)) + 1
+    return level, BAND_LABELS[level]
+
+
+def band_lower_bound(level: int) -> float | None:
+    """Where `level` begins on theta. None for the lowest band, which is unbounded."""
+    if level <= 1:
+        return None
+    if level - 2 < len(BAND_CUTS):
+        return BAND_CUTS[level - 2]
+    return None
+
+
+def band_probabilities(posterior: np.ndarray) -> dict[int, float]:
+    """P(theta in each band), summed over the grid.
+
+    Derived from `ability_band`'s OWN rule applied per grid point, so the reported level
+    and its probability cannot disagree about where a boundary is. This is the number a
+    reader assumes `certainty_percent` already was, and it is not.
+    """
+    weights = np.asarray(posterior, dtype=float)
+    if weights.shape != THETA_GRID.shape:
+        raise ValueError(
+            f"posterior length {weights.size} does not match THETA_GRID {THETA_GRID.size}"
+        )
+    total = float(weights.sum())
+    if total <= 0.0:
+        raise ValueError("posterior has non-positive mass")
+
+    levels = np.digitize(THETA_GRID, BAND_CUTS) + 1
+    normalised = weights / total
+    return {
+        int(level): float(normalised[levels == level].sum())
+        for level in sorted(set(levels.tolist()))
+    }

@@ -88,6 +88,11 @@ class Settings(BaseSettings):
     # be mistaken for "the estimate is precise" while it is still vague.
     cat_stability_se_ceiling: float = Field(default=0.80, gt=0.0)
 
+    # Stop when the reported LEVEL is probably right, rather than when the estimate is
+    # precise. OFF, and additive: it can end a competency early, never hold one open.
+    cat_band_probability_stop_enabled: bool = False
+    cat_band_probability_target: float = Field(default=0.80, gt=0.0, lt=1.0)
+
     # Blueprint coverage. Among items carrying at least this fraction of the best
     # available information, the least-served sub-competency wins. Expressed as a
     # constraint rather than a tie-break because a tie-break sitting behind a continuous

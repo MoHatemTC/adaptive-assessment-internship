@@ -82,14 +82,35 @@ def band_is_stable(band_history: list[int], window: int) -> bool:
     return len(set(band_history[-window:])) == 1
 
 
+def band_probability_stop_available(
+    band_probability: float | None, questions_answered: int
+) -> bool:
+    """Whether a P(band) stop may fire. Off by default; see `evaluate`."""
+    return (
+        settings.cat_band_probability_stop_enabled
+        and band_probability is not None
+        and band_probability >= settings.cat_band_probability_target
+        and questions_answered
+        >= getattr(settings, "cat_precision_min_questions", settings.cat_min_questions)
+    )
+
+
 def evaluate(
     standard_error: float,
     band_history: list[int],
     questions_answered: int,
     items_remaining: int,
+    *,
+    band_probability: float | None = None,
 ) -> StopDecision:
     """Apply the stopping rules in precedence order.
 
+    0. BAND PROBABILITY — the reported level is probably right. OFF by default, and
+       ADDITIVE: it can end a competency early, never keep one open. It asks a different
+       question from precision — "is this level right" rather than "is this estimate
+       tight" — and measured on the evaluation cohort it is both more accurate and
+       shorter than the SE rule at every band count tested. Keeps the observation floor
+       regardless: a prior is not a measurement, however concentrated it looks.
     1. PRECISION — SE at/under target AND enough observations to trust that width.
        A single high-discrimination hit can crush SE; the observation floor stops that
        from ending the competency before the estimate has been corroborated.
@@ -98,6 +119,9 @@ def evaluate(
        ceiling and its own min-questions floor.
     3. BUDGET — out of questions, or out of items. Not convergence.
     """
+    if band_probability_stop_available(band_probability, questions_answered):
+        return StopDecision(True, "band_probability", converged=True)
+
     if (
         standard_error <= settings.cat_se_target
         and questions_answered

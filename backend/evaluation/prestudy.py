@@ -145,12 +145,79 @@ def run_one(*, simulee, main, pool, information, cuts, stop_rule):
     }
 
 
+def spread_theta(simulees, seed: int = 20260804):
+    """Re-draw each simulee's true ability UNIFORMLY over the scale.
+
+    THE BUG THIS FIXES, AND IT WAS MINE.
+
+    The cohort places true ability at eight fixed strata: -2.8, -2.0, ..., +2.8. Measured
+    against each scale's cut points, those strata are not neutral:
+
+        5 bands (cuts -2.4, -0.8, 0.8, 2.4)   every stratum exactly 0.40 from a cut
+        4 bands (cuts -2.0, 0.0, 2.0)         mean 0.50, two strata ON a cut
+        8 bands (cuts -3 .. 3)                mean 0.20, two strata ON a cut
+
+    An estimator with SE 0.55 misclassifies a candidate sitting on a cut point about half
+    the time and one sitting 0.4 away far less often. So the first version of this
+    pre-study compared band counts on a cohort constructed to favour the 5-band scale and
+    to punish the 8-band one, and reported the difference as a property of band width. It
+    gave 8 bands 0.2917 exact accuracy where an unbiased estimator at that SE gives about
+    0.58 — and reported 0.980 within-one alongside it, which cannot come from the same
+    estimator and was the tell.
+
+    Drawing ability uniformly removes the alignment: no scale's cut points are privileged,
+    because there is no discrete truth for them to be privileged against.
+
+    NODE TRUTH IS DROPPED, and that matters. Node mastery was generated against the
+    simulee's ORIGINAL ability, and `responder` shifts the response probability by
+    +/-0.8 logits according to it. Re-drawing ability while keeping the old node map
+    therefore detaches the two: a candidate moved from -2.8 to +3.0 keeps the unmastered
+    nodes of a weak candidate and answers 0.8 logits below their stated ability, every
+    item, in one direction. The first uniform run did exactly that and produced a shifted
+    diagonal — 44-63% of candidates reported one band LOW against 0.6-1.3% reported high.
+    That is a bias, not imprecision, and it would have been read as a property of the
+    band scale.
+
+    Dropping the map is the right fix rather than regenerating it: this pre-study is
+    explicitly the no-graph configuration, so responses should come from the 3PL alone.
+    """
+    import copy
+
+    rng = np.random.default_rng(seed)
+    spread = []
+    for simulee in simulees:
+        clone = copy.deepcopy(simulee)
+        offset = float(rng.uniform(-3.2, 3.2))
+        base = float(np.mean(list(simulee.theta.values())))
+        clone.theta = {main: value - base + offset for main, value in simulee.theta.items()}
+        clone.nodes = {}
+        spread.append(clone)
+    return spread
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cohort", required=True)
     parser.add_argument("--out", default="eval-results/prestudy")
     parser.add_argument("--limit", type=int, default=1000)
     parser.add_argument("--bank", default="AIE")
+    parser.add_argument(
+        "--strata",
+        action="store_true",
+        help="keep the cohort's eight fixed ability strata (reproduces the confounded run)",
+    )
+    parser.add_argument(
+        "--nodes",
+        choices=("consistent", "dropped"),
+        default=None,
+        help=(
+            "node-level mastery. 'consistent' keeps it (responses vary WITHIN a "
+            "competency, so one theta is a summary of several skills); 'dropped' removes "
+            "it (responses come from the 3PL alone). Defaults to consistent with "
+            "--strata and dropped otherwise, because re-drawing ability detaches a node "
+            "map generated against the old ability and biases every response one way."
+        ),
+    )
     args = parser.parse_args()
 
     from app.services.orchestrator import registry
@@ -158,6 +225,23 @@ def main() -> None:
     bank = registry.get_bank(registry.resolve_bank_id(args.bank))
     cohort = Cohort.load(args.cohort)
     simulees = cohort.simulees[: args.limit]
+    nodes_mode = args.nodes or ("consistent" if args.strata else "dropped")
+    if not args.strata:
+        if nodes_mode == "consistent":
+            raise SystemExit(
+                "--nodes consistent needs --strata: re-drawing ability detaches the node "
+                "map it was generated from, which biases every response downward."
+            )
+        simulees = spread_theta(simulees)
+    elif nodes_mode == "dropped":
+        import copy
+
+        stripped = []
+        for simulee in simulees:
+            clone = copy.deepcopy(simulee)
+            clone.nodes = {}
+            stripped.append(clone)
+        simulees = stripped
     mains = [m for m in cohort.mains if m in set(bank.variables())]
     pools = {m: bank.shortlist(m, exclude=set()) for m in mains}
     # One information matrix per competency, shared by every configuration and every
@@ -174,6 +258,7 @@ def main() -> None:
             thetas: list[float] = []
             ses: list[float] = []
             band_rows: list[dict] = []
+            confusion: dict[tuple[int, int], int] = {}
             for simulee in simulees:
                 for main in mains:
                     result = run_one(
@@ -183,6 +268,9 @@ def main() -> None:
                         information=informations[main],
                         cuts=cuts,
                         stop_rule=stop_rule,
+                    )
+                    confusion[(result["true_level"], result["level"])] = (
+                        confusion.get((result["true_level"], result["level"]), 0) + 1
                     )
                     correct.append(result["level"] == result["true_level"])
                     within_one.append(abs(result["level"] - result["true_level"]) <= 1)
@@ -206,6 +294,10 @@ def main() -> None:
                     "decision_consistency": round(stats.decision_consistency(band_rows), 5),
                     "median_se": round(float(np.median(ses)), 5),
                     "n": len(correct),
+                    # (true band, reported band) counts. Mass on a SHIFTED diagonal is an
+                    # alignment bug; mass spread symmetrically is a measurement result.
+                    # This is the diagnostic that found the strata confound.
+                    "confusion": {f"{t}->{e}": n for (t, e), n in sorted(confusion.items())},
                 }
             )
 
@@ -219,7 +311,16 @@ def main() -> None:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     (out / "prestudy.json").write_text(
-        json.dumps({"cohort": cohort.dgp, "n_simulees": len(simulees), "rows": rows}, indent=1),
+        json.dumps(
+            {
+                "cohort": cohort.dgp,
+                "n_simulees": len(simulees),
+                "ability_distribution": "eight fixed strata" if args.strata else "uniform [-3.2, 3.2]",
+                "node_heterogeneity": nodes_mode == "consistent",
+                "rows": rows,
+            },
+            indent=1,
+        ),
         encoding="utf-8",
     )
 
@@ -227,7 +328,11 @@ def main() -> None:
         f"{'bands':>6} {'width':>6} {'stop rule':>17} {'accuracy':>9} {'within1':>8} "
         f"{'items':>7} {'rel':>7} {'consist':>8} {'d acc pp':>9} {'d items':>8}"
     )
-    print(f"Phase 0a configuration pre-study — {len(simulees)} simulees x {len(mains)} mains")
+    print(
+        f"Phase 0a configuration pre-study — {len(simulees)} simulees x {len(mains)} mains, "
+        f"ability {'at eight fixed strata' if args.strata else 'uniform over [-3.2, 3.2]'}, "
+        f"node heterogeneity {nodes_mode}"
+    )
     print(header)
     print("-" * len(header))
     for row in sorted(rows, key=lambda r: (-r["exact_level_accuracy"],)):

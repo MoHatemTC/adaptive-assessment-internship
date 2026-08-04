@@ -26,6 +26,7 @@ from app.services.adaptive import convergence
 from app.services.adaptive.irt import (
     THETA_GRID,
     ability_band,
+    band_probabilities,
     prior_from_self_rating,
     uniform_prior,
 )
@@ -120,8 +121,20 @@ def evaluate_finalisation(state: VariableState, items_remaining: int) -> Variabl
     if state.finalised:
         return state
 
+    # P(the level being REPORTED is the true level). Omitted at both call sites before,
+    # so `convergence.evaluate` saw None and `cat_band_probability_stop_enabled` was a
+    # live, documented, unreachable setting.
+    level, _label = ability_band(state.theta_hat)
+    reported_band_probability = band_probabilities(
+        np.asarray(state.posterior, dtype=float)
+    ).get(level, 0.0)
+
     stop = convergence.evaluate(
-        state.standard_error, state.band_history, state.observations, items_remaining
+        state.standard_error,
+        state.band_history,
+        state.observations,
+        items_remaining,
+        band_probability=reported_band_probability,
     )
     if not stop.should_stop:
         return state
