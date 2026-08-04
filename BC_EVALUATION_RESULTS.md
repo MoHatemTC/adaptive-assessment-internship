@@ -1,5 +1,14 @@
 # Approach B vs Approach C — evaluation results
 
+> **SUPERSEDED IN PART.** Every absolute figure in this document was computed on a
+> **biased subsample**: `build_cohort` emits simulees in ascending ability-stratum order and
+> `--limit N` took the first N, so a 960-of-4,000 run covered only the weakest two strata of
+> eight. `BC_ARCHITECTURE_PROPOSAL.md` §6 re-runs on a stratum-balanced sample and overturns
+> three findings below — the absolute gates do not all fail (marginal reliability passes at
+> 0.93–0.95), inference is not inert (it fires in 44% of sessions and is wrong 23.3% of the
+> time), and the DAG's 2.85pp accuracy cost disappears (every contrast is non-inferior).
+> The safety conclusions get *stronger*, not weaker. The sampler now strides and shuffles.
+>
 > **CORRECTED 4 August 2026, after review.** Section 6's band-count figure was wrong by
 > about 4x and is restated below; the verdict's framing in favour of "Approach B" was
 > contradicted by this document's own tables and is restated; §3's premature-convergence
@@ -23,6 +32,7 @@
 | C4 | §3 reported "premature convergence 8–12%, gate <2%" | It measured **interval non-coverage**. A calibrated 95% interval misses 5% of the time by construction, so <2% was unachievable. Renamed, gate corrected to 3–7% |
 | C5 | §7 concluded a prerequisite edge cannot be validated offline, on one estimator | **Conclusion stands, now against three.** Raw conditional: 0/8 spurious edges refused. Pooled regression: no effect for real or spurious. Ability-stratified: real edges −0.148…−0.000, spurious −0.099…−0.008, completely interleaved |
 | C6 | The review suspected DGP-1 had no real prerequisite mechanism, which would void the headline | **It does.** P(child mastered \| parent failed) = 0.084 against 0.801 when the parent is mastered, and the lift survives θ-matching wherever both cells are populated |
+| C8 | Every absolute figure came from the weakest two ability strata of eight, because `--limit` truncated a stratum-ordered cohort | **Superseded by the proposal's §6.** Sampler now strides across strata and shuffles, so any prefix is representative |
 | C7 | §4's worst-decile metric was of unstated scale, which the review said "decides whether the verdict is right" | **Common scale, both arms**, and deciles are on true θ. B's tail advantage is real and not the §5 artefact |
 
 Corrections C2 and C3 reduce the size of the largest number in this document without

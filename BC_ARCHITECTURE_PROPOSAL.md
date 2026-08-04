@@ -253,8 +253,8 @@ that is strata 0–2 of 8 — **the weakest third of the ability range**, report
 were the population.
 
 The sampler now strides across strata and shuffles deterministically, so any prefix is
-representative. Re-run on that basis: 5 arms, 821 (DGP-0) and 845 (DGP-2) paired
-candidates, ~105 per stratum.
+representative. Re-run on that basis: 5 arms, **1,600 paired candidates per cell, exactly
+200 per ability stratum**.
 
 **Three findings do not survive, and one gets much worse.**
 
@@ -262,12 +262,12 @@ candidates, ~105 per stratum.
 
 | gate | bar | DGP-0 (unidimensional) | DGP-2 (multi-node) |
 |---|---|---|---|
-| Marginal reliability | ≥ 0.85 | **0.925–0.931 PASS** | **0.947–0.951 PASS** |
-| SE calibration RMSE/SE | 0.95–1.10 | **1.03–1.08 PASS** | 1.31–1.43 FAIL |
-| Interval non-coverage | 3–7% | **5.2–6.9% PASS** | 13.5–16.8% FAIL |
-| Exact-level accuracy | ≥ 0.80 | 0.704–0.720 FAIL | 0.609–0.614 FAIL |
-| Worst band | ≥ 0.70 | 0.42–0.57 FAIL | 0.44–0.46 FAIL |
-| P90 duration | ≤ 90 min | 59.8–99.1 (B fails) | 58.3–83.0 PASS |
+| Marginal reliability | ≥ 0.85 | **0.922–0.929 PASS** | **0.942–0.950 PASS** |
+| SE calibration RMSE/SE | 0.95–1.10 | **1.02–1.09 PASS** | 1.33–1.45 FAIL |
+| Interval non-coverage | 3–7% | **5.2–5.7% PASS** | 13.2–16.9% FAIL |
+| Exact-level accuracy | ≥ 0.80 | 0.705–0.718 FAIL | 0.607–0.615 FAIL |
+| Worst band | ≥ 0.70 | 0.41–0.58 FAIL | 0.45–0.48 FAIL |
+| P90 duration | ≤ 90 min | 59.5–98.1 — **B fails at 98.1** | 58.5–95.3 — **B fails at 95.3** |
 
 Marginal reliability of 0.68 in the first run was a **restriction-of-range artefact** —
 reliability is a ratio of true-score variance to observed variance, and a cohort spanning
@@ -282,8 +282,8 @@ cleaner one:
 
 | | DGP-0: no node structure | DGP-2: node-level mastery |
 |---|---:|---:|
-| SE calibration ratio | **1.03–1.08** | 1.31–1.43 |
-| 95% interval non-coverage | **5.2–5.7%** | 13.5–16.8% |
+| SE calibration ratio | **1.02–1.09** | 1.33–1.45 |
+| 95% interval non-coverage | **5.2–5.7%** | 13.2–16.9% |
 
 **The posterior is correctly calibrated when a competency really is one skill, and 30–40%
 overconfident when it is several.** Same likelihood, same item parameters, same prior, same
@@ -304,10 +304,9 @@ On a representative cohort, `C-full` under DGP-2:
 
 | | |
 |---|---:|
-| sessions with at least one inference | **372 of 845 (44%)** |
-| inferences verified against node truth | 696 |
-| **wrong inference rate (C-DAG-03, gate < 3%)** | **23.3%, 95% UCB 26.1%** |
-| inference precision (C-DAG-01, gate ≥ 97%) | **0.767** |
+| inferences verified against node truth | **1,386** |
+| **wrong inference rate (C-DAG-03, gate < 3%)** | **22.4%, 95% UCB 24.4%** |
+| inference precision (C-DAG-01, gate ≥ 97%) | **0.776** |
 
 **Nearly one inference in four is wrong**, against a gate of one in thirty-three. The
 conclusion — do not enable inference — is unchanged, and the reason is now much stronger:
@@ -317,8 +316,10 @@ not "it never fires" but "it fires in 44% of sessions and is wrong 23% of the ti
 
 | | DGP-2, representative |
 |---|---:|
-| false blocking (gate < 2%) | **8.2%, 95% UCB 9.4%** |
-| missed blocking | 94.8% |
+| false blocking (gate < 2%) | **8.7%, 95% UCB 9.6%** (262 / 3,006) |
+| missed blocking | 94.9% (10,325 / 10,885) |
+| duplicate evidence | **0 / 36,657 PASS** |
+| over-convergence | **0 PASS** |
 
 Still failing by roughly 4×, and §2's structural floor stands: a block fired on perfect
 knowledge of the parent is wrong 14.6% of the time under DGP-2. Missed blocking at 94.8%
@@ -328,16 +329,18 @@ says the mechanism also almost never fires when it should — it is both unsafe 
 
 | DGP-2 | B | C-off | C-shipped | C-hybrid | C-full |
 |---|---:|---:|---:|---:|---:|
-| exact-level accuracy | 0.6087 | 0.6099 | **0.6142** | **0.6142** | 0.6134 |
-| questions per candidate | **17.69** | 20.30 | 21.64 | 20.48 | 21.91 |
-| duration P50 (min) | 78.6 | 46.8 | 48.5 | **46.8** | 50.8 |
-| duration P90 (min) | 95.1 | **58.3** | 83.0 | 83.0 | 83.0 |
-| modality blueprint | 0.9124 | 0.7708 | **0.9992** | **0.9992** | 0.9980 |
+| exact-level accuracy | 0.6117 | 0.6067 | **0.6148** | 0.6135 | 0.6102 |
+| questions per candidate | **17.47** | 20.27 | 21.60 | 20.47 | 21.81 |
+| duration P50 (min) | 83.3 | 47.7 | 49.6 | **48.1** | 51.3 |
+| duration P90 (min) | **95.3 — over cap** | **58.5** | 83.0 | 83.0 | 83.0 |
+| modality blueprint | 0.9129 | 0.7685 | **0.9992** | **0.9992** | 0.9988 |
+| marginal reliability | 0.9420 | 0.9496 | **0.9499** | 0.9462 | 0.9497 |
 
-**Every arm is within 0.6pp of every other, and every contrast is non-inferior at the 2pp
-margin.** The first run's "the DAG costs 2.85pp" was the biased sample. Measurement does not
-decide between these architectures — which is what the scorecard concluded independently,
-and it is right.
+**Every arm is within 0.8pp of every other, and nine of the ten contrasts are non-inferior
+at the 2pp margin** (the tenth, `C-off` vs `C-hybrid` under DGP-0, has an upper bound of
++2.38pp). The first run's "the DAG costs 2.85pp" was the biased sample. Measurement does not
+decide between these architectures — which is what the scorecard concluded independently
+from the earlier numbers, and it was right for a reason it could not have known.
 
 What does separate them:
 
@@ -346,10 +349,13 @@ What does separate them:
   of 95.1 minutes **breaches the 90-minute cap**; every C arm stays inside it.
 - **The blueprint separates them by 23 points.** `C-off` at 0.771 against 0.999 for every
   arm with the coverage gate on. Without it the assessment quietly stops being mixed.
-- **`C-hybrid` is the shortest C arm** — 20.48 questions, P50 46.8 minutes — at identical
-  accuracy. The P(band) early exit costs nothing here that the 2pp margin can detect, which
-  is a weaker claim than §3's +2.1pp but no longer an argument against it. Its P90 of 83
-  minutes is worse than `C-off`'s 58.3, so the coverage gate has a long tail worth watching.
+- **`C-hybrid` is the shortest arm with the coverage gate on** — 20.47 questions against
+  `C-shipped`'s 21.60, at the same accuracy (0.6135 vs 0.6148, non-inferior). The P(band)
+  early exit costs nothing the 2pp margin can detect. That is weaker than §3's predicted
+  +2.1pp but no longer an argument against it.
+- **The coverage gate has a long P90 tail.** Every arm running it sits at 83.0 minutes
+  against `C-off`'s 58.5 — inside the 90-minute cap, but with little room. Worth watching
+  before the cap is tightened or a fourth competency is added.
 
 ## 7. Order of work
 

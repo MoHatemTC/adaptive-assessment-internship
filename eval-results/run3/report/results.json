@@ -1,6 +1,6 @@
 {
- "cohort_size": 821,
- "n_pairs_per_arm": 2463,
+ "cohort_size": 1600,
+ "n_pairs_per_arm": 4800,
  "gate_count_if_untiered": 18,
  "arms": [
   "B",
@@ -17,53 +17,53 @@
   "DGP-0": {
    "B": {
     "metrics": {
-     "n_pairs": 2463,
-     "n_sessions": 821,
-     "theta_rmse": 0.53951,
-     "theta_mae": 0.40591,
-     "exact_level_accuracy_common": 0.70361,
-     "exact_level_accuracy_native": 0.70361,
-     "within_one_level_common": 0.99675,
+     "n_pairs": 4800,
+     "n_sessions": 1600,
+     "theta_rmse": 0.53411,
+     "theta_mae": 0.39973,
+     "exact_level_accuracy_common": 0.70979,
+     "exact_level_accuracy_native": 0.70979,
+     "within_one_level_common": 0.99667,
      "accuracy_by_band": {
-      "1": 0.419,
-      "2": 0.7197,
-      "3": 0.7323,
-      "4": 0.6949,
-      "5": 0.9274
+      "1": 0.4146,
+      "2": 0.7087,
+      "3": 0.7409,
+      "4": 0.7111,
+      "5": 0.9359
      },
-     "min_band_accuracy": 0.41896,
-     "min_decile_accuracy": 0.43496,
-     "marginal_reliability": 0.92484,
-     "decision_consistency": 0.66035,
-     "final_se_median": 0.52836,
-     "mean_se": 0.52427,
-     "se_calibration_ratio": 1.02906,
-     "interval_coverage_95": 0.94153,
-     "questions_per_candidate_mean": 17.2205,
+     "min_band_accuracy": 0.41455,
+     "min_decile_accuracy": 0.42083,
+     "marginal_reliability": 0.92249,
+     "decision_consistency": 0.65728,
+     "final_se_median": 0.52825,
+     "mean_se": 0.52418,
+     "se_calibration_ratio": 1.01894,
+     "interval_coverage_95": 0.94646,
+     "questions_per_candidate_mean": 17.1125,
      "questions_per_candidate_median": 18.0,
-     "duration_minutes_p50": 77.833,
-     "duration_minutes_p90": 99.083,
-     "p90_duration_minutes": 99.083,
-     "duration_over_90min_rate": 0.45067,
-     "converged_rate": 0.66951,
+     "duration_minutes_p50": 81.541,
+     "duration_minutes_p90": 98.083,
+     "p90_duration_minutes": 98.083,
+     "duration_over_90min_rate": 0.45875,
+     "converged_rate": 0.66063,
      "coverage_satisfied_rate": 1.0,
-     "modality_blueprint_compliance": 0.92976,
-     "information_realization_ratio": 0.9551,
+     "modality_blueprint_compliance": 0.92792,
+     "information_realization_ratio": 0.95473,
      "stop_reason_distribution": {
-      "": 0.3305,
-      "precision": 0.6695
+      "": 0.3394,
+      "precision": 0.6606
      },
-     "heldout_auc": 0.93596,
-     "heldout_brier": 0.10315,
-     "heldout_log_loss": 0.33127,
-     "heldout_ece": 0.04152
+     "heldout_auc": 0.93417,
+     "heldout_brier": 0.10466,
+     "heldout_log_loss": 0.33574,
+     "heldout_ece": 0.0407
     },
     "verdicts": [
      {
       "gate": "ABS-01",
       "metric": "exact_level_accuracy_common",
       "rule": ">= 0.80 overall",
-      "value": 0.70361,
+      "value": 0.70979,
       "verdict": "FAIL",
       "source": "Livingston & Lewis (1995); Rudner (2001)"
      },
@@ -71,7 +71,7 @@
       "gate": "ABS-02",
       "metric": "min_band_accuracy",
       "rule": ">= 0.70 in every reported band",
-      "value": 0.41896,
+      "value": 0.41455,
       "verdict": "FAIL",
       "source": "Rudner (2001)"
      },
@@ -79,7 +79,7 @@
       "gate": "ABS-03",
       "metric": "marginal_reliability",
       "rule": ">= 0.85 to certify a level; >= 0.80 for routing",
-      "value": 0.92484,
+      "value": 0.92249,
       "verdict": "PASS",
       "source": "Nunnally & Bernstein (1994)"
      },
@@ -87,7 +87,7 @@
       "gate": "ABS-04",
       "metric": "min_decile_accuracy",
       "rule": "no true-theta decile below 0.65",
-      "value": 0.43496,
+      "value": 0.42083,
       "verdict": "FAIL",
       "source": "validation B3"
      },
@@ -95,7 +95,7 @@
       "gate": "ABS-05",
       "metric": "decision_consistency",
       "rule": ">= 0.75",
-      "value": 0.66035,
+      "value": 0.65728,
       "verdict": "FAIL",
       "source": "Livingston & Lewis (1995)"
      },
@@ -103,7 +103,7 @@
       "gate": "ABS-06",
       "metric": "se_calibration_ratio",
       "rule": "RMSE / mean SE within [0.95, 1.10] \u2014 the direct detector for double counting",
-      "value": 1.02906,
+      "value": 1.01894,
       "verdict": "PASS",
       "source": "validation, new U-05"
      },
@@ -111,7 +111,7 @@
       "gate": "ABS-07",
       "metric": "p90_duration_minutes",
       "rule": "P90 modelled duration <= 90 minutes",
-      "value": 99.083,
+      "value": 98.083,
       "verdict": "FAIL",
       "source": "validation: E-04 gains a gate"
      }
@@ -119,54 +119,54 @@
    },
    "C-full": {
     "metrics": {
-     "n_pairs": 2463,
-     "n_sessions": 821,
-     "theta_rmse": 0.55552,
-     "theta_mae": 0.42033,
-     "exact_level_accuracy_common": 0.7162,
-     "exact_level_accuracy_native": 0.7162,
-     "within_one_level_common": 0.99594,
+     "n_pairs": 4800,
+     "n_sessions": 1600,
+     "theta_rmse": 0.54631,
+     "theta_mae": 0.41732,
+     "exact_level_accuracy_common": 0.71813,
+     "exact_level_accuracy_native": 0.71813,
+     "within_one_level_common": 0.99708,
      "accuracy_by_band": {
-      "1": 0.5688,
-      "2": 0.7307,
-      "3": 0.7424,
-      "4": 0.7,
-      "5": 0.8202
+      "1": 0.5685,
+      "2": 0.7302,
+      "3": 0.7316,
+      "4": 0.7078,
+      "5": 0.8339
      },
-     "min_band_accuracy": 0.56881,
-     "min_decile_accuracy": 0.55691,
-     "marginal_reliability": 0.92954,
-     "decision_consistency": 0.66099,
-     "final_se_median": 0.52518,
-     "mean_se": 0.52155,
-     "se_calibration_ratio": 1.06512,
-     "interval_coverage_95": 0.94356,
-     "questions_per_candidate_mean": 21.5225,
+     "min_band_accuracy": 0.56853,
+     "min_decile_accuracy": 0.55417,
+     "marginal_reliability": 0.92788,
+     "decision_consistency": 0.66088,
+     "final_se_median": 0.52395,
+     "mean_se": 0.52117,
+     "se_calibration_ratio": 1.04824,
+     "interval_coverage_95": 0.94563,
+     "questions_per_candidate_mean": 21.4731,
      "questions_per_candidate_median": 21.0,
-     "duration_minutes_p50": 50.0,
-     "duration_minutes_p90": 81.25,
-     "p90_duration_minutes": 81.25,
+     "duration_minutes_p50": 50.833,
+     "duration_minutes_p90": 79.775,
+     "p90_duration_minutes": 79.775,
      "duration_over_90min_rate": 0.0,
-     "converged_rate": 0.99188,
+     "converged_rate": 0.99292,
      "coverage_satisfied_rate": 1.0,
-     "modality_blueprint_compliance": 0.99756,
-     "information_realization_ratio": 1.06124,
+     "modality_blueprint_compliance": 0.99833,
+     "information_realization_ratio": 1.06145,
      "stop_reason_distribution": {
-      "precision": 0.9919,
-      "question_budget": 0.0077,
-      "time_budget": 0.0004
+      "precision": 0.9929,
+      "question_budget": 0.0069,
+      "time_budget": 0.0002
      },
-     "heldout_auc": 0.93116,
-     "heldout_brier": 0.10509,
-     "heldout_log_loss": 0.33642,
-     "heldout_ece": 0.02231
+     "heldout_auc": 0.93021,
+     "heldout_brier": 0.10587,
+     "heldout_log_loss": 0.33926,
+     "heldout_ece": 0.02187
     },
     "verdicts": [
      {
       "gate": "ABS-01",
       "metric": "exact_level_accuracy_common",
       "rule": ">= 0.80 overall",
-      "value": 0.7162,
+      "value": 0.71813,
       "verdict": "FAIL",
       "source": "Livingston & Lewis (1995); Rudner (2001)"
      },
@@ -174,7 +174,7 @@
       "gate": "ABS-02",
       "metric": "min_band_accuracy",
       "rule": ">= 0.70 in every reported band",
-      "value": 0.56881,
+      "value": 0.56853,
       "verdict": "FAIL",
       "source": "Rudner (2001)"
      },
@@ -182,7 +182,7 @@
       "gate": "ABS-03",
       "metric": "marginal_reliability",
       "rule": ">= 0.85 to certify a level; >= 0.80 for routing",
-      "value": 0.92954,
+      "value": 0.92788,
       "verdict": "PASS",
       "source": "Nunnally & Bernstein (1994)"
      },
@@ -190,7 +190,7 @@
       "gate": "ABS-04",
       "metric": "min_decile_accuracy",
       "rule": "no true-theta decile below 0.65",
-      "value": 0.55691,
+      "value": 0.55417,
       "verdict": "FAIL",
       "source": "validation B3"
      },
@@ -198,7 +198,7 @@
       "gate": "ABS-05",
       "metric": "decision_consistency",
       "rule": ">= 0.75",
-      "value": 0.66099,
+      "value": 0.66088,
       "verdict": "FAIL",
       "source": "Livingston & Lewis (1995)"
      },
@@ -206,7 +206,7 @@
       "gate": "ABS-06",
       "metric": "se_calibration_ratio",
       "rule": "RMSE / mean SE within [0.95, 1.10] \u2014 the direct detector for double counting",
-      "value": 1.06512,
+      "value": 1.04824,
       "verdict": "PASS",
       "source": "validation, new U-05"
      },
@@ -214,7 +214,7 @@
       "gate": "ABS-07",
       "metric": "p90_duration_minutes",
       "rule": "P90 modelled duration <= 90 minutes",
-      "value": 81.25,
+      "value": 79.775,
       "verdict": "PASS",
       "source": "validation: E-04 gains a gate"
      }
@@ -222,54 +222,54 @@
    },
    "C-hybrid": {
     "metrics": {
-     "n_pairs": 2463,
-     "n_sessions": 821,
-     "theta_rmse": 0.57846,
-     "theta_mae": 0.43969,
-     "exact_level_accuracy_common": 0.7093,
-     "exact_level_accuracy_native": 0.7093,
-     "within_one_level_common": 0.99513,
+     "n_pairs": 4800,
+     "n_sessions": 1600,
+     "theta_rmse": 0.572,
+     "theta_mae": 0.4393,
+     "exact_level_accuracy_common": 0.70458,
+     "exact_level_accuracy_native": 0.70458,
+     "within_one_level_common": 0.99646,
      "accuracy_by_band": {
-      "1": 0.5596,
-      "2": 0.715,
-      "3": 0.7492,
-      "4": 0.6831,
-      "5": 0.8265
+      "1": 0.5601,
+      "2": 0.7129,
+      "3": 0.729,
+      "4": 0.678,
+      "5": 0.8339
      },
-     "min_band_accuracy": 0.55963,
-     "min_decile_accuracy": 0.55691,
-     "marginal_reliability": 0.92595,
-     "decision_consistency": 0.66062,
-     "final_se_median": 0.53624,
-     "mean_se": 0.53699,
-     "se_calibration_ratio": 1.07722,
-     "interval_coverage_95": 0.94803,
-     "questions_per_candidate_mean": 20.2631,
+     "min_band_accuracy": 0.56007,
+     "min_decile_accuracy": 0.55417,
+     "marginal_reliability": 0.92428,
+     "decision_consistency": 0.66165,
+     "final_se_median": 0.53602,
+     "mean_se": 0.53633,
+     "se_calibration_ratio": 1.06651,
+     "interval_coverage_95": 0.94833,
+     "questions_per_candidate_mean": 20.2444,
      "questions_per_candidate_median": 20.0,
-     "duration_minutes_p50": 47.333,
-     "duration_minutes_p90": 79.25,
-     "p90_duration_minutes": 79.25,
+     "duration_minutes_p50": 47.833,
+     "duration_minutes_p90": 79.325,
+     "p90_duration_minutes": 79.325,
      "duration_over_90min_rate": 0.0,
-     "converged_rate": 0.99756,
+     "converged_rate": 0.99833,
      "coverage_satisfied_rate": 1.0,
-     "modality_blueprint_compliance": 0.99756,
-     "information_realization_ratio": 1.06483,
+     "modality_blueprint_compliance": 0.99833,
+     "information_realization_ratio": 1.06493,
      "stop_reason_distribution": {
-      "band_probability": 0.5254,
-      "precision": 0.4722,
-      "question_budget": 0.0024
+      "band_probability": 0.529,
+      "precision": 0.4694,
+      "question_budget": 0.0017
      },
-     "heldout_auc": 0.93023,
-     "heldout_brier": 0.10613,
-     "heldout_log_loss": 0.33976,
-     "heldout_ece": 0.02524
+     "heldout_auc": 0.92946,
+     "heldout_brier": 0.10683,
+     "heldout_log_loss": 0.34186,
+     "heldout_ece": 0.02405
     },
     "verdicts": [
      {
       "gate": "ABS-01",
       "metric": "exact_level_accuracy_common",
       "rule": ">= 0.80 overall",
-      "value": 0.7093,
+      "value": 0.70458,
       "verdict": "FAIL",
       "source": "Livingston & Lewis (1995); Rudner (2001)"
      },
@@ -277,7 +277,7 @@
       "gate": "ABS-02",
       "metric": "min_band_accuracy",
       "rule": ">= 0.70 in every reported band",
-      "value": 0.55963,
+      "value": 0.56007,
       "verdict": "FAIL",
       "source": "Rudner (2001)"
      },
@@ -285,7 +285,7 @@
       "gate": "ABS-03",
       "metric": "marginal_reliability",
       "rule": ">= 0.85 to certify a level; >= 0.80 for routing",
-      "value": 0.92595,
+      "value": 0.92428,
       "verdict": "PASS",
       "source": "Nunnally & Bernstein (1994)"
      },
@@ -293,7 +293,7 @@
       "gate": "ABS-04",
       "metric": "min_decile_accuracy",
       "rule": "no true-theta decile below 0.65",
-      "value": 0.55691,
+      "value": 0.55417,
       "verdict": "FAIL",
       "source": "validation B3"
      },
@@ -301,7 +301,7 @@
       "gate": "ABS-05",
       "metric": "decision_consistency",
       "rule": ">= 0.75",
-      "value": 0.66062,
+      "value": 0.66165,
       "verdict": "FAIL",
       "source": "Livingston & Lewis (1995)"
      },
@@ -309,7 +309,7 @@
       "gate": "ABS-06",
       "metric": "se_calibration_ratio",
       "rule": "RMSE / mean SE within [0.95, 1.10] \u2014 the direct detector for double counting",
-      "value": 1.07722,
+      "value": 1.06651,
       "verdict": "PASS",
       "source": "validation, new U-05"
      },
@@ -317,7 +317,7 @@
       "gate": "ABS-07",
       "metric": "p90_duration_minutes",
       "rule": "P90 modelled duration <= 90 minutes",
-      "value": 79.25,
+      "value": 79.325,
       "verdict": "PASS",
       "source": "validation: E-04 gains a gate"
      }
@@ -325,53 +325,53 @@
    },
    "C-off": {
     "metrics": {
-     "n_pairs": 2463,
-     "n_sessions": 821,
-     "theta_rmse": 0.56008,
-     "theta_mae": 0.42411,
-     "exact_level_accuracy_common": 0.71985,
-     "exact_level_accuracy_native": 0.71985,
-     "within_one_level_common": 0.99675,
+     "n_pairs": 4800,
+     "n_sessions": 1600,
+     "theta_rmse": 0.56451,
+     "theta_mae": 0.42439,
+     "exact_level_accuracy_common": 0.71688,
+     "exact_level_accuracy_native": 0.71688,
+     "within_one_level_common": 0.99562,
      "accuracy_by_band": {
-      "1": 0.5749,
-      "2": 0.7732,
-      "3": 0.6869,
-      "4": 0.7203,
-      "5": 0.8233
+      "1": 0.5685,
+      "2": 0.7632,
+      "3": 0.6698,
+      "4": 0.7285,
+      "5": 0.8372
      },
-     "min_band_accuracy": 0.57492,
-     "min_decile_accuracy": 0.58537,
-     "marginal_reliability": 0.93057,
+     "min_band_accuracy": 0.56853,
+     "min_decile_accuracy": 0.55833,
+     "marginal_reliability": 0.92838,
      "decision_consistency": 0.65969,
-     "final_se_median": 0.52193,
-     "mean_se": 0.51902,
-     "se_calibration_ratio": 1.0791,
-     "interval_coverage_95": 0.94275,
-     "questions_per_candidate_mean": 20.1035,
-     "questions_per_candidate_median": 20.0,
-     "duration_minutes_p50": 47.083,
-     "duration_minutes_p90": 59.75,
-     "p90_duration_minutes": 59.75,
+     "final_se_median": 0.52121,
+     "mean_se": 0.51908,
+     "se_calibration_ratio": 1.08752,
+     "interval_coverage_95": 0.94271,
+     "questions_per_candidate_mean": 20.0275,
+     "questions_per_candidate_median": 19.0,
+     "duration_minutes_p50": 47.583,
+     "duration_minutes_p90": 59.5,
+     "p90_duration_minutes": 59.5,
      "duration_over_90min_rate": 0.0,
-     "converged_rate": 0.99675,
+     "converged_rate": 0.99604,
      "coverage_satisfied_rate": 1.0,
-     "modality_blueprint_compliance": 0.784,
-     "information_realization_ratio": 1.05642,
+     "modality_blueprint_compliance": 0.77875,
+     "information_realization_ratio": 1.05646,
      "stop_reason_distribution": {
-      "precision": 0.9968,
-      "question_budget": 0.0032
+      "precision": 0.996,
+      "question_budget": 0.004
      },
-     "heldout_auc": 0.93066,
-     "heldout_brier": 0.10623,
-     "heldout_log_loss": 0.33964,
-     "heldout_ece": 0.02613
+     "heldout_auc": 0.93007,
+     "heldout_brier": 0.10656,
+     "heldout_log_loss": 0.34086,
+     "heldout_ece": 0.02451
     },
     "verdicts": [
      {
       "gate": "ABS-01",
       "metric": "exact_level_accuracy_common",
       "rule": ">= 0.80 overall",
-      "value": 0.71985,
+      "value": 0.71688,
       "verdict": "FAIL",
       "source": "Livingston & Lewis (1995); Rudner (2001)"
      },
@@ -379,7 +379,7 @@
       "gate": "ABS-02",
       "metric": "min_band_accuracy",
       "rule": ">= 0.70 in every reported band",
-      "value": 0.57492,
+      "value": 0.56853,
       "verdict": "FAIL",
       "source": "Rudner (2001)"
      },
@@ -387,7 +387,7 @@
       "gate": "ABS-03",
       "metric": "marginal_reliability",
       "rule": ">= 0.85 to certify a level; >= 0.80 for routing",
-      "value": 0.93057,
+      "value": 0.92838,
       "verdict": "PASS",
       "source": "Nunnally & Bernstein (1994)"
      },
@@ -395,7 +395,7 @@
       "gate": "ABS-04",
       "metric": "min_decile_accuracy",
       "rule": "no true-theta decile below 0.65",
-      "value": 0.58537,
+      "value": 0.55833,
       "verdict": "FAIL",
       "source": "validation B3"
      },
@@ -411,7 +411,7 @@
       "gate": "ABS-06",
       "metric": "se_calibration_ratio",
       "rule": "RMSE / mean SE within [0.95, 1.10] \u2014 the direct detector for double counting",
-      "value": 1.0791,
+      "value": 1.08752,
       "verdict": "PASS",
       "source": "validation, new U-05"
      },
@@ -419,7 +419,7 @@
       "gate": "ABS-07",
       "metric": "p90_duration_minutes",
       "rule": "P90 modelled duration <= 90 minutes",
-      "value": 59.75,
+      "value": 59.5,
       "verdict": "PASS",
       "source": "validation: E-04 gains a gate"
      }
@@ -427,53 +427,53 @@
    },
    "C-shipped": {
     "metrics": {
-     "n_pairs": 2463,
-     "n_sessions": 821,
-     "theta_rmse": 0.55285,
-     "theta_mae": 0.42174,
-     "exact_level_accuracy_common": 0.71458,
-     "exact_level_accuracy_native": 0.71458,
-     "within_one_level_common": 0.99635,
+     "n_pairs": 4800,
+     "n_sessions": 1600,
+     "theta_rmse": 0.54343,
+     "theta_mae": 0.41913,
+     "exact_level_accuracy_common": 0.71125,
+     "exact_level_accuracy_native": 0.71125,
+     "within_one_level_common": 0.9975,
      "accuracy_by_band": {
-      "1": 0.5749,
-      "2": 0.7197,
-      "3": 0.7492,
-      "4": 0.6898,
-      "5": 0.8297
+      "1": 0.5804,
+      "2": 0.7186,
+      "3": 0.7307,
+      "4": 0.6863,
+      "5": 0.8355
      },
-     "min_band_accuracy": 0.57492,
-     "min_decile_accuracy": 0.55691,
-     "marginal_reliability": 0.93022,
-     "decision_consistency": 0.66525,
-     "final_se_median": 0.52461,
-     "mean_se": 0.52114,
-     "se_calibration_ratio": 1.06085,
-     "interval_coverage_95": 0.94519,
-     "questions_per_candidate_mean": 21.3386,
+     "min_band_accuracy": 0.58037,
+     "min_decile_accuracy": 0.55833,
+     "marginal_reliability": 0.92867,
+     "decision_consistency": 0.66502,
+     "final_se_median": 0.52379,
+     "mean_se": 0.52079,
+     "se_calibration_ratio": 1.04347,
+     "interval_coverage_95": 0.94604,
+     "questions_per_candidate_mean": 21.3019,
      "questions_per_candidate_median": 21.0,
-     "duration_minutes_p50": 48.583,
-     "duration_minutes_p90": 81.25,
-     "p90_duration_minutes": 81.25,
+     "duration_minutes_p50": 49.583,
+     "duration_minutes_p90": 80.5,
+     "p90_duration_minutes": 80.5,
      "duration_over_90min_rate": 0.0,
-     "converged_rate": 0.9935,
+     "converged_rate": 0.99438,
      "coverage_satisfied_rate": 1.0,
-     "modality_blueprint_compliance": 0.99756,
-     "information_realization_ratio": 1.06131,
+     "modality_blueprint_compliance": 0.99833,
+     "information_realization_ratio": 1.06146,
      "stop_reason_distribution": {
-      "precision": 0.9935,
-      "question_budget": 0.0065
+      "precision": 0.9944,
+      "question_budget": 0.0056
      },
-     "heldout_auc": 0.93106,
-     "heldout_brier": 0.10539,
-     "heldout_log_loss": 0.33733,
-     "heldout_ece": 0.0239
+     "heldout_auc": 0.93074,
+     "heldout_brier": 0.10551,
+     "heldout_log_loss": 0.33799,
+     "heldout_ece": 0.02205
     },
     "verdicts": [
      {
       "gate": "ABS-01",
       "metric": "exact_level_accuracy_common",
       "rule": ">= 0.80 overall",
-      "value": 0.71458,
+      "value": 0.71125,
       "verdict": "FAIL",
       "source": "Livingston & Lewis (1995); Rudner (2001)"
      },
@@ -481,7 +481,7 @@
       "gate": "ABS-02",
       "metric": "min_band_accuracy",
       "rule": ">= 0.70 in every reported band",
-      "value": 0.57492,
+      "value": 0.58037,
       "verdict": "FAIL",
       "source": "Rudner (2001)"
      },
@@ -489,7 +489,7 @@
       "gate": "ABS-03",
       "metric": "marginal_reliability",
       "rule": ">= 0.85 to certify a level; >= 0.80 for routing",
-      "value": 0.93022,
+      "value": 0.92867,
       "verdict": "PASS",
       "source": "Nunnally & Bernstein (1994)"
      },
@@ -497,7 +497,7 @@
       "gate": "ABS-04",
       "metric": "min_decile_accuracy",
       "rule": "no true-theta decile below 0.65",
-      "value": 0.55691,
+      "value": 0.55833,
       "verdict": "FAIL",
       "source": "validation B3"
      },
@@ -505,7 +505,7 @@
       "gate": "ABS-05",
       "metric": "decision_consistency",
       "rule": ">= 0.75",
-      "value": 0.66525,
+      "value": 0.66502,
       "verdict": "FAIL",
       "source": "Livingston & Lewis (1995)"
      },
@@ -513,7 +513,7 @@
       "gate": "ABS-06",
       "metric": "se_calibration_ratio",
       "rule": "RMSE / mean SE within [0.95, 1.10] \u2014 the direct detector for double counting",
-      "value": 1.06085,
+      "value": 1.04347,
       "verdict": "PASS",
       "source": "validation, new U-05"
      },
@@ -521,7 +521,7 @@
       "gate": "ABS-07",
       "metric": "p90_duration_minutes",
       "rule": "P90 modelled duration <= 90 minutes",
-      "value": 81.25,
+      "value": 80.5,
       "verdict": "PASS",
       "source": "validation: E-04 gains a gate"
      }
@@ -531,53 +531,53 @@
   "DGP-2": {
    "B": {
     "metrics": {
-     "n_pairs": 2535,
-     "n_sessions": 845,
-     "theta_rmse": 0.69565,
-     "theta_mae": 0.57261,
-     "exact_level_accuracy_common": 0.60868,
-     "exact_level_accuracy_native": 0.60868,
-     "within_one_level_common": 0.99684,
+     "n_pairs": 4800,
+     "n_sessions": 1600,
+     "theta_rmse": 0.71042,
+     "theta_mae": 0.58445,
+     "exact_level_accuracy_common": 0.61167,
+     "exact_level_accuracy_native": 0.61167,
+     "within_one_level_common": 0.99687,
      "accuracy_by_band": {
-      "1": 0.7143,
-      "2": 0.6498,
-      "3": 0.4853,
-      "4": 0.4538,
-      "5": 0.9408
+      "1": 0.6897,
+      "2": 0.6537,
+      "3": 0.4878,
+      "4": 0.4789,
+      "5": 0.9619
      },
-     "min_band_accuracy": 0.4538,
-     "min_decile_accuracy": 0.33992,
-     "marginal_reliability": 0.94353,
-     "decision_consistency": 0.68133,
-     "final_se_median": 0.53532,
-     "mean_se": 0.53256,
-     "se_calibration_ratio": 1.30624,
-     "interval_coverage_95": 0.8785,
-     "questions_per_candidate_mean": 17.6947,
+     "min_band_accuracy": 0.47891,
+     "min_decile_accuracy": 0.34167,
+     "marginal_reliability": 0.94199,
+     "decision_consistency": 0.67943,
+     "final_se_median": 0.53459,
+     "mean_se": 0.53238,
+     "se_calibration_ratio": 1.33443,
+     "interval_coverage_95": 0.86833,
+     "questions_per_candidate_mean": 17.4662,
      "questions_per_candidate_median": 18.0,
-     "duration_minutes_p50": 78.583,
-     "duration_minutes_p90": 95.083,
-     "p90_duration_minutes": 95.083,
-     "duration_over_90min_rate": 0.4497,
-     "converged_rate": 0.63156,
+     "duration_minutes_p50": 83.333,
+     "duration_minutes_p90": 95.333,
+     "p90_duration_minutes": 95.333,
+     "duration_over_90min_rate": 0.475,
+     "converged_rate": 0.61833,
      "coverage_satisfied_rate": 1.0,
-     "modality_blueprint_compliance": 0.91243,
-     "information_realization_ratio": 0.95782,
+     "modality_blueprint_compliance": 0.91292,
+     "information_realization_ratio": 0.95723,
      "stop_reason_distribution": {
-      "": 0.3684,
-      "precision": 0.6316
+      "": 0.3817,
+      "precision": 0.6183
      },
-     "heldout_auc": 0.94151,
-     "heldout_brier": 0.09956,
-     "heldout_log_loss": 0.32373,
-     "heldout_ece": 0.04513
+     "heldout_auc": 0.93917,
+     "heldout_brier": 0.10216,
+     "heldout_log_loss": 0.3319,
+     "heldout_ece": 0.04714
     },
     "verdicts": [
      {
       "gate": "ABS-01",
       "metric": "exact_level_accuracy_common",
       "rule": ">= 0.80 overall",
-      "value": 0.60868,
+      "value": 0.61167,
       "verdict": "FAIL",
       "source": "Livingston & Lewis (1995); Rudner (2001)"
      },
@@ -585,7 +585,7 @@
       "gate": "ABS-02",
       "metric": "min_band_accuracy",
       "rule": ">= 0.70 in every reported band",
-      "value": 0.4538,
+      "value": 0.47891,
       "verdict": "FAIL",
       "source": "Rudner (2001)"
      },
@@ -593,7 +593,7 @@
       "gate": "ABS-03",
       "metric": "marginal_reliability",
       "rule": ">= 0.85 to certify a level; >= 0.80 for routing",
-      "value": 0.94353,
+      "value": 0.94199,
       "verdict": "PASS",
       "source": "Nunnally & Bernstein (1994)"
      },
@@ -601,7 +601,7 @@
       "gate": "ABS-04",
       "metric": "min_decile_accuracy",
       "rule": "no true-theta decile below 0.65",
-      "value": 0.33992,
+      "value": 0.34167,
       "verdict": "FAIL",
       "source": "validation B3"
      },
@@ -609,7 +609,7 @@
       "gate": "ABS-05",
       "metric": "decision_consistency",
       "rule": ">= 0.75",
-      "value": 0.68133,
+      "value": 0.67943,
       "verdict": "FAIL",
       "source": "Livingston & Lewis (1995)"
      },
@@ -617,7 +617,7 @@
       "gate": "ABS-06",
       "metric": "se_calibration_ratio",
       "rule": "RMSE / mean SE within [0.95, 1.10] \u2014 the direct detector for double counting",
-      "value": 1.30624,
+      "value": 1.33443,
       "verdict": "FAIL",
       "source": "validation, new U-05"
      },
@@ -625,7 +625,7 @@
       "gate": "ABS-07",
       "metric": "p90_duration_minutes",
       "rule": "P90 modelled duration <= 90 minutes",
-      "value": 95.083,
+      "value": 95.333,
       "verdict": "FAIL",
       "source": "validation: E-04 gains a gate"
      }
@@ -633,53 +633,53 @@
    },
    "C-full": {
     "metrics": {
-     "n_pairs": 2535,
-     "n_sessions": 845,
-     "theta_rmse": 0.72185,
-     "theta_mae": 0.60157,
-     "exact_level_accuracy_common": 0.61341,
-     "exact_level_accuracy_native": 0.61341,
-     "within_one_level_common": 0.99645,
+     "n_pairs": 4800,
+     "n_sessions": 1600,
+     "theta_rmse": 0.73921,
+     "theta_mae": 0.61652,
+     "exact_level_accuracy_common": 0.61021,
+     "exact_level_accuracy_native": 0.61021,
+     "within_one_level_common": 0.99646,
      "accuracy_by_band": {
-      "1": 0.8571,
-      "2": 0.616,
-      "3": 0.4805,
-      "4": 0.4439,
-      "5": 0.9221
+      "1": 0.8381,
+      "2": 0.6154,
+      "3": 0.4861,
+      "4": 0.4467,
+      "5": 0.9486
      },
-     "min_band_accuracy": 0.44389,
-     "min_decile_accuracy": 0.34783,
-     "marginal_reliability": 0.95016,
-     "decision_consistency": 0.69586,
-     "final_se_median": 0.52261,
-     "mean_se": 0.52045,
-     "se_calibration_ratio": 1.38698,
-     "interval_coverage_95": 0.84339,
-     "questions_per_candidate_mean": 21.9065,
+     "min_band_accuracy": 0.44665,
+     "min_decile_accuracy": 0.34375,
+     "marginal_reliability": 0.9497,
+     "decision_consistency": 0.69933,
+     "final_se_median": 0.52238,
+     "mean_se": 0.51988,
+     "se_calibration_ratio": 1.4219,
+     "interval_coverage_95": 0.83521,
+     "questions_per_candidate_mean": 21.8125,
      "questions_per_candidate_median": 21.0,
-     "duration_minutes_p50": 50.833,
+     "duration_minutes_p50": 51.333,
      "duration_minutes_p90": 83.0,
      "p90_duration_minutes": 83.0,
      "duration_over_90min_rate": 0.0,
-     "converged_rate": 0.98777,
+     "converged_rate": 0.98896,
      "coverage_satisfied_rate": 1.0,
-     "modality_blueprint_compliance": 0.99803,
-     "information_realization_ratio": 1.06115,
+     "modality_blueprint_compliance": 0.99875,
+     "information_realization_ratio": 1.06146,
      "stop_reason_distribution": {
-      "precision": 0.9878,
-      "question_budget": 0.0122
+      "precision": 0.989,
+      "question_budget": 0.011
      },
-     "heldout_auc": 0.94089,
-     "heldout_brier": 0.09648,
-     "heldout_log_loss": 0.31392,
-     "heldout_ece": 0.02727
+     "heldout_auc": 0.93934,
+     "heldout_brier": 0.09816,
+     "heldout_log_loss": 0.31961,
+     "heldout_ece": 0.02886
     },
     "verdicts": [
      {
       "gate": "ABS-01",
       "metric": "exact_level_accuracy_common",
       "rule": ">= 0.80 overall",
-      "value": 0.61341,
+      "value": 0.61021,
       "verdict": "FAIL",
       "source": "Livingston & Lewis (1995); Rudner (2001)"
      },
@@ -687,7 +687,7 @@
       "gate": "ABS-02",
       "metric": "min_band_accuracy",
       "rule": ">= 0.70 in every reported band",
-      "value": 0.44389,
+      "value": 0.44665,
       "verdict": "FAIL",
       "source": "Rudner (2001)"
      },
@@ -695,7 +695,7 @@
       "gate": "ABS-03",
       "metric": "marginal_reliability",
       "rule": ">= 0.85 to certify a level; >= 0.80 for routing",
-      "value": 0.95016,
+      "value": 0.9497,
       "verdict": "PASS",
       "source": "Nunnally & Bernstein (1994)"
      },
@@ -703,7 +703,7 @@
       "gate": "ABS-04",
       "metric": "min_decile_accuracy",
       "rule": "no true-theta decile below 0.65",
-      "value": 0.34783,
+      "value": 0.34375,
       "verdict": "FAIL",
       "source": "validation B3"
      },
@@ -711,7 +711,7 @@
       "gate": "ABS-05",
       "metric": "decision_consistency",
       "rule": ">= 0.75",
-      "value": 0.69586,
+      "value": 0.69933,
       "verdict": "FAIL",
       "source": "Livingston & Lewis (1995)"
      },
@@ -719,7 +719,7 @@
       "gate": "ABS-06",
       "metric": "se_calibration_ratio",
       "rule": "RMSE / mean SE within [0.95, 1.10] \u2014 the direct detector for double counting",
-      "value": 1.38698,
+      "value": 1.4219,
       "verdict": "FAIL",
       "source": "validation, new U-05"
      },
@@ -735,54 +735,54 @@
    },
    "C-hybrid": {
     "metrics": {
-     "n_pairs": 2535,
-     "n_sessions": 845,
-     "theta_rmse": 0.73721,
-     "theta_mae": 0.61159,
-     "exact_level_accuracy_common": 0.6142,
-     "exact_level_accuracy_native": 0.6142,
-     "within_one_level_common": 0.99606,
+     "n_pairs": 4800,
+     "n_sessions": 1600,
+     "theta_rmse": 0.75058,
+     "theta_mae": 0.62425,
+     "exact_level_accuracy_common": 0.61354,
+     "exact_level_accuracy_native": 0.61354,
+     "within_one_level_common": 0.99562,
      "accuracy_by_band": {
-      "1": 0.8513,
-      "2": 0.6037,
-      "3": 0.4902,
-      "4": 0.4554,
-      "5": 0.919
+      "1": 0.8347,
+      "2": 0.5997,
+      "3": 0.5038,
+      "4": 0.4632,
+      "5": 0.942
      },
-     "min_band_accuracy": 0.45545,
-     "min_decile_accuracy": 0.35573,
-     "marginal_reliability": 0.9467,
-     "decision_consistency": 0.6942,
-     "final_se_median": 0.53683,
-     "mean_se": 0.53738,
-     "se_calibration_ratio": 1.37186,
-     "interval_coverage_95": 0.85996,
-     "questions_per_candidate_mean": 20.4805,
+     "min_band_accuracy": 0.46319,
+     "min_decile_accuracy": 0.35208,
+     "marginal_reliability": 0.9462,
+     "decision_consistency": 0.69535,
+     "final_se_median": 0.53597,
+     "mean_se": 0.53633,
+     "se_calibration_ratio": 1.39945,
+     "interval_coverage_95": 0.84896,
+     "questions_per_candidate_mean": 20.4737,
      "questions_per_candidate_median": 20.0,
-     "duration_minutes_p50": 46.833,
+     "duration_minutes_p50": 48.083,
      "duration_minutes_p90": 83.0,
      "p90_duration_minutes": 83.0,
      "duration_over_90min_rate": 0.0,
-     "converged_rate": 0.99684,
+     "converged_rate": 0.99625,
      "coverage_satisfied_rate": 1.0,
-     "modality_blueprint_compliance": 0.99921,
-     "information_realization_ratio": 1.0648,
+     "modality_blueprint_compliance": 0.99917,
+     "information_realization_ratio": 1.0649,
      "stop_reason_distribution": {
-      "band_probability": 0.641,
-      "precision": 0.3558,
-      "question_budget": 0.0032
+      "band_probability": 0.6352,
+      "precision": 0.361,
+      "question_budget": 0.0037
      },
-     "heldout_auc": 0.93866,
-     "heldout_brier": 0.09861,
-     "heldout_log_loss": 0.32181,
-     "heldout_ece": 0.03005
+     "heldout_auc": 0.93774,
+     "heldout_brier": 0.09972,
+     "heldout_log_loss": 0.32537,
+     "heldout_ece": 0.0303
     },
     "verdicts": [
      {
       "gate": "ABS-01",
       "metric": "exact_level_accuracy_common",
       "rule": ">= 0.80 overall",
-      "value": 0.6142,
+      "value": 0.61354,
       "verdict": "FAIL",
       "source": "Livingston & Lewis (1995); Rudner (2001)"
      },
@@ -790,7 +790,7 @@
       "gate": "ABS-02",
       "metric": "min_band_accuracy",
       "rule": ">= 0.70 in every reported band",
-      "value": 0.45545,
+      "value": 0.46319,
       "verdict": "FAIL",
       "source": "Rudner (2001)"
      },
@@ -798,7 +798,7 @@
       "gate": "ABS-03",
       "metric": "marginal_reliability",
       "rule": ">= 0.85 to certify a level; >= 0.80 for routing",
-      "value": 0.9467,
+      "value": 0.9462,
       "verdict": "PASS",
       "source": "Nunnally & Bernstein (1994)"
      },
@@ -806,7 +806,7 @@
       "gate": "ABS-04",
       "metric": "min_decile_accuracy",
       "rule": "no true-theta decile below 0.65",
-      "value": 0.35573,
+      "value": 0.35208,
       "verdict": "FAIL",
       "source": "validation B3"
      },
@@ -814,7 +814,7 @@
       "gate": "ABS-05",
       "metric": "decision_consistency",
       "rule": ">= 0.75",
-      "value": 0.6942,
+      "value": 0.69535,
       "verdict": "FAIL",
       "source": "Livingston & Lewis (1995)"
      },
@@ -822,7 +822,7 @@
       "gate": "ABS-06",
       "metric": "se_calibration_ratio",
       "rule": "RMSE / mean SE within [0.95, 1.10] \u2014 the direct detector for double counting",
-      "value": 1.37186,
+      "value": 1.39945,
       "verdict": "FAIL",
       "source": "validation, new U-05"
      },
@@ -838,53 +838,53 @@
    },
    "C-off": {
     "metrics": {
-     "n_pairs": 2535,
-     "n_sessions": 845,
-     "theta_rmse": 0.74084,
-     "theta_mae": 0.61175,
-     "exact_level_accuracy_common": 0.60986,
-     "exact_level_accuracy_native": 0.60986,
-     "within_one_level_common": 0.99724,
+     "n_pairs": 4800,
+     "n_sessions": 1600,
+     "theta_rmse": 0.75204,
+     "theta_mae": 0.62128,
+     "exact_level_accuracy_common": 0.60667,
+     "exact_level_accuracy_native": 0.60667,
+     "within_one_level_common": 0.99667,
      "accuracy_by_band": {
-      "1": 0.8746,
-      "2": 0.616,
-      "3": 0.4609,
-      "4": 0.4389,
-      "5": 0.9221
+      "1": 0.8533,
+      "2": 0.6188,
+      "3": 0.4542,
+      "4": 0.4549,
+      "5": 0.9453
      },
-     "min_band_accuracy": 0.43894,
-     "min_decile_accuracy": 0.31621,
-     "marginal_reliability": 0.95067,
-     "decision_consistency": 0.69474,
-     "final_se_median": 0.52213,
-     "mean_se": 0.51934,
-     "se_calibration_ratio": 1.4265,
-     "interval_coverage_95": 0.83314,
-     "questions_per_candidate_mean": 20.3006,
+     "min_band_accuracy": 0.45424,
+     "min_decile_accuracy": 0.36458,
+     "marginal_reliability": 0.94958,
+     "decision_consistency": 0.6947,
+     "final_se_median": 0.5211,
+     "mean_se": 0.5192,
+     "se_calibration_ratio": 1.44845,
+     "interval_coverage_95": 0.83062,
+     "questions_per_candidate_mean": 20.2744,
      "questions_per_candidate_median": 20.0,
-     "duration_minutes_p50": 46.833,
-     "duration_minutes_p90": 58.25,
-     "p90_duration_minutes": 58.25,
+     "duration_minutes_p50": 47.709,
+     "duration_minutes_p90": 58.5,
+     "p90_duration_minutes": 58.5,
      "duration_over_90min_rate": 0.0,
-     "converged_rate": 0.99408,
+     "converged_rate": 0.99313,
      "coverage_satisfied_rate": 1.0,
-     "modality_blueprint_compliance": 0.77081,
-     "information_realization_ratio": 1.0557,
+     "modality_blueprint_compliance": 0.76854,
+     "information_realization_ratio": 1.05571,
      "stop_reason_distribution": {
-      "precision": 0.9941,
-      "question_budget": 0.0059
+      "precision": 0.9931,
+      "question_budget": 0.0069
      },
-     "heldout_auc": 0.93989,
-     "heldout_brier": 0.09745,
-     "heldout_log_loss": 0.31827,
-     "heldout_ece": 0.02819
+     "heldout_auc": 0.93796,
+     "heldout_brier": 0.09957,
+     "heldout_log_loss": 0.32448,
+     "heldout_ece": 0.0299
     },
     "verdicts": [
      {
       "gate": "ABS-01",
       "metric": "exact_level_accuracy_common",
       "rule": ">= 0.80 overall",
-      "value": 0.60986,
+      "value": 0.60667,
       "verdict": "FAIL",
       "source": "Livingston & Lewis (1995); Rudner (2001)"
      },
@@ -892,7 +892,7 @@
       "gate": "ABS-02",
       "metric": "min_band_accuracy",
       "rule": ">= 0.70 in every reported band",
-      "value": 0.43894,
+      "value": 0.45424,
       "verdict": "FAIL",
       "source": "Rudner (2001)"
      },
@@ -900,7 +900,7 @@
       "gate": "ABS-03",
       "metric": "marginal_reliability",
       "rule": ">= 0.85 to certify a level; >= 0.80 for routing",
-      "value": 0.95067,
+      "value": 0.94958,
       "verdict": "PASS",
       "source": "Nunnally & Bernstein (1994)"
      },
@@ -908,7 +908,7 @@
       "gate": "ABS-04",
       "metric": "min_decile_accuracy",
       "rule": "no true-theta decile below 0.65",
-      "value": 0.31621,
+      "value": 0.36458,
       "verdict": "FAIL",
       "source": "validation B3"
      },
@@ -916,7 +916,7 @@
       "gate": "ABS-05",
       "metric": "decision_consistency",
       "rule": ">= 0.75",
-      "value": 0.69474,
+      "value": 0.6947,
       "verdict": "FAIL",
       "source": "Livingston & Lewis (1995)"
      },
@@ -924,7 +924,7 @@
       "gate": "ABS-06",
       "metric": "se_calibration_ratio",
       "rule": "RMSE / mean SE within [0.95, 1.10] \u2014 the direct detector for double counting",
-      "value": 1.4265,
+      "value": 1.44845,
       "verdict": "FAIL",
       "source": "validation, new U-05"
      },
@@ -932,7 +932,7 @@
       "gate": "ABS-07",
       "metric": "p90_duration_minutes",
       "rule": "P90 modelled duration <= 90 minutes",
-      "value": 58.25,
+      "value": 58.5,
       "verdict": "PASS",
       "source": "validation: E-04 gains a gate"
      }
@@ -940,53 +940,53 @@
    },
    "C-shipped": {
     "metrics": {
-     "n_pairs": 2535,
-     "n_sessions": 845,
-     "theta_rmse": 0.7256,
-     "theta_mae": 0.6047,
-     "exact_level_accuracy_common": 0.6142,
-     "exact_level_accuracy_native": 0.6142,
-     "within_one_level_common": 0.99763,
+     "n_pairs": 4800,
+     "n_sessions": 1600,
+     "theta_rmse": 0.74025,
+     "theta_mae": 0.61796,
+     "exact_level_accuracy_common": 0.61479,
+     "exact_level_accuracy_native": 0.61479,
+     "within_one_level_common": 0.99687,
      "accuracy_by_band": {
-      "1": 0.863,
-      "2": 0.5945,
-      "3": 0.487,
-      "4": 0.462,
-      "5": 0.919
+      "1": 0.8432,
+      "2": 0.5963,
+      "3": 0.5021,
+      "4": 0.469,
+      "5": 0.942
      },
-     "min_band_accuracy": 0.46205,
-     "min_decile_accuracy": 0.35573,
-     "marginal_reliability": 0.95051,
-     "decision_consistency": 0.70154,
-     "final_se_median": 0.52196,
-     "mean_se": 0.52031,
-     "se_calibration_ratio": 1.39454,
-     "interval_coverage_95": 0.84694,
-     "questions_per_candidate_mean": 21.6414,
+     "min_band_accuracy": 0.46898,
+     "min_decile_accuracy": 0.35,
+     "marginal_reliability": 0.94991,
+     "decision_consistency": 0.70253,
+     "final_se_median": 0.52143,
+     "mean_se": 0.51972,
+     "se_calibration_ratio": 1.42432,
+     "interval_coverage_95": 0.83625,
+     "questions_per_candidate_mean": 21.595,
      "questions_per_candidate_median": 21.0,
-     "duration_minutes_p50": 48.5,
+     "duration_minutes_p50": 49.583,
      "duration_minutes_p90": 83.0,
      "p90_duration_minutes": 83.0,
      "duration_over_90min_rate": 0.0,
-     "converged_rate": 0.99053,
+     "converged_rate": 0.99104,
      "coverage_satisfied_rate": 1.0,
-     "modality_blueprint_compliance": 0.99921,
-     "information_realization_ratio": 1.06103,
+     "modality_blueprint_compliance": 0.99917,
+     "information_realization_ratio": 1.06126,
      "stop_reason_distribution": {
-      "precision": 0.9905,
-      "question_budget": 0.0095
+      "precision": 0.991,
+      "question_budget": 0.009
      },
-     "heldout_auc": 0.93984,
-     "heldout_brier": 0.09737,
-     "heldout_log_loss": 0.31766,
-     "heldout_ece": 0.0278
+     "heldout_auc": 0.9389,
+     "heldout_brier": 0.09843,
+     "heldout_log_loss": 0.32106,
+     "heldout_ece": 0.02848
     },
     "verdicts": [
      {
       "gate": "ABS-01",
       "metric": "exact_level_accuracy_common",
       "rule": ">= 0.80 overall",
-      "value": 0.6142,
+      "value": 0.61479,
       "verdict": "FAIL",
       "source": "Livingston & Lewis (1995); Rudner (2001)"
      },
@@ -994,7 +994,7 @@
       "gate": "ABS-02",
       "metric": "min_band_accuracy",
       "rule": ">= 0.70 in every reported band",
-      "value": 0.46205,
+      "value": 0.46898,
       "verdict": "FAIL",
       "source": "Rudner (2001)"
      },
@@ -1002,7 +1002,7 @@
       "gate": "ABS-03",
       "metric": "marginal_reliability",
       "rule": ">= 0.85 to certify a level; >= 0.80 for routing",
-      "value": 0.95051,
+      "value": 0.94991,
       "verdict": "PASS",
       "source": "Nunnally & Bernstein (1994)"
      },
@@ -1010,7 +1010,7 @@
       "gate": "ABS-04",
       "metric": "min_decile_accuracy",
       "rule": "no true-theta decile below 0.65",
-      "value": 0.35573,
+      "value": 0.35,
       "verdict": "FAIL",
       "source": "validation B3"
      },
@@ -1018,7 +1018,7 @@
       "gate": "ABS-05",
       "metric": "decision_consistency",
       "rule": ">= 0.75",
-      "value": 0.70154,
+      "value": 0.70253,
       "verdict": "FAIL",
       "source": "Livingston & Lewis (1995)"
      },
@@ -1026,7 +1026,7 @@
       "gate": "ABS-06",
       "metric": "se_calibration_ratio",
       "rule": "RMSE / mean SE within [0.95, 1.10] \u2014 the direct detector for double counting",
-      "value": 1.39454,
+      "value": 1.42432,
       "verdict": "FAIL",
       "source": "validation, new U-05"
      },
@@ -1047,296 +1047,296 @@
    "C-off:C-hybrid": {
     "reference_arm": "C-off",
     "test_arm": "C-hybrid",
-    "n_pairs": 2463,
-    "n_sessions": 821,
-    "between_arm_theta_correlation": 0.9566,
+    "n_pairs": 4800,
+    "n_sessions": 1600,
+    "between_arm_theta_correlation": 0.95494,
     "primary_endpoint": {
      "metric": "exact-level accuracy, COMMON band scale",
-     "accuracy_reference": 0.71985,
-     "accuracy_test": 0.7093,
-     "degradation_pp": 1.0556,
-     "upper_bound_pp_clustered_bca": 2.8015,
+     "accuracy_reference": 0.71688,
+     "accuracy_test": 0.70458,
+     "degradation_pp": 1.2292,
+     "upper_bound_pp_clustered_bca": 2.375,
      "margin_pp": 2.0,
      "non_inferior": false,
-     "tango_upper_bound_pp": 2.162,
-     "discordance_psi": 0.2363,
+     "tango_upper_bound_pp": 1.9966,
+     "discordance_psi": 0.23729,
      "discordant_pairs": {
-      "test_better": 278,
-      "test_worse": 304
+      "test_better": 540,
+      "test_worse": 599
      },
      "degradation_pp_by_family": {
-      "borderline": 3.313,
-      "contradictory": -1.578,
-      "monotonic": 0.849,
-      "noisy": 1.863,
-      "shared_core_asymmetric": 0.963
+      "borderline": 0.833,
+      "contradictory": 2.5,
+      "monotonic": 0.0,
+      "noisy": 0.521,
+      "shared_core_asymmetric": 2.292
      }
     },
     "theta_rmse": {
-     "reference": 0.56008,
-     "test": 0.57846,
-     "relative_degradation": 0.03282,
+     "reference": 0.56451,
+     "test": 0.572,
+     "relative_degradation": 0.01326,
      "margin": 0.05,
-     "paired_squared_error_difference_upper": 0.050533,
-     "cohens_d_paired": 0.024
+     "paired_squared_error_difference_upper": 0.028953,
+     "cohens_d_paired": 0.0096
     },
     "efficiency": {
-     "questions_reference_mean": 20.1035,
-     "questions_test_mean": 20.2631,
-     "question_reduction": -0.00794,
+     "questions_reference_mean": 20.0275,
+     "questions_test_mean": 20.2444,
+     "question_reduction": -0.01083,
      "target": 0.15,
-     "cliffs_delta": 0.0958,
-     "duration_reduction": -0.09275,
-     "pareto_shorter_rate": 0.34836
+     "cliffs_delta": 0.1181,
+     "duration_reduction": -0.09476,
+     "pareto_shorter_rate": 0.32438
     },
     "prediction": {
-     "auc_ref": 0.94071,
-     "auc_test": 0.9399,
-     "difference": -0.00081,
-     "se": 0.000529,
-     "z": -1.5381,
-     "p_two_sided": 0.124015,
-     "brier_reference": 0.09759,
-     "brier_test": 0.09806,
-     "log_loss_reference": 0.31362,
-     "log_loss_test": 0.3156,
-     "n_heldout": 30083
+     "auc_ref": 0.93901,
+     "auc_test": 0.93878,
+     "difference": -0.00023,
+     "se": 0.000392,
+     "z": -0.5747,
+     "p_two_sided": 0.565511,
+     "brier_reference": 0.09912,
+     "brier_test": 0.0991,
+     "log_loss_reference": 0.31839,
+     "log_loss_test": 0.31862,
+     "n_heldout": 58735
     }
    },
    "C-off:C-shipped": {
     "reference_arm": "C-off",
     "test_arm": "C-shipped",
-    "n_pairs": 2463,
-    "n_sessions": 821,
-    "between_arm_theta_correlation": 0.96263,
+    "n_pairs": 4800,
+    "n_sessions": 1600,
+    "between_arm_theta_correlation": 0.96087,
     "primary_endpoint": {
      "metric": "exact-level accuracy, COMMON band scale",
-     "accuracy_reference": 0.71985,
-     "accuracy_test": 0.71458,
-     "degradation_pp": 0.5278,
-     "upper_bound_pp_clustered_bca": 2.1924,
+     "accuracy_reference": 0.71688,
+     "accuracy_test": 0.71125,
+     "degradation_pp": 0.5625,
+     "upper_bound_pp_clustered_bca": 1.6875,
      "margin_pp": 2.0,
-     "non_inferior": false,
-     "tango_upper_bound_pp": 1.5139,
-     "discordance_psi": 0.23508,
+     "non_inferior": true,
+     "tango_upper_bound_pp": 1.2163,
+     "discordance_psi": 0.23438,
      "discordant_pairs": {
-      "test_better": 283,
-      "test_worse": 296
+      "test_better": 549,
+      "test_worse": 576
      },
      "degradation_pp_by_family": {
-      "borderline": 2.899,
-      "contradictory": -2.367,
-      "monotonic": 0.212,
-      "noisy": 1.449,
-      "shared_core_asymmetric": 0.578
+      "borderline": 0.208,
+      "contradictory": 1.354,
+      "monotonic": -0.833,
+      "noisy": 0.104,
+      "shared_core_asymmetric": 1.979
      }
     },
     "theta_rmse": {
-     "reference": 0.56008,
-     "test": 0.55285,
-     "relative_degradation": -0.01291,
+     "reference": 0.56451,
+     "test": 0.54343,
+     "relative_degradation": -0.03736,
      "margin": 0.05,
-     "paired_squared_error_difference_upper": 0.018549,
-     "cohens_d_paired": -0.0098
+     "paired_squared_error_difference_upper": -0.004174,
+     "cohens_d_paired": -0.0279
     },
     "efficiency": {
-     "questions_reference_mean": 20.1035,
-     "questions_test_mean": 21.3386,
-     "question_reduction": -0.06144,
+     "questions_reference_mean": 20.0275,
+     "questions_test_mean": 21.3019,
+     "question_reduction": -0.06363,
      "target": 0.15,
-     "cliffs_delta": 0.3526,
-     "duration_reduction": -0.12034,
-     "pareto_shorter_rate": 0.19488
+     "cliffs_delta": 0.3619,
+     "duration_reduction": -0.12182,
+     "pareto_shorter_rate": 0.18625
     },
     "prediction": {
-     "auc_ref": 0.94172,
-     "auc_test": 0.94088,
-     "difference": -0.00085,
-     "se": 0.000493,
-     "z": -1.7152,
-     "p_two_sided": 0.086306,
-     "brier_reference": 0.09659,
-     "brier_test": 0.0971,
-     "log_loss_reference": 0.31115,
-     "log_loss_test": 0.31277,
-     "n_heldout": 30316
+     "auc_ref": 0.93998,
+     "auc_test": 0.94018,
+     "difference": 0.0002,
+     "se": 0.000365,
+     "z": 0.5421,
+     "p_two_sided": 0.587783,
+     "brier_reference": 0.09809,
+     "brier_test": 0.09764,
+     "log_loss_reference": 0.31585,
+     "log_loss_test": 0.3145,
+     "n_heldout": 58952
     }
    },
    "C-off:C-full": {
     "reference_arm": "C-off",
     "test_arm": "C-full",
-    "n_pairs": 2463,
-    "n_sessions": 821,
-    "between_arm_theta_correlation": 0.9645,
+    "n_pairs": 4800,
+    "n_sessions": 1600,
+    "between_arm_theta_correlation": 0.96327,
     "primary_endpoint": {
      "metric": "exact-level accuracy, COMMON band scale",
-     "accuracy_reference": 0.71985,
-     "accuracy_test": 0.7162,
-     "degradation_pp": 0.3654,
-     "upper_bound_pp_clustered_bca": 1.9838,
+     "accuracy_reference": 0.71688,
+     "accuracy_test": 0.71813,
+     "degradation_pp": -0.125,
+     "upper_bound_pp_clustered_bca": 0.9792,
      "margin_pp": 2.0,
      "non_inferior": true,
-     "tango_upper_bound_pp": 1.3021,
-     "discordance_psi": 0.2294,
+     "tango_upper_bound_pp": -0.0312,
+     "discordance_psi": 0.22833,
      "discordant_pairs": {
-      "test_better": 278,
-      "test_worse": 287
+      "test_better": 551,
+      "test_worse": 545
      },
      "degradation_pp_by_family": {
-      "borderline": 2.692,
-      "contradictory": -1.381,
-      "monotonic": 0.212,
-      "noisy": -0.207,
-      "shared_core_asymmetric": 0.578
+      "borderline": -0.104,
+      "contradictory": 1.875,
+      "monotonic": -2.292,
+      "noisy": -1.458,
+      "shared_core_asymmetric": 1.354
      }
     },
     "theta_rmse": {
-     "reference": 0.56008,
-     "test": 0.55552,
-     "relative_degradation": -0.00814,
+     "reference": 0.56451,
+     "test": 0.54631,
+     "relative_degradation": -0.03224,
      "margin": 0.05,
-     "paired_squared_error_difference_upper": 0.021073,
-     "cohens_d_paired": -0.0064
+     "paired_squared_error_difference_upper": -0.002443,
+     "cohens_d_paired": -0.0252
     },
     "efficiency": {
-     "questions_reference_mean": 20.1035,
-     "questions_test_mean": 21.5225,
-     "question_reduction": -0.07058,
+     "questions_reference_mean": 20.0275,
+     "questions_test_mean": 21.4731,
+     "question_reduction": -0.07218,
      "target": 0.15,
-     "cliffs_delta": 0.3799,
-     "duration_reduction": -0.12632,
-     "pareto_shorter_rate": 0.16565
+     "cliffs_delta": 0.3871,
+     "duration_reduction": -0.12834,
+     "pareto_shorter_rate": 0.16687
     },
     "prediction": {
-     "auc_ref": 0.94149,
-     "auc_test": 0.94064,
-     "difference": -0.00085,
-     "se": 0.00049,
-     "z": -1.7387,
-     "p_two_sided": 0.082094,
-     "brier_reference": 0.09665,
-     "brier_test": 0.09707,
-     "log_loss_reference": 0.31144,
-     "log_loss_test": 0.31277,
-     "n_heldout": 29606
+     "auc_ref": 0.93935,
+     "auc_test": 0.93948,
+     "difference": 0.00013,
+     "se": 0.000358,
+     "z": 0.3612,
+     "p_two_sided": 0.717965,
+     "brier_reference": 0.09858,
+     "brier_test": 0.09815,
+     "log_loss_reference": 0.31765,
+     "log_loss_test": 0.31637,
+     "n_heldout": 57870
     }
    },
    "B:C-off": {
     "reference_arm": "B",
     "test_arm": "C-off",
-    "n_pairs": 2463,
-    "n_sessions": 821,
-    "between_arm_theta_correlation": 0.96341,
+    "n_pairs": 4800,
+    "n_sessions": 1600,
+    "between_arm_theta_correlation": 0.96128,
     "primary_endpoint": {
      "metric": "exact-level accuracy, COMMON band scale",
-     "accuracy_reference": 0.70361,
-     "accuracy_test": 0.71985,
-     "degradation_pp": -1.624,
-     "upper_bound_pp_clustered_bca": -0.0812,
+     "accuracy_reference": 0.70979,
+     "accuracy_test": 0.71688,
+     "degradation_pp": -0.7083,
+     "upper_bound_pp_clustered_bca": 0.4375,
      "margin_pp": 2.0,
      "non_inferior": true,
-     "tango_upper_bound_pp": -0.4036,
-     "discordance_psi": 0.21437,
+     "tango_upper_bound_pp": -0.1766,
+     "discordance_psi": 0.21667,
      "discordant_pairs": {
-      "test_better": 284,
-      "test_worse": 244
+      "test_better": 537,
+      "test_worse": 503
      },
      "degradation_pp_by_family": {
-      "borderline": -3.313,
-      "contradictory": 2.367,
-      "monotonic": -3.609,
-      "noisy": 3.106,
-      "shared_core_asymmetric": -6.551
+      "borderline": -1.979,
+      "contradictory": 1.458,
+      "monotonic": 1.25,
+      "noisy": 2.604,
+      "shared_core_asymmetric": -6.875
      }
     },
     "theta_rmse": {
-     "reference": 0.53951,
-     "test": 0.56008,
-     "relative_degradation": 0.03812,
+     "reference": 0.53411,
+     "test": 0.56451,
+     "relative_degradation": 0.05691,
      "margin": 0.05,
-     "paired_squared_error_difference_upper": 0.04863,
-     "cohens_d_paired": 0.0295
+     "paired_squared_error_difference_upper": 0.052438,
+     "cohens_d_paired": 0.0416
     },
     "efficiency": {
-     "questions_reference_mean": 17.2205,
-     "questions_test_mean": 20.1035,
-     "question_reduction": -0.16742,
+     "questions_reference_mean": 17.1125,
+     "questions_test_mean": 20.0275,
+     "question_reduction": -0.17034,
      "target": 0.15,
-     "cliffs_delta": 0.4773,
-     "duration_reduction": 0.37514,
-     "pareto_shorter_rate": 0.12667
+     "cliffs_delta": 0.4849,
+     "duration_reduction": 0.37808,
+     "pareto_shorter_rate": 0.12562
     },
     "prediction": {
-     "auc_ref": 0.93751,
-     "auc_test": 0.93447,
-     "difference": -0.00304,
-     "se": 0.000635,
-     "z": -4.7908,
-     "p_two_sided": 2e-06,
+     "auc_ref": 0.93743,
+     "auc_test": 0.93344,
+     "difference": -0.00399,
+     "se": 0.000478,
+     "z": -8.3464,
+     "p_two_sided": 0.0,
      "brier_reference": 0.10077,
-     "brier_test": 0.10196,
-     "log_loss_reference": 0.32384,
-     "log_loss_test": 0.3272,
-     "n_heldout": 18203
+     "brier_test": 0.10302,
+     "log_loss_reference": 0.32524,
+     "log_loss_test": 0.33106,
+     "n_heldout": 35149
     }
    },
    "B:C-hybrid": {
     "reference_arm": "B",
     "test_arm": "C-hybrid",
-    "n_pairs": 2463,
-    "n_sessions": 821,
-    "between_arm_theta_correlation": 0.95469,
+    "n_pairs": 4800,
+    "n_sessions": 1600,
+    "between_arm_theta_correlation": 0.95301,
     "primary_endpoint": {
      "metric": "exact-level accuracy, COMMON band scale",
-     "accuracy_reference": 0.70361,
-     "accuracy_test": 0.7093,
-     "degradation_pp": -0.5684,
-     "upper_bound_pp_clustered_bca": 1.1368,
+     "accuracy_reference": 0.70979,
+     "accuracy_test": 0.70458,
+     "degradation_pp": 0.5208,
+     "upper_bound_pp_clustered_bca": 1.8333,
      "margin_pp": 2.0,
      "non_inferior": true,
-     "tango_upper_bound_pp": -0.1418,
-     "discordance_psi": 0.26634,
+     "tango_upper_bound_pp": 1.186,
+     "discordance_psi": 0.27021,
      "discordant_pairs": {
-      "test_better": 335,
-      "test_worse": 321
+      "test_better": 636,
+      "test_worse": 661
      },
      "degradation_pp_by_family": {
-      "borderline": 0.0,
-      "contradictory": 0.789,
-      "monotonic": -2.76,
-      "noisy": 4.969,
-      "shared_core_asymmetric": -5.588
+      "borderline": -1.146,
+      "contradictory": 3.958,
+      "monotonic": 1.25,
+      "noisy": 3.125,
+      "shared_core_asymmetric": -4.583
      }
     },
     "theta_rmse": {
-     "reference": 0.53951,
-     "test": 0.57846,
-     "relative_degradation": 0.0722,
+     "reference": 0.53411,
+     "test": 0.572,
+     "relative_degradation": 0.07093,
      "margin": 0.05,
-     "paired_squared_error_difference_upper": 0.070087,
-     "cohens_d_paired": 0.0545
+     "paired_squared_error_difference_upper": 0.060169,
+     "cohens_d_paired": 0.0555
     },
     "efficiency": {
-     "questions_reference_mean": 17.2205,
-     "questions_test_mean": 20.2631,
-     "question_reduction": -0.17669,
+     "questions_reference_mean": 17.1125,
+     "questions_test_mean": 20.2444,
+     "question_reduction": -0.18302,
      "target": 0.15,
-     "cliffs_delta": 0.5492,
-     "duration_reduction": 0.31718,
-     "pareto_shorter_rate": 0.15469
+     "cliffs_delta": 0.5712,
+     "duration_reduction": 0.31915,
+     "pareto_shorter_rate": 0.15438
     },
     "prediction": {
-     "auc_ref": 0.94659,
-     "auc_test": 0.94116,
-     "difference": -0.00543,
-     "se": 0.000705,
-     "z": -7.703,
+     "auc_ref": 0.94477,
+     "auc_test": 0.93956,
+     "difference": -0.00521,
+     "se": 0.000525,
+     "z": -9.9322,
      "p_two_sided": 0.0,
-     "brier_reference": 0.0927,
-     "brier_test": 0.09595,
-     "log_loss_reference": 0.30063,
-     "log_loss_test": 0.31195,
-     "n_heldout": 15692
+     "brier_reference": 0.09422,
+     "brier_test": 0.09744,
+     "log_loss_reference": 0.30645,
+     "log_loss_test": 0.317,
+     "n_heldout": 30308
     }
    }
   },
@@ -1344,296 +1344,296 @@
    "C-off:C-hybrid": {
     "reference_arm": "C-off",
     "test_arm": "C-hybrid",
-    "n_pairs": 2535,
-    "n_sessions": 845,
-    "between_arm_theta_correlation": 0.96442,
+    "n_pairs": 4800,
+    "n_sessions": 1600,
+    "between_arm_theta_correlation": 0.96255,
     "primary_endpoint": {
      "metric": "exact-level accuracy, COMMON band scale",
-     "accuracy_reference": 0.60986,
-     "accuracy_test": 0.6142,
-     "degradation_pp": -0.4339,
-     "upper_bound_pp_clustered_bca": 0.9862,
+     "accuracy_reference": 0.60667,
+     "accuracy_test": 0.61354,
+     "degradation_pp": -0.6875,
+     "upper_bound_pp_clustered_bca": 0.375,
      "margin_pp": 2.0,
      "non_inferior": true,
-     "tango_upper_bound_pp": -0.1083,
-     "discordance_psi": 0.20789,
+     "tango_upper_bound_pp": -0.1714,
+     "discordance_psi": 0.20563,
      "discordant_pairs": {
-      "test_better": 269,
-      "test_worse": 258
+      "test_better": 510,
+      "test_worse": 477
      },
      "degradation_pp_by_family": {
-      "borderline": -2.008,
-      "contradictory": -1.143,
-      "monotonic": 1.035,
-      "noisy": 2.008,
-      "shared_core_asymmetric": -1.883
+      "borderline": -1.25,
+      "contradictory": -0.729,
+      "monotonic": -0.0,
+      "noisy": -0.521,
+      "shared_core_asymmetric": -0.937
      }
     },
     "theta_rmse": {
-     "reference": 0.74084,
-     "test": 0.73721,
-     "relative_degradation": -0.0049,
+     "reference": 0.75204,
+     "test": 0.75058,
+     "relative_degradation": -0.00195,
      "margin": 0.05,
-     "paired_squared_error_difference_upper": 0.022272,
-     "cohens_d_paired": -0.0065
+     "paired_squared_error_difference_upper": 0.017711,
+     "cohens_d_paired": -0.0027
     },
     "efficiency": {
-     "questions_reference_mean": 20.3006,
-     "questions_test_mean": 20.4805,
-     "question_reduction": -0.00886,
+     "questions_reference_mean": 20.2744,
+     "questions_test_mean": 20.4737,
+     "question_reduction": -0.00983,
      "target": 0.15,
-     "cliffs_delta": 0.0778,
-     "duration_reduction": -0.13211,
-     "pareto_shorter_rate": 0.35858
+     "cliffs_delta": 0.0892,
+     "duration_reduction": -0.13534,
+     "pareto_shorter_rate": 0.35875
     },
     "prediction": {
-     "auc_ref": 0.9509,
-     "auc_test": 0.95121,
-     "difference": 0.00031,
-     "se": 0.000472,
-     "z": 0.6609,
-     "p_two_sided": 0.508671,
-     "brier_reference": 0.08733,
-     "brier_test": 0.08678,
-     "log_loss_reference": 0.28697,
-     "log_loss_test": 0.28562,
-     "n_heldout": 31387
+     "auc_ref": 0.94862,
+     "auc_test": 0.94899,
+     "difference": 0.00036,
+     "se": 0.000358,
+     "z": 1.0131,
+     "p_two_sided": 0.310999,
+     "brier_reference": 0.08963,
+     "brier_test": 0.08921,
+     "log_loss_reference": 0.29409,
+     "log_loss_test": 0.29298,
+     "n_heldout": 59283
     }
    },
    "C-off:C-shipped": {
     "reference_arm": "C-off",
     "test_arm": "C-shipped",
-    "n_pairs": 2535,
-    "n_sessions": 845,
-    "between_arm_theta_correlation": 0.96911,
+    "n_pairs": 4800,
+    "n_sessions": 1600,
+    "between_arm_theta_correlation": 0.96693,
     "primary_endpoint": {
      "metric": "exact-level accuracy, COMMON band scale",
-     "accuracy_reference": 0.60986,
-     "accuracy_test": 0.6142,
-     "degradation_pp": -0.4339,
-     "upper_bound_pp_clustered_bca": 1.0256,
+     "accuracy_reference": 0.60667,
+     "accuracy_test": 0.61479,
+     "degradation_pp": -0.8125,
+     "upper_bound_pp_clustered_bca": 0.2708,
      "margin_pp": 2.0,
      "non_inferior": true,
-     "tango_upper_bound_pp": -0.1083,
-     "discordance_psi": 0.2071,
+     "tango_upper_bound_pp": -0.2025,
+     "discordance_psi": 0.20396,
      "discordant_pairs": {
-      "test_better": 268,
-      "test_worse": 257
+      "test_better": 509,
+      "test_worse": 470
      },
      "degradation_pp_by_family": {
-      "borderline": -2.008,
-      "contradictory": -1.333,
-      "monotonic": 1.656,
-      "noisy": 2.209,
-      "shared_core_asymmetric": -2.448
+      "borderline": -1.458,
+      "contradictory": -1.042,
+      "monotonic": 0.104,
+      "noisy": -0.417,
+      "shared_core_asymmetric": -1.25
      }
     },
     "theta_rmse": {
-     "reference": 0.74084,
-     "test": 0.7256,
-     "relative_degradation": -0.02057,
+     "reference": 0.75204,
+     "test": 0.74025,
+     "relative_degradation": -0.01568,
      "margin": 0.05,
-     "paired_squared_error_difference_upper": 0.003358,
-     "cohens_d_paired": -0.0293
+     "paired_squared_error_difference_upper": 0.000524,
+     "cohens_d_paired": -0.0229
     },
     "efficiency": {
-     "questions_reference_mean": 20.3006,
-     "questions_test_mean": 21.6414,
-     "question_reduction": -0.06605,
+     "questions_reference_mean": 20.2744,
+     "questions_test_mean": 21.595,
+     "question_reduction": -0.06514,
      "target": 0.15,
-     "cliffs_delta": 0.3331,
-     "duration_reduction": -0.16202,
-     "pareto_shorter_rate": 0.2071
+     "cliffs_delta": 0.3294,
+     "duration_reduction": -0.16413,
+     "pareto_shorter_rate": 0.20187
     },
     "prediction": {
-     "auc_ref": 0.95212,
-     "auc_test": 0.95278,
-     "difference": 0.00066,
-     "se": 0.000435,
-     "z": 1.5208,
-     "p_two_sided": 0.128318,
-     "brier_reference": 0.086,
-     "brier_test": 0.08487,
-     "log_loss_reference": 0.28326,
-     "log_loss_test": 0.27973,
-     "n_heldout": 31784
+     "auc_ref": 0.94971,
+     "auc_test": 0.95046,
+     "difference": 0.00075,
+     "se": 0.000332,
+     "z": 2.2531,
+     "p_two_sided": 0.024255,
+     "brier_reference": 0.08849,
+     "brier_test": 0.08743,
+     "log_loss_reference": 0.29075,
+     "log_loss_test": 0.28735,
+     "n_heldout": 60122
     }
    },
    "C-off:C-full": {
     "reference_arm": "C-off",
     "test_arm": "C-full",
-    "n_pairs": 2535,
-    "n_sessions": 845,
-    "between_arm_theta_correlation": 0.96892,
+    "n_pairs": 4800,
+    "n_sessions": 1600,
+    "between_arm_theta_correlation": 0.96786,
     "primary_endpoint": {
      "metric": "exact-level accuracy, COMMON band scale",
-     "accuracy_reference": 0.60986,
-     "accuracy_test": 0.61341,
-     "degradation_pp": -0.355,
-     "upper_bound_pp_clustered_bca": 1.144,
+     "accuracy_reference": 0.60667,
+     "accuracy_test": 0.61021,
+     "degradation_pp": -0.3542,
+     "upper_bound_pp_clustered_bca": 0.7292,
      "margin_pp": 2.0,
      "non_inferior": true,
-     "tango_upper_bound_pp": -0.0886,
-     "discordance_psi": 0.21026,
+     "tango_upper_bound_pp": -0.0884,
+     "discordance_psi": 0.20688,
      "discordant_pairs": {
-      "test_better": 271,
-      "test_worse": 262
+      "test_better": 505,
+      "test_worse": 488
      },
      "degradation_pp_by_family": {
-      "borderline": -1.807,
-      "contradictory": -1.143,
-      "monotonic": 2.277,
-      "noisy": 1.205,
-      "shared_core_asymmetric": -2.072
+      "borderline": -1.146,
+      "contradictory": -0.521,
+      "monotonic": 0.104,
+      "noisy": 0.313,
+      "shared_core_asymmetric": -0.521
      }
     },
     "theta_rmse": {
-     "reference": 0.74084,
-     "test": 0.72185,
-     "relative_degradation": -0.02563,
+     "reference": 0.75204,
+     "test": 0.73921,
+     "relative_degradation": -0.01706,
      "margin": 0.05,
-     "paired_squared_error_difference_upper": -0.001725,
-     "cohens_d_paired": -0.0362
+     "paired_squared_error_difference_upper": -0.001463,
+     "cohens_d_paired": -0.0252
     },
     "efficiency": {
-     "questions_reference_mean": 20.3006,
-     "questions_test_mean": 21.9065,
-     "question_reduction": -0.07911,
+     "questions_reference_mean": 20.2744,
+     "questions_test_mean": 21.8125,
+     "question_reduction": -0.07587,
      "target": 0.15,
-     "cliffs_delta": 0.363,
-     "duration_reduction": -0.17397,
-     "pareto_shorter_rate": 0.17751
+     "cliffs_delta": 0.3535,
+     "duration_reduction": -0.17455,
+     "pareto_shorter_rate": 0.18438
     },
     "prediction": {
-     "auc_ref": 0.95297,
-     "auc_test": 0.95382,
-     "difference": 0.00085,
-     "se": 0.000435,
-     "z": 1.9465,
-     "p_two_sided": 0.0516,
-     "brier_reference": 0.08509,
-     "brier_test": 0.08369,
-     "log_loss_reference": 0.28041,
-     "log_loss_test": 0.2759,
-     "n_heldout": 31233
+     "auc_ref": 0.95016,
+     "auc_test": 0.95108,
+     "difference": 0.00093,
+     "se": 0.000328,
+     "z": 2.8168,
+     "p_two_sided": 0.004851,
+     "brier_reference": 0.08808,
+     "brier_test": 0.0868,
+     "log_loss_reference": 0.28952,
+     "log_loss_test": 0.28543,
+     "n_heldout": 59166
     }
    },
    "B:C-off": {
     "reference_arm": "B",
     "test_arm": "C-off",
-    "n_pairs": 2535,
-    "n_sessions": 845,
-    "between_arm_theta_correlation": 0.96058,
+    "n_pairs": 4800,
+    "n_sessions": 1600,
+    "between_arm_theta_correlation": 0.95859,
     "primary_endpoint": {
      "metric": "exact-level accuracy, COMMON band scale",
-     "accuracy_reference": 0.60868,
-     "accuracy_test": 0.60986,
-     "degradation_pp": -0.1183,
-     "upper_bound_pp_clustered_bca": 1.499,
+     "accuracy_reference": 0.61167,
+     "accuracy_test": 0.60667,
+     "degradation_pp": 0.5,
+     "upper_bound_pp_clustered_bca": 1.6667,
      "margin_pp": 2.0,
      "non_inferior": true,
-     "tango_upper_bound_pp": -0.0296,
-     "discordance_psi": 0.22919,
+     "tango_upper_bound_pp": 1.1408,
+     "discordance_psi": 0.23417,
      "discordant_pairs": {
-      "test_better": 292,
-      "test_worse": 289
+      "test_better": 550,
+      "test_worse": 574
      },
      "degradation_pp_by_family": {
-      "borderline": -2.41,
-      "contradictory": 1.524,
-      "monotonic": -0.207,
-      "noisy": 0.803,
-      "shared_core_asymmetric": -0.377
+      "borderline": -0.208,
+      "contradictory": 0.312,
+      "monotonic": 0.937,
+      "noisy": 1.25,
+      "shared_core_asymmetric": 0.208
      }
     },
     "theta_rmse": {
-     "reference": 0.69565,
-     "test": 0.74084,
-     "relative_degradation": 0.06497,
+     "reference": 0.71042,
+     "test": 0.75204,
+     "relative_degradation": 0.05859,
      "margin": 0.05,
-     "paired_squared_error_difference_upper": 0.094444,
-     "cohens_d_paired": 0.0785
+     "paired_squared_error_difference_upper": 0.081604,
+     "cohens_d_paired": 0.071
     },
     "efficiency": {
-     "questions_reference_mean": 17.6947,
-     "questions_test_mean": 20.3006,
-     "question_reduction": -0.14727,
+     "questions_reference_mean": 17.4662,
+     "questions_test_mean": 20.2744,
+     "question_reduction": -0.16077,
      "target": 0.15,
-     "cliffs_delta": 0.3673,
-     "duration_reduction": 0.3681,
-     "pareto_shorter_rate": 0.21065
+     "cliffs_delta": 0.4038,
+     "duration_reduction": 0.37045,
+     "pareto_shorter_rate": 0.17438
     },
     "prediction": {
-     "auc_ref": 0.94285,
-     "auc_test": 0.94098,
-     "difference": -0.00187,
-     "se": 0.000663,
-     "z": -2.8134,
-     "p_two_sided": 0.004902,
-     "brier_reference": 0.0958,
-     "brier_test": 0.09448,
-     "log_loss_reference": 0.31296,
-     "log_loss_test": 0.30838,
-     "n_heldout": 19168
+     "auc_ref": 0.94226,
+     "auc_test": 0.94016,
+     "difference": -0.0021,
+     "se": 0.000489,
+     "z": -4.3007,
+     "p_two_sided": 1.7e-05,
+     "brier_reference": 0.09721,
+     "brier_test": 0.09624,
+     "log_loss_reference": 0.31695,
+     "log_loss_test": 0.31344,
+     "n_heldout": 36040
     }
    },
    "B:C-hybrid": {
     "reference_arm": "B",
     "test_arm": "C-hybrid",
-    "n_pairs": 2535,
-    "n_sessions": 845,
-    "between_arm_theta_correlation": 0.95855,
+    "n_pairs": 4800,
+    "n_sessions": 1600,
+    "between_arm_theta_correlation": 0.95633,
     "primary_endpoint": {
      "metric": "exact-level accuracy, COMMON band scale",
-     "accuracy_reference": 0.60868,
-     "accuracy_test": 0.6142,
-     "degradation_pp": -0.5523,
-     "upper_bound_pp_clustered_bca": 1.2229,
+     "accuracy_reference": 0.61167,
+     "accuracy_test": 0.61354,
+     "degradation_pp": -0.1875,
+     "upper_bound_pp_clustered_bca": 1.0833,
      "margin_pp": 2.0,
      "non_inferior": true,
-     "tango_upper_bound_pp": -0.1378,
-     "discordance_psi": 0.26114,
+     "tango_upper_bound_pp": -0.0468,
+     "discordance_psi": 0.26188,
      "discordant_pairs": {
-      "test_better": 338,
-      "test_worse": 324
+      "test_better": 633,
+      "test_worse": 624
      },
      "degradation_pp_by_family": {
-      "borderline": -4.418,
-      "contradictory": 0.381,
-      "monotonic": 0.828,
-      "noisy": 2.811,
-      "shared_core_asymmetric": -2.26
+      "borderline": -1.458,
+      "contradictory": -0.417,
+      "monotonic": 0.937,
+      "noisy": 0.729,
+      "shared_core_asymmetric": -0.729
      }
     },
     "theta_rmse": {
-     "reference": 0.69565,
-     "test": 0.73721,
-     "relative_degradation": 0.05975,
+     "reference": 0.71042,
+     "test": 0.75058,
+     "relative_degradation": 0.05653,
      "margin": 0.05,
-     "paired_squared_error_difference_upper": 0.088181,
-     "cohens_d_paired": 0.0725
+     "paired_squared_error_difference_upper": 0.078578,
+     "cohens_d_paired": 0.0698
     },
     "efficiency": {
-     "questions_reference_mean": 17.6947,
-     "questions_test_mean": 20.4805,
-     "question_reduction": -0.15744,
+     "questions_reference_mean": 17.4662,
+     "questions_test_mean": 20.4737,
+     "question_reduction": -0.17219,
      "target": 0.15,
-     "cliffs_delta": 0.4169,
-     "duration_reduction": 0.28462,
-     "pareto_shorter_rate": 0.22959
+     "cliffs_delta": 0.4618,
+     "duration_reduction": 0.28525,
+     "pareto_shorter_rate": 0.2075
     },
     "prediction": {
-     "auc_ref": 0.94797,
-     "auc_test": 0.94747,
-     "difference": -0.0005,
-     "se": 0.000675,
-     "z": -0.744,
-     "p_two_sided": 0.456888,
-     "brier_reference": 0.09101,
-     "brier_test": 0.08901,
-     "log_loss_reference": 0.30042,
-     "log_loss_test": 0.29311,
-     "n_heldout": 16744
+     "auc_ref": 0.94788,
+     "auc_test": 0.94694,
+     "difference": -0.00094,
+     "se": 0.000513,
+     "z": -1.8245,
+     "p_two_sided": 0.068072,
+     "brier_reference": 0.09198,
+     "brier_test": 0.08998,
+     "log_loss_reference": 0.30255,
+     "log_loss_test": 0.29605,
+     "n_heldout": 31367
     }
    }
   }
@@ -1642,19 +1642,19 @@
   "DGP-0": {
    "B": {
     "raw": {
-     "sessions": 821,
+     "sessions": 1600,
      "sessions_with_inference": 0,
      "U-02_interval_non_coverage": {
-      "events": 114,
-      "verified": 1649,
-      "rate": 0.06913,
-      "upper_95": 0.08029
+      "events": 199,
+      "verified": 3171,
+      "rate": 0.06276,
+      "upper_95": 0.0703
      },
      "C-DAG-15_over_convergence": {
       "events": 0,
-      "verified": 1649,
+      "verified": 3171,
       "rate": 0.0,
-      "upper_95": 0.00182
+      "upper_95": 0.00094
      },
      "C-DAG-03_wrong_inference": {
       "events": 0,
@@ -1724,8 +1724,8 @@
       "metric": "interval_non_coverage_rate",
       "rule": "3%-7% (nominal 5%)",
       "tier": 3,
-      "upper_bound_95": 0.08029,
-      "value": 0.08029,
+      "upper_bound_95": 0.0703,
+      "value": 0.0703,
       "verdict": "FAIL"
      },
      {
@@ -1733,27 +1733,27 @@
       "metric": "over_convergence_rate",
       "rule": "95% UCB < 2%",
       "tier": 3,
-      "upper_bound_95": 0.00182,
-      "value": 0.00182,
+      "upper_bound_95": 0.00094,
+      "value": 0.00094,
       "verdict": "PASS"
      }
     ]
    },
    "C-full": {
     "raw": {
-     "sessions": 821,
+     "sessions": 1600,
      "sessions_with_inference": 0,
      "U-02_interval_non_coverage": {
-      "events": 138,
-      "verified": 2443,
-      "rate": 0.05649,
-      "upper_95": 0.06478
+      "events": 260,
+      "verified": 4766,
+      "rate": 0.05455,
+      "upper_95": 0.06027
      },
      "C-DAG-15_over_convergence": {
       "events": 0,
-      "verified": 2443,
+      "verified": 4766,
       "rate": 0.0,
-      "upper_95": 0.00123
+      "upper_95": 0.00063
      },
      "C-DAG-03_wrong_inference": {
       "events": 0,
@@ -1776,9 +1776,9 @@
      },
      "C-DAG-11_duplicate_evidence": {
       "events": 0,
-      "verified": 18522,
+      "verified": 36062,
       "rate": 0.0,
-      "upper_95": 0.00016
+      "upper_95": 8e-05
      }
     },
     "verdicts": [
@@ -1814,7 +1814,7 @@
       "metric": "duplicate_evidence_events",
       "rule": "0 events",
       "tier": 1,
-      "upper_bound_95": 0.00016,
+      "upper_bound_95": 8e-05,
       "value": 0,
       "verdict": "PASS"
      },
@@ -1823,8 +1823,8 @@
       "metric": "interval_non_coverage_rate",
       "rule": "3%-7% (nominal 5%)",
       "tier": 3,
-      "upper_bound_95": 0.06478,
-      "value": 0.06478,
+      "upper_bound_95": 0.06027,
+      "value": 0.06027,
       "verdict": "PASS"
      },
      {
@@ -1832,27 +1832,27 @@
       "metric": "over_convergence_rate",
       "rule": "95% UCB < 2%",
       "tier": 3,
-      "upper_bound_95": 0.00123,
-      "value": 0.00123,
+      "upper_bound_95": 0.00063,
+      "value": 0.00063,
       "verdict": "PASS"
      }
     ]
    },
    "C-hybrid": {
     "raw": {
-     "sessions": 821,
+     "sessions": 1600,
      "sessions_with_inference": 0,
      "U-02_interval_non_coverage": {
-      "events": 128,
-      "verified": 2457,
-      "rate": 0.0521,
-      "upper_95": 0.06008
+      "events": 248,
+      "verified": 4792,
+      "rate": 0.05175,
+      "upper_95": 0.05733
      },
      "C-DAG-15_over_convergence": {
       "events": 0,
-      "verified": 2457,
+      "verified": 4792,
       "rate": 0.0,
-      "upper_95": 0.00122
+      "upper_95": 0.00062
      },
      "C-DAG-03_wrong_inference": {
       "events": 0,
@@ -1875,9 +1875,9 @@
      },
      "C-DAG-11_duplicate_evidence": {
       "events": 0,
-      "verified": 17311,
+      "verified": 33726,
       "rate": 0.0,
-      "upper_95": 0.00017
+      "upper_95": 9e-05
      }
     },
     "verdicts": [
@@ -1913,7 +1913,7 @@
       "metric": "duplicate_evidence_events",
       "rule": "0 events",
       "tier": 1,
-      "upper_bound_95": 0.00017,
+      "upper_bound_95": 9e-05,
       "value": 0,
       "verdict": "PASS"
      },
@@ -1922,8 +1922,8 @@
       "metric": "interval_non_coverage_rate",
       "rule": "3%-7% (nominal 5%)",
       "tier": 3,
-      "upper_bound_95": 0.06008,
-      "value": 0.06008,
+      "upper_bound_95": 0.05733,
+      "value": 0.05733,
       "verdict": "PASS"
      },
      {
@@ -1931,27 +1931,27 @@
       "metric": "over_convergence_rate",
       "rule": "95% UCB < 2%",
       "tier": 3,
-      "upper_bound_95": 0.00122,
-      "value": 0.00122,
+      "upper_bound_95": 0.00062,
+      "value": 0.00062,
       "verdict": "PASS"
      }
     ]
    },
    "C-off": {
     "raw": {
-     "sessions": 821,
+     "sessions": 1600,
      "sessions_with_inference": 0,
      "U-02_interval_non_coverage": {
-      "events": 141,
-      "verified": 2455,
-      "rate": 0.05743,
-      "upper_95": 0.06576
+      "events": 275,
+      "verified": 4781,
+      "rate": 0.05752,
+      "upper_95": 0.06337
      },
      "C-DAG-15_over_convergence": {
       "events": 0,
-      "verified": 2455,
+      "verified": 4781,
       "rate": 0.0,
-      "upper_95": 0.00122
+      "upper_95": 0.00063
      },
      "C-DAG-03_wrong_inference": {
       "events": 0,
@@ -2013,105 +2013,6 @@
       "rule": "0 events",
       "tier": 1,
       "upper_bound_95": 0.95,
-      "value": 0,
-      "verdict": "PASS"
-     },
-     {
-      "gate": "U-02",
-      "metric": "interval_non_coverage_rate",
-      "rule": "3%-7% (nominal 5%)",
-      "tier": 3,
-      "upper_bound_95": 0.06576,
-      "value": 0.06576,
-      "verdict": "PASS"
-     },
-     {
-      "gate": "C-DAG-15",
-      "metric": "over_convergence_rate",
-      "rule": "95% UCB < 2%",
-      "tier": 3,
-      "upper_bound_95": 0.00122,
-      "value": 0.00122,
-      "verdict": "PASS"
-     }
-    ]
-   },
-   "C-shipped": {
-    "raw": {
-     "sessions": 821,
-     "sessions_with_inference": 0,
-     "U-02_interval_non_coverage": {
-      "events": 135,
-      "verified": 2447,
-      "rate": 0.05517,
-      "upper_95": 0.06337
-     },
-     "C-DAG-15_over_convergence": {
-      "events": 0,
-      "verified": 2447,
-      "rate": 0.0,
-      "upper_95": 0.00122
-     },
-     "C-DAG-03_wrong_inference": {
-      "events": 0,
-      "verified": 0,
-      "rate": null,
-      "upper_95": null
-     },
-     "C-DAG-01_inference_precision": null,
-     "C-DAG-04_false_blocking": {
-      "events": 0,
-      "verified": 0,
-      "rate": null,
-      "upper_95": null
-     },
-     "C-DAG-05_missed_blocking": {
-      "events": 0,
-      "verified": 0,
-      "rate": null,
-      "upper_95": null
-     },
-     "C-DAG-11_duplicate_evidence": {
-      "events": 0,
-      "verified": 18227,
-      "rate": 0.0,
-      "upper_95": 0.00016
-     }
-    },
-    "verdicts": [
-     {
-      "gate": "C-DAG-03",
-      "metric": "wrong_inference_rate",
-      "rule": "95% UCB < 3%",
-      "tier": 3,
-      "upper_bound_95": null,
-      "value": null,
-      "verdict": "NOT MEASURED"
-     },
-     {
-      "gate": "C-DAG-04",
-      "metric": "false_blocking_rate",
-      "rule": "95% UCB < 2%",
-      "tier": 3,
-      "upper_bound_95": null,
-      "value": null,
-      "verdict": "NOT MEASURED"
-     },
-     {
-      "gate": "C-DAG-05",
-      "metric": "missed_blocking_rate",
-      "rule": "descriptive: no strict edges in this graph",
-      "tier": 4,
-      "upper_bound_95": null,
-      "value": null,
-      "verdict": "DESCRIPTIVE"
-     },
-     {
-      "gate": "C-DAG-11",
-      "metric": "duplicate_evidence_events",
-      "rule": "0 events",
-      "tier": 1,
-      "upper_bound_95": 0.00016,
       "value": 0,
       "verdict": "PASS"
      },
@@ -2129,8 +2030,107 @@
       "metric": "over_convergence_rate",
       "rule": "95% UCB < 2%",
       "tier": 3,
-      "upper_bound_95": 0.00122,
-      "value": 0.00122,
+      "upper_bound_95": 0.00063,
+      "value": 0.00063,
+      "verdict": "PASS"
+     }
+    ]
+   },
+   "C-shipped": {
+    "raw": {
+     "sessions": 1600,
+     "sessions_with_inference": 0,
+     "U-02_interval_non_coverage": {
+      "events": 259,
+      "verified": 4773,
+      "rate": 0.05426,
+      "upper_95": 0.05997
+     },
+     "C-DAG-15_over_convergence": {
+      "events": 0,
+      "verified": 4773,
+      "rate": 0.0,
+      "upper_95": 0.00063
+     },
+     "C-DAG-03_wrong_inference": {
+      "events": 0,
+      "verified": 0,
+      "rate": null,
+      "upper_95": null
+     },
+     "C-DAG-01_inference_precision": null,
+     "C-DAG-04_false_blocking": {
+      "events": 0,
+      "verified": 0,
+      "rate": null,
+      "upper_95": null
+     },
+     "C-DAG-05_missed_blocking": {
+      "events": 0,
+      "verified": 0,
+      "rate": null,
+      "upper_95": null
+     },
+     "C-DAG-11_duplicate_evidence": {
+      "events": 0,
+      "verified": 35482,
+      "rate": 0.0,
+      "upper_95": 8e-05
+     }
+    },
+    "verdicts": [
+     {
+      "gate": "C-DAG-03",
+      "metric": "wrong_inference_rate",
+      "rule": "95% UCB < 3%",
+      "tier": 3,
+      "upper_bound_95": null,
+      "value": null,
+      "verdict": "NOT MEASURED"
+     },
+     {
+      "gate": "C-DAG-04",
+      "metric": "false_blocking_rate",
+      "rule": "95% UCB < 2%",
+      "tier": 3,
+      "upper_bound_95": null,
+      "value": null,
+      "verdict": "NOT MEASURED"
+     },
+     {
+      "gate": "C-DAG-05",
+      "metric": "missed_blocking_rate",
+      "rule": "descriptive: no strict edges in this graph",
+      "tier": 4,
+      "upper_bound_95": null,
+      "value": null,
+      "verdict": "DESCRIPTIVE"
+     },
+     {
+      "gate": "C-DAG-11",
+      "metric": "duplicate_evidence_events",
+      "rule": "0 events",
+      "tier": 1,
+      "upper_bound_95": 8e-05,
+      "value": 0,
+      "verdict": "PASS"
+     },
+     {
+      "gate": "U-02",
+      "metric": "interval_non_coverage_rate",
+      "rule": "3%-7% (nominal 5%)",
+      "tier": 3,
+      "upper_bound_95": 0.05997,
+      "value": 0.05997,
+      "verdict": "PASS"
+     },
+     {
+      "gate": "C-DAG-15",
+      "metric": "over_convergence_rate",
+      "rule": "95% UCB < 2%",
+      "tier": 3,
+      "upper_bound_95": 0.00063,
+      "value": 0.00063,
       "verdict": "PASS"
      }
     ]
@@ -2139,19 +2139,19 @@
   "DGP-2": {
    "B": {
     "raw": {
-     "sessions": 845,
+     "sessions": 1600,
      "sessions_with_inference": 0,
      "U-02_interval_non_coverage": {
-      "events": 216,
-      "verified": 1601,
-      "rate": 0.13492,
-      "upper_95": 0.14977
+      "events": 441,
+      "verified": 2968,
+      "rate": 0.14858,
+      "upper_95": 0.15975
      },
      "C-DAG-15_over_convergence": {
       "events": 0,
-      "verified": 1601,
+      "verified": 2968,
       "rate": 0.0,
-      "upper_95": 0.00187
+      "upper_95": 0.00101
      },
      "C-DAG-03_wrong_inference": {
       "events": 0,
@@ -2221,8 +2221,8 @@
       "metric": "interval_non_coverage_rate",
       "rule": "3%-7% (nominal 5%)",
       "tier": 3,
-      "upper_bound_95": 0.14977,
-      "value": 0.14977,
+      "upper_bound_95": 0.15975,
+      "value": 0.15975,
       "verdict": "FAIL"
      },
      {
@@ -2230,52 +2230,52 @@
       "metric": "over_convergence_rate",
       "rule": "95% UCB < 2%",
       "tier": 3,
-      "upper_bound_95": 0.00187,
-      "value": 0.00187,
+      "upper_bound_95": 0.00101,
+      "value": 0.00101,
       "verdict": "PASS"
      }
     ]
    },
    "C-full": {
     "raw": {
-     "sessions": 845,
-     "sessions_with_inference": 372,
+     "sessions": 1600,
+     "sessions_with_inference": 735,
      "U-02_interval_non_coverage": {
-      "events": 396,
-      "verified": 2504,
-      "rate": 0.15815,
-      "upper_95": 0.17064
+      "events": 788,
+      "verified": 4747,
+      "rate": 0.166,
+      "upper_95": 0.17514
      },
      "C-DAG-15_over_convergence": {
       "events": 0,
-      "verified": 2504,
+      "verified": 4747,
       "rate": 0.0,
-      "upper_95": 0.0012
+      "upper_95": 0.00063
      },
      "C-DAG-03_wrong_inference": {
-      "events": 162,
-      "verified": 696,
-      "rate": 0.23276,
-      "upper_95": 0.26064
+      "events": 311,
+      "verified": 1386,
+      "rate": 0.22439,
+      "upper_95": 0.2436
      },
-     "C-DAG-01_inference_precision": 0.76724,
+     "C-DAG-01_inference_precision": 0.77561,
      "C-DAG-04_false_blocking": {
-      "events": 140,
-      "verified": 1700,
-      "rate": 0.08235,
-      "upper_95": 0.09416
+      "events": 262,
+      "verified": 3006,
+      "rate": 0.08716,
+      "upper_95": 0.09609
      },
      "C-DAG-05_missed_blocking": {
-      "events": 5615,
-      "verified": 5926,
-      "rate": 0.94752,
-      "upper_95": 0.9522
+      "events": 10325,
+      "verified": 10885,
+      "rate": 0.94855,
+      "upper_95": 0.95199
      },
      "C-DAG-11_duplicate_evidence": {
       "events": 0,
-      "verified": 19417,
+      "verified": 36657,
       "rate": 0.0,
-      "upper_95": 0.00015
+      "upper_95": 8e-05
      }
     },
     "verdicts": [
@@ -2284,8 +2284,8 @@
       "metric": "wrong_inference_rate",
       "rule": "95% UCB < 3%",
       "tier": 3,
-      "upper_bound_95": 0.26064,
-      "value": 0.26064,
+      "upper_bound_95": 0.2436,
+      "value": 0.2436,
       "verdict": "FAIL"
      },
      {
@@ -2293,8 +2293,8 @@
       "metric": "false_blocking_rate",
       "rule": "95% UCB < 2%",
       "tier": 3,
-      "upper_bound_95": 0.09416,
-      "value": 0.09416,
+      "upper_bound_95": 0.09609,
+      "value": 0.09609,
       "verdict": "FAIL"
      },
      {
@@ -2302,8 +2302,8 @@
       "metric": "missed_blocking_rate",
       "rule": "descriptive: no strict edges in this graph",
       "tier": 4,
-      "upper_bound_95": 0.9522,
-      "value": 0.9522,
+      "upper_bound_95": 0.95199,
+      "value": 0.95199,
       "verdict": "DESCRIPTIVE"
      },
      {
@@ -2311,7 +2311,7 @@
       "metric": "duplicate_evidence_events",
       "rule": "0 events",
       "tier": 1,
-      "upper_bound_95": 0.00015,
+      "upper_bound_95": 8e-05,
       "value": 0,
       "verdict": "PASS"
      },
@@ -2320,8 +2320,8 @@
       "metric": "interval_non_coverage_rate",
       "rule": "3%-7% (nominal 5%)",
       "tier": 3,
-      "upper_bound_95": 0.17064,
-      "value": 0.17064,
+      "upper_bound_95": 0.17514,
+      "value": 0.17514,
       "verdict": "FAIL"
      },
      {
@@ -2329,27 +2329,27 @@
       "metric": "over_convergence_rate",
       "rule": "95% UCB < 2%",
       "tier": 3,
-      "upper_bound_95": 0.0012,
-      "value": 0.0012,
+      "upper_bound_95": 0.00063,
+      "value": 0.00063,
       "verdict": "PASS"
      }
     ]
    },
    "C-hybrid": {
     "raw": {
-     "sessions": 845,
+     "sessions": 1600,
      "sessions_with_inference": 0,
      "U-02_interval_non_coverage": {
-      "events": 354,
-      "verified": 2527,
-      "rate": 0.14009,
-      "upper_95": 0.15195
+      "events": 721,
+      "verified": 4782,
+      "rate": 0.15077,
+      "upper_95": 0.15955
      },
      "C-DAG-15_over_convergence": {
       "events": 0,
-      "verified": 2527,
+      "verified": 4782,
       "rate": 0.0,
-      "upper_95": 0.00118
+      "upper_95": 0.00063
      },
      "C-DAG-03_wrong_inference": {
       "events": 0,
@@ -2365,16 +2365,16 @@
       "upper_95": null
      },
      "C-DAG-05_missed_blocking": {
-      "events": 5369,
-      "verified": 5369,
+      "events": 9900,
+      "verified": 9900,
       "rate": 1.0,
       "upper_95": 1.0
      },
      "C-DAG-11_duplicate_evidence": {
       "events": 0,
-      "verified": 18022,
+      "verified": 34149,
       "rate": 0.0,
-      "upper_95": 0.00017
+      "upper_95": 9e-05
      }
     },
     "verdicts": [
@@ -2410,7 +2410,7 @@
       "metric": "duplicate_evidence_events",
       "rule": "0 events",
       "tier": 1,
-      "upper_bound_95": 0.00017,
+      "upper_bound_95": 9e-05,
       "value": 0,
       "verdict": "PASS"
      },
@@ -2419,8 +2419,8 @@
       "metric": "interval_non_coverage_rate",
       "rule": "3%-7% (nominal 5%)",
       "tier": 3,
-      "upper_bound_95": 0.15195,
-      "value": 0.15195,
+      "upper_bound_95": 0.15955,
+      "value": 0.15955,
       "verdict": "FAIL"
      },
      {
@@ -2428,27 +2428,27 @@
       "metric": "over_convergence_rate",
       "rule": "95% UCB < 2%",
       "tier": 3,
-      "upper_bound_95": 0.00118,
-      "value": 0.00118,
+      "upper_bound_95": 0.00063,
+      "value": 0.00063,
       "verdict": "PASS"
      }
     ]
    },
    "C-off": {
     "raw": {
-     "sessions": 845,
+     "sessions": 1600,
      "sessions_with_inference": 0,
      "U-02_interval_non_coverage": {
-      "events": 423,
-      "verified": 2520,
-      "rate": 0.16786,
-      "upper_95": 0.18059
+      "events": 811,
+      "verified": 4767,
+      "rate": 0.17013,
+      "upper_95": 0.17933
      },
      "C-DAG-15_over_convergence": {
       "events": 0,
-      "verified": 2520,
+      "verified": 4767,
       "rate": 0.0,
-      "upper_95": 0.00119
+      "upper_95": 0.00063
      },
      "C-DAG-03_wrong_inference": {
       "events": 0,
@@ -2518,8 +2518,8 @@
       "metric": "interval_non_coverage_rate",
       "rule": "3%-7% (nominal 5%)",
       "tier": 3,
-      "upper_bound_95": 0.18059,
-      "value": 0.18059,
+      "upper_bound_95": 0.17933,
+      "value": 0.17933,
       "verdict": "FAIL"
      },
      {
@@ -2527,27 +2527,27 @@
       "metric": "over_convergence_rate",
       "rule": "95% UCB < 2%",
       "tier": 3,
-      "upper_bound_95": 0.00119,
-      "value": 0.00119,
+      "upper_bound_95": 0.00063,
+      "value": 0.00063,
       "verdict": "PASS"
      }
     ]
    },
    "C-shipped": {
     "raw": {
-     "sessions": 845,
+     "sessions": 1600,
      "sessions_with_inference": 0,
      "U-02_interval_non_coverage": {
-      "events": 387,
-      "verified": 2511,
-      "rate": 0.15412,
-      "upper_95": 0.16647
+      "events": 781,
+      "verified": 4757,
+      "rate": 0.16418,
+      "upper_95": 0.17327
      },
      "C-DAG-15_over_convergence": {
       "events": 0,
-      "verified": 2511,
+      "verified": 4757,
       "rate": 0.0,
-      "upper_95": 0.00119
+      "upper_95": 0.00063
      },
      "C-DAG-03_wrong_inference": {
       "events": 0,
@@ -2563,16 +2563,16 @@
       "upper_95": null
      },
      "C-DAG-05_missed_blocking": {
-      "events": 5857,
-      "verified": 5857,
+      "events": 10790,
+      "verified": 10790,
       "rate": 1.0,
       "upper_95": 1.0
      },
      "C-DAG-11_duplicate_evidence": {
       "events": 0,
-      "verified": 19025,
+      "verified": 35991,
       "rate": 0.0,
-      "upper_95": 0.00016
+      "upper_95": 8e-05
      }
     },
     "verdicts": [
@@ -2608,7 +2608,7 @@
       "metric": "duplicate_evidence_events",
       "rule": "0 events",
       "tier": 1,
-      "upper_bound_95": 0.00016,
+      "upper_bound_95": 8e-05,
       "value": 0,
       "verdict": "PASS"
      },
@@ -2617,8 +2617,8 @@
       "metric": "interval_non_coverage_rate",
       "rule": "3%-7% (nominal 5%)",
       "tier": 3,
-      "upper_bound_95": 0.16647,
-      "value": 0.16647,
+      "upper_bound_95": 0.17327,
+      "value": 0.17327,
       "verdict": "FAIL"
      },
      {
@@ -2626,8 +2626,8 @@
       "metric": "over_convergence_rate",
       "rule": "95% UCB < 2%",
       "tier": 3,
-      "upper_bound_95": 0.00119,
-      "value": 0.00119,
+      "upper_bound_95": 0.00063,
+      "value": 0.00063,
       "verdict": "PASS"
      }
     ]
@@ -2636,113 +2636,113 @@
  },
  "power": {
   "DGP-0 C-off:C-hybrid": {
-   "observed_discordance_psi": 0.2363,
-   "n_for_2pp_80pct_power": 3653,
-   "n_for_2pp_90pct_power": 5060,
+   "observed_discordance_psi": 0.23729,
+   "n_for_2pp_80pct_power": 3668,
+   "n_for_2pp_90pct_power": 5081,
    "detectable_margin_pp_at_n": {
-    "500": 5.405,
-    "2000": 2.703,
-    "4000": 1.911,
-    "5000": 1.709
+    "500": 5.417,
+    "2000": 2.708,
+    "4000": 1.915,
+    "5000": 1.713
    }
   },
   "DGP-0 C-off:C-shipped": {
-   "observed_discordance_psi": 0.23508,
-   "n_for_2pp_80pct_power": 3634,
-   "n_for_2pp_90pct_power": 5033,
+   "observed_discordance_psi": 0.23438,
+   "n_for_2pp_80pct_power": 3623,
+   "n_for_2pp_90pct_power": 5018,
    "detectable_margin_pp_at_n": {
-    "500": 5.391,
-    "2000": 2.696,
-    "4000": 1.906,
-    "5000": 1.705
+    "500": 5.383,
+    "2000": 2.692,
+    "4000": 1.903,
+    "5000": 1.702
    }
   },
   "DGP-0 C-off:C-full": {
-   "observed_discordance_psi": 0.2294,
-   "n_for_2pp_80pct_power": 3546,
-   "n_for_2pp_90pct_power": 4912,
+   "observed_discordance_psi": 0.22833,
+   "n_for_2pp_80pct_power": 3530,
+   "n_for_2pp_90pct_power": 4889,
    "detectable_margin_pp_at_n": {
-    "500": 5.326,
-    "2000": 2.663,
-    "4000": 1.883,
-    "5000": 1.684
+    "500": 5.313,
+    "2000": 2.657,
+    "4000": 1.879,
+    "5000": 1.68
    }
   },
   "DGP-0 B:C-off": {
-   "observed_discordance_psi": 0.21437,
-   "n_for_2pp_80pct_power": 3314,
-   "n_for_2pp_90pct_power": 4590,
+   "observed_discordance_psi": 0.21667,
+   "n_for_2pp_80pct_power": 3349,
+   "n_for_2pp_90pct_power": 4639,
    "detectable_margin_pp_at_n": {
-    "500": 5.149,
-    "2000": 2.574,
-    "4000": 1.82,
-    "5000": 1.628
+    "500": 5.176,
+    "2000": 2.588,
+    "4000": 1.83,
+    "5000": 1.637
    }
   },
   "DGP-0 B:C-hybrid": {
-   "observed_discordance_psi": 0.26634,
-   "n_for_2pp_80pct_power": 4117,
-   "n_for_2pp_90pct_power": 5703,
+   "observed_discordance_psi": 0.27021,
+   "n_for_2pp_80pct_power": 4177,
+   "n_for_2pp_90pct_power": 5786,
    "detectable_margin_pp_at_n": {
-    "500": 5.739,
-    "2000": 2.869,
-    "4000": 2.029,
-    "5000": 1.815
+    "500": 5.78,
+    "2000": 2.89,
+    "4000": 2.044,
+    "5000": 1.828
    }
   },
   "DGP-2 C-off:C-hybrid": {
-   "observed_discordance_psi": 0.20789,
-   "n_for_2pp_80pct_power": 3214,
-   "n_for_2pp_90pct_power": 4451,
+   "observed_discordance_psi": 0.20563,
+   "n_for_2pp_80pct_power": 3179,
+   "n_for_2pp_90pct_power": 4403,
    "detectable_margin_pp_at_n": {
-    "500": 5.07,
-    "2000": 2.535,
-    "4000": 1.793,
-    "5000": 1.603
+    "500": 5.042,
+    "2000": 2.521,
+    "4000": 1.783,
+    "5000": 1.595
    }
   },
   "DGP-2 C-off:C-shipped": {
-   "observed_discordance_psi": 0.2071,
-   "n_for_2pp_80pct_power": 3202,
-   "n_for_2pp_90pct_power": 4434,
+   "observed_discordance_psi": 0.20396,
+   "n_for_2pp_80pct_power": 3153,
+   "n_for_2pp_90pct_power": 4367,
    "detectable_margin_pp_at_n": {
-    "500": 5.06,
-    "2000": 2.53,
-    "4000": 1.789,
-    "5000": 1.6
+    "500": 5.022,
+    "2000": 2.511,
+    "4000": 1.776,
+    "5000": 1.588
    }
   },
   "DGP-2 C-off:C-full": {
-   "observed_discordance_psi": 0.21026,
-   "n_for_2pp_80pct_power": 3250,
-   "n_for_2pp_90pct_power": 4502,
+   "observed_discordance_psi": 0.20688,
+   "n_for_2pp_80pct_power": 3198,
+   "n_for_2pp_90pct_power": 4430,
    "detectable_margin_pp_at_n": {
-    "500": 5.099,
-    "2000": 2.549,
-    "4000": 1.803,
-    "5000": 1.612
+    "500": 5.058,
+    "2000": 2.529,
+    "4000": 1.788,
+    "5000": 1.599
    }
   },
   "DGP-2 B:C-off": {
-   "observed_discordance_psi": 0.22919,
-   "n_for_2pp_80pct_power": 3543,
-   "n_for_2pp_90pct_power": 4907,
+   "observed_discordance_psi": 0.23417,
+   "n_for_2pp_80pct_power": 3620,
+   "n_for_2pp_90pct_power": 5014,
    "detectable_margin_pp_at_n": {
-    "500": 5.323,
-    "2000": 2.662,
-    "4000": 1.882,
-    "5000": 1.683
+    "500": 5.381,
+    "2000": 2.691,
+    "4000": 1.902,
+    "5000": 1.702
    }
   },
   "DGP-2 B:C-hybrid": {
-   "observed_discordance_psi": 0.26114,
-   "n_for_2pp_80pct_power": 4037,
-   "n_for_2pp_90pct_power": 5591,
+   "observed_discordance_psi": 0.26188,
+   "n_for_2pp_80pct_power": 4048,
+   "n_for_2pp_90pct_power": 5607,
    "detectable_margin_pp_at_n": {
-    "500": 5.682,
-    "2000": 2.841,
-    "4000": 2.009,
-    "5000": 1.797
+    "500": 5.69,
+    "2000": 2.845,
+    "4000": 2.012,
+    "5000": 1.799
    }
   }
  }
