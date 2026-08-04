@@ -1,0 +1,2749 @@
+{
+ "cohort_size": 821,
+ "n_pairs_per_arm": 2463,
+ "gate_count_if_untiered": 18,
+ "arms": [
+  "B",
+  "C-full",
+  "C-hybrid",
+  "C-off",
+  "C-shipped"
+ ],
+ "dgp_arms": [
+  "DGP-0",
+  "DGP-2"
+ ],
+ "absolute": {
+  "DGP-0": {
+   "B": {
+    "metrics": {
+     "n_pairs": 2463,
+     "n_sessions": 821,
+     "theta_rmse": 0.53951,
+     "theta_mae": 0.40591,
+     "exact_level_accuracy_common": 0.70361,
+     "exact_level_accuracy_native": 0.70361,
+     "within_one_level_common": 0.99675,
+     "accuracy_by_band": {
+      "1": 0.419,
+      "2": 0.7197,
+      "3": 0.7323,
+      "4": 0.6949,
+      "5": 0.9274
+     },
+     "min_band_accuracy": 0.41896,
+     "min_decile_accuracy": 0.43496,
+     "marginal_reliability": 0.92484,
+     "decision_consistency": 0.66035,
+     "final_se_median": 0.52836,
+     "mean_se": 0.52427,
+     "se_calibration_ratio": 1.02906,
+     "interval_coverage_95": 0.94153,
+     "questions_per_candidate_mean": 17.2205,
+     "questions_per_candidate_median": 18.0,
+     "duration_minutes_p50": 77.833,
+     "duration_minutes_p90": 99.083,
+     "p90_duration_minutes": 99.083,
+     "duration_over_90min_rate": 0.45067,
+     "converged_rate": 0.66951,
+     "coverage_satisfied_rate": 1.0,
+     "modality_blueprint_compliance": 0.92976,
+     "information_realization_ratio": 0.9551,
+     "stop_reason_distribution": {
+      "": 0.3305,
+      "precision": 0.6695
+     },
+     "heldout_auc": 0.93596,
+     "heldout_brier": 0.10315,
+     "heldout_log_loss": 0.33127,
+     "heldout_ece": 0.04152
+    },
+    "verdicts": [
+     {
+      "gate": "ABS-01",
+      "metric": "exact_level_accuracy_common",
+      "rule": ">= 0.80 overall",
+      "value": 0.70361,
+      "verdict": "FAIL",
+      "source": "Livingston & Lewis (1995); Rudner (2001)"
+     },
+     {
+      "gate": "ABS-02",
+      "metric": "min_band_accuracy",
+      "rule": ">= 0.70 in every reported band",
+      "value": 0.41896,
+      "verdict": "FAIL",
+      "source": "Rudner (2001)"
+     },
+     {
+      "gate": "ABS-03",
+      "metric": "marginal_reliability",
+      "rule": ">= 0.85 to certify a level; >= 0.80 for routing",
+      "value": 0.92484,
+      "verdict": "PASS",
+      "source": "Nunnally & Bernstein (1994)"
+     },
+     {
+      "gate": "ABS-04",
+      "metric": "min_decile_accuracy",
+      "rule": "no true-theta decile below 0.65",
+      "value": 0.43496,
+      "verdict": "FAIL",
+      "source": "validation B3"
+     },
+     {
+      "gate": "ABS-05",
+      "metric": "decision_consistency",
+      "rule": ">= 0.75",
+      "value": 0.66035,
+      "verdict": "FAIL",
+      "source": "Livingston & Lewis (1995)"
+     },
+     {
+      "gate": "ABS-06",
+      "metric": "se_calibration_ratio",
+      "rule": "RMSE / mean SE within [0.95, 1.10] \u2014 the direct detector for double counting",
+      "value": 1.02906,
+      "verdict": "PASS",
+      "source": "validation, new U-05"
+     },
+     {
+      "gate": "ABS-07",
+      "metric": "p90_duration_minutes",
+      "rule": "P90 modelled duration <= 90 minutes",
+      "value": 99.083,
+      "verdict": "FAIL",
+      "source": "validation: E-04 gains a gate"
+     }
+    ]
+   },
+   "C-full": {
+    "metrics": {
+     "n_pairs": 2463,
+     "n_sessions": 821,
+     "theta_rmse": 0.55552,
+     "theta_mae": 0.42033,
+     "exact_level_accuracy_common": 0.7162,
+     "exact_level_accuracy_native": 0.7162,
+     "within_one_level_common": 0.99594,
+     "accuracy_by_band": {
+      "1": 0.5688,
+      "2": 0.7307,
+      "3": 0.7424,
+      "4": 0.7,
+      "5": 0.8202
+     },
+     "min_band_accuracy": 0.56881,
+     "min_decile_accuracy": 0.55691,
+     "marginal_reliability": 0.92954,
+     "decision_consistency": 0.66099,
+     "final_se_median": 0.52518,
+     "mean_se": 0.52155,
+     "se_calibration_ratio": 1.06512,
+     "interval_coverage_95": 0.94356,
+     "questions_per_candidate_mean": 21.5225,
+     "questions_per_candidate_median": 21.0,
+     "duration_minutes_p50": 50.0,
+     "duration_minutes_p90": 81.25,
+     "p90_duration_minutes": 81.25,
+     "duration_over_90min_rate": 0.0,
+     "converged_rate": 0.99188,
+     "coverage_satisfied_rate": 1.0,
+     "modality_blueprint_compliance": 0.99756,
+     "information_realization_ratio": 1.06124,
+     "stop_reason_distribution": {
+      "precision": 0.9919,
+      "question_budget": 0.0077,
+      "time_budget": 0.0004
+     },
+     "heldout_auc": 0.93116,
+     "heldout_brier": 0.10509,
+     "heldout_log_loss": 0.33642,
+     "heldout_ece": 0.02231
+    },
+    "verdicts": [
+     {
+      "gate": "ABS-01",
+      "metric": "exact_level_accuracy_common",
+      "rule": ">= 0.80 overall",
+      "value": 0.7162,
+      "verdict": "FAIL",
+      "source": "Livingston & Lewis (1995); Rudner (2001)"
+     },
+     {
+      "gate": "ABS-02",
+      "metric": "min_band_accuracy",
+      "rule": ">= 0.70 in every reported band",
+      "value": 0.56881,
+      "verdict": "FAIL",
+      "source": "Rudner (2001)"
+     },
+     {
+      "gate": "ABS-03",
+      "metric": "marginal_reliability",
+      "rule": ">= 0.85 to certify a level; >= 0.80 for routing",
+      "value": 0.92954,
+      "verdict": "PASS",
+      "source": "Nunnally & Bernstein (1994)"
+     },
+     {
+      "gate": "ABS-04",
+      "metric": "min_decile_accuracy",
+      "rule": "no true-theta decile below 0.65",
+      "value": 0.55691,
+      "verdict": "FAIL",
+      "source": "validation B3"
+     },
+     {
+      "gate": "ABS-05",
+      "metric": "decision_consistency",
+      "rule": ">= 0.75",
+      "value": 0.66099,
+      "verdict": "FAIL",
+      "source": "Livingston & Lewis (1995)"
+     },
+     {
+      "gate": "ABS-06",
+      "metric": "se_calibration_ratio",
+      "rule": "RMSE / mean SE within [0.95, 1.10] \u2014 the direct detector for double counting",
+      "value": 1.06512,
+      "verdict": "PASS",
+      "source": "validation, new U-05"
+     },
+     {
+      "gate": "ABS-07",
+      "metric": "p90_duration_minutes",
+      "rule": "P90 modelled duration <= 90 minutes",
+      "value": 81.25,
+      "verdict": "PASS",
+      "source": "validation: E-04 gains a gate"
+     }
+    ]
+   },
+   "C-hybrid": {
+    "metrics": {
+     "n_pairs": 2463,
+     "n_sessions": 821,
+     "theta_rmse": 0.57846,
+     "theta_mae": 0.43969,
+     "exact_level_accuracy_common": 0.7093,
+     "exact_level_accuracy_native": 0.7093,
+     "within_one_level_common": 0.99513,
+     "accuracy_by_band": {
+      "1": 0.5596,
+      "2": 0.715,
+      "3": 0.7492,
+      "4": 0.6831,
+      "5": 0.8265
+     },
+     "min_band_accuracy": 0.55963,
+     "min_decile_accuracy": 0.55691,
+     "marginal_reliability": 0.92595,
+     "decision_consistency": 0.66062,
+     "final_se_median": 0.53624,
+     "mean_se": 0.53699,
+     "se_calibration_ratio": 1.07722,
+     "interval_coverage_95": 0.94803,
+     "questions_per_candidate_mean": 20.2631,
+     "questions_per_candidate_median": 20.0,
+     "duration_minutes_p50": 47.333,
+     "duration_minutes_p90": 79.25,
+     "p90_duration_minutes": 79.25,
+     "duration_over_90min_rate": 0.0,
+     "converged_rate": 0.99756,
+     "coverage_satisfied_rate": 1.0,
+     "modality_blueprint_compliance": 0.99756,
+     "information_realization_ratio": 1.06483,
+     "stop_reason_distribution": {
+      "band_probability": 0.5254,
+      "precision": 0.4722,
+      "question_budget": 0.0024
+     },
+     "heldout_auc": 0.93023,
+     "heldout_brier": 0.10613,
+     "heldout_log_loss": 0.33976,
+     "heldout_ece": 0.02524
+    },
+    "verdicts": [
+     {
+      "gate": "ABS-01",
+      "metric": "exact_level_accuracy_common",
+      "rule": ">= 0.80 overall",
+      "value": 0.7093,
+      "verdict": "FAIL",
+      "source": "Livingston & Lewis (1995); Rudner (2001)"
+     },
+     {
+      "gate": "ABS-02",
+      "metric": "min_band_accuracy",
+      "rule": ">= 0.70 in every reported band",
+      "value": 0.55963,
+      "verdict": "FAIL",
+      "source": "Rudner (2001)"
+     },
+     {
+      "gate": "ABS-03",
+      "metric": "marginal_reliability",
+      "rule": ">= 0.85 to certify a level; >= 0.80 for routing",
+      "value": 0.92595,
+      "verdict": "PASS",
+      "source": "Nunnally & Bernstein (1994)"
+     },
+     {
+      "gate": "ABS-04",
+      "metric": "min_decile_accuracy",
+      "rule": "no true-theta decile below 0.65",
+      "value": 0.55691,
+      "verdict": "FAIL",
+      "source": "validation B3"
+     },
+     {
+      "gate": "ABS-05",
+      "metric": "decision_consistency",
+      "rule": ">= 0.75",
+      "value": 0.66062,
+      "verdict": "FAIL",
+      "source": "Livingston & Lewis (1995)"
+     },
+     {
+      "gate": "ABS-06",
+      "metric": "se_calibration_ratio",
+      "rule": "RMSE / mean SE within [0.95, 1.10] \u2014 the direct detector for double counting",
+      "value": 1.07722,
+      "verdict": "PASS",
+      "source": "validation, new U-05"
+     },
+     {
+      "gate": "ABS-07",
+      "metric": "p90_duration_minutes",
+      "rule": "P90 modelled duration <= 90 minutes",
+      "value": 79.25,
+      "verdict": "PASS",
+      "source": "validation: E-04 gains a gate"
+     }
+    ]
+   },
+   "C-off": {
+    "metrics": {
+     "n_pairs": 2463,
+     "n_sessions": 821,
+     "theta_rmse": 0.56008,
+     "theta_mae": 0.42411,
+     "exact_level_accuracy_common": 0.71985,
+     "exact_level_accuracy_native": 0.71985,
+     "within_one_level_common": 0.99675,
+     "accuracy_by_band": {
+      "1": 0.5749,
+      "2": 0.7732,
+      "3": 0.6869,
+      "4": 0.7203,
+      "5": 0.8233
+     },
+     "min_band_accuracy": 0.57492,
+     "min_decile_accuracy": 0.58537,
+     "marginal_reliability": 0.93057,
+     "decision_consistency": 0.65969,
+     "final_se_median": 0.52193,
+     "mean_se": 0.51902,
+     "se_calibration_ratio": 1.0791,
+     "interval_coverage_95": 0.94275,
+     "questions_per_candidate_mean": 20.1035,
+     "questions_per_candidate_median": 20.0,
+     "duration_minutes_p50": 47.083,
+     "duration_minutes_p90": 59.75,
+     "p90_duration_minutes": 59.75,
+     "duration_over_90min_rate": 0.0,
+     "converged_rate": 0.99675,
+     "coverage_satisfied_rate": 1.0,
+     "modality_blueprint_compliance": 0.784,
+     "information_realization_ratio": 1.05642,
+     "stop_reason_distribution": {
+      "precision": 0.9968,
+      "question_budget": 0.0032
+     },
+     "heldout_auc": 0.93066,
+     "heldout_brier": 0.10623,
+     "heldout_log_loss": 0.33964,
+     "heldout_ece": 0.02613
+    },
+    "verdicts": [
+     {
+      "gate": "ABS-01",
+      "metric": "exact_level_accuracy_common",
+      "rule": ">= 0.80 overall",
+      "value": 0.71985,
+      "verdict": "FAIL",
+      "source": "Livingston & Lewis (1995); Rudner (2001)"
+     },
+     {
+      "gate": "ABS-02",
+      "metric": "min_band_accuracy",
+      "rule": ">= 0.70 in every reported band",
+      "value": 0.57492,
+      "verdict": "FAIL",
+      "source": "Rudner (2001)"
+     },
+     {
+      "gate": "ABS-03",
+      "metric": "marginal_reliability",
+      "rule": ">= 0.85 to certify a level; >= 0.80 for routing",
+      "value": 0.93057,
+      "verdict": "PASS",
+      "source": "Nunnally & Bernstein (1994)"
+     },
+     {
+      "gate": "ABS-04",
+      "metric": "min_decile_accuracy",
+      "rule": "no true-theta decile below 0.65",
+      "value": 0.58537,
+      "verdict": "FAIL",
+      "source": "validation B3"
+     },
+     {
+      "gate": "ABS-05",
+      "metric": "decision_consistency",
+      "rule": ">= 0.75",
+      "value": 0.65969,
+      "verdict": "FAIL",
+      "source": "Livingston & Lewis (1995)"
+     },
+     {
+      "gate": "ABS-06",
+      "metric": "se_calibration_ratio",
+      "rule": "RMSE / mean SE within [0.95, 1.10] \u2014 the direct detector for double counting",
+      "value": 1.0791,
+      "verdict": "PASS",
+      "source": "validation, new U-05"
+     },
+     {
+      "gate": "ABS-07",
+      "metric": "p90_duration_minutes",
+      "rule": "P90 modelled duration <= 90 minutes",
+      "value": 59.75,
+      "verdict": "PASS",
+      "source": "validation: E-04 gains a gate"
+     }
+    ]
+   },
+   "C-shipped": {
+    "metrics": {
+     "n_pairs": 2463,
+     "n_sessions": 821,
+     "theta_rmse": 0.55285,
+     "theta_mae": 0.42174,
+     "exact_level_accuracy_common": 0.71458,
+     "exact_level_accuracy_native": 0.71458,
+     "within_one_level_common": 0.99635,
+     "accuracy_by_band": {
+      "1": 0.5749,
+      "2": 0.7197,
+      "3": 0.7492,
+      "4": 0.6898,
+      "5": 0.8297
+     },
+     "min_band_accuracy": 0.57492,
+     "min_decile_accuracy": 0.55691,
+     "marginal_reliability": 0.93022,
+     "decision_consistency": 0.66525,
+     "final_se_median": 0.52461,
+     "mean_se": 0.52114,
+     "se_calibration_ratio": 1.06085,
+     "interval_coverage_95": 0.94519,
+     "questions_per_candidate_mean": 21.3386,
+     "questions_per_candidate_median": 21.0,
+     "duration_minutes_p50": 48.583,
+     "duration_minutes_p90": 81.25,
+     "p90_duration_minutes": 81.25,
+     "duration_over_90min_rate": 0.0,
+     "converged_rate": 0.9935,
+     "coverage_satisfied_rate": 1.0,
+     "modality_blueprint_compliance": 0.99756,
+     "information_realization_ratio": 1.06131,
+     "stop_reason_distribution": {
+      "precision": 0.9935,
+      "question_budget": 0.0065
+     },
+     "heldout_auc": 0.93106,
+     "heldout_brier": 0.10539,
+     "heldout_log_loss": 0.33733,
+     "heldout_ece": 0.0239
+    },
+    "verdicts": [
+     {
+      "gate": "ABS-01",
+      "metric": "exact_level_accuracy_common",
+      "rule": ">= 0.80 overall",
+      "value": 0.71458,
+      "verdict": "FAIL",
+      "source": "Livingston & Lewis (1995); Rudner (2001)"
+     },
+     {
+      "gate": "ABS-02",
+      "metric": "min_band_accuracy",
+      "rule": ">= 0.70 in every reported band",
+      "value": 0.57492,
+      "verdict": "FAIL",
+      "source": "Rudner (2001)"
+     },
+     {
+      "gate": "ABS-03",
+      "metric": "marginal_reliability",
+      "rule": ">= 0.85 to certify a level; >= 0.80 for routing",
+      "value": 0.93022,
+      "verdict": "PASS",
+      "source": "Nunnally & Bernstein (1994)"
+     },
+     {
+      "gate": "ABS-04",
+      "metric": "min_decile_accuracy",
+      "rule": "no true-theta decile below 0.65",
+      "value": 0.55691,
+      "verdict": "FAIL",
+      "source": "validation B3"
+     },
+     {
+      "gate": "ABS-05",
+      "metric": "decision_consistency",
+      "rule": ">= 0.75",
+      "value": 0.66525,
+      "verdict": "FAIL",
+      "source": "Livingston & Lewis (1995)"
+     },
+     {
+      "gate": "ABS-06",
+      "metric": "se_calibration_ratio",
+      "rule": "RMSE / mean SE within [0.95, 1.10] \u2014 the direct detector for double counting",
+      "value": 1.06085,
+      "verdict": "PASS",
+      "source": "validation, new U-05"
+     },
+     {
+      "gate": "ABS-07",
+      "metric": "p90_duration_minutes",
+      "rule": "P90 modelled duration <= 90 minutes",
+      "value": 81.25,
+      "verdict": "PASS",
+      "source": "validation: E-04 gains a gate"
+     }
+    ]
+   }
+  },
+  "DGP-2": {
+   "B": {
+    "metrics": {
+     "n_pairs": 2535,
+     "n_sessions": 845,
+     "theta_rmse": 0.69565,
+     "theta_mae": 0.57261,
+     "exact_level_accuracy_common": 0.60868,
+     "exact_level_accuracy_native": 0.60868,
+     "within_one_level_common": 0.99684,
+     "accuracy_by_band": {
+      "1": 0.7143,
+      "2": 0.6498,
+      "3": 0.4853,
+      "4": 0.4538,
+      "5": 0.9408
+     },
+     "min_band_accuracy": 0.4538,
+     "min_decile_accuracy": 0.33992,
+     "marginal_reliability": 0.94353,
+     "decision_consistency": 0.68133,
+     "final_se_median": 0.53532,
+     "mean_se": 0.53256,
+     "se_calibration_ratio": 1.30624,
+     "interval_coverage_95": 0.8785,
+     "questions_per_candidate_mean": 17.6947,
+     "questions_per_candidate_median": 18.0,
+     "duration_minutes_p50": 78.583,
+     "duration_minutes_p90": 95.083,
+     "p90_duration_minutes": 95.083,
+     "duration_over_90min_rate": 0.4497,
+     "converged_rate": 0.63156,
+     "coverage_satisfied_rate": 1.0,
+     "modality_blueprint_compliance": 0.91243,
+     "information_realization_ratio": 0.95782,
+     "stop_reason_distribution": {
+      "": 0.3684,
+      "precision": 0.6316
+     },
+     "heldout_auc": 0.94151,
+     "heldout_brier": 0.09956,
+     "heldout_log_loss": 0.32373,
+     "heldout_ece": 0.04513
+    },
+    "verdicts": [
+     {
+      "gate": "ABS-01",
+      "metric": "exact_level_accuracy_common",
+      "rule": ">= 0.80 overall",
+      "value": 0.60868,
+      "verdict": "FAIL",
+      "source": "Livingston & Lewis (1995); Rudner (2001)"
+     },
+     {
+      "gate": "ABS-02",
+      "metric": "min_band_accuracy",
+      "rule": ">= 0.70 in every reported band",
+      "value": 0.4538,
+      "verdict": "FAIL",
+      "source": "Rudner (2001)"
+     },
+     {
+      "gate": "ABS-03",
+      "metric": "marginal_reliability",
+      "rule": ">= 0.85 to certify a level; >= 0.80 for routing",
+      "value": 0.94353,
+      "verdict": "PASS",
+      "source": "Nunnally & Bernstein (1994)"
+     },
+     {
+      "gate": "ABS-04",
+      "metric": "min_decile_accuracy",
+      "rule": "no true-theta decile below 0.65",
+      "value": 0.33992,
+      "verdict": "FAIL",
+      "source": "validation B3"
+     },
+     {
+      "gate": "ABS-05",
+      "metric": "decision_consistency",
+      "rule": ">= 0.75",
+      "value": 0.68133,
+      "verdict": "FAIL",
+      "source": "Livingston & Lewis (1995)"
+     },
+     {
+      "gate": "ABS-06",
+      "metric": "se_calibration_ratio",
+      "rule": "RMSE / mean SE within [0.95, 1.10] \u2014 the direct detector for double counting",
+      "value": 1.30624,
+      "verdict": "FAIL",
+      "source": "validation, new U-05"
+     },
+     {
+      "gate": "ABS-07",
+      "metric": "p90_duration_minutes",
+      "rule": "P90 modelled duration <= 90 minutes",
+      "value": 95.083,
+      "verdict": "FAIL",
+      "source": "validation: E-04 gains a gate"
+     }
+    ]
+   },
+   "C-full": {
+    "metrics": {
+     "n_pairs": 2535,
+     "n_sessions": 845,
+     "theta_rmse": 0.72185,
+     "theta_mae": 0.60157,
+     "exact_level_accuracy_common": 0.61341,
+     "exact_level_accuracy_native": 0.61341,
+     "within_one_level_common": 0.99645,
+     "accuracy_by_band": {
+      "1": 0.8571,
+      "2": 0.616,
+      "3": 0.4805,
+      "4": 0.4439,
+      "5": 0.9221
+     },
+     "min_band_accuracy": 0.44389,
+     "min_decile_accuracy": 0.34783,
+     "marginal_reliability": 0.95016,
+     "decision_consistency": 0.69586,
+     "final_se_median": 0.52261,
+     "mean_se": 0.52045,
+     "se_calibration_ratio": 1.38698,
+     "interval_coverage_95": 0.84339,
+     "questions_per_candidate_mean": 21.9065,
+     "questions_per_candidate_median": 21.0,
+     "duration_minutes_p50": 50.833,
+     "duration_minutes_p90": 83.0,
+     "p90_duration_minutes": 83.0,
+     "duration_over_90min_rate": 0.0,
+     "converged_rate": 0.98777,
+     "coverage_satisfied_rate": 1.0,
+     "modality_blueprint_compliance": 0.99803,
+     "information_realization_ratio": 1.06115,
+     "stop_reason_distribution": {
+      "precision": 0.9878,
+      "question_budget": 0.0122
+     },
+     "heldout_auc": 0.94089,
+     "heldout_brier": 0.09648,
+     "heldout_log_loss": 0.31392,
+     "heldout_ece": 0.02727
+    },
+    "verdicts": [
+     {
+      "gate": "ABS-01",
+      "metric": "exact_level_accuracy_common",
+      "rule": ">= 0.80 overall",
+      "value": 0.61341,
+      "verdict": "FAIL",
+      "source": "Livingston & Lewis (1995); Rudner (2001)"
+     },
+     {
+      "gate": "ABS-02",
+      "metric": "min_band_accuracy",
+      "rule": ">= 0.70 in every reported band",
+      "value": 0.44389,
+      "verdict": "FAIL",
+      "source": "Rudner (2001)"
+     },
+     {
+      "gate": "ABS-03",
+      "metric": "marginal_reliability",
+      "rule": ">= 0.85 to certify a level; >= 0.80 for routing",
+      "value": 0.95016,
+      "verdict": "PASS",
+      "source": "Nunnally & Bernstein (1994)"
+     },
+     {
+      "gate": "ABS-04",
+      "metric": "min_decile_accuracy",
+      "rule": "no true-theta decile below 0.65",
+      "value": 0.34783,
+      "verdict": "FAIL",
+      "source": "validation B3"
+     },
+     {
+      "gate": "ABS-05",
+      "metric": "decision_consistency",
+      "rule": ">= 0.75",
+      "value": 0.69586,
+      "verdict": "FAIL",
+      "source": "Livingston & Lewis (1995)"
+     },
+     {
+      "gate": "ABS-06",
+      "metric": "se_calibration_ratio",
+      "rule": "RMSE / mean SE within [0.95, 1.10] \u2014 the direct detector for double counting",
+      "value": 1.38698,
+      "verdict": "FAIL",
+      "source": "validation, new U-05"
+     },
+     {
+      "gate": "ABS-07",
+      "metric": "p90_duration_minutes",
+      "rule": "P90 modelled duration <= 90 minutes",
+      "value": 83.0,
+      "verdict": "PASS",
+      "source": "validation: E-04 gains a gate"
+     }
+    ]
+   },
+   "C-hybrid": {
+    "metrics": {
+     "n_pairs": 2535,
+     "n_sessions": 845,
+     "theta_rmse": 0.73721,
+     "theta_mae": 0.61159,
+     "exact_level_accuracy_common": 0.6142,
+     "exact_level_accuracy_native": 0.6142,
+     "within_one_level_common": 0.99606,
+     "accuracy_by_band": {
+      "1": 0.8513,
+      "2": 0.6037,
+      "3": 0.4902,
+      "4": 0.4554,
+      "5": 0.919
+     },
+     "min_band_accuracy": 0.45545,
+     "min_decile_accuracy": 0.35573,
+     "marginal_reliability": 0.9467,
+     "decision_consistency": 0.6942,
+     "final_se_median": 0.53683,
+     "mean_se": 0.53738,
+     "se_calibration_ratio": 1.37186,
+     "interval_coverage_95": 0.85996,
+     "questions_per_candidate_mean": 20.4805,
+     "questions_per_candidate_median": 20.0,
+     "duration_minutes_p50": 46.833,
+     "duration_minutes_p90": 83.0,
+     "p90_duration_minutes": 83.0,
+     "duration_over_90min_rate": 0.0,
+     "converged_rate": 0.99684,
+     "coverage_satisfied_rate": 1.0,
+     "modality_blueprint_compliance": 0.99921,
+     "information_realization_ratio": 1.0648,
+     "stop_reason_distribution": {
+      "band_probability": 0.641,
+      "precision": 0.3558,
+      "question_budget": 0.0032
+     },
+     "heldout_auc": 0.93866,
+     "heldout_brier": 0.09861,
+     "heldout_log_loss": 0.32181,
+     "heldout_ece": 0.03005
+    },
+    "verdicts": [
+     {
+      "gate": "ABS-01",
+      "metric": "exact_level_accuracy_common",
+      "rule": ">= 0.80 overall",
+      "value": 0.6142,
+      "verdict": "FAIL",
+      "source": "Livingston & Lewis (1995); Rudner (2001)"
+     },
+     {
+      "gate": "ABS-02",
+      "metric": "min_band_accuracy",
+      "rule": ">= 0.70 in every reported band",
+      "value": 0.45545,
+      "verdict": "FAIL",
+      "source": "Rudner (2001)"
+     },
+     {
+      "gate": "ABS-03",
+      "metric": "marginal_reliability",
+      "rule": ">= 0.85 to certify a level; >= 0.80 for routing",
+      "value": 0.9467,
+      "verdict": "PASS",
+      "source": "Nunnally & Bernstein (1994)"
+     },
+     {
+      "gate": "ABS-04",
+      "metric": "min_decile_accuracy",
+      "rule": "no true-theta decile below 0.65",
+      "value": 0.35573,
+      "verdict": "FAIL",
+      "source": "validation B3"
+     },
+     {
+      "gate": "ABS-05",
+      "metric": "decision_consistency",
+      "rule": ">= 0.75",
+      "value": 0.6942,
+      "verdict": "FAIL",
+      "source": "Livingston & Lewis (1995)"
+     },
+     {
+      "gate": "ABS-06",
+      "metric": "se_calibration_ratio",
+      "rule": "RMSE / mean SE within [0.95, 1.10] \u2014 the direct detector for double counting",
+      "value": 1.37186,
+      "verdict": "FAIL",
+      "source": "validation, new U-05"
+     },
+     {
+      "gate": "ABS-07",
+      "metric": "p90_duration_minutes",
+      "rule": "P90 modelled duration <= 90 minutes",
+      "value": 83.0,
+      "verdict": "PASS",
+      "source": "validation: E-04 gains a gate"
+     }
+    ]
+   },
+   "C-off": {
+    "metrics": {
+     "n_pairs": 2535,
+     "n_sessions": 845,
+     "theta_rmse": 0.74084,
+     "theta_mae": 0.61175,
+     "exact_level_accuracy_common": 0.60986,
+     "exact_level_accuracy_native": 0.60986,
+     "within_one_level_common": 0.99724,
+     "accuracy_by_band": {
+      "1": 0.8746,
+      "2": 0.616,
+      "3": 0.4609,
+      "4": 0.4389,
+      "5": 0.9221
+     },
+     "min_band_accuracy": 0.43894,
+     "min_decile_accuracy": 0.31621,
+     "marginal_reliability": 0.95067,
+     "decision_consistency": 0.69474,
+     "final_se_median": 0.52213,
+     "mean_se": 0.51934,
+     "se_calibration_ratio": 1.4265,
+     "interval_coverage_95": 0.83314,
+     "questions_per_candidate_mean": 20.3006,
+     "questions_per_candidate_median": 20.0,
+     "duration_minutes_p50": 46.833,
+     "duration_minutes_p90": 58.25,
+     "p90_duration_minutes": 58.25,
+     "duration_over_90min_rate": 0.0,
+     "converged_rate": 0.99408,
+     "coverage_satisfied_rate": 1.0,
+     "modality_blueprint_compliance": 0.77081,
+     "information_realization_ratio": 1.0557,
+     "stop_reason_distribution": {
+      "precision": 0.9941,
+      "question_budget": 0.0059
+     },
+     "heldout_auc": 0.93989,
+     "heldout_brier": 0.09745,
+     "heldout_log_loss": 0.31827,
+     "heldout_ece": 0.02819
+    },
+    "verdicts": [
+     {
+      "gate": "ABS-01",
+      "metric": "exact_level_accuracy_common",
+      "rule": ">= 0.80 overall",
+      "value": 0.60986,
+      "verdict": "FAIL",
+      "source": "Livingston & Lewis (1995); Rudner (2001)"
+     },
+     {
+      "gate": "ABS-02",
+      "metric": "min_band_accuracy",
+      "rule": ">= 0.70 in every reported band",
+      "value": 0.43894,
+      "verdict": "FAIL",
+      "source": "Rudner (2001)"
+     },
+     {
+      "gate": "ABS-03",
+      "metric": "marginal_reliability",
+      "rule": ">= 0.85 to certify a level; >= 0.80 for routing",
+      "value": 0.95067,
+      "verdict": "PASS",
+      "source": "Nunnally & Bernstein (1994)"
+     },
+     {
+      "gate": "ABS-04",
+      "metric": "min_decile_accuracy",
+      "rule": "no true-theta decile below 0.65",
+      "value": 0.31621,
+      "verdict": "FAIL",
+      "source": "validation B3"
+     },
+     {
+      "gate": "ABS-05",
+      "metric": "decision_consistency",
+      "rule": ">= 0.75",
+      "value": 0.69474,
+      "verdict": "FAIL",
+      "source": "Livingston & Lewis (1995)"
+     },
+     {
+      "gate": "ABS-06",
+      "metric": "se_calibration_ratio",
+      "rule": "RMSE / mean SE within [0.95, 1.10] \u2014 the direct detector for double counting",
+      "value": 1.4265,
+      "verdict": "FAIL",
+      "source": "validation, new U-05"
+     },
+     {
+      "gate": "ABS-07",
+      "metric": "p90_duration_minutes",
+      "rule": "P90 modelled duration <= 90 minutes",
+      "value": 58.25,
+      "verdict": "PASS",
+      "source": "validation: E-04 gains a gate"
+     }
+    ]
+   },
+   "C-shipped": {
+    "metrics": {
+     "n_pairs": 2535,
+     "n_sessions": 845,
+     "theta_rmse": 0.7256,
+     "theta_mae": 0.6047,
+     "exact_level_accuracy_common": 0.6142,
+     "exact_level_accuracy_native": 0.6142,
+     "within_one_level_common": 0.99763,
+     "accuracy_by_band": {
+      "1": 0.863,
+      "2": 0.5945,
+      "3": 0.487,
+      "4": 0.462,
+      "5": 0.919
+     },
+     "min_band_accuracy": 0.46205,
+     "min_decile_accuracy": 0.35573,
+     "marginal_reliability": 0.95051,
+     "decision_consistency": 0.70154,
+     "final_se_median": 0.52196,
+     "mean_se": 0.52031,
+     "se_calibration_ratio": 1.39454,
+     "interval_coverage_95": 0.84694,
+     "questions_per_candidate_mean": 21.6414,
+     "questions_per_candidate_median": 21.0,
+     "duration_minutes_p50": 48.5,
+     "duration_minutes_p90": 83.0,
+     "p90_duration_minutes": 83.0,
+     "duration_over_90min_rate": 0.0,
+     "converged_rate": 0.99053,
+     "coverage_satisfied_rate": 1.0,
+     "modality_blueprint_compliance": 0.99921,
+     "information_realization_ratio": 1.06103,
+     "stop_reason_distribution": {
+      "precision": 0.9905,
+      "question_budget": 0.0095
+     },
+     "heldout_auc": 0.93984,
+     "heldout_brier": 0.09737,
+     "heldout_log_loss": 0.31766,
+     "heldout_ece": 0.0278
+    },
+    "verdicts": [
+     {
+      "gate": "ABS-01",
+      "metric": "exact_level_accuracy_common",
+      "rule": ">= 0.80 overall",
+      "value": 0.6142,
+      "verdict": "FAIL",
+      "source": "Livingston & Lewis (1995); Rudner (2001)"
+     },
+     {
+      "gate": "ABS-02",
+      "metric": "min_band_accuracy",
+      "rule": ">= 0.70 in every reported band",
+      "value": 0.46205,
+      "verdict": "FAIL",
+      "source": "Rudner (2001)"
+     },
+     {
+      "gate": "ABS-03",
+      "metric": "marginal_reliability",
+      "rule": ">= 0.85 to certify a level; >= 0.80 for routing",
+      "value": 0.95051,
+      "verdict": "PASS",
+      "source": "Nunnally & Bernstein (1994)"
+     },
+     {
+      "gate": "ABS-04",
+      "metric": "min_decile_accuracy",
+      "rule": "no true-theta decile below 0.65",
+      "value": 0.35573,
+      "verdict": "FAIL",
+      "source": "validation B3"
+     },
+     {
+      "gate": "ABS-05",
+      "metric": "decision_consistency",
+      "rule": ">= 0.75",
+      "value": 0.70154,
+      "verdict": "FAIL",
+      "source": "Livingston & Lewis (1995)"
+     },
+     {
+      "gate": "ABS-06",
+      "metric": "se_calibration_ratio",
+      "rule": "RMSE / mean SE within [0.95, 1.10] \u2014 the direct detector for double counting",
+      "value": 1.39454,
+      "verdict": "FAIL",
+      "source": "validation, new U-05"
+     },
+     {
+      "gate": "ABS-07",
+      "metric": "p90_duration_minutes",
+      "rule": "P90 modelled duration <= 90 minutes",
+      "value": 83.0,
+      "verdict": "PASS",
+      "source": "validation: E-04 gains a gate"
+     }
+    ]
+   }
+  }
+ },
+ "comparisons": {
+  "DGP-0": {
+   "C-off:C-hybrid": {
+    "reference_arm": "C-off",
+    "test_arm": "C-hybrid",
+    "n_pairs": 2463,
+    "n_sessions": 821,
+    "between_arm_theta_correlation": 0.9566,
+    "primary_endpoint": {
+     "metric": "exact-level accuracy, COMMON band scale",
+     "accuracy_reference": 0.71985,
+     "accuracy_test": 0.7093,
+     "degradation_pp": 1.0556,
+     "upper_bound_pp_clustered_bca": 2.8015,
+     "margin_pp": 2.0,
+     "non_inferior": false,
+     "tango_upper_bound_pp": 2.162,
+     "discordance_psi": 0.2363,
+     "discordant_pairs": {
+      "test_better": 278,
+      "test_worse": 304
+     },
+     "degradation_pp_by_family": {
+      "borderline": 3.313,
+      "contradictory": -1.578,
+      "monotonic": 0.849,
+      "noisy": 1.863,
+      "shared_core_asymmetric": 0.963
+     }
+    },
+    "theta_rmse": {
+     "reference": 0.56008,
+     "test": 0.57846,
+     "relative_degradation": 0.03282,
+     "margin": 0.05,
+     "paired_squared_error_difference_upper": 0.050533,
+     "cohens_d_paired": 0.024
+    },
+    "efficiency": {
+     "questions_reference_mean": 20.1035,
+     "questions_test_mean": 20.2631,
+     "question_reduction": -0.00794,
+     "target": 0.15,
+     "cliffs_delta": 0.0958,
+     "duration_reduction": -0.09275,
+     "pareto_shorter_rate": 0.34836
+    },
+    "prediction": {
+     "auc_ref": 0.94071,
+     "auc_test": 0.9399,
+     "difference": -0.00081,
+     "se": 0.000529,
+     "z": -1.5381,
+     "p_two_sided": 0.124015,
+     "brier_reference": 0.09759,
+     "brier_test": 0.09806,
+     "log_loss_reference": 0.31362,
+     "log_loss_test": 0.3156,
+     "n_heldout": 30083
+    }
+   },
+   "C-off:C-shipped": {
+    "reference_arm": "C-off",
+    "test_arm": "C-shipped",
+    "n_pairs": 2463,
+    "n_sessions": 821,
+    "between_arm_theta_correlation": 0.96263,
+    "primary_endpoint": {
+     "metric": "exact-level accuracy, COMMON band scale",
+     "accuracy_reference": 0.71985,
+     "accuracy_test": 0.71458,
+     "degradation_pp": 0.5278,
+     "upper_bound_pp_clustered_bca": 2.1924,
+     "margin_pp": 2.0,
+     "non_inferior": false,
+     "tango_upper_bound_pp": 1.5139,
+     "discordance_psi": 0.23508,
+     "discordant_pairs": {
+      "test_better": 283,
+      "test_worse": 296
+     },
+     "degradation_pp_by_family": {
+      "borderline": 2.899,
+      "contradictory": -2.367,
+      "monotonic": 0.212,
+      "noisy": 1.449,
+      "shared_core_asymmetric": 0.578
+     }
+    },
+    "theta_rmse": {
+     "reference": 0.56008,
+     "test": 0.55285,
+     "relative_degradation": -0.01291,
+     "margin": 0.05,
+     "paired_squared_error_difference_upper": 0.018549,
+     "cohens_d_paired": -0.0098
+    },
+    "efficiency": {
+     "questions_reference_mean": 20.1035,
+     "questions_test_mean": 21.3386,
+     "question_reduction": -0.06144,
+     "target": 0.15,
+     "cliffs_delta": 0.3526,
+     "duration_reduction": -0.12034,
+     "pareto_shorter_rate": 0.19488
+    },
+    "prediction": {
+     "auc_ref": 0.94172,
+     "auc_test": 0.94088,
+     "difference": -0.00085,
+     "se": 0.000493,
+     "z": -1.7152,
+     "p_two_sided": 0.086306,
+     "brier_reference": 0.09659,
+     "brier_test": 0.0971,
+     "log_loss_reference": 0.31115,
+     "log_loss_test": 0.31277,
+     "n_heldout": 30316
+    }
+   },
+   "C-off:C-full": {
+    "reference_arm": "C-off",
+    "test_arm": "C-full",
+    "n_pairs": 2463,
+    "n_sessions": 821,
+    "between_arm_theta_correlation": 0.9645,
+    "primary_endpoint": {
+     "metric": "exact-level accuracy, COMMON band scale",
+     "accuracy_reference": 0.71985,
+     "accuracy_test": 0.7162,
+     "degradation_pp": 0.3654,
+     "upper_bound_pp_clustered_bca": 1.9838,
+     "margin_pp": 2.0,
+     "non_inferior": true,
+     "tango_upper_bound_pp": 1.3021,
+     "discordance_psi": 0.2294,
+     "discordant_pairs": {
+      "test_better": 278,
+      "test_worse": 287
+     },
+     "degradation_pp_by_family": {
+      "borderline": 2.692,
+      "contradictory": -1.381,
+      "monotonic": 0.212,
+      "noisy": -0.207,
+      "shared_core_asymmetric": 0.578
+     }
+    },
+    "theta_rmse": {
+     "reference": 0.56008,
+     "test": 0.55552,
+     "relative_degradation": -0.00814,
+     "margin": 0.05,
+     "paired_squared_error_difference_upper": 0.021073,
+     "cohens_d_paired": -0.0064
+    },
+    "efficiency": {
+     "questions_reference_mean": 20.1035,
+     "questions_test_mean": 21.5225,
+     "question_reduction": -0.07058,
+     "target": 0.15,
+     "cliffs_delta": 0.3799,
+     "duration_reduction": -0.12632,
+     "pareto_shorter_rate": 0.16565
+    },
+    "prediction": {
+     "auc_ref": 0.94149,
+     "auc_test": 0.94064,
+     "difference": -0.00085,
+     "se": 0.00049,
+     "z": -1.7387,
+     "p_two_sided": 0.082094,
+     "brier_reference": 0.09665,
+     "brier_test": 0.09707,
+     "log_loss_reference": 0.31144,
+     "log_loss_test": 0.31277,
+     "n_heldout": 29606
+    }
+   },
+   "B:C-off": {
+    "reference_arm": "B",
+    "test_arm": "C-off",
+    "n_pairs": 2463,
+    "n_sessions": 821,
+    "between_arm_theta_correlation": 0.96341,
+    "primary_endpoint": {
+     "metric": "exact-level accuracy, COMMON band scale",
+     "accuracy_reference": 0.70361,
+     "accuracy_test": 0.71985,
+     "degradation_pp": -1.624,
+     "upper_bound_pp_clustered_bca": -0.0812,
+     "margin_pp": 2.0,
+     "non_inferior": true,
+     "tango_upper_bound_pp": -0.4036,
+     "discordance_psi": 0.21437,
+     "discordant_pairs": {
+      "test_better": 284,
+      "test_worse": 244
+     },
+     "degradation_pp_by_family": {
+      "borderline": -3.313,
+      "contradictory": 2.367,
+      "monotonic": -3.609,
+      "noisy": 3.106,
+      "shared_core_asymmetric": -6.551
+     }
+    },
+    "theta_rmse": {
+     "reference": 0.53951,
+     "test": 0.56008,
+     "relative_degradation": 0.03812,
+     "margin": 0.05,
+     "paired_squared_error_difference_upper": 0.04863,
+     "cohens_d_paired": 0.0295
+    },
+    "efficiency": {
+     "questions_reference_mean": 17.2205,
+     "questions_test_mean": 20.1035,
+     "question_reduction": -0.16742,
+     "target": 0.15,
+     "cliffs_delta": 0.4773,
+     "duration_reduction": 0.37514,
+     "pareto_shorter_rate": 0.12667
+    },
+    "prediction": {
+     "auc_ref": 0.93751,
+     "auc_test": 0.93447,
+     "difference": -0.00304,
+     "se": 0.000635,
+     "z": -4.7908,
+     "p_two_sided": 2e-06,
+     "brier_reference": 0.10077,
+     "brier_test": 0.10196,
+     "log_loss_reference": 0.32384,
+     "log_loss_test": 0.3272,
+     "n_heldout": 18203
+    }
+   },
+   "B:C-hybrid": {
+    "reference_arm": "B",
+    "test_arm": "C-hybrid",
+    "n_pairs": 2463,
+    "n_sessions": 821,
+    "between_arm_theta_correlation": 0.95469,
+    "primary_endpoint": {
+     "metric": "exact-level accuracy, COMMON band scale",
+     "accuracy_reference": 0.70361,
+     "accuracy_test": 0.7093,
+     "degradation_pp": -0.5684,
+     "upper_bound_pp_clustered_bca": 1.1368,
+     "margin_pp": 2.0,
+     "non_inferior": true,
+     "tango_upper_bound_pp": -0.1418,
+     "discordance_psi": 0.26634,
+     "discordant_pairs": {
+      "test_better": 335,
+      "test_worse": 321
+     },
+     "degradation_pp_by_family": {
+      "borderline": 0.0,
+      "contradictory": 0.789,
+      "monotonic": -2.76,
+      "noisy": 4.969,
+      "shared_core_asymmetric": -5.588
+     }
+    },
+    "theta_rmse": {
+     "reference": 0.53951,
+     "test": 0.57846,
+     "relative_degradation": 0.0722,
+     "margin": 0.05,
+     "paired_squared_error_difference_upper": 0.070087,
+     "cohens_d_paired": 0.0545
+    },
+    "efficiency": {
+     "questions_reference_mean": 17.2205,
+     "questions_test_mean": 20.2631,
+     "question_reduction": -0.17669,
+     "target": 0.15,
+     "cliffs_delta": 0.5492,
+     "duration_reduction": 0.31718,
+     "pareto_shorter_rate": 0.15469
+    },
+    "prediction": {
+     "auc_ref": 0.94659,
+     "auc_test": 0.94116,
+     "difference": -0.00543,
+     "se": 0.000705,
+     "z": -7.703,
+     "p_two_sided": 0.0,
+     "brier_reference": 0.0927,
+     "brier_test": 0.09595,
+     "log_loss_reference": 0.30063,
+     "log_loss_test": 0.31195,
+     "n_heldout": 15692
+    }
+   }
+  },
+  "DGP-2": {
+   "C-off:C-hybrid": {
+    "reference_arm": "C-off",
+    "test_arm": "C-hybrid",
+    "n_pairs": 2535,
+    "n_sessions": 845,
+    "between_arm_theta_correlation": 0.96442,
+    "primary_endpoint": {
+     "metric": "exact-level accuracy, COMMON band scale",
+     "accuracy_reference": 0.60986,
+     "accuracy_test": 0.6142,
+     "degradation_pp": -0.4339,
+     "upper_bound_pp_clustered_bca": 0.9862,
+     "margin_pp": 2.0,
+     "non_inferior": true,
+     "tango_upper_bound_pp": -0.1083,
+     "discordance_psi": 0.20789,
+     "discordant_pairs": {
+      "test_better": 269,
+      "test_worse": 258
+     },
+     "degradation_pp_by_family": {
+      "borderline": -2.008,
+      "contradictory": -1.143,
+      "monotonic": 1.035,
+      "noisy": 2.008,
+      "shared_core_asymmetric": -1.883
+     }
+    },
+    "theta_rmse": {
+     "reference": 0.74084,
+     "test": 0.73721,
+     "relative_degradation": -0.0049,
+     "margin": 0.05,
+     "paired_squared_error_difference_upper": 0.022272,
+     "cohens_d_paired": -0.0065
+    },
+    "efficiency": {
+     "questions_reference_mean": 20.3006,
+     "questions_test_mean": 20.4805,
+     "question_reduction": -0.00886,
+     "target": 0.15,
+     "cliffs_delta": 0.0778,
+     "duration_reduction": -0.13211,
+     "pareto_shorter_rate": 0.35858
+    },
+    "prediction": {
+     "auc_ref": 0.9509,
+     "auc_test": 0.95121,
+     "difference": 0.00031,
+     "se": 0.000472,
+     "z": 0.6609,
+     "p_two_sided": 0.508671,
+     "brier_reference": 0.08733,
+     "brier_test": 0.08678,
+     "log_loss_reference": 0.28697,
+     "log_loss_test": 0.28562,
+     "n_heldout": 31387
+    }
+   },
+   "C-off:C-shipped": {
+    "reference_arm": "C-off",
+    "test_arm": "C-shipped",
+    "n_pairs": 2535,
+    "n_sessions": 845,
+    "between_arm_theta_correlation": 0.96911,
+    "primary_endpoint": {
+     "metric": "exact-level accuracy, COMMON band scale",
+     "accuracy_reference": 0.60986,
+     "accuracy_test": 0.6142,
+     "degradation_pp": -0.4339,
+     "upper_bound_pp_clustered_bca": 1.0256,
+     "margin_pp": 2.0,
+     "non_inferior": true,
+     "tango_upper_bound_pp": -0.1083,
+     "discordance_psi": 0.2071,
+     "discordant_pairs": {
+      "test_better": 268,
+      "test_worse": 257
+     },
+     "degradation_pp_by_family": {
+      "borderline": -2.008,
+      "contradictory": -1.333,
+      "monotonic": 1.656,
+      "noisy": 2.209,
+      "shared_core_asymmetric": -2.448
+     }
+    },
+    "theta_rmse": {
+     "reference": 0.74084,
+     "test": 0.7256,
+     "relative_degradation": -0.02057,
+     "margin": 0.05,
+     "paired_squared_error_difference_upper": 0.003358,
+     "cohens_d_paired": -0.0293
+    },
+    "efficiency": {
+     "questions_reference_mean": 20.3006,
+     "questions_test_mean": 21.6414,
+     "question_reduction": -0.06605,
+     "target": 0.15,
+     "cliffs_delta": 0.3331,
+     "duration_reduction": -0.16202,
+     "pareto_shorter_rate": 0.2071
+    },
+    "prediction": {
+     "auc_ref": 0.95212,
+     "auc_test": 0.95278,
+     "difference": 0.00066,
+     "se": 0.000435,
+     "z": 1.5208,
+     "p_two_sided": 0.128318,
+     "brier_reference": 0.086,
+     "brier_test": 0.08487,
+     "log_loss_reference": 0.28326,
+     "log_loss_test": 0.27973,
+     "n_heldout": 31784
+    }
+   },
+   "C-off:C-full": {
+    "reference_arm": "C-off",
+    "test_arm": "C-full",
+    "n_pairs": 2535,
+    "n_sessions": 845,
+    "between_arm_theta_correlation": 0.96892,
+    "primary_endpoint": {
+     "metric": "exact-level accuracy, COMMON band scale",
+     "accuracy_reference": 0.60986,
+     "accuracy_test": 0.61341,
+     "degradation_pp": -0.355,
+     "upper_bound_pp_clustered_bca": 1.144,
+     "margin_pp": 2.0,
+     "non_inferior": true,
+     "tango_upper_bound_pp": -0.0886,
+     "discordance_psi": 0.21026,
+     "discordant_pairs": {
+      "test_better": 271,
+      "test_worse": 262
+     },
+     "degradation_pp_by_family": {
+      "borderline": -1.807,
+      "contradictory": -1.143,
+      "monotonic": 2.277,
+      "noisy": 1.205,
+      "shared_core_asymmetric": -2.072
+     }
+    },
+    "theta_rmse": {
+     "reference": 0.74084,
+     "test": 0.72185,
+     "relative_degradation": -0.02563,
+     "margin": 0.05,
+     "paired_squared_error_difference_upper": -0.001725,
+     "cohens_d_paired": -0.0362
+    },
+    "efficiency": {
+     "questions_reference_mean": 20.3006,
+     "questions_test_mean": 21.9065,
+     "question_reduction": -0.07911,
+     "target": 0.15,
+     "cliffs_delta": 0.363,
+     "duration_reduction": -0.17397,
+     "pareto_shorter_rate": 0.17751
+    },
+    "prediction": {
+     "auc_ref": 0.95297,
+     "auc_test": 0.95382,
+     "difference": 0.00085,
+     "se": 0.000435,
+     "z": 1.9465,
+     "p_two_sided": 0.0516,
+     "brier_reference": 0.08509,
+     "brier_test": 0.08369,
+     "log_loss_reference": 0.28041,
+     "log_loss_test": 0.2759,
+     "n_heldout": 31233
+    }
+   },
+   "B:C-off": {
+    "reference_arm": "B",
+    "test_arm": "C-off",
+    "n_pairs": 2535,
+    "n_sessions": 845,
+    "between_arm_theta_correlation": 0.96058,
+    "primary_endpoint": {
+     "metric": "exact-level accuracy, COMMON band scale",
+     "accuracy_reference": 0.60868,
+     "accuracy_test": 0.60986,
+     "degradation_pp": -0.1183,
+     "upper_bound_pp_clustered_bca": 1.499,
+     "margin_pp": 2.0,
+     "non_inferior": true,
+     "tango_upper_bound_pp": -0.0296,
+     "discordance_psi": 0.22919,
+     "discordant_pairs": {
+      "test_better": 292,
+      "test_worse": 289
+     },
+     "degradation_pp_by_family": {
+      "borderline": -2.41,
+      "contradictory": 1.524,
+      "monotonic": -0.207,
+      "noisy": 0.803,
+      "shared_core_asymmetric": -0.377
+     }
+    },
+    "theta_rmse": {
+     "reference": 0.69565,
+     "test": 0.74084,
+     "relative_degradation": 0.06497,
+     "margin": 0.05,
+     "paired_squared_error_difference_upper": 0.094444,
+     "cohens_d_paired": 0.0785
+    },
+    "efficiency": {
+     "questions_reference_mean": 17.6947,
+     "questions_test_mean": 20.3006,
+     "question_reduction": -0.14727,
+     "target": 0.15,
+     "cliffs_delta": 0.3673,
+     "duration_reduction": 0.3681,
+     "pareto_shorter_rate": 0.21065
+    },
+    "prediction": {
+     "auc_ref": 0.94285,
+     "auc_test": 0.94098,
+     "difference": -0.00187,
+     "se": 0.000663,
+     "z": -2.8134,
+     "p_two_sided": 0.004902,
+     "brier_reference": 0.0958,
+     "brier_test": 0.09448,
+     "log_loss_reference": 0.31296,
+     "log_loss_test": 0.30838,
+     "n_heldout": 19168
+    }
+   },
+   "B:C-hybrid": {
+    "reference_arm": "B",
+    "test_arm": "C-hybrid",
+    "n_pairs": 2535,
+    "n_sessions": 845,
+    "between_arm_theta_correlation": 0.95855,
+    "primary_endpoint": {
+     "metric": "exact-level accuracy, COMMON band scale",
+     "accuracy_reference": 0.60868,
+     "accuracy_test": 0.6142,
+     "degradation_pp": -0.5523,
+     "upper_bound_pp_clustered_bca": 1.2229,
+     "margin_pp": 2.0,
+     "non_inferior": true,
+     "tango_upper_bound_pp": -0.1378,
+     "discordance_psi": 0.26114,
+     "discordant_pairs": {
+      "test_better": 338,
+      "test_worse": 324
+     },
+     "degradation_pp_by_family": {
+      "borderline": -4.418,
+      "contradictory": 0.381,
+      "monotonic": 0.828,
+      "noisy": 2.811,
+      "shared_core_asymmetric": -2.26
+     }
+    },
+    "theta_rmse": {
+     "reference": 0.69565,
+     "test": 0.73721,
+     "relative_degradation": 0.05975,
+     "margin": 0.05,
+     "paired_squared_error_difference_upper": 0.088181,
+     "cohens_d_paired": 0.0725
+    },
+    "efficiency": {
+     "questions_reference_mean": 17.6947,
+     "questions_test_mean": 20.4805,
+     "question_reduction": -0.15744,
+     "target": 0.15,
+     "cliffs_delta": 0.4169,
+     "duration_reduction": 0.28462,
+     "pareto_shorter_rate": 0.22959
+    },
+    "prediction": {
+     "auc_ref": 0.94797,
+     "auc_test": 0.94747,
+     "difference": -0.0005,
+     "se": 0.000675,
+     "z": -0.744,
+     "p_two_sided": 0.456888,
+     "brier_reference": 0.09101,
+     "brier_test": 0.08901,
+     "log_loss_reference": 0.30042,
+     "log_loss_test": 0.29311,
+     "n_heldout": 16744
+    }
+   }
+  }
+ },
+ "safety": {
+  "DGP-0": {
+   "B": {
+    "raw": {
+     "sessions": 821,
+     "sessions_with_inference": 0,
+     "U-02_interval_non_coverage": {
+      "events": 114,
+      "verified": 1649,
+      "rate": 0.06913,
+      "upper_95": 0.08029
+     },
+     "C-DAG-15_over_convergence": {
+      "events": 0,
+      "verified": 1649,
+      "rate": 0.0,
+      "upper_95": 0.00182
+     },
+     "C-DAG-03_wrong_inference": {
+      "events": 0,
+      "verified": 0,
+      "rate": null,
+      "upper_95": null
+     },
+     "C-DAG-01_inference_precision": null,
+     "C-DAG-04_false_blocking": {
+      "events": 0,
+      "verified": 0,
+      "rate": null,
+      "upper_95": null
+     },
+     "C-DAG-05_missed_blocking": {
+      "events": 0,
+      "verified": 0,
+      "rate": null,
+      "upper_95": null
+     },
+     "C-DAG-11_duplicate_evidence": {
+      "events": 0,
+      "verified": 1,
+      "rate": 0.0,
+      "upper_95": 0.95
+     }
+    },
+    "verdicts": [
+     {
+      "gate": "C-DAG-03",
+      "metric": "wrong_inference_rate",
+      "rule": "95% UCB < 3%",
+      "tier": 3,
+      "upper_bound_95": null,
+      "value": null,
+      "verdict": "NOT MEASURED"
+     },
+     {
+      "gate": "C-DAG-04",
+      "metric": "false_blocking_rate",
+      "rule": "95% UCB < 2%",
+      "tier": 3,
+      "upper_bound_95": null,
+      "value": null,
+      "verdict": "NOT MEASURED"
+     },
+     {
+      "gate": "C-DAG-05",
+      "metric": "missed_blocking_rate",
+      "rule": "descriptive: no strict edges in this graph",
+      "tier": 4,
+      "upper_bound_95": null,
+      "value": null,
+      "verdict": "DESCRIPTIVE"
+     },
+     {
+      "gate": "C-DAG-11",
+      "metric": "duplicate_evidence_events",
+      "rule": "0 events",
+      "tier": 1,
+      "upper_bound_95": 0.95,
+      "value": 0,
+      "verdict": "PASS"
+     },
+     {
+      "gate": "U-02",
+      "metric": "interval_non_coverage_rate",
+      "rule": "3%-7% (nominal 5%)",
+      "tier": 3,
+      "upper_bound_95": 0.08029,
+      "value": 0.08029,
+      "verdict": "FAIL"
+     },
+     {
+      "gate": "C-DAG-15",
+      "metric": "over_convergence_rate",
+      "rule": "95% UCB < 2%",
+      "tier": 3,
+      "upper_bound_95": 0.00182,
+      "value": 0.00182,
+      "verdict": "PASS"
+     }
+    ]
+   },
+   "C-full": {
+    "raw": {
+     "sessions": 821,
+     "sessions_with_inference": 0,
+     "U-02_interval_non_coverage": {
+      "events": 138,
+      "verified": 2443,
+      "rate": 0.05649,
+      "upper_95": 0.06478
+     },
+     "C-DAG-15_over_convergence": {
+      "events": 0,
+      "verified": 2443,
+      "rate": 0.0,
+      "upper_95": 0.00123
+     },
+     "C-DAG-03_wrong_inference": {
+      "events": 0,
+      "verified": 0,
+      "rate": null,
+      "upper_95": null
+     },
+     "C-DAG-01_inference_precision": null,
+     "C-DAG-04_false_blocking": {
+      "events": 0,
+      "verified": 0,
+      "rate": null,
+      "upper_95": null
+     },
+     "C-DAG-05_missed_blocking": {
+      "events": 0,
+      "verified": 0,
+      "rate": null,
+      "upper_95": null
+     },
+     "C-DAG-11_duplicate_evidence": {
+      "events": 0,
+      "verified": 18522,
+      "rate": 0.0,
+      "upper_95": 0.00016
+     }
+    },
+    "verdicts": [
+     {
+      "gate": "C-DAG-03",
+      "metric": "wrong_inference_rate",
+      "rule": "95% UCB < 3%",
+      "tier": 3,
+      "upper_bound_95": null,
+      "value": null,
+      "verdict": "NOT MEASURED"
+     },
+     {
+      "gate": "C-DAG-04",
+      "metric": "false_blocking_rate",
+      "rule": "95% UCB < 2%",
+      "tier": 3,
+      "upper_bound_95": null,
+      "value": null,
+      "verdict": "NOT MEASURED"
+     },
+     {
+      "gate": "C-DAG-05",
+      "metric": "missed_blocking_rate",
+      "rule": "descriptive: no strict edges in this graph",
+      "tier": 4,
+      "upper_bound_95": null,
+      "value": null,
+      "verdict": "DESCRIPTIVE"
+     },
+     {
+      "gate": "C-DAG-11",
+      "metric": "duplicate_evidence_events",
+      "rule": "0 events",
+      "tier": 1,
+      "upper_bound_95": 0.00016,
+      "value": 0,
+      "verdict": "PASS"
+     },
+     {
+      "gate": "U-02",
+      "metric": "interval_non_coverage_rate",
+      "rule": "3%-7% (nominal 5%)",
+      "tier": 3,
+      "upper_bound_95": 0.06478,
+      "value": 0.06478,
+      "verdict": "PASS"
+     },
+     {
+      "gate": "C-DAG-15",
+      "metric": "over_convergence_rate",
+      "rule": "95% UCB < 2%",
+      "tier": 3,
+      "upper_bound_95": 0.00123,
+      "value": 0.00123,
+      "verdict": "PASS"
+     }
+    ]
+   },
+   "C-hybrid": {
+    "raw": {
+     "sessions": 821,
+     "sessions_with_inference": 0,
+     "U-02_interval_non_coverage": {
+      "events": 128,
+      "verified": 2457,
+      "rate": 0.0521,
+      "upper_95": 0.06008
+     },
+     "C-DAG-15_over_convergence": {
+      "events": 0,
+      "verified": 2457,
+      "rate": 0.0,
+      "upper_95": 0.00122
+     },
+     "C-DAG-03_wrong_inference": {
+      "events": 0,
+      "verified": 0,
+      "rate": null,
+      "upper_95": null
+     },
+     "C-DAG-01_inference_precision": null,
+     "C-DAG-04_false_blocking": {
+      "events": 0,
+      "verified": 0,
+      "rate": null,
+      "upper_95": null
+     },
+     "C-DAG-05_missed_blocking": {
+      "events": 0,
+      "verified": 0,
+      "rate": null,
+      "upper_95": null
+     },
+     "C-DAG-11_duplicate_evidence": {
+      "events": 0,
+      "verified": 17311,
+      "rate": 0.0,
+      "upper_95": 0.00017
+     }
+    },
+    "verdicts": [
+     {
+      "gate": "C-DAG-03",
+      "metric": "wrong_inference_rate",
+      "rule": "95% UCB < 3%",
+      "tier": 3,
+      "upper_bound_95": null,
+      "value": null,
+      "verdict": "NOT MEASURED"
+     },
+     {
+      "gate": "C-DAG-04",
+      "metric": "false_blocking_rate",
+      "rule": "95% UCB < 2%",
+      "tier": 3,
+      "upper_bound_95": null,
+      "value": null,
+      "verdict": "NOT MEASURED"
+     },
+     {
+      "gate": "C-DAG-05",
+      "metric": "missed_blocking_rate",
+      "rule": "descriptive: no strict edges in this graph",
+      "tier": 4,
+      "upper_bound_95": null,
+      "value": null,
+      "verdict": "DESCRIPTIVE"
+     },
+     {
+      "gate": "C-DAG-11",
+      "metric": "duplicate_evidence_events",
+      "rule": "0 events",
+      "tier": 1,
+      "upper_bound_95": 0.00017,
+      "value": 0,
+      "verdict": "PASS"
+     },
+     {
+      "gate": "U-02",
+      "metric": "interval_non_coverage_rate",
+      "rule": "3%-7% (nominal 5%)",
+      "tier": 3,
+      "upper_bound_95": 0.06008,
+      "value": 0.06008,
+      "verdict": "PASS"
+     },
+     {
+      "gate": "C-DAG-15",
+      "metric": "over_convergence_rate",
+      "rule": "95% UCB < 2%",
+      "tier": 3,
+      "upper_bound_95": 0.00122,
+      "value": 0.00122,
+      "verdict": "PASS"
+     }
+    ]
+   },
+   "C-off": {
+    "raw": {
+     "sessions": 821,
+     "sessions_with_inference": 0,
+     "U-02_interval_non_coverage": {
+      "events": 141,
+      "verified": 2455,
+      "rate": 0.05743,
+      "upper_95": 0.06576
+     },
+     "C-DAG-15_over_convergence": {
+      "events": 0,
+      "verified": 2455,
+      "rate": 0.0,
+      "upper_95": 0.00122
+     },
+     "C-DAG-03_wrong_inference": {
+      "events": 0,
+      "verified": 0,
+      "rate": null,
+      "upper_95": null
+     },
+     "C-DAG-01_inference_precision": null,
+     "C-DAG-04_false_blocking": {
+      "events": 0,
+      "verified": 0,
+      "rate": null,
+      "upper_95": null
+     },
+     "C-DAG-05_missed_blocking": {
+      "events": 0,
+      "verified": 0,
+      "rate": null,
+      "upper_95": null
+     },
+     "C-DAG-11_duplicate_evidence": {
+      "events": 0,
+      "verified": 1,
+      "rate": 0.0,
+      "upper_95": 0.95
+     }
+    },
+    "verdicts": [
+     {
+      "gate": "C-DAG-03",
+      "metric": "wrong_inference_rate",
+      "rule": "95% UCB < 3%",
+      "tier": 3,
+      "upper_bound_95": null,
+      "value": null,
+      "verdict": "NOT MEASURED"
+     },
+     {
+      "gate": "C-DAG-04",
+      "metric": "false_blocking_rate",
+      "rule": "95% UCB < 2%",
+      "tier": 3,
+      "upper_bound_95": null,
+      "value": null,
+      "verdict": "NOT MEASURED"
+     },
+     {
+      "gate": "C-DAG-05",
+      "metric": "missed_blocking_rate",
+      "rule": "descriptive: no strict edges in this graph",
+      "tier": 4,
+      "upper_bound_95": null,
+      "value": null,
+      "verdict": "DESCRIPTIVE"
+     },
+     {
+      "gate": "C-DAG-11",
+      "metric": "duplicate_evidence_events",
+      "rule": "0 events",
+      "tier": 1,
+      "upper_bound_95": 0.95,
+      "value": 0,
+      "verdict": "PASS"
+     },
+     {
+      "gate": "U-02",
+      "metric": "interval_non_coverage_rate",
+      "rule": "3%-7% (nominal 5%)",
+      "tier": 3,
+      "upper_bound_95": 0.06576,
+      "value": 0.06576,
+      "verdict": "PASS"
+     },
+     {
+      "gate": "C-DAG-15",
+      "metric": "over_convergence_rate",
+      "rule": "95% UCB < 2%",
+      "tier": 3,
+      "upper_bound_95": 0.00122,
+      "value": 0.00122,
+      "verdict": "PASS"
+     }
+    ]
+   },
+   "C-shipped": {
+    "raw": {
+     "sessions": 821,
+     "sessions_with_inference": 0,
+     "U-02_interval_non_coverage": {
+      "events": 135,
+      "verified": 2447,
+      "rate": 0.05517,
+      "upper_95": 0.06337
+     },
+     "C-DAG-15_over_convergence": {
+      "events": 0,
+      "verified": 2447,
+      "rate": 0.0,
+      "upper_95": 0.00122
+     },
+     "C-DAG-03_wrong_inference": {
+      "events": 0,
+      "verified": 0,
+      "rate": null,
+      "upper_95": null
+     },
+     "C-DAG-01_inference_precision": null,
+     "C-DAG-04_false_blocking": {
+      "events": 0,
+      "verified": 0,
+      "rate": null,
+      "upper_95": null
+     },
+     "C-DAG-05_missed_blocking": {
+      "events": 0,
+      "verified": 0,
+      "rate": null,
+      "upper_95": null
+     },
+     "C-DAG-11_duplicate_evidence": {
+      "events": 0,
+      "verified": 18227,
+      "rate": 0.0,
+      "upper_95": 0.00016
+     }
+    },
+    "verdicts": [
+     {
+      "gate": "C-DAG-03",
+      "metric": "wrong_inference_rate",
+      "rule": "95% UCB < 3%",
+      "tier": 3,
+      "upper_bound_95": null,
+      "value": null,
+      "verdict": "NOT MEASURED"
+     },
+     {
+      "gate": "C-DAG-04",
+      "metric": "false_blocking_rate",
+      "rule": "95% UCB < 2%",
+      "tier": 3,
+      "upper_bound_95": null,
+      "value": null,
+      "verdict": "NOT MEASURED"
+     },
+     {
+      "gate": "C-DAG-05",
+      "metric": "missed_blocking_rate",
+      "rule": "descriptive: no strict edges in this graph",
+      "tier": 4,
+      "upper_bound_95": null,
+      "value": null,
+      "verdict": "DESCRIPTIVE"
+     },
+     {
+      "gate": "C-DAG-11",
+      "metric": "duplicate_evidence_events",
+      "rule": "0 events",
+      "tier": 1,
+      "upper_bound_95": 0.00016,
+      "value": 0,
+      "verdict": "PASS"
+     },
+     {
+      "gate": "U-02",
+      "metric": "interval_non_coverage_rate",
+      "rule": "3%-7% (nominal 5%)",
+      "tier": 3,
+      "upper_bound_95": 0.06337,
+      "value": 0.06337,
+      "verdict": "PASS"
+     },
+     {
+      "gate": "C-DAG-15",
+      "metric": "over_convergence_rate",
+      "rule": "95% UCB < 2%",
+      "tier": 3,
+      "upper_bound_95": 0.00122,
+      "value": 0.00122,
+      "verdict": "PASS"
+     }
+    ]
+   }
+  },
+  "DGP-2": {
+   "B": {
+    "raw": {
+     "sessions": 845,
+     "sessions_with_inference": 0,
+     "U-02_interval_non_coverage": {
+      "events": 216,
+      "verified": 1601,
+      "rate": 0.13492,
+      "upper_95": 0.14977
+     },
+     "C-DAG-15_over_convergence": {
+      "events": 0,
+      "verified": 1601,
+      "rate": 0.0,
+      "upper_95": 0.00187
+     },
+     "C-DAG-03_wrong_inference": {
+      "events": 0,
+      "verified": 0,
+      "rate": null,
+      "upper_95": null
+     },
+     "C-DAG-01_inference_precision": null,
+     "C-DAG-04_false_blocking": {
+      "events": 0,
+      "verified": 0,
+      "rate": null,
+      "upper_95": null
+     },
+     "C-DAG-05_missed_blocking": {
+      "events": 0,
+      "verified": 0,
+      "rate": null,
+      "upper_95": null
+     },
+     "C-DAG-11_duplicate_evidence": {
+      "events": 0,
+      "verified": 1,
+      "rate": 0.0,
+      "upper_95": 0.95
+     }
+    },
+    "verdicts": [
+     {
+      "gate": "C-DAG-03",
+      "metric": "wrong_inference_rate",
+      "rule": "95% UCB < 3%",
+      "tier": 3,
+      "upper_bound_95": null,
+      "value": null,
+      "verdict": "NOT MEASURED"
+     },
+     {
+      "gate": "C-DAG-04",
+      "metric": "false_blocking_rate",
+      "rule": "95% UCB < 2%",
+      "tier": 3,
+      "upper_bound_95": null,
+      "value": null,
+      "verdict": "NOT MEASURED"
+     },
+     {
+      "gate": "C-DAG-05",
+      "metric": "missed_blocking_rate",
+      "rule": "descriptive: no strict edges in this graph",
+      "tier": 4,
+      "upper_bound_95": null,
+      "value": null,
+      "verdict": "DESCRIPTIVE"
+     },
+     {
+      "gate": "C-DAG-11",
+      "metric": "duplicate_evidence_events",
+      "rule": "0 events",
+      "tier": 1,
+      "upper_bound_95": 0.95,
+      "value": 0,
+      "verdict": "PASS"
+     },
+     {
+      "gate": "U-02",
+      "metric": "interval_non_coverage_rate",
+      "rule": "3%-7% (nominal 5%)",
+      "tier": 3,
+      "upper_bound_95": 0.14977,
+      "value": 0.14977,
+      "verdict": "FAIL"
+     },
+     {
+      "gate": "C-DAG-15",
+      "metric": "over_convergence_rate",
+      "rule": "95% UCB < 2%",
+      "tier": 3,
+      "upper_bound_95": 0.00187,
+      "value": 0.00187,
+      "verdict": "PASS"
+     }
+    ]
+   },
+   "C-full": {
+    "raw": {
+     "sessions": 845,
+     "sessions_with_inference": 372,
+     "U-02_interval_non_coverage": {
+      "events": 396,
+      "verified": 2504,
+      "rate": 0.15815,
+      "upper_95": 0.17064
+     },
+     "C-DAG-15_over_convergence": {
+      "events": 0,
+      "verified": 2504,
+      "rate": 0.0,
+      "upper_95": 0.0012
+     },
+     "C-DAG-03_wrong_inference": {
+      "events": 162,
+      "verified": 696,
+      "rate": 0.23276,
+      "upper_95": 0.26064
+     },
+     "C-DAG-01_inference_precision": 0.76724,
+     "C-DAG-04_false_blocking": {
+      "events": 140,
+      "verified": 1700,
+      "rate": 0.08235,
+      "upper_95": 0.09416
+     },
+     "C-DAG-05_missed_blocking": {
+      "events": 5615,
+      "verified": 5926,
+      "rate": 0.94752,
+      "upper_95": 0.9522
+     },
+     "C-DAG-11_duplicate_evidence": {
+      "events": 0,
+      "verified": 19417,
+      "rate": 0.0,
+      "upper_95": 0.00015
+     }
+    },
+    "verdicts": [
+     {
+      "gate": "C-DAG-03",
+      "metric": "wrong_inference_rate",
+      "rule": "95% UCB < 3%",
+      "tier": 3,
+      "upper_bound_95": 0.26064,
+      "value": 0.26064,
+      "verdict": "FAIL"
+     },
+     {
+      "gate": "C-DAG-04",
+      "metric": "false_blocking_rate",
+      "rule": "95% UCB < 2%",
+      "tier": 3,
+      "upper_bound_95": 0.09416,
+      "value": 0.09416,
+      "verdict": "FAIL"
+     },
+     {
+      "gate": "C-DAG-05",
+      "metric": "missed_blocking_rate",
+      "rule": "descriptive: no strict edges in this graph",
+      "tier": 4,
+      "upper_bound_95": 0.9522,
+      "value": 0.9522,
+      "verdict": "DESCRIPTIVE"
+     },
+     {
+      "gate": "C-DAG-11",
+      "metric": "duplicate_evidence_events",
+      "rule": "0 events",
+      "tier": 1,
+      "upper_bound_95": 0.00015,
+      "value": 0,
+      "verdict": "PASS"
+     },
+     {
+      "gate": "U-02",
+      "metric": "interval_non_coverage_rate",
+      "rule": "3%-7% (nominal 5%)",
+      "tier": 3,
+      "upper_bound_95": 0.17064,
+      "value": 0.17064,
+      "verdict": "FAIL"
+     },
+     {
+      "gate": "C-DAG-15",
+      "metric": "over_convergence_rate",
+      "rule": "95% UCB < 2%",
+      "tier": 3,
+      "upper_bound_95": 0.0012,
+      "value": 0.0012,
+      "verdict": "PASS"
+     }
+    ]
+   },
+   "C-hybrid": {
+    "raw": {
+     "sessions": 845,
+     "sessions_with_inference": 0,
+     "U-02_interval_non_coverage": {
+      "events": 354,
+      "verified": 2527,
+      "rate": 0.14009,
+      "upper_95": 0.15195
+     },
+     "C-DAG-15_over_convergence": {
+      "events": 0,
+      "verified": 2527,
+      "rate": 0.0,
+      "upper_95": 0.00118
+     },
+     "C-DAG-03_wrong_inference": {
+      "events": 0,
+      "verified": 0,
+      "rate": null,
+      "upper_95": null
+     },
+     "C-DAG-01_inference_precision": null,
+     "C-DAG-04_false_blocking": {
+      "events": 0,
+      "verified": 0,
+      "rate": null,
+      "upper_95": null
+     },
+     "C-DAG-05_missed_blocking": {
+      "events": 5369,
+      "verified": 5369,
+      "rate": 1.0,
+      "upper_95": 1.0
+     },
+     "C-DAG-11_duplicate_evidence": {
+      "events": 0,
+      "verified": 18022,
+      "rate": 0.0,
+      "upper_95": 0.00017
+     }
+    },
+    "verdicts": [
+     {
+      "gate": "C-DAG-03",
+      "metric": "wrong_inference_rate",
+      "rule": "95% UCB < 3%",
+      "tier": 3,
+      "upper_bound_95": null,
+      "value": null,
+      "verdict": "NOT MEASURED"
+     },
+     {
+      "gate": "C-DAG-04",
+      "metric": "false_blocking_rate",
+      "rule": "95% UCB < 2%",
+      "tier": 3,
+      "upper_bound_95": null,
+      "value": null,
+      "verdict": "NOT MEASURED"
+     },
+     {
+      "gate": "C-DAG-05",
+      "metric": "missed_blocking_rate",
+      "rule": "descriptive: no strict edges in this graph",
+      "tier": 4,
+      "upper_bound_95": 1.0,
+      "value": 1.0,
+      "verdict": "DESCRIPTIVE"
+     },
+     {
+      "gate": "C-DAG-11",
+      "metric": "duplicate_evidence_events",
+      "rule": "0 events",
+      "tier": 1,
+      "upper_bound_95": 0.00017,
+      "value": 0,
+      "verdict": "PASS"
+     },
+     {
+      "gate": "U-02",
+      "metric": "interval_non_coverage_rate",
+      "rule": "3%-7% (nominal 5%)",
+      "tier": 3,
+      "upper_bound_95": 0.15195,
+      "value": 0.15195,
+      "verdict": "FAIL"
+     },
+     {
+      "gate": "C-DAG-15",
+      "metric": "over_convergence_rate",
+      "rule": "95% UCB < 2%",
+      "tier": 3,
+      "upper_bound_95": 0.00118,
+      "value": 0.00118,
+      "verdict": "PASS"
+     }
+    ]
+   },
+   "C-off": {
+    "raw": {
+     "sessions": 845,
+     "sessions_with_inference": 0,
+     "U-02_interval_non_coverage": {
+      "events": 423,
+      "verified": 2520,
+      "rate": 0.16786,
+      "upper_95": 0.18059
+     },
+     "C-DAG-15_over_convergence": {
+      "events": 0,
+      "verified": 2520,
+      "rate": 0.0,
+      "upper_95": 0.00119
+     },
+     "C-DAG-03_wrong_inference": {
+      "events": 0,
+      "verified": 0,
+      "rate": null,
+      "upper_95": null
+     },
+     "C-DAG-01_inference_precision": null,
+     "C-DAG-04_false_blocking": {
+      "events": 0,
+      "verified": 0,
+      "rate": null,
+      "upper_95": null
+     },
+     "C-DAG-05_missed_blocking": {
+      "events": 0,
+      "verified": 0,
+      "rate": null,
+      "upper_95": null
+     },
+     "C-DAG-11_duplicate_evidence": {
+      "events": 0,
+      "verified": 1,
+      "rate": 0.0,
+      "upper_95": 0.95
+     }
+    },
+    "verdicts": [
+     {
+      "gate": "C-DAG-03",
+      "metric": "wrong_inference_rate",
+      "rule": "95% UCB < 3%",
+      "tier": 3,
+      "upper_bound_95": null,
+      "value": null,
+      "verdict": "NOT MEASURED"
+     },
+     {
+      "gate": "C-DAG-04",
+      "metric": "false_blocking_rate",
+      "rule": "95% UCB < 2%",
+      "tier": 3,
+      "upper_bound_95": null,
+      "value": null,
+      "verdict": "NOT MEASURED"
+     },
+     {
+      "gate": "C-DAG-05",
+      "metric": "missed_blocking_rate",
+      "rule": "descriptive: no strict edges in this graph",
+      "tier": 4,
+      "upper_bound_95": null,
+      "value": null,
+      "verdict": "DESCRIPTIVE"
+     },
+     {
+      "gate": "C-DAG-11",
+      "metric": "duplicate_evidence_events",
+      "rule": "0 events",
+      "tier": 1,
+      "upper_bound_95": 0.95,
+      "value": 0,
+      "verdict": "PASS"
+     },
+     {
+      "gate": "U-02",
+      "metric": "interval_non_coverage_rate",
+      "rule": "3%-7% (nominal 5%)",
+      "tier": 3,
+      "upper_bound_95": 0.18059,
+      "value": 0.18059,
+      "verdict": "FAIL"
+     },
+     {
+      "gate": "C-DAG-15",
+      "metric": "over_convergence_rate",
+      "rule": "95% UCB < 2%",
+      "tier": 3,
+      "upper_bound_95": 0.00119,
+      "value": 0.00119,
+      "verdict": "PASS"
+     }
+    ]
+   },
+   "C-shipped": {
+    "raw": {
+     "sessions": 845,
+     "sessions_with_inference": 0,
+     "U-02_interval_non_coverage": {
+      "events": 387,
+      "verified": 2511,
+      "rate": 0.15412,
+      "upper_95": 0.16647
+     },
+     "C-DAG-15_over_convergence": {
+      "events": 0,
+      "verified": 2511,
+      "rate": 0.0,
+      "upper_95": 0.00119
+     },
+     "C-DAG-03_wrong_inference": {
+      "events": 0,
+      "verified": 0,
+      "rate": null,
+      "upper_95": null
+     },
+     "C-DAG-01_inference_precision": null,
+     "C-DAG-04_false_blocking": {
+      "events": 0,
+      "verified": 0,
+      "rate": null,
+      "upper_95": null
+     },
+     "C-DAG-05_missed_blocking": {
+      "events": 5857,
+      "verified": 5857,
+      "rate": 1.0,
+      "upper_95": 1.0
+     },
+     "C-DAG-11_duplicate_evidence": {
+      "events": 0,
+      "verified": 19025,
+      "rate": 0.0,
+      "upper_95": 0.00016
+     }
+    },
+    "verdicts": [
+     {
+      "gate": "C-DAG-03",
+      "metric": "wrong_inference_rate",
+      "rule": "95% UCB < 3%",
+      "tier": 3,
+      "upper_bound_95": null,
+      "value": null,
+      "verdict": "NOT MEASURED"
+     },
+     {
+      "gate": "C-DAG-04",
+      "metric": "false_blocking_rate",
+      "rule": "95% UCB < 2%",
+      "tier": 3,
+      "upper_bound_95": null,
+      "value": null,
+      "verdict": "NOT MEASURED"
+     },
+     {
+      "gate": "C-DAG-05",
+      "metric": "missed_blocking_rate",
+      "rule": "descriptive: no strict edges in this graph",
+      "tier": 4,
+      "upper_bound_95": 1.0,
+      "value": 1.0,
+      "verdict": "DESCRIPTIVE"
+     },
+     {
+      "gate": "C-DAG-11",
+      "metric": "duplicate_evidence_events",
+      "rule": "0 events",
+      "tier": 1,
+      "upper_bound_95": 0.00016,
+      "value": 0,
+      "verdict": "PASS"
+     },
+     {
+      "gate": "U-02",
+      "metric": "interval_non_coverage_rate",
+      "rule": "3%-7% (nominal 5%)",
+      "tier": 3,
+      "upper_bound_95": 0.16647,
+      "value": 0.16647,
+      "verdict": "FAIL"
+     },
+     {
+      "gate": "C-DAG-15",
+      "metric": "over_convergence_rate",
+      "rule": "95% UCB < 2%",
+      "tier": 3,
+      "upper_bound_95": 0.00119,
+      "value": 0.00119,
+      "verdict": "PASS"
+     }
+    ]
+   }
+  }
+ },
+ "power": {
+  "DGP-0 C-off:C-hybrid": {
+   "observed_discordance_psi": 0.2363,
+   "n_for_2pp_80pct_power": 3653,
+   "n_for_2pp_90pct_power": 5060,
+   "detectable_margin_pp_at_n": {
+    "500": 5.405,
+    "2000": 2.703,
+    "4000": 1.911,
+    "5000": 1.709
+   }
+  },
+  "DGP-0 C-off:C-shipped": {
+   "observed_discordance_psi": 0.23508,
+   "n_for_2pp_80pct_power": 3634,
+   "n_for_2pp_90pct_power": 5033,
+   "detectable_margin_pp_at_n": {
+    "500": 5.391,
+    "2000": 2.696,
+    "4000": 1.906,
+    "5000": 1.705
+   }
+  },
+  "DGP-0 C-off:C-full": {
+   "observed_discordance_psi": 0.2294,
+   "n_for_2pp_80pct_power": 3546,
+   "n_for_2pp_90pct_power": 4912,
+   "detectable_margin_pp_at_n": {
+    "500": 5.326,
+    "2000": 2.663,
+    "4000": 1.883,
+    "5000": 1.684
+   }
+  },
+  "DGP-0 B:C-off": {
+   "observed_discordance_psi": 0.21437,
+   "n_for_2pp_80pct_power": 3314,
+   "n_for_2pp_90pct_power": 4590,
+   "detectable_margin_pp_at_n": {
+    "500": 5.149,
+    "2000": 2.574,
+    "4000": 1.82,
+    "5000": 1.628
+   }
+  },
+  "DGP-0 B:C-hybrid": {
+   "observed_discordance_psi": 0.26634,
+   "n_for_2pp_80pct_power": 4117,
+   "n_for_2pp_90pct_power": 5703,
+   "detectable_margin_pp_at_n": {
+    "500": 5.739,
+    "2000": 2.869,
+    "4000": 2.029,
+    "5000": 1.815
+   }
+  },
+  "DGP-2 C-off:C-hybrid": {
+   "observed_discordance_psi": 0.20789,
+   "n_for_2pp_80pct_power": 3214,
+   "n_for_2pp_90pct_power": 4451,
+   "detectable_margin_pp_at_n": {
+    "500": 5.07,
+    "2000": 2.535,
+    "4000": 1.793,
+    "5000": 1.603
+   }
+  },
+  "DGP-2 C-off:C-shipped": {
+   "observed_discordance_psi": 0.2071,
+   "n_for_2pp_80pct_power": 3202,
+   "n_for_2pp_90pct_power": 4434,
+   "detectable_margin_pp_at_n": {
+    "500": 5.06,
+    "2000": 2.53,
+    "4000": 1.789,
+    "5000": 1.6
+   }
+  },
+  "DGP-2 C-off:C-full": {
+   "observed_discordance_psi": 0.21026,
+   "n_for_2pp_80pct_power": 3250,
+   "n_for_2pp_90pct_power": 4502,
+   "detectable_margin_pp_at_n": {
+    "500": 5.099,
+    "2000": 2.549,
+    "4000": 1.803,
+    "5000": 1.612
+   }
+  },
+  "DGP-2 B:C-off": {
+   "observed_discordance_psi": 0.22919,
+   "n_for_2pp_80pct_power": 3543,
+   "n_for_2pp_90pct_power": 4907,
+   "detectable_margin_pp_at_n": {
+    "500": 5.323,
+    "2000": 2.662,
+    "4000": 1.882,
+    "5000": 1.683
+   }
+  },
+  "DGP-2 B:C-hybrid": {
+   "observed_discordance_psi": 0.26114,
+   "n_for_2pp_80pct_power": 4037,
+   "n_for_2pp_90pct_power": 5591,
+   "detectable_margin_pp_at_n": {
+    "500": 5.682,
+    "2000": 2.841,
+    "4000": 2.009,
+    "5000": 1.797
+   }
+  }
+ }
+}

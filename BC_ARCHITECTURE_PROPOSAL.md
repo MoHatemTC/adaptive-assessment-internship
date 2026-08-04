@@ -1,8 +1,9 @@
 # Proposed architecture
 
 **Date:** 4 August 2026
-**Evidence:** `BC_EVALUATION_RESULTS.md` (first run), the corrected Phase 0a/0b analyses, and
-the re-run described in §6 below.
+**Evidence:** the corrected Phase 0a/0b analyses and the representative-sample re-run in §6.
+`BC_EVALUATION_RESULTS.md` records the first run; **§6 supersedes its absolute figures**,
+which were computed on the weakest third of the cohort.
 **Branches:** `eval/bc-graph-augmented`, `eval/bc-voice-code-mcq-streamlit`.
 
 ---
@@ -14,13 +15,13 @@ the re-run described in §6 below.
 | CAT posterior, fractional likelihood, EAP on a grid | shared core | identical in both approaches; not the decision |
 | Explicit, equal-width band cuts | Approach C | B's clipped rounding inflated its own accuracy by 17pp |
 | **Four or five bands, reported as a range** | new | +12.4pp for 8→5, and within-one accuracy is 100% |
-| **P(band) ≥ 0.80 as an ADDED requirement** | shared core, needs a change | as an early exit it costs 1.5pp to save 1.7 items — see §6 |
+| **P(band) ≥ 0.80 as an ADDED requirement** | shared core, needs a change | as an early exit it is accuracy-neutral and 5% shorter, but §6.5 shows a worse P90 tail |
 | Coverage requirement over sub-competencies | Approach C | without it, **no** competency ends fully covered |
 | Modality blueprint, enforced as a constraint | Approach C, fixed | preemption had collapsed breadth to 0.714 |
 | Information-per-minute ranking | Approach C | 90-minute cap is otherwise unreachable |
 | Difficulty corroboration before convergence | Approach C | prevents a narrow posterior from easy items |
-| **Prerequisite inference** | neither | fired once in 960 sessions |
-| **Prerequisite blocking** | neither | 4.8–5.1% false blocking on edges correct by construction |
+| **Prerequisite inference** | neither | fires in 44% of sessions and is **wrong 23.3%** of the time, against a 3% gate |
+| **Prerequisite blocking** | neither | 8.2% false blocking, and a **14.6% structural floor** no evidence can beat |
 | **Graph utility penalties/bonuses** | neither | collapsed modality breadth, bought nothing |
 
 Net: **Approach C's codebase, with the graph reduced to a coverage bookkeeper, on a coarser
@@ -37,19 +38,27 @@ selection.
 ## 1. Why not simply "retain Approach B"
 
 The first results document said "retain Approach B's measurement core," and the review was
-right that this contradicts its own table. On the common band scale, across every DGP arm,
-`C-off` — Approach C's code with the graph switched off — beat B:
+right that this contradicts its own table — but the table it contradicted was itself
+computed on the weakest third of the cohort (see §6). On a representative sample the two
+are indistinguishable on measurement:
 
-| DGP | B | C-off |
+| DGP-2 | B | C-off |
 |---|---:|---:|
-| DGP-0 | 0.6215 | **0.6917** |
-| DGP-1 | 0.6441 | **0.6562** |
-| DGP-2 | 0.6479 | **0.6562** |
-| DGP-3 | 0.6191 | **0.6462** |
+| exact-level accuracy | 0.6087 | 0.6099 |
+| non-inferiority, B as reference | — | **non-inferior**, UB +1.50pp |
 
-B also took 58–59 minutes at P50 against C's 42–44, and breached the 90-minute cap at P90
-in the pilot. The measurement core is shared; what differs is everything C added *around*
-it — corroboration, time-aware ranking, the blueprint — and those are worth having.
+So the choice is not a measurement choice. It is made on three things that are not close:
+
+- **The clock.** B's P90 is 95.1 minutes against `C-off`'s 58.3. **B breaches the
+  90-minute cap; no C arm does.** B ranks on raw information, which buys expensive code and
+  voice items; C ranks on information per minute.
+- **The blueprint.** B reaches 0.912 modality compliance without enforcing anything; every
+  C arm with the coverage gate reaches 0.999.
+- **The scale.** B's clipped rounding overstated its own accuracy by 17 points until this
+  work replaced it, and the replacement came from C.
+
+B does ask **15% fewer questions**, which is real and is the one axis on which it wins.
+Against a 90-minute cap it loses on the axis that binds.
 
 **One caveat the review raised and I can now close.** B won the worst-true-θ-decile metric
 (0.458 vs 0.292), and the review asked whether that was B's unbounded tail bands showing up
@@ -75,23 +84,24 @@ sub-competencies a main has, which are critical — so the cheap path is to keep
 declaration and drop the propagation. Replacing it with a standalone blueprint is a
 follow-up, not a prerequisite, and §7 lists it.
 
-**Not earned — inference.** One session in 960 fired an upward inference even with every
-flag on and every edge forced live. `graph_allow_mcq_single_hit_inference` is false by
-design, and code/voice inference needs score ≥ 0.80 *and* confidence ≥ 0.80 at once, which
-almost never co-occurs. The efficiency mechanism the architecture is built around does not
-fire.
+**Not earned — inference, and the reason is not the one first reported.** The first run
+said inference fired once in 960 sessions and concluded it was inert. That was the sampling
+bias: inference needs a *strong success*, and the weakest third of a cohort almost never
+produces one.
 
-*The review is right to flag this as simulator-dependent* (H5): grader confidence is
-generated by the harness and has never been compared to a real grader's, and LLM graders
-are typically overconfident. If the real distribution puts more mass above 0.80, inference
-fires more often. That does not rescue it — it makes the blocking result worse, since
-blocking shares the same trigger — but it does mean the *rate* is unvalidated. The gold set
-(§7) settles it.
+On a representative sample it fires in **372 of 845 sessions (44%)** and is **wrong 23.3%
+of the time** (95% UCB 26.1%) against a gate of 3%. Inference precision is 0.767 against a
+0.97 bar. The mechanism is not dead; it is active and unreliable.
 
-**Not earned — blocking.** 4.8–5.1% of blocked nodes belonged to candidates who could do
-the work, against a 2% gate, on a graph whose edges were correct by construction. This is
-not an edge-quality problem. It is the per-observation error rate of a single graded
-response, propagated whole into the strongest claim the system makes.
+The review's H5 caveat still applies to the *trigger rate*: grader confidence is generated
+by the harness and has never been compared to a real grader's. But it now cuts the other
+way. If real graders are more confident than the simulator, inference fires **more** often,
+not less — and each firing is wrong about a quarter of the time. The gold set (§7) settles
+the rate; it cannot rescue the precision.
+
+**Not earned — blocking.** On a representative sample, **8.2%** of blocked nodes belonged to
+candidates who could do the work (95% UCB 9.4%), against a 2% gate. Missed blocking is
+94.8%: the mechanism also almost never fires when it should. Unsafe and ineffective at once.
 
 **The fix works and the gate is still unreachable — for a reason that is structural.**
 
@@ -199,10 +209,12 @@ its own, and §7 puts it in the research column rather than the roadmap.
 ```bash
 # scale
 CAT_BAND_COUNT=5                        # explicit equal-width cuts, report a RANGE
-CAT_BAND_PROBABILITY_STOP_ENABLED=false # reachable now, but wired as an early exit: it
-                                        # costs 1.5pp to save 1.7 items. Enable only after
-                                        # it becomes a REQUIREMENT alongside precision
-                                        # rather than an alternative to it (see section 6).
+CAT_BAND_PROBABILITY_STOP_ENABLED=false # reachable now. On a representative sample it is
+                                        # accuracy-neutral and ~5% shorter, but it is wired
+                                        # as an EARLY EXIT checked before precision and it
+                                        # fires for 73% of competencies. Make it a
+                                        # REQUIREMENT alongside precision, measure the P90
+                                        # tail, then enable (see section 6.5).
 CAT_BAND_PROBABILITY_TARGET=0.80
 
 # graph: bookkeeping only
@@ -232,88 +244,123 @@ puts this first for that reason.
 
 ---
 
-## 6. Re-run results, with every fix applied
+## 6. Re-run on a representative sample — what it overturns
 
-Five arms, three DGP arms, 566 paired candidates per cell for DGP-2 (596 for DGP-0, 300 for
-DGP-1 — the Approach B arms are the slowest and were still running).
+Everything before this section, in this document and in `BC_EVALUATION_RESULTS.md`, was
+computed on a **biased subsample**. `build_cohort` emits stratum 0's simulees, then stratum
+1's, and so on; `--limit N` took the first N. At `--limit 1200` of a 4,000-simulee cohort
+that is strata 0–2 of 8 — **the weakest third of the ability range**, reported as if it
+were the population.
 
-**DGP-2, the realistic arm — a quarter of the graph's edges are absent from the world:**
+The sampler now strides across strata and shuffles deterministically, so any prefix is
+representative. Re-run on that basis: 5 arms, 821 (DGP-0) and 845 (DGP-2) paired
+candidates, ~105 per stratum.
 
-| metric | B | C-off | C-shipped | C-hybrid | C-full |
+**Three findings do not survive, and one gets much worse.**
+
+### 6.1 The absolute gates do not all fail
+
+| gate | bar | DGP-0 (unidimensional) | DGP-2 (multi-node) |
+|---|---|---|---|
+| Marginal reliability | ≥ 0.85 | **0.925–0.931 PASS** | **0.947–0.951 PASS** |
+| SE calibration RMSE/SE | 0.95–1.10 | **1.03–1.08 PASS** | 1.31–1.43 FAIL |
+| Interval non-coverage | 3–7% | **5.2–6.9% PASS** | 13.5–16.8% FAIL |
+| Exact-level accuracy | ≥ 0.80 | 0.704–0.720 FAIL | 0.609–0.614 FAIL |
+| Worst band | ≥ 0.70 | 0.42–0.57 FAIL | 0.44–0.46 FAIL |
+| P90 duration | ≤ 90 min | 59.8–99.1 (B fails) | 58.3–83.0 PASS |
+
+Marginal reliability of 0.68 in the first run was a **restriction-of-range artefact** —
+reliability is a ratio of true-score variance to observed variance, and a cohort spanning
+only the bottom third of ability has almost no true-score variance to detect. On a
+representative cohort the instrument is reliable enough to certify.
+
+### 6.2 The calibration failure is the dimensionality assumption — identified, not guessed
+
+This is the most useful result in the exercise. The review listed four candidate causes for
+the SE calibration failure and proposed an experiment. The design already contained a
+cleaner one:
+
+| | DGP-0: no node structure | DGP-2: node-level mastery |
+|---|---:|---:|
+| SE calibration ratio | **1.03–1.08** | 1.31–1.43 |
+| 95% interval non-coverage | **5.2–5.7%** | 13.5–16.8% |
+
+**The posterior is correctly calibrated when a competency really is one skill, and 30–40%
+overconfident when it is several.** Same likelihood, same item parameters, same prior, same
+grid, same code — only the construct changes. That rules out the fractional likelihood,
+inflated `a` parameters, grid truncation and prior width in one contrast, and it agrees
+with §4's finding that single-θ modelling costs 9.9pp of decision accuracy.
+
+So the fix is not a recalibration constant. It is to model the sub-competencies — which is
+the graph's real opportunity and not the one the architecture took.
+
+### 6.3 Inference is not inert. It fires often and it is badly wrong
+
+The first run reported "upward inference fired in 1 session out of 960" and concluded the
+mechanism was effectively dead. That was entirely the sampling bias: inference needs a
+*strong success*, and the weakest third of candidates almost never produce one.
+
+On a representative cohort, `C-full` under DGP-2:
+
+| | |
+|---|---:|
+| sessions with at least one inference | **372 of 845 (44%)** |
+| inferences verified against node truth | 696 |
+| **wrong inference rate (C-DAG-03, gate < 3%)** | **23.3%, 95% UCB 26.1%** |
+| inference precision (C-DAG-01, gate ≥ 97%) | **0.767** |
+
+**Nearly one inference in four is wrong**, against a gate of one in thirty-three. The
+conclusion — do not enable inference — is unchanged, and the reason is now much stronger:
+not "it never fires" but "it fires in 44% of sessions and is wrong 23% of the time".
+
+### 6.4 Blocking, on the same basis
+
+| | DGP-2, representative |
+|---|---:|
+| false blocking (gate < 2%) | **8.2%, 95% UCB 9.4%** |
+| missed blocking | 94.8% |
+
+Still failing by roughly 4×, and §2's structural floor stands: a block fired on perfect
+knowledge of the parent is wrong 14.6% of the time under DGP-2. Missed blocking at 94.8%
+says the mechanism also almost never fires when it should — it is both unsafe and ineffective.
+
+### 6.5 The measurement comparison is a wash
+
+| DGP-2 | B | C-off | C-shipped | C-hybrid | C-full |
 |---|---:|---:|---:|---:|---:|
-| exact-level accuracy (common) | 0.6390 | **0.7120** | 0.6996 | 0.6967 | 0.6996 |
-| exact-level accuracy (native) | 0.6390 | 0.7120 | 0.6996 | 0.6967 | 0.6996 |
-| within-one-level | 0.9823 | 0.9906 | 0.9941 | 0.9888 | 0.9935 |
-| questions per candidate | 22.98 | 22.84 | 23.35 | **21.11** | 23.87 |
-| duration P50 (min) | 57.9 | 43.3 | 44.6 | **42.1** | 44.8 |
-| duration P90 (min) | 64.4 | 48.3 | 49.1 | **46.3** | 53.6 |
-| SE calibration RMSE/SE | 1.4378 | 1.2228 | 1.1892 | **1.1822** | 1.1915 |
-| 95% interval coverage | 0.8687 | 0.9276 | 0.9287 | **0.9364** | 0.9264 |
-| modality blueprint | 0.9747 | 0.9853 | **0.9994** | **0.9994** | **0.9994** |
+| exact-level accuracy | 0.6087 | 0.6099 | **0.6142** | **0.6142** | 0.6134 |
+| questions per candidate | **17.69** | 20.30 | 21.64 | 20.48 | 21.91 |
+| duration P50 (min) | 78.6 | 46.8 | 48.5 | **46.8** | 50.8 |
+| duration P90 (min) | 95.1 | **58.3** | 83.0 | 83.0 | 83.0 |
+| modality blueprint | 0.9124 | 0.7708 | **0.9992** | **0.9992** | 0.9980 |
 
-### What the fixes did
+**Every arm is within 0.6pp of every other, and every contrast is non-inferior at the 2pp
+margin.** The first run's "the DAG costs 2.85pp" was the biased sample. Measurement does not
+decide between these architectures — which is what the scorecard concluded independently,
+and it is right.
 
-**S4 worked, cleanly.** Approach B's native and common accuracy are now the same number
-(0.6390 = 0.6390). The 17-point gap between what B reported and what its estimates earned
-is closed; the estimates themselves did not change, only the honesty of the scale.
+What does separate them:
 
-**S6 worked.** Modality blueprint compliance is 0.9994 in every graph arm, including
-`C-full`, which was 0.714 before the fix. An unblocking probe no longer starves the code and
-voice minimums.
-
-**Calibration improved as a side effect, and this was not predicted.** SE calibration in the
-graph arms moved from 1.28–1.29 to 1.18–1.22, and 95% interval coverage from 0.88–0.89 to
-0.926–0.936 — much closer to nominal. The blueprint fix is the only calibration-adjacent
-change in this run, so the likeliest explanation is that a mix containing its owed code and
-voice items produces a better-conditioned posterior than an MCQ-dominated one. That is a
-hypothesis this run cannot confirm, and it is worth confirming, because it points at the
-same place §7.1 does. **Approach B is unchanged at 1.4378 / 0.8687**, since none of these
-fixes touched its selection.
-
-### The recommendation this run overturns
-
-**Do not enable the P(band) stopping rule in its current form.** §3 predicted +2.1pp for
-+1.6 items. Measured in the orchestrator, `C-hybrid` gets **−1.53pp for −1.7 items** — the
-opposite sign on both axes.
-
-The two are not the same rule. My pre-study implemented "stop when the level is probably
-right, otherwise keep going to the cap", which can only *lengthen* a session and therefore
-only improve accuracy. `convergence.evaluate` implements it as an **additive early exit**
-checked *before* the precision rule, so it stops as soon as P(reported band) ≥ 0.80 even
-with a wide posterior. It fires for 73% of competencies and cuts mean observations from 7.82
-to 7.08. The docstring says exactly this — "it can end a competency early, never keep one
-open" — and I measured the other rule.
-
-Against the exchange rate (one question saved is worth at most 0.5pp of decision accuracy),
-1.7 questions saved buys at most 0.87pp and this costs 1.53pp. Bad trade, so: leave the flag
-off, and change the rule to a **conjunction** — require P(band) ≥ 0.80 *in addition to* the
-precision target rather than instead of it. That is strictly stricter than today's precision
-stop, so it must raise accuracy at some question cost, which is the trade the pre-study
-actually measured. It is a two-line change to `convergence.evaluate` and it has not been
-tested.
-
-### One measurement the fixes destroyed
-
-The first run's headline graph benefit — required sub-competency coverage going 0.000 →
-1.000 — **cannot be reproduced after S1**, and that is S1 working. With the master switch
-off, `summarise` no longer computes coverage, so `C-off` now reports `coverage_satisfied` as
-vacuously true rather than as measured-and-false. The 0.000 figure stands as evidence from
-the first run; re-measuring it needs the harness to compute coverage itself from served
-items against the graph's requirement, independently of the report. That is a small change
-and it is not made here.
-
----
+- **B asks 15% fewer questions and takes 37% longer.** Ranking on raw information buys
+  expensive code and voice items; ranking on information-per-minute buys the clock. B's P90
+  of 95.1 minutes **breaches the 90-minute cap**; every C arm stays inside it.
+- **The blueprint separates them by 23 points.** `C-off` at 0.771 against 0.999 for every
+  arm with the coverage gate on. Without it the assessment quietly stops being mixed.
+- **`C-hybrid` is the shortest C arm** — 20.48 questions, P50 46.8 minutes — at identical
+  accuracy. The P(band) early exit costs nothing here that the 2pp margin can detect, which
+  is a weaker claim than §3's +2.1pp but no longer an argument against it. Its P90 of 83
+  minutes is worse than `C-off`'s 58.3, so the coverage gate has a long tail worth watching.
 
 ## 7. Order of work
 
-1. **Diagnose the SE calibration.** RMSE/SE at 1.28–1.37 in every arm. The review's first
-   candidate is the fractional likelihood: `[P^s (1-P)^(1-s)]^w` peaks at `P(θ) = s`, so a
-   partial score constrains θ to a *point* rather than a half-line, injecting more
-   information than the response carries. The test costs one query — compute the ratio
-   separately for MCQ-only sessions against sessions containing code or voice. If MCQ-only
-   is calibrated and mixed is not, that is the cause. Second candidate: item `a` parameters
-   assigned by formula rather than estimated; an SE understated by 30% is information
-   overstated by 1.69×, which is what an `a` inflated by ~1.3× produces.
+1. **The SE calibration cause is identified — act on it, do not re-diagnose it.** §6.2
+   shows the posterior is calibrated (ratio 1.03–1.08, non-coverage 5.2–5.7%) when a
+   competency is genuinely one skill, and 30–40% overconfident (1.31–1.43, 13.5–16.8%) when
+   it is several. Same likelihood, same parameters, same prior — only the construct changes.
+   That rules out the fractional likelihood, inflated `a`, grid truncation and prior width
+   together. The remedy is to model the sub-competencies, or to widen reported intervals by
+   a measured factor per competency until that exists. **The interim is honest reporting: a
+   band RANGE, not a point band.**
 2. **Run the grader gold set (Layer 2).** It is upstream of every score, weight and
    confidence in the system, it produces the confidence ECE that Approach C's whole
    propagation design gates on and that has never been measured, and it settles whether the
@@ -323,8 +370,9 @@ and it is not made here.
    of 1 and 2. Report a band RANGE: within-one accuracy is 99% and exact is 70%.
 4. **Make the P(band) rule conjunctive and re-measure.** Two lines in
    `convergence.evaluate`: require it alongside the precision target instead of before it.
-   As an early exit it is a bad trade; as an added requirement it is strictly stricter than
-   today's stop and should buy accuracy at a question cost worth pricing.
+   As an early exit it is accuracy-neutral and shorter on average but has a worse P90 tail;
+   as an added requirement it is strictly stricter than today's stop. Either way the
+   decision needs the tail measured, not just the mean.
 5. **Add cost and LLM-call telemetry.** The plan's stated objective includes minimising
    runtime and LLM cost, and neither appears anywhere in the evaluation. It is a logging
    change, not a study.
