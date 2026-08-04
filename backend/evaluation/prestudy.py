@@ -76,25 +76,45 @@ def _band_probabilities(posterior: np.ndarray, grid: np.ndarray, cuts) -> dict[i
     return {int(v): float(normalised[levels == v].sum()) for v in sorted(set(levels.tolist()))}
 
 
-def run_one(*, simulee, main, pool, cuts, stop_rule):
+def information_matrix(pool) -> np.ndarray:
+    """Fisher information of every item at every grid point: shape (items, grid).
+
+    Precomputed once per competency, so choosing an item is one matrix-vector product
+    instead of `len(pool) * len(THETA_GRID)` Python-level calls. The engine's
+    `expected_fisher_information` does the latter, which is right for one live session and
+    ruinous for a pre-study that runs tens of thousands.
+    """
+    from app.services.adaptive.irt import THETA_GRID, fisher_information
+
+    return np.array(
+        [
+            [fisher_information(float(t), i.cat.a, i.cat.b, i.cat.c) for t in THETA_GRID]
+            for i in pool
+        ]
+    )
+
+
+def run_one(*, simulee, main, pool, information, cuts, stop_rule):
     """One single-competency CAT session under one configuration."""
-    from app.services.adaptive.irt import THETA_GRID, expected_fisher_information, uniform_prior
+    from app.services.adaptive.irt import THETA_GRID, uniform_prior
     from app.services.orchestrator.outcome import graded_posterior_update
 
     posterior = uniform_prior()
     theta_hat = 0.0
     se = 2.0
-    served: set[str] = set()
     questions = 0
+    available = np.ones(len(pool), dtype=bool)
 
     for _ in range(MAX_QUESTIONS):
-        candidates = [i for i in pool if i.item_id not in served]
-        if not candidates:
+        if not available.any():
             break
-        item = max(
-            candidates,
-            key=lambda i: expected_fisher_information(posterior, i.cat.a, i.cat.b, i.cat.c),
-        )
+        # Expected Fisher information over the posterior — the criterion the real picker
+        # falls back to — for every remaining item at once.
+        expected = information @ posterior
+        expected[~available] = -np.inf
+        index = int(np.argmax(expected))
+        item = pool[index]
+        available[index] = False
         plan = responder.plan_for(simulee, item, main)
         # One scale for every modality, as the engine does: an MCQ is a 0/1 score at full
         # weight, a rubric-graded answer is its continuous score.
@@ -102,7 +122,6 @@ def run_one(*, simulee, main, pool, cuts, stop_rule):
         posterior, theta_hat, se = graded_posterior_update(
             posterior, item.cat.a, item.cat.b, item.cat.c, score, 1.0
         )
-        served.add(item.item_id)
         questions += 1
 
         if questions < MIN_QUESTIONS:
@@ -141,6 +160,9 @@ def main() -> None:
     simulees = cohort.simulees[: args.limit]
     mains = [m for m in cohort.mains if m in set(bank.variables())]
     pools = {m: bank.shortlist(m, exclude=set()) for m in mains}
+    # One information matrix per competency, shared by every configuration and every
+    # simulee: the bank does not change between them.
+    informations = {m: information_matrix(pools[m]) for m in mains}
 
     rows = []
     for n_bands in BAND_COUNTS:
@@ -158,6 +180,7 @@ def main() -> None:
                         simulee=simulee,
                         main=main,
                         pool=pools[main],
+                        information=informations[main],
                         cuts=cuts,
                         stop_rule=stop_rule,
                     )
