@@ -70,6 +70,12 @@ ENABLE_BAR_P_PASS_CHILD_GIVEN_FAIL_PARENT = 0.02
 # than to the point estimate.
 SCORE_EFFECT_ENABLE_BAR = 0.20
 
+# Above this correlation between "failed the parent" and ability, the prerequisite effect
+# is not identified: there is no candidate who fails the parent for a reason other than
+# being weak, so nothing distinguishes the edge from the ability it rides on. A coefficient
+# estimated through that much collinearity is not evidence in either direction.
+COLLINEARITY_CEILING = 0.70
+
 
 def node_scores(cohort: Cohort, bank) -> dict[str, dict[str, float]]:
     """simulee -> node -> mean simulated score over every item measuring that node.
@@ -202,10 +208,26 @@ def ability_conditioned_effect(
     if n < 100 or fails.sum() < 20 or fails.sum() == n or y.std() < 1e-9:
         return {"coefficient": None, "se": None, "n": n, "upper_95": None}
 
-    X = np.column_stack([np.ones(n), np.array(theta), fails])
-    coefficients, residuals, rank, _sv = np.linalg.lstsq(X, y, rcond=None)
+    theta_array = np.array(theta)
+    # IS THE EFFECT IDENTIFIED AT ALL? Failing a prerequisite is itself mostly a statement
+    # about ability: only weak candidates fail. When that indicator is nearly collinear
+    # with theta there is no independent variation left to attribute a prerequisite effect
+    # to, and the regression will return approximately zero for a real edge and a spurious
+    # one alike. Reported rather than silently returned as an estimate — a coefficient of
+    # zero from a collinear design is not evidence that the edge is spurious.
+    collinearity = abs(float(np.corrcoef(theta_array, fails)[0, 1]))
+
+    X = np.column_stack([np.ones(n), theta_array, fails])
+    coefficients, _residuals, rank, _sv = np.linalg.lstsq(X, y, rcond=None)
     if rank < X.shape[1]:
-        return {"coefficient": None, "se": None, "n": n, "upper_95": None}
+        return {
+            "coefficient": None,
+            "se": None,
+            "n": n,
+            "upper_95": None,
+            "collinearity": round(collinearity, 4),
+            "identified": False,
+        }
 
     fitted = X @ coefficients
     sigma_squared = float(np.sum((y - fitted) ** 2) / max(n - X.shape[1], 1))
@@ -219,6 +241,8 @@ def ability_conditioned_effect(
         # One-sided 95% UPPER bound on the effect. An edge is believed only if even the
         # least favourable plausible value is a real suppression.
         "upper_95": round(coefficient + 1.645 * standard_error, 4),
+        "collinearity": round(collinearity, 4),
+        "identified": bool(collinearity < COLLINEARITY_CEILING),
     }
 
 
@@ -267,6 +291,8 @@ def edge_report(cohort: Cohort, scores: dict[str, dict[str, float]]) -> list[dic
                 "ability_conditioned_coefficient": effect["coefficient"],
                 "ability_conditioned_upper_95": effect["upper_95"],
                 "ability_conditioned_n": effect["n"],
+                "ability_failure_collinearity": effect.get("collinearity"),
+                "ability_conditioned_identified": effect.get("identified"),
                 "verdict": (
                     "ENABLE BLOCKING"
                     if may_block
@@ -277,11 +303,12 @@ def edge_report(cohort: Cohort, scores: dict[str, dict[str, float]]) -> list[dic
                 # stratum; otherwise the apparent dependency is theta, which every pair of
                 # nodes under one main shares.
                 "verdict_ability_conditioned": (
-                    "ENABLE BLOCKING"
-                    if effect["upper_95"] is not None and effect["upper_95"] <= -SCORE_EFFECT_ENABLE_BAR
+                    "NOT IDENTIFIED — parent failure is collinear with ability"
+                    if effect.get("identified") is False
                     else (
-                        "KEEP INERT — not measured"
-                        if effect["coefficient"] is None
+                        "ENABLE BLOCKING"
+                        if effect["upper_95"] is not None
+                        and effect["upper_95"] <= -SCORE_EFFECT_ENABLE_BAR
                         else "KEEP INERT — no residual effect beyond ability"
                     )
                 ),
@@ -379,35 +406,40 @@ def main() -> None:
     print(f"  enabled by P(pass child | fail parent): {len(enable)}")
     print(f"  enabled by ability-conditioned effect : {len(enable_conditioned)}")
     print()
-    print(f"  {'parent':>8} {'child':>8} {'real?':>6} {'fails':>7} {'P(pass|fail)':>13} {'UCB':>8} {'effect UB':>10}  unconditioned -> conditioned")
+    print(f"  {'parent':>8} {'child':>8} {'real?':>6} {'fails':>7} {'P(pass|fail)':>13} {'UCB':>8} {'effect UB':>10} {'r':>6}  unconditioned -> conditioned")
     for row in sorted(rows, key=lambda r: (r["in_true_structure"], r["ability_conditioned_upper_95"] or 0)):
         p = row["p_pass_child_given_fail_parent"]
         u = row["upper_95"]
-        lift_value = row["ability_conditioned_upper_95"]
+        effect_bound = row["ability_conditioned_upper_95"]
+        collinear = row.get("ability_failure_collinearity")
+        conditioned = {
+            "ENABLE BLOCKING": "ENABLE",
+            "KEEP INERT — no residual effect beyond ability": "inert",
+        }.get(row["verdict_ability_conditioned"], "NOT IDENTIFIED")
         print(
             f"  {row['parent']:>8} {row['child']:>8} {str(row['in_true_structure']):>6} "
             f"{row['n_parent_failures']:>7} {('—' if p is None else f'{p:.4f}'):>13} "
             f"{('—' if u is None else f'{u:.4f}'):>8} "
-            f"{('—' if lift_value is None else f'{lift_value:+.3f}'):>10}  "
-            f"{'ENABLE' if row['verdict'] == 'ENABLE BLOCKING' else 'inert':>6} -> "
-            f"{'ENABLE' if row['verdict_ability_conditioned'] == 'ENABLE BLOCKING' else 'inert'}"
+            f"{('—' if effect_bound is None else f'{effect_bound:+.3f}'):>10} "
+            f"{('—' if collinear is None else f'{collinear:.2f}'):>6}  "
+            f"{'ENABLE' if row['verdict'] == 'ENABLE BLOCKING' else 'inert':>6} -> {conditioned}"
         )
 
     if spurious:
         caught_raw = sum(1 for r in spurious if r["verdict"] != "ENABLE BLOCKING")
-        caught_lift = sum(
-            1 for r in spurious if r["verdict_ability_conditioned"] != "ENABLE BLOCKING"
-        )
         kept_raw = sum(1 for r in real if r["verdict"] == "ENABLE BLOCKING")
-        kept_lift = sum(
-            1 for r in real if r["verdict_ability_conditioned"] == "ENABLE BLOCKING"
-        )
+        not_identified = sum(1 for r in rows if r.get("ability_conditioned_identified") is False)
         print()
-        print("  Discrimination — can the check tell a real edge from a spurious one?")
-        print(f"    spurious edges refused : {caught_raw}/{len(spurious)} unconditioned, "
-              f"{caught_lift}/{len(spurious)} ability-conditioned")
-        print(f"    real edges retained    : {kept_raw}/{len(real)} unconditioned, "
-              f"{kept_lift}/{len(real)} ability-conditioned")
+        print("  Discrimination — can either check tell a real edge from a spurious one?")
+        print(f"    unconditioned: {caught_raw}/{len(spurious)} spurious refused, "
+              f"{kept_raw}/{len(real)} real retained")
+        print(f"    ability-conditioned: {not_identified}/{len(rows)} edges NOT IDENTIFIED — "
+              "failing the parent is collinear with being weak, so the residual effect")
+        print("      cannot be estimated in either direction from observational data.")
+        print("    CONCLUSION: an offline linear form cannot validate a prerequisite edge.")
+        print("      Doing so needs the manipulation C-DAG-01 already describes — serve the")
+        print("      child to candidates who failed the parent — which is an experiment, not")
+        print("      a calibration matrix.")
     if matrix:
         print()
         print("  Layer 4 replay precondition (A3):")
