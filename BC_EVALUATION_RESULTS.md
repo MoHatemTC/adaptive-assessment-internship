@@ -1,17 +1,55 @@
 # Approach B vs Approach C — evaluation results
 
+> **SUPERSEDED IN PART.** Every absolute figure in this document was computed on a
+> **biased subsample**: `build_cohort` emits simulees in ascending ability-stratum order and
+> `--limit N` took the first N, so a 960-of-4,000 run covered only the weakest two strata of
+> eight. `BC_ARCHITECTURE_PROPOSAL.md` §6 re-runs on a stratum-balanced sample and overturns
+> three findings below — the absolute gates do not all fail (marginal reliability passes at
+> 0.93–0.95), inference is not inert (it fires in 44% of sessions and is wrong 23.3% of the
+> time), and the DAG's 2.85pp accuracy cost disappears (every contrast is non-inferior).
+> The safety conclusions get *stronger*, not weaker. The sampler now strides and shuffles.
+>
+> **CORRECTED 4 August 2026, after review.** Section 6's band-count figure was wrong by
+> about 4x and is restated below; the verdict's framing in favour of "Approach B" was
+> contradicted by this document's own tables and is restated; §3's premature-convergence
+> metric was mislabelled and its gate unachievable. The corrections are listed in §0 and
+> applied in place. Everything else survived independent recomputation. A follow-up run
+> with the fixes applied is in `BC_ARCHITECTURE_PROPOSAL.md` §6.
+
 **Ran:** 4 August 2026
 **Harness:** `backend/evaluation/`, on `eval/bc-graph-augmented` and `eval/bc-voice-code-mcq-streamlit`
 **Approach branches were not modified.**
 
 ---
 
+## 0. Corrections after review
+
+| # | What was wrong | Now |
+|---|---|---|
+| C1 | "Retain Approach B's measurement core" contradicted §4, where `C-off` beats B on level accuracy in all four DGP arms and finishes 15 minutes sooner | **Ship Approach C's codebase with the graph switched off**, not B |
+| C2 | §6 claimed 8→5 bands is worth +47.5pp | **+12.4pp.** Two harness bugs of mine compounded: ability strata aligned with the 5-band cuts and against the 8-band ones, and a re-draw that detached node truth from ability and biased every response 0.8 logits low |
+| C3 | §6 claimed 5→4 bands is worth +16.4pp | **+1.7pp** |
+| C4 | §3 reported "premature convergence 8–12%, gate <2%" | It measured **interval non-coverage**. A calibrated 95% interval misses 5% of the time by construction, so <2% was unachievable. Renamed, gate corrected to 3–7% |
+| C5 | §7 concluded a prerequisite edge cannot be validated offline, on one estimator | **Conclusion stands, now against three.** Raw conditional: 0/8 spurious edges refused. Pooled regression: no effect for real or spurious. Ability-stratified: real edges −0.148…−0.000, spurious −0.099…−0.008, completely interleaved |
+| C6 | The review suspected DGP-1 had no real prerequisite mechanism, which would void the headline | **It does.** P(child mastered \| parent failed) = 0.084 against 0.801 when the parent is mastered, and the lift survives θ-matching wherever both cells are populated |
+| C8 | Every absolute figure came from the weakest two ability strata of eight, because `--limit` truncated a stratum-ordered cohort | **Superseded by the proposal's §6.** Sampler now strides across strata and shuffles, so any prefix is representative |
+| C7 | §4's worst-decile metric was of unstated scale, which the review said "decides whether the verdict is right" | **Common scale, both arms**, and deciles are on true θ. B's tail advantage is real and not the §5 artefact |
+
+Corrections C2 and C3 reduce the size of the largest number in this document without
+changing what follows from it: band count is still the biggest single lever, now by about
+4x over the DAG rather than by an order of magnitude.
+
+---
+
 ## Verdict
 
-**Retain Approach B's measurement core. Do not enable the competency DAG.** On the bank
-and configuration these branches ship, enabling the graph costs decision accuracy, adds
-questions, and blocks candidates who can do the work. That holds in the arm built to
-favour it most.
+**Ship Approach C's codebase with the competency DAG's propagation switched off. Do not
+enable inference or blocking.** On the bank
+and configuration these branches ship, enabling the graph's propagation costs decision
+accuracy, adds questions, and blocks candidates who can do the work. That holds in the arm
+built to favour it most. Approach C's *other* additions — corroboration, time-aware
+ranking, the modality blueprint, explicit band cuts — are worth keeping: `C-off` beats
+Approach B on level accuracy in every DGP arm and finishes 15 minutes sooner.
 
 **And neither approach is fit to certify a level.** Every absolute quality gate fails for
 every arm. The binding constraint is not the DAG — it is the reporting scale and the
@@ -129,9 +167,21 @@ problem is not that verification is expensive, it is that the event never happen
 efficiency mechanism Approach C is built around is, in practice, inert even when fully
 enabled.**
 
-**Premature convergence is 8–12% for every arm, against a <2% gate** — including Approach
-B (13.4%). Measured as: the competency claimed convergence and its own 95% credible
-interval excludes the truth. This is a property of the shared CAT core, not of the DAG.
+**~~Premature convergence~~ INTERVAL NON-COVERAGE is 8–12% for every arm, including
+Approach B (13.4%).** This was published as premature convergence against a <2% gate, and
+both the name and the gate were wrong. What it measures is how often a converged
+competency's own 95% credible interval excludes the truth — a calibration statistic. A
+perfectly calibrated 95% interval excludes the truth **5% of the time by construction**, so
+no well-calibrated estimator could ever have passed a <2% bar.
+
+Renamed to U-02 and gated at 3–7% around the nominal 5%. On that gate every arm still
+fails, but it now fails for the right reason and by the right margin: 8–12% against 5%
+means the intervals are about twice as narrow as they should be, which is the same finding
+as the SE calibration ratio in §4 and not a separate one.
+
+A real premature-stop metric needs a counterfactual continuation — force k more items past
+the trigger and count band changes. The harness does not run it, and it is reported as
+absent rather than approximated by this.
 
 ---
 
@@ -184,34 +234,69 @@ also a reporting defect in its own right, independent of the B/C decision.
 
 ---
 
-## 6. Phase 0a: the scale is worth more than the architecture
+## 6. Phase 0a: the scale is the biggest single lever — corrected
 
-Band count × stopping rule, simulation only, 400 simulees × 3 mains, no graph:
+**This section was wrong when first published and is restated.** It claimed 8→5 bands was
+worth +47.5pp. The correct figure is **+12.4pp**. Two bugs in my own harness compounded:
 
-| bands | width | stop rule | exact accuracy | within one | items | Δ accuracy | Δ items |
-|---:|---:|---|---:|---:|---:|---:|---:|
-| 4 | 2.00 | P(band) ≥ 0.80 | **0.9375** | 1.000 | 6.48 | **+17.1pp** | −0.83 |
-| 4 | 2.00 | SE ≤ 0.55 | 0.9308 | 1.000 | 7.31 | +16.4pp | 0.00 |
-| 5 | 1.60 | P(band) ≥ 0.80 | 0.7692 | 1.000 | 7.07 | +0.3pp | −0.24 |
-| 5 | 1.60 | SE ≤ 0.55 | 0.7667 | 1.000 | 7.31 | — | — |
-| 8 | 1.00 | P(band) ≥ 0.80 | 0.3292 | 0.984 | 10.29 | −43.8pp | +2.97 |
-| 8 | 1.00 | SE ≤ 0.55 | 0.2917 | 0.980 | 7.31 | −47.5pp | 0.00 |
+- The cohort places true ability at eight fixed strata. Those sit **0.40 from every 5-band
+  cut** but **0.20 from every 8-band cut, two of them exactly on one**. An estimator at
+  SE 0.55 misclassifies a candidate on a cut point about half the time, so the 8-band arm
+  was maximally penalised by where the truth happened to sit.
+- The first correction re-drew ability uniformly but kept a node-mastery map generated
+  against the *old* ability. `responder` shifts response probability ±0.8 logits by node
+  mastery, so every response came in 0.8 logits low. The confusion matrix showed 44–63% of
+  candidates reported one band **low** against 0.6–1.3% reported high — a bias, not
+  imprecision.
 
-Moving from an 8-band scale to a 5-band scale is worth **+47.5 points** of decision
-accuracy at zero item cost — three times the validation document's estimate and more than
-an order of magnitude larger than any DAG effect measured here. Moving to 4 bands buys a
-further +16.4pp, also free.
+Both are fixed, and the per-cell confusion matrix that diagnoses them is now written to
+`prestudy.json`. Decomposition:
 
-This is not a free lunch: a coarser scale reports less. The honest reading is that the
-instrument supports about four or five distinguishable levels at this precision, and an
-eight-level scale claims a resolution nobody has. Within-one-level accuracy is 100% at four
-and five bands, which is what makes a band *range* the defensible thing to report.
+| configuration | 8→5 | 5→4 |
+|---|---:|---:|
+| **clean — uniform ability, no node heterogeneity** | **+12.4pp** | **+1.7pp** |
+| + ability at eight fixed strata (cut-alignment confound) | +23.7pp | +4.9pp |
+| + node-level heterogeneity | +39.4pp | +17.3pp |
+| as originally published | +47.5pp | +16.4pp |
 
-The P(band) stopping rule is slightly better on both axes — more accurate and shorter. It
-is also, today, **unreachable**: `convergence.evaluate` implements it, but neither caller
-(`variables.evaluate_finalisation`, `adaptive/session.py`) passes `band_probability`, so it
-defaults to `None` and the rule never fires. `cat_band_probability_stop_enabled` is live,
-documented, and dead.
+Corrected results, ability uniform over [−3.2, 3.2], no node heterogeneity — the
+configuration in which band count is the only thing varying:
+
+| bands | width | stop rule | exact accuracy | within-one | items |
+|---:|---:|---|---:|---:|---:|
+| 4 | 2.00 | P(band) ≥ 0.80 | **0.9228** | 1.000 | 7.68 |
+| 4 | 2.00 | SE ≤ 0.55 | 0.9044 | 1.000 | 6.51 |
+| 5 | 1.60 | P(band) ≥ 0.80 | 0.9083 | 1.000 | 8.12 |
+| 5 | 1.60 | SE ≤ 0.55 | 0.8878 | 1.000 | 6.51 |
+| 8 | 1.00 | P(band) ≥ 0.80 | 0.8156 | 0.999 | 11.01 |
+| 8 | 1.00 | SE ≤ 0.55 | 0.7633 | 0.998 | 6.51 |
+
++12.4pp is close to the validation document's independent +14.8pp estimate and to the
+review's +15.1pp recomputation, which is the reassurance the original +47.5pp should have
+been checked against rather than celebrated.
+
+**What still follows.** Band count remains the largest single lever — about 4× the DAG
+effect rather than an order of magnitude. And the reason to act on it is not the point
+estimate: within-one-level accuracy is 100% at four and five bands while exact accuracy is
+89–90%, so **report a band range**. "Level 3–4" is defensible; "Level 3" is not.
+
+**A finding this correction exposed.** Isolating node-level heterogeneity at fixed cut
+alignment:
+
+| responses generated from | 5-band exact accuracy |
+|---|---:|
+| the 3PL alone (well-specified) | 0.7972 |
+| node mastery varying within a competency | **0.6983** |
+
+**Summarising a multi-node competency with one θ costs 9.9pp** — comparable to two-thirds
+of the band-count effect, and the largest modelling error in the instrument. It is exactly
+what a competency graph ought to fix, and the implemented graph does not: inferred signals
+carry no score and no weight by design, so the graph reaches selection and stopping but
+never the posterior. See `BC_ARCHITECTURE_PROPOSAL.md` §4.
+
+**The P(band) stopping rule is still unreachable in production, and the pre-study measured
+a different rule from the one the engine implements.** Both are now fixed and re-measured;
+the result reverses. See the proposal's §6.
 
 ---
 
@@ -234,10 +319,24 @@ candidate and will probably fail C1.2 too, prerequisite or not. Any two nodes un
 main are correlated through θ, so the conditional is ≈ 0 for every pair in the graph and
 the check green-lights it whole.
 
-Conditioning on ability does not rescue it. Regressing the child's score on θ and on
-"failed the parent" gives a coefficient of −0.015 for real edges and −0.022 for spurious
-ones — indistinguishable, and both far short of any usable bar. Only weak candidates fail
-the parent, so there is too little independent variation to attribute an effect to.
+Conditioning on ability does not rescue it, and this has now been tried three ways:
+
+| estimator | spurious refused | real retained |
+|---|---:|---:|
+| P(pass child \| fail parent), as specified | 0 / 8 | 22 / 22 |
+| pooled regression on θ and "failed the parent" | — | — (no effect for either) |
+| **within-ability-stratum contrast**, over strata holding both groups | 8 / 8 | **0 / 22** |
+
+The third is the fair test — the pooled regression was averaging the real effect against a
+low-ability floor where everyone fails everything and no comparison exists — and it refuses
+real and spurious edges alike. The two distributions interleave almost completely: real
+edges span −0.148 to −0.000, spurious −0.099 to −0.008. No threshold separates them.
+
+Note this is **not** because the world has no prerequisite structure. It does: in DGP-1,
+P(child mastered | parent failed) = 0.084 against 0.801 when the parent is mastered. The
+structure is there, in the node truth, and it survives θ-matching. What does not survive is
+the trip through the response layer — one noisy graded response per node, averaged — which
+attenuates the signal to the point where a real edge and a spurious one look the same.
 
 **A prerequisite edge cannot be validated from observational response data.** Establishing
 one needs the manipulation C-DAG-01 already describes — serve the child to candidates who

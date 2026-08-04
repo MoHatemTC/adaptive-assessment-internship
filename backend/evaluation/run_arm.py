@@ -111,7 +111,23 @@ async def _run_all(*, arm_name, cohort, out_dir, limit, max_steps, trace_every):
     if not mains:
         raise SystemExit(f"cohort mains {cohort.mains} are not in this bank ({sorted(available)})")
 
-    simulees = cohort.simulees[: limit or len(cohort.simulees)]
+    # STRIDE, NOT TRUNCATE. `build_cohort` emits stratum 0's simulees, then stratum 1's,
+    # and so on, so `simulees[:limit]` is not a smaller cohort — it is the WEAKEST
+    # candidates only. At limit=1200 of 4000 that is strata 0-2 of 8, and every absolute
+    # accuracy, reliability and calibration figure computed from it describes the bottom
+    # third of the ability range while reading like a population number.
+    # ...and SHUFFLED, deterministically, so that any PREFIX is representative too. A
+    # strided sample is still emitted in ascending-ability order, so a run stopped early —
+    # which is how every run here has ended — would again describe only the weak end.
+    # Shuffling makes "stopped at k sessions" a random subsample instead of a truncation.
+    import numpy as _np
+
+    simulees = list(cohort.simulees)
+    if limit and limit < len(simulees):
+        step = len(simulees) / limit
+        simulees = [simulees[int(i * step)] for i in range(limit)]
+    order = _np.random.default_rng(cohort.seed).permutation(len(simulees))
+    simulees = [simulees[int(i)] for i in order]
     out_dir.mkdir(parents=True, exist_ok=True)
     results_path = out_dir / f"{arm_name}__{cohort.dgp}.jsonl"
 
