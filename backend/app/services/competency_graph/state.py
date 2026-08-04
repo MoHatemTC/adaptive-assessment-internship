@@ -14,6 +14,12 @@ class CompetencyNodeState:
 
     direct_observations: int = 0
     inferred_observations: int = 0
+    # How many DIRECT observations of this node were strong failures. Blocking reads it,
+    # because a block decided from one observation propagates that observation's full
+    # error rate into the block: at a per-observation error of 5-10% — which is what the
+    # measured 4.8-5.1% false-blocking rate implies — one failure blocks wrongly 5-10% of
+    # the time, and two consistent failures square that to 0.25-1.0%.
+    strong_failure_observations: int = 0
 
     status: CompetencyStatus = CompetencyStatus.UNKNOWN
     status_confidence: float = 0.0
@@ -34,6 +40,7 @@ class CompetencyNodeState:
             "uncertainty": self.uncertainty,
             "direct_observations": self.direct_observations,
             "inferred_observations": self.inferred_observations,
+            "strong_failure_observations": self.strong_failure_observations,
             "status": str(self.status),
             "status_confidence": self.status_confidence,
             "direct_evidence_ids": sorted(self.direct_evidence_ids),
@@ -52,6 +59,7 @@ class CompetencyNodeState:
             uncertainty=float(raw.get("uncertainty", 1.0)),
             direct_observations=int(raw.get("direct_observations", 0)),
             inferred_observations=int(raw.get("inferred_observations", 0)),
+            strong_failure_observations=int(raw.get("strong_failure_observations", 0)),
             status=CompetencyStatus(raw.get("status", CompetencyStatus.UNKNOWN)),
             status_confidence=float(raw.get("status_confidence", 0.0)),
             direct_evidence_ids=set(raw.get("direct_evidence_ids") or []),

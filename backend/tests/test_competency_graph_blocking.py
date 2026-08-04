@@ -34,19 +34,31 @@ from app.services.competency_graph.config import PropagationConfig
 from app.services.competency_graph.propagation import shadow_apply_events
 
 
-def _failure_event(*, target: str, modality: str = "code") -> EvidenceEvent:
-    """A strong failure: score at the floor, confidence above the blocking threshold."""
+def _failure_event(*, target: str, modality: str = "code", attempt: int = 1) -> EvidenceEvent:
+    """A strong failure: score at the floor, confidence above the blocking threshold.
+
+    `attempt` distinguishes repeated failures of the same node, which the ledger would
+    otherwise deduplicate. Blocking now needs `minimum_failures_to_block` of them.
+    """
     return EvidenceEvent(
-        evidence_id=f"session:item:{modality}:{target}",
+        evidence_id=f"session:item{attempt}:{modality}:{target}",
         session_id="session",
-        item_id="item",
+        item_id=f"item{attempt}",
         modality=modality,
         target_node=target,
         score=0.0,
         weight=1.0,
         confidence=1.0,
-        source="item",
+        source=f"item{attempt}",
     )
+
+
+def _failures_to_block(target: str, config: PropagationConfig) -> list[EvidenceEvent]:
+    """Enough consistent failures of `target` to license a block."""
+    return [
+        _failure_event(target=target, attempt=i + 1)
+        for i in range(config.minimum_failures_to_block)
+    ]
 
 
 def _graph_with_edges(*edges: CompetencyEdge, node_ids: set[str]) -> CompetencyGraphService:
@@ -63,10 +75,37 @@ def _prereq(from_id: str, to_id: str, **kw) -> CompetencyEdge:
     return CompetencyEdge(from_id=from_id, to_id=to_id, relation="PREREQUISITE", **kw)
 
 
-def test_strong_failure_blocks_every_dependent_descendant() -> None:
+def test_repeated_strong_failure_blocks_every_dependent_descendant() -> None:
+    graph = CompetencyGraphService(load_default_competency_graph())
+    config = PropagationConfig()
+    updates = shadow_apply_events(graph, _failures_to_block("DA.1", config), config=config)
+
+    assert updates[-1].blocked_nodes == frozenset({"DA.3", "DA.4", "DA.5", "DA.6"})
+
+
+def test_a_single_failure_blocks_nothing() -> None:
+    """One observation is not enough to deny a candidate a skill.
+
+    A block decided from one response carries that response's whole error rate. Measured
+    on a graph with correct edges, that put false blocking at 4.8-5.1% against a 2% gate.
+    """
     graph = CompetencyGraphService(load_default_competency_graph())
     [update] = shadow_apply_events(
         graph, [_failure_event(target="DA.1")], config=PropagationConfig()
+    )
+
+    assert update.blocked_nodes == frozenset()
+    # The failure itself is still recorded — it is the BLOCK that waits, not the verdict.
+    assert {e.target_node for e in update.direct_updates} == {"DA.1"}
+
+
+def test_one_failure_still_blocks_when_the_policy_asks_for_one() -> None:
+    """The old behaviour is a configuration, not a deletion."""
+    graph = CompetencyGraphService(load_default_competency_graph())
+    [update] = shadow_apply_events(
+        graph,
+        [_failure_event(target="DA.1")],
+        config=PropagationConfig(minimum_failures_to_block=1),
     )
 
     assert update.blocked_nodes == frozenset({"DA.3", "DA.4", "DA.5", "DA.6"})
@@ -78,13 +117,12 @@ def test_blocked_descendants_are_not_marked_failed() -> None:
     Passes today and must keep passing once blocking is real — that is the point.
     """
     graph = CompetencyGraphService(load_default_competency_graph())
-    [update] = shadow_apply_events(
-        graph, [_failure_event(target="DA.1")], config=PropagationConfig()
-    )
+    config = PropagationConfig()
+    updates = shadow_apply_events(graph, _failures_to_block("DA.1", config), config=config)
 
     # Only the directly tested node carries a failure verdict.
-    assert {e.target_node for e in update.direct_updates} == {"DA.1"}
-    assert update.inferred_updates == ()
+    assert {e.target_node for u in updates for e in u.direct_updates} == {"DA.1"}
+    assert all(u.inferred_updates == () for u in updates)
 
 
 def test_an_edge_that_forbids_blocking_does_not_block_through_itself() -> None:

@@ -1,0 +1,54 @@
+# Boilerplate. Every service starts, answers /health, and calls nothing.
+#
+# Build context is the REPOSITORY ROOT so each image can copy `services/contracts`. That is
+# the one shared dependency, and vendoring it per service would let the copies drift.
+name: adaptive-assessment
+
+x-common: &common
+  restart: unless-stopped
+  environment: &common-env
+    LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    RELEASE: ${RELEASE:-dev}
+  networks: [assessment]
+
+services:
+  bank-registry:
+    <<: *common
+    build: {context: .., dockerfile: services/bank-registry/Dockerfile}
+    ports: ["8081:8081"]
+    volumes:
+      # Banks and graphs are data, not code: mounted read-only so a new bank is a deploy
+      # of a file rather than a deploy of an image.
+      - ../backend/app/data:/srv/data:ro
+
+  grader:
+    <<: *common
+    build: {context: .., dockerfile: services/grader/Dockerfile}
+    ports: ["8082:8082"]
+    environment:
+      <<: *common-env
+      # The only service that needs egress — sandbox and model. Everything else runs with
+      # no network policy at all, which is most of the security argument for the split.
+      E2B_API_KEY: ${E2B_API_KEY:-}
+      LITELLM_BASE_URL: ${LITELLM_BASE_URL:-}
+      LITELLM_API_KEY: ${LITELLM_API_KEY:-}
+
+  competency-graph:
+    <<: *common
+    build: {context: .., dockerfile: services/competency-graph/Dockerfile}
+    ports: ["8083:8083"]
+    depends_on: [bank-registry]
+
+  assessment-orchestrator:
+    <<: *common
+    build: {context: .., dockerfile: services/assessment-orchestrator/Dockerfile}
+    ports: ["8080:8080"]
+    depends_on: [bank-registry, grader, competency-graph]
+    environment:
+      <<: *common-env
+      BANK_REGISTRY_URL: http://bank-registry:8081
+      GRADER_URL: http://grader:8082
+      COMPETENCY_GRAPH_URL: http://competency-graph:8083
+
+networks:
+  assessment: {}

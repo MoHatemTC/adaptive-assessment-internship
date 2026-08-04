@@ -10,6 +10,7 @@ from .models import (
     CompetencyGraph,
     CompetencyNode,
 )
+from .policy import GraphPolicy
 
 
 
@@ -125,7 +126,17 @@ def load_and_validate_graph(path: str | Path) -> CompetencyGraph:
         raw_edges = raw_edges.values()
     edges = tuple(_parse_edge(e) for e in raw_edges)
 
-    graph = CompetencyGraph(schema_version=schema_version, nodes=nodes, edges=edges)
+    # The bank's own propagation policy. Absent means "no opinion", which is what every
+    # graph authored before the block existed means — so adding the block is additive and
+    # an old graph file keeps behaving exactly as it did.
+    try:
+        policy = GraphPolicy.from_dict(raw.get("policy"))
+    except ValueError as exc:
+        raise CompetencyGraphValidationError(f"{p.name}: invalid policy block — {exc}") from exc
+
+    graph = CompetencyGraph(
+        schema_version=schema_version, nodes=nodes, edges=edges, policy=policy
+    )
     validate_graph(graph)
     return graph
 

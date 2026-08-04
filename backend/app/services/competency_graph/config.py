@@ -48,6 +48,10 @@ class PropagationConfig:
 
     downward_block_confidence: float = 0.85
     maximum_propagation_depth: int = 4
+    # Consistent direct failures of a prerequisite before its descendants may be blocked.
+    # See `propagation.apply_direct_evidence` for the arithmetic; 1 reproduces the old
+    # behaviour and the false-blocking rate that came with it.
+    minimum_failures_to_block: int = 2
 
     allow_mcq_single_hit_upward_inference: bool = False
     allow_code_upward_inference: bool = True
@@ -86,8 +90,16 @@ class PropagationConfig:
         return False
 
 
-def propagation_config_from_settings() -> PropagationConfig:
-    """The only place a PropagationConfig is built from configuration."""
+def propagation_config_from_settings(
+    *, minimum_failures_to_block: int | None = None
+) -> PropagationConfig:
+    """The only place a PropagationConfig is built from configuration.
+
+    `minimum_failures_to_block` lets the resolved bank policy tighten the deployment's
+    value. It may only tighten: `resolve_policy` takes the max of the two, so a bank that
+    demands three consistent failures gets three even on a deployment configured for two,
+    and a bank that asks for one on a deployment configured for two still gets two.
+    """
     return PropagationConfig(
         strong_success_threshold=settings.graph_strong_success_threshold,
         strong_failure_threshold=settings.graph_strong_failure_threshold,
@@ -96,6 +108,11 @@ def propagation_config_from_settings() -> PropagationConfig:
         minimum_inferred_weight=settings.graph_minimum_inferred_weight,
         maximum_inferred_weight=settings.graph_maximum_inferred_weight,
         downward_block_confidence=settings.graph_downward_block_confidence,
+        minimum_failures_to_block=(
+            settings.graph_minimum_failures_to_block
+            if minimum_failures_to_block is None
+            else max(minimum_failures_to_block, settings.graph_minimum_failures_to_block)
+        ),
         maximum_propagation_depth=settings.graph_maximum_propagation_depth,
         allow_mcq_single_hit_upward_inference=settings.graph_allow_mcq_single_hit_inference,
         allow_code_upward_inference=settings.graph_allow_code_upward_inference,

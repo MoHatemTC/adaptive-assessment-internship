@@ -34,6 +34,10 @@ class GraphDelta:
     mastered: set[str] = field(default_factory=set)
     not_mastered: set[str] = field(default_factory=set)
     inferred_mastered: set[str] = field(default_factory=set)
+    # The audit mirror for inference, matching the one blocking already had. Enforcement
+    # is a deployment decision; the record of what WOULD have been inferred is not, and
+    # collapsing the two left `graph_upward_inference_enabled` enforced nowhere.
+    shadow_inferred_mastered: set[str] = field(default_factory=set)
     # Enforced blocking is flag-gated; the audit set records what WOULD be blocked so a
     # reviewer can see the consequence before anyone enables it.
     blocked: set[str] = field(default_factory=set)
@@ -61,6 +65,7 @@ class GraphDelta:
             mastered=set(state.graph_direct_mastered_nodes),
             not_mastered=set(state.graph_direct_not_mastered_nodes),
             inferred_mastered=set(state.graph_inferred_mastered_nodes),
+            shadow_inferred_mastered=set(state.graph_shadow_inferred_mastered_nodes),
             blocked=set(state.graph_blocked_nodes),
             shadow_blocked=set(state.graph_shadow_blocked_nodes),
             contradicted=set(state.graph_contradicted_nodes),
@@ -83,6 +88,12 @@ class GraphDelta:
         self.processed_evidence_ids = ledger.processed_ids()
 
         blocking_enforced = graph_config.descendant_blocking_enabled()
+        # Symmetrical with blocking, and new. `graph_upward_inference_enabled` was declared
+        # in settings, documented as the switch for upward inference, and read by nothing:
+        # inference was gated only by the per-edge flag, so an operator turning the feature
+        # off saw no change. Enforced here rather than baked into the edge set, so the
+        # mirror below still records what the graph would have concluded.
+        inference_enforced = graph_config.upward_inference_enabled()
 
         for result in results:
             if result.unscorable:
@@ -109,7 +120,10 @@ class GraphDelta:
 
             # Inference is recorded separately from direct mastery, whatever the flags
             # say. Merging the two is what let a deduction satisfy the coverage gate.
-            self.inferred_mastered.update(s.node for s in result.inferred_signals)
+            self.shadow_inferred_mastered.update(s.node for s in result.inferred_signals)
+            self.shadow_inferred_mastered -= self.mastered | self.not_mastered
+            if inference_enforced:
+                self.inferred_mastered.update(s.node for s in result.inferred_signals)
             self.inferred_mastered -= self.mastered | self.not_mastered
 
             self.shadow_blocked.update(result.blocked_nodes)
@@ -197,7 +211,7 @@ class GraphDelta:
             "graph_contradictions": self.contradictions,
             # The audit mirror. Same computation; recorded, never enforced.
             "graph_shadow_direct_mastered_nodes": sorted(self.mastered),
-            "graph_shadow_inferred_mastered_nodes": sorted(self.inferred_mastered),
+            "graph_shadow_inferred_mastered_nodes": sorted(self.shadow_inferred_mastered),
             "graph_shadow_direct_not_mastered_nodes": sorted(self.not_mastered),
             "graph_shadow_blocked_nodes": sorted(self.shadow_blocked),
             "graph_shadow_contradicted_nodes": sorted(self.contradicted),

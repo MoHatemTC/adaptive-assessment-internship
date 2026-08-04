@@ -17,6 +17,7 @@ into a graded outcome. See `inference.py`.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 
 from .config import PropagationConfig
@@ -27,6 +28,8 @@ from .ledger import EvidenceLedger
 from .models import CompetencyStatus
 from .prerequisite_rules import is_scorable, is_strong_failure, is_strong_success
 from .state import CompetencyGraphState
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -157,10 +160,37 @@ def apply_direct_evidence(
         node_state.status = CompetencyStatus.DIRECT_NOT_MASTERED
         node_state.mastery = min(node_state.mastery, score)
         node_state.uncertainty = min(node_state.uncertainty, 1.0 - confidence)
+        node_state.strong_failure_observations += 1
 
-        for descendant in graph.blockable_descendants(
-            event.target_node, max_depth=config.maximum_propagation_depth
-        ):
+        # HOW MANY FAILURES BUY A BLOCK. One observation propagates its own error rate
+        # straight into the block, and the block is the strongest claim the graph makes:
+        # it denies a candidate the chance to demonstrate a skill. Measured on a graph
+        # whose edges were correct by construction, blocking from a single failure put the
+        # false-blocking rate at 4.8-5.1% against a 2% gate — which is the per-observation
+        # error rate, not an edge-quality problem. Requiring k consistent failures squares
+        # it: at q = 0.05-0.10, k = 2 lands at 0.25-1.0%, inside the gate, without
+        # touching a single edge.
+        #
+        # Asymmetric with inference on purpose, and in the same direction as the
+        # confidence floors: inferring mastery a candidate lacks costs one unnecessary
+        # question, blocking a skill they have costs them the assessment.
+        if node_state.strong_failure_observations < config.minimum_failures_to_block:
+            blocked_pending = graph.blockable_descendants(
+                event.target_node, max_depth=config.maximum_propagation_depth
+            )
+            if blocked_pending:
+                logger.debug(
+                    "%s failed once — holding %d descendant block(s) until a second failure",
+                    event.target_node,
+                    len(blocked_pending),
+                )
+            descendants: set[str] = set()
+        else:
+            descendants = graph.blockable_descendants(
+                event.target_node, max_depth=config.maximum_propagation_depth
+            )
+
+        for descendant in descendants:
             graph_state.ensure_nodes({descendant})
             state = graph_state.nodes[descendant]
             # A node already demonstrated directly is not blocked by a later failure

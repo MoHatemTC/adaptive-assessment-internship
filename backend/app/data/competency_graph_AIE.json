@@ -2,6 +2,15 @@
  "version": "1.1",
  "bank_id": "AIE",
  "notes": "Four sub-competencies serve two main competencies each (C1.6, C6.3, C3.9, C3.10). One node holds one authoritative state; every main it contributes to is recalculated from it. PREREQUISITE edges encode the authored numbering order within a node's home main and nothing else — they ship with upward inference and downward blocking DISABLED and validation_status=unvalidated. Only scripts/validate_prerequisite_edges.py --apply, against a real session corpus, may enable one.",
+ "policy": {
+  "upward_inference": false,
+  "descendant_blocking": false,
+  "accepted_validation_statuses": [
+   "validated"
+  ],
+  "minimum_failures_to_block": 2,
+  "notes": "Propagation is OFF for this bank at the bank level, not only at the deployment level, so a deployment that enables it globally does not enable it here. Measured on this bank with edges correct by construction: upward inference was wrong 22.4% of the time against a 3% gate, and blocking produced 8.7% false blocks against a 2% gate with a 14.6% structural floor. Re-enable only per docs/operations.md, edge by edge, after each edge reaches validation_status=validated."
+ },
  "nodes": [
   {
    "competency_id": "C1",

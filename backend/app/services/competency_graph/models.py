@@ -2,7 +2,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:  # pragma: no cover - import cycle: policy imports models
+    from .policy import GraphPolicy
+
+
+def _default_policy() -> "GraphPolicy":
+    """A policy with no opinion. Imported lazily because `policy` imports this module."""
+    from .policy import GraphPolicy
+
+    return GraphPolicy()
 
 
 class CompetencyStatus(StrEnum):
@@ -59,7 +69,7 @@ class CompetencyEdge:
 
 @dataclass(frozen=True)
 class CompetencyGraph:
-    """The authored graph, exactly as it was written. No derived structure.
+    """The authored graph, exactly as it was written, plus the bank's own policy.
 
     Precomputed edge lists live on `graph.GraphIndexes` instead. A derived field here was
     populated by nothing and defaulted to empty, so every consumer of it saw a graph with
@@ -70,4 +80,9 @@ class CompetencyGraph:
     schema_version: str
     nodes: dict[str, CompetencyNode]
     edges: tuple[CompetencyEdge, ...]
+
+    # The `policy` block of the graph file: what THIS bank permits, independently of what
+    # the deployment permits. Defaults to "no opinion", which is what every graph authored
+    # before the block existed means. See `policy.py` for how the three levels combine.
+    policy: "GraphPolicy" = field(default_factory=lambda: _default_policy())
 

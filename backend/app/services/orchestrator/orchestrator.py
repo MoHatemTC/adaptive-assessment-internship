@@ -142,6 +142,20 @@ class Orchestrator:
         )
         return False
 
+    def _minimum_failures_to_block(self) -> int | None:
+        """The bank's own blocking threshold, when it declares one.
+
+        Read from the resolved policy rather than the graph file, so the deployment floor
+        has already been applied and a bank can only ever tighten it.
+        """
+        try:
+            from app.services.orchestrator.registry import get_propagation_policy
+
+            resolved = get_propagation_policy()
+        except (ImportError, KeyError, OSError, ValueError):
+            return None
+        return resolved.minimum_failures_to_block if resolved is not None else None
+
     def coverage_critical_only(self) -> bool:
         """Whether coverage requires only the critical sub-competencies.
 
@@ -232,6 +246,11 @@ class Orchestrator:
             if not pool and bank_had_items and time_filtered:
                 out_of_time.append(variable)
                 continue
+            # Kept before any constraint narrows `pool`, so the modality blueprint can be
+            # computed against everything still servable rather than against whatever
+            # coverage happened to leave behind.
+            unconstrained_pool = list(pool)
+
             coverage_pending = False
             graph = self._graph() if graph_config.convergence_gate_enabled() else None
             if graph is not None:
@@ -273,18 +292,46 @@ class Orchestrator:
                     len(pool),
                 )
 
+            # THE BLUEPRINT IS NOT PREEMPTED. Coverage and the blueprint are orthogonal:
+            # coverage decides WHICH node must be measured, the blueprint WHICH modality
+            # measures it. The deficit is therefore computed against the UNNARROWED pool
+            # and intersected with whatever coverage or a probe has already chosen, so both
+            # hold whenever the bank allows it.
+            #
+            # WHY THIS CHANGED. Previously an unblocking probe skipped the blueprint check
+            # outright and the deficit was computed against the already-narrowed pool.
+            # Measured, that put modality compliance at 0.714 in the full-graph arm against
+            # 0.979 for Approach B: a probe fires every fifth observation, and on a
+            # graph-heavy session it fires often enough to starve the code and voice
+            # minimums for the rest of the assessment. An assessment that silently stops
+            # being mixed is a different instrument, not a faster one.
+            #
+            # `_modality_deficit_pool` only returns anything once the deficit is close to
+            # unmeetable, so when it fires and the intersection is empty, the blueprint
+            # wins: a required modality that can still be served is worth more than one
+            # more coverage node, because the coverage node has later chances and the
+            # modality slot does not.
             modality_pending = False
-            if not probing:
-                deficit_pool = self._modality_deficit_pool(
-                    pool=pool, state=state, variable=variable, available=all_available
-                )
-                if deficit_pool:
-                    # Coverage and the blueprint are orthogonal: coverage decides WHICH
-                    # node must be measured, the blueprint WHICH modality measures it.
-                    # When the coverage pool spans the owed modality, both are satisfied
-                    # at once — and on a bank whose coverage requirement fills the whole
-                    # observation floor, that intersection is the only chance the
-                    # blueprint ever gets. Coverage still wins when they cannot both hold.
+            deficit_pool = self._modality_deficit_pool(
+                pool=unconstrained_pool, state=state, variable=variable, available=all_available
+            )
+            if deficit_pool:
+                deficit_ids = {item.item_id for item in deficit_pool}
+                both = [item for item in pool if item.item_id in deficit_ids]
+                if both:
+                    pool = both
+                    modality_pending = True
+                elif coverage_pending or probing:
+                    logger.info(
+                        "%s: blueprint and %s cannot both hold — serving the owed modality",
+                        variable,
+                        "coverage" if coverage_pending else "an unblocking probe",
+                    )
+                    pool = deficit_pool
+                    modality_pending = True
+                    coverage_pending = False
+                    probing = False
+                else:
                     pool = deficit_pool
                     modality_pending = True
 
@@ -680,7 +727,9 @@ class Orchestrator:
         if graph is None:
             return delta
 
-        config = graph_config.propagation_config_from_settings()
+        config = graph_config.propagation_config_from_settings(
+            minimum_failures_to_block=self._minimum_failures_to_block()
+        )
         # Distinguishes re-administrations of one item. Computed before `served` grows.
         attempt_no = state.served_item_ids.count(item.item_id) + 1
         now = datetime.now(timezone.utc).isoformat()
@@ -1016,7 +1065,12 @@ class Orchestrator:
                 }
             )
 
-        graph = self._graph()
+        # The master switch, checked here as it is at every other entry point. It used to
+        # be absent from this one, so a session run with COMPETENCY_GRAPH_ENABLED=false
+        # still loaded the graph, computed coverage, and emitted a full graph block in the
+        # report. A disabled feature that keeps running in production reporting is the
+        # exact failure the switch was added to prevent.
+        graph = self._graph() if graph_config.graph_enabled() else None
         aberrant_by_variable: dict[str, int] = {}
         for record in state.aberrant_responses:
             key = str(record.get("variable", ""))

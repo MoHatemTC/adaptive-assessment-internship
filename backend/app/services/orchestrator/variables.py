@@ -222,12 +222,23 @@ def evaluate_finalisation(
             maximum_available_difficulty=maximum_available_difficulty,
         )
     )
+    # P(the level being REPORTED is the true level), not P(the most likely level). The
+    # rule asks "is this level right", and the level the report prints is the one derived
+    # from theta_hat — which near a cut point is not always the modal band.
+    #
+    # This argument used to be omitted at both call sites, so `convergence.evaluate` saw
+    # None, `band_probability_stop_available` returned False whatever the flag said, and
+    # `cat_band_probability_stop_enabled` was a live, documented, unreachable setting.
+    level, _label = ability_band(state.theta_hat)
+    reported_band_probability = band_probability(state).get(level, 0.0)
+
     stop = convergence.evaluate(
         state.standard_error,
         state.band_history,
         state.observations,
         items_remaining,
         difficulty_corroborated=corroborated,
+        band_probability=reported_band_probability,
     )
     if not stop.should_stop:
         return state

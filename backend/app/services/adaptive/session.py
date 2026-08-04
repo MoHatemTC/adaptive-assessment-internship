@@ -33,6 +33,7 @@ from app.services.adaptive.bank import ItemRepository
 from app.services.adaptive.irt import (
     ability_band,
     ability_percentile,
+    band_probabilities,
     posterior_update,
     prior_from_self_rating,
     uniform_prior,
@@ -153,8 +154,15 @@ class AdaptiveSession:
 
         pool = await self._repository.items_for_competency(state.competency)
         remaining = sum(1 for i in pool if i.id not in set(updated.served_item_ids))
+        # P(the reported level is the true level). Omitting it left
+        # `cat_band_probability_stop_enabled` unreachable from this engine too.
+        bands = band_probabilities(np.asarray(updated.posterior, dtype=float))
         stop = convergence.evaluate(
-            updated.standard_error, updated.band_history, updated.questions_answered, remaining
+            updated.standard_error,
+            updated.band_history,
+            updated.questions_answered,
+            remaining,
+            band_probability=bands.get(ability_band(updated.theta_hat)[0], 0.0),
         )
         return updated, stop
 

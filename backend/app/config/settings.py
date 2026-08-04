@@ -292,6 +292,12 @@ class Settings(BaseSettings):
     # Blocking is a stronger claim than inferring: it denies a candidate the chance to
     # demonstrate a skill, so it demands more confidence.
     graph_downward_block_confidence: float = Field(default=0.85, ge=0.0, le=1.0)
+    # Consistent direct failures of a prerequisite before its descendants may be blocked.
+    # At 1 the block inherits the whole per-observation error rate; measured on a graph
+    # with correct edges that put false blocking at 4.8-5.1% against a 2% gate. Two
+    # consistent failures square the error and bring it inside the gate without changing
+    # a single edge, at the cost of one extra observation before a block can fire.
+    graph_minimum_failures_to_block: int = Field(default=2, ge=1)
     graph_upward_decay: float = Field(default=0.70, gt=0.0, le=1.0)
     graph_minimum_inferred_weight: float = Field(default=0.15, ge=0.0, le=1.0)
     graph_maximum_inferred_weight: float = Field(default=0.60, ge=0.0, le=1.0)

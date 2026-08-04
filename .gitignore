@@ -13,3 +13,6 @@ venv/
 # Graphify local knowledge-graph outputs
 graphify-out/
 **/graphify-out/
+
+# Evaluation harness outputs (research scaffolding, not part of this branch)
+eval-results/

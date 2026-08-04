@@ -24,6 +24,7 @@ from pathlib import Path
 from app.config.settings import settings
 from app.services.competency_graph import load_competency_graph
 from app.services.competency_graph.graph import CompetencyGraphService
+from app.services.competency_graph.policy import ResolvedPolicy, apply_policy, resolve_policy
 from app.services.orchestrator.bank import BankReporting, JsonUnifiedBank
 
 logger = logging.getLogger(__name__)
@@ -152,15 +153,68 @@ def _bank_cached(bank_id: str) -> JsonUnifiedBank:
     return JsonUnifiedBank(REGISTRY[bank_id].bank_path)
 
 
+def get_propagation_policy(bank_id: str | None = None) -> ResolvedPolicy | None:
+    """How deployment, bank and edge configuration resolved for this bank.
+
+    Exposed so an operator can ask "why is this edge inert?" without reading three files
+    and doing the AND in their head. `scripts/show_propagation_policy.py` prints it and
+    the diagnostics endpoint returns `.summary()`.
+    """
+    return _policy_cached(resolve_bank_id(bank_id))
+
+
 @lru_cache(maxsize=None)
-def _graph_cached(bank_id: str) -> CompetencyGraphService | None:
+def _policy_cached(bank_id: str) -> ResolvedPolicy | None:
     graph_path = REGISTRY[bank_id].graph_path
     if graph_path is None:
         return None
-    return CompetencyGraphService(load_competency_graph(graph_path))
+    return resolve_policy(
+        load_competency_graph(graph_path),
+        deployment_inference=settings.graph_upward_inference_enabled,
+        deployment_blocking=settings.graph_descendant_blocking_enabled,
+        deployment_minimum_failures_to_block=settings.graph_minimum_failures_to_block,
+    )
+
+
+@lru_cache(maxsize=None)
+def _graph_cached(bank_id: str) -> CompetencyGraphService | None:
+    """The graph for this bank, with the propagation policy already applied.
+
+    Resolution happens HERE, once per bank per process, rather than at every traversal.
+    Everything downstream reads the edge flags, so baking the effective values in makes
+    the policy apply everywhere without a new check in a hot path and without a second
+    place that could disagree about the answer.
+    """
+    graph_path = REGISTRY[bank_id].graph_path
+    if graph_path is None:
+        return None
+
+    graph = load_competency_graph(graph_path)
+    resolved = _policy_cached(bank_id)
+    if resolved is not None:
+        graph = apply_policy(graph, resolved)
+        summary = resolved.summary()
+        logger.info(
+            "bank %s propagation policy: %d prerequisite edges, %d may infer, %d may block "
+            "(deployment inference=%s blocking=%s, failures to block=%d)",
+            bank_id,
+            summary["prerequisite_edges"],
+            summary["inference_enabled"],
+            summary["blocking_enabled"],
+            summary["deployment"]["upward_inference"],
+            summary["deployment"]["descendant_blocking"],
+            summary["minimum_failures_to_block"],
+        )
+    return CompetencyGraphService(graph)
 
 
 def reset_caches() -> None:
-    """Drop parsed banks and graphs. For tests that rewrite a bank file on disk."""
+    """Drop parsed banks, graphs and resolved policies.
+
+    For tests that rewrite a bank file on disk — and for any test that changes a
+    propagation setting, since the policy is resolved once at load and would otherwise
+    survive the change.
+    """
     _bank_cached.cache_clear()
     _graph_cached.cache_clear()
+    _policy_cached.cache_clear()
