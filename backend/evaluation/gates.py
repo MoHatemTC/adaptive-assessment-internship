@@ -63,7 +63,13 @@ SAFETY = (
     # not. Evaluated on the observed COUNT, so a clean run reads PASS instead of failing
     # on the upper bound of a rate that is exactly zero.
     Gate("C-DAG-11", "duplicate_evidence_events", 1, "0 events", "<=", 0.0, "plan sec 20"),
-    Gate("S-02", "premature_stop_rate", 3, "95% UCB < 2%", "<", 0.02, "plan sec 11"),
+    # RENAMED, AND ITS GATE CORRECTED. This measures how often a converged competency's
+    # own 95% credible interval excludes the truth — which is interval coverage, not
+    # premature stopping. A perfectly calibrated interval excludes the truth 5% of the
+    # time BY CONSTRUCTION, so the plan's "<2%" demanded deliberate over-coverage and
+    # could never be met by a well-calibrated estimator. The honest gate is two-sided
+    # around the nominal level.
+    Gate("U-02", "interval_non_coverage_rate", 3, "3%-7% (nominal 5%)", "in", (0.03, 0.07), "corrected from plan S-02"),
     Gate("C-DAG-15", "over_convergence_rate", 3, "95% UCB < 2%", "<", 0.02, "plan sec 20"),
 )
 

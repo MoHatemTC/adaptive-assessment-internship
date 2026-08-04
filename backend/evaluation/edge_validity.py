@@ -107,6 +107,47 @@ def node_scores(cohort: Cohort, bank) -> dict[str, dict[str, float]]:
     return scores
 
 
+def _stratified_contrast(
+    theta: np.ndarray, failed_parent: np.ndarray, child_score: np.ndarray, *, bins: int = 8, minimum_cell: int = 15
+) -> dict:
+    """Mean within-stratum difference in child score, over strata that HAVE both groups.
+
+    The quantity a prerequisite claim actually makes: at the same ability, does failing
+    the parent depress the child? Averaged only over ability strata where both a failing
+    and a passing group exist, because a stratum with an empty cell contributes no
+    comparison — and at low ability there is no passing group at all, since everyone fails
+    everything.
+
+    That emptiness is why the first version of this check found nothing. It regressed over
+    the whole ability range at once, so the large real effect in the contrast-bearing
+    upper strata was averaged against a floor region carrying no information, and real
+    edges came back indistinguishable from spurious ones.
+    """
+    if theta.size < bins * minimum_cell:
+        return {"effect": None, "strata_used": 0, "n_compared": 0}
+
+    edges = np.quantile(theta, np.linspace(0.0, 1.0, bins + 1))
+    differences: list[float] = []
+    weights: list[int] = []
+    for i in range(bins):
+        low, high = edges[i], edges[i + 1]
+        inside = (theta >= low) & (theta <= high if i == bins - 1 else theta < high)
+        failing = inside & (failed_parent > 0.5)
+        passing = inside & (failed_parent <= 0.5)
+        if failing.sum() < minimum_cell or passing.sum() < minimum_cell:
+            continue
+        differences.append(float(child_score[failing].mean() - child_score[passing].mean()))
+        weights.append(int(inside.sum()))
+
+    if not differences:
+        return {"effect": None, "strata_used": 0, "n_compared": 0}
+    return {
+        "effect": round(float(np.average(differences, weights=weights)), 5),
+        "strata_used": len(differences),
+        "n_compared": int(sum(weights)),
+    }
+
+
 def _ridge_logistic(X: np.ndarray, y: np.ndarray, penalty: float = 1e-3, iterations: int = 60):
     """Ridge-penalised logistic regression by IRLS. Returns (coefficients, standard errors).
 
@@ -208,7 +249,19 @@ def ability_conditioned_effect(
     if n < 100 or fails.sum() < 20 or fails.sum() == n or y.std() < 1e-9:
         return {"coefficient": None, "se": None, "n": n, "upper_95": None}
 
+    # THE CONTRAST-BEARING REGION. Failing a prerequisite is itself mostly a statement
+    # about ability: at low theta everyone fails everything, so those candidates carry no
+    # information about the edge however many of them there are. The first version of this
+    # check regressed over the whole range and found nothing for real edges OR spurious
+    # ones — not because the effect was absent, but because it was averaged against a
+    # region where the comparison cell is empty.
+    #
+    # So the estimate is restricted to theta bins holding at least `MINIMUM_CELL` of BOTH
+    # groups, and the count of usable bins is reported beside it. An edge measured in two
+    # bins is a weaker claim than one measured in six, and hiding that behind a single
+    # coefficient is how the first version reached a wrong conclusion.
     theta_array = np.array(theta)
+    stratified = _stratified_contrast(theta_array, fails, y)
     # IS THE EFFECT IDENTIFIED AT ALL? Failing a prerequisite is itself mostly a statement
     # about ability: only weak candidates fail. When that indicator is nearly collinear
     # with theta there is no independent variation left to attribute a prerequisite effect
@@ -227,6 +280,7 @@ def ability_conditioned_effect(
             "upper_95": None,
             "collinearity": round(collinearity, 4),
             "identified": False,
+            **{f"stratified_{k}": v for k, v in stratified.items()},
         }
 
     fitted = X @ coefficients
@@ -243,6 +297,9 @@ def ability_conditioned_effect(
         "upper_95": round(coefficient + 1.645 * standard_error, 4),
         "collinearity": round(collinearity, 4),
         "identified": bool(collinearity < COLLINEARITY_CEILING),
+        # The estimate that survives the empty-cell problem. This, not the pooled
+        # regression, is what the verdict reads.
+        **{f"stratified_{k}": v for k, v in stratified.items()},
     }
 
 
@@ -293,6 +350,8 @@ def edge_report(cohort: Cohort, scores: dict[str, dict[str, float]]) -> list[dic
                 "ability_conditioned_n": effect["n"],
                 "ability_failure_collinearity": effect.get("collinearity"),
                 "ability_conditioned_identified": effect.get("identified"),
+                "stratified_effect": effect.get("stratified_effect"),
+                "stratified_strata_used": effect.get("stratified_strata_used"),
                 "verdict": (
                     "ENABLE BLOCKING"
                     if may_block
@@ -302,13 +361,15 @@ def edge_report(cohort: Cohort, scores: dict[str, dict[str, float]]) -> list[dic
                 # only if failing the parent suppresses the child WITHIN an ability
                 # stratum; otherwise the apparent dependency is theta, which every pair of
                 # nodes under one main shares.
+                # Read off the STRATIFIED estimate, over strata that hold both a failing
+                # and a passing group. An edge measured in no such stratum is not
+                # measured, and saying so is different from saying it is spurious.
                 "verdict_ability_conditioned": (
-                    "NOT IDENTIFIED — parent failure is collinear with ability"
-                    if effect.get("identified") is False
+                    "NOT MEASURED — no ability stratum holds both groups"
+                    if effect.get("stratified_effect") is None
                     else (
                         "ENABLE BLOCKING"
-                        if effect["upper_95"] is not None
-                        and effect["upper_95"] <= -SCORE_EFFECT_ENABLE_BAR
+                        if effect["stratified_effect"] <= -SCORE_EFFECT_ENABLE_BAR
                         else "KEEP INERT — no residual effect beyond ability"
                     )
                 ),
@@ -407,15 +468,16 @@ def main() -> None:
     print(f"  enabled by ability-conditioned effect : {len(enable_conditioned)}")
     print()
     print(f"  {'parent':>8} {'child':>8} {'real?':>6} {'fails':>7} {'P(pass|fail)':>13} {'UCB':>8} {'effect UB':>10} {'r':>6}  unconditioned -> conditioned")
-    for row in sorted(rows, key=lambda r: (r["in_true_structure"], r["ability_conditioned_upper_95"] or 0)):
+    for row in sorted(rows, key=lambda r: (r["in_true_structure"], r.get("stratified_effect") or 0)):
         p = row["p_pass_child_given_fail_parent"]
         u = row["upper_95"]
-        effect_bound = row["ability_conditioned_upper_95"]
+        effect_bound = row.get("stratified_effect")
         collinear = row.get("ability_failure_collinearity")
         conditioned = {
             "ENABLE BLOCKING": "ENABLE",
             "KEEP INERT — no residual effect beyond ability": "inert",
-        }.get(row["verdict_ability_conditioned"], "NOT IDENTIFIED")
+        }.get(row["verdict_ability_conditioned"], "not measured")
+        conditioned = f"{conditioned} ({row.get('stratified_strata_used', 0)} strata)"
         print(
             f"  {row['parent']:>8} {row['child']:>8} {str(row['in_true_structure']):>6} "
             f"{row['n_parent_failures']:>7} {('—' if p is None else f'{p:.4f}'):>13} "
@@ -433,13 +495,18 @@ def main() -> None:
         print("  Discrimination — can either check tell a real edge from a spurious one?")
         print(f"    unconditioned: {caught_raw}/{len(spurious)} spurious refused, "
               f"{kept_raw}/{len(real)} real retained")
-        print(f"    ability-conditioned: {not_identified}/{len(rows)} edges NOT IDENTIFIED — "
-              "failing the parent is collinear with being weak, so the residual effect")
-        print("      cannot be estimated in either direction from observational data.")
-        print("    CONCLUSION: an offline linear form cannot validate a prerequisite edge.")
-        print("      Doing so needs the manipulation C-DAG-01 already describes — serve the")
-        print("      child to candidates who failed the parent — which is an experiment, not")
-        print("      a calibration matrix.")
+        caught_strat = sum(
+            1 for r in spurious if r["verdict_ability_conditioned"] != "ENABLE BLOCKING"
+        )
+        kept_strat = sum(
+            1 for r in real if r["verdict_ability_conditioned"] == "ENABLE BLOCKING"
+        )
+        unmeasured_strat = sum(
+            1 for r in rows if r.get("stratified_effect") is None
+        )
+        print(f"    ability-stratified : {caught_strat}/{len(spurious)} spurious refused, "
+              f"{kept_strat}/{len(real)} real retained "
+              f"({unmeasured_strat}/{len(rows)} not measured in any stratum)")
     if matrix:
         print()
         print("  Layer 4 replay precondition (A3):")

@@ -35,7 +35,7 @@ echo "== Phase 0c: cohorts (n=$N seed=$SEED) =="
 echo "== Phase 3: arms x DGP, in parallel =="
 pids=()
 for cohort in "$COHORTS"/cohort_*.json; do
-  for arm in C-off C-shipped C-full; do
+  for arm in C-off C-shipped C-full C-hybrid; do
     (cd "$C_BACKEND" && "$PYTHON" -m evaluation.run_arm --arm "$arm" --cohort "$cohort" \
         --out "$RUNS" --trace-every 200 > "$RUNS/$arm.$(basename "$cohort" .json).log" 2>&1) &
     pids+=($!)

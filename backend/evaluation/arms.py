@@ -87,6 +87,29 @@ class Arm:
     description: str = ""
 
 
+# The configuration the first run's evidence actually argues for. Everything the graph
+# layer measurably earned, and nothing it did not:
+#
+#   coverage gate ON      the only row the graph won on. Without it, NO competency ends
+#                         with all its required sub-competencies directly measured — the
+#                         information-greedy selector never covers what the report claims.
+#   inference OFF         fired once in 960 sessions even fully enabled
+#   blocking OFF          4.8-5.1% false blocking against a 2% gate, on correct edges
+#   filtering/utility OFF penalties collapsed modality breadth to 0.714
+#   P(band) stop ON       +2.1pp accuracy for +1.6 items in the corrected pre-study, and
+#                         reachable for the first time now that both callers pass it
+GRAPH_HYBRID = {
+    "COMPETENCY_GRAPH_ENABLED": "true",
+    "GRAPH_SHADOW_MODE": "true",
+    "GRAPH_FILTERING_ENABLED": "false",
+    "GRAPH_UPWARD_INFERENCE_ENABLED": "false",
+    "GRAPH_DESCENDANT_BLOCKING_ENABLED": "false",
+    "GRAPH_UTILITY_ENABLED": "false",
+    "GRAPH_CONVERGENCE_GATE_ENABLED": "true",
+    "GRAPH_EDGE_PREVIEW_ENABLED": "true",
+    "CAT_BAND_PROBABILITY_STOP_ENABLED": "true",
+}
+
 ARMS: dict[str, Arm] = {
     "B": Arm(
         name="B",
@@ -108,6 +131,14 @@ ARMS: dict[str, Arm] = {
         env=GRAPH_FULL,
         force_enable_edges=True,
         description="Approach C with inference, blocking, filtering, utility and edges on.",
+    ),
+    "C-hybrid": Arm(
+        name="C-hybrid",
+        env=GRAPH_HYBRID,
+        description=(
+            "The configuration the first run's evidence argues for: coverage gate on, "
+            "propagation off, P(band) stopping on."
+        ),
     ),
 }
 
