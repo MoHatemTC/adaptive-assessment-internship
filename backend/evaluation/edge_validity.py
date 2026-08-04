@@ -64,6 +64,12 @@ MINIMUM_INFORMATIVE_PAIRS = 100
 # been mastered, enforcement breaches C-DAG-04 by construction.
 ENABLE_BAR_P_PASS_CHILD_GIVEN_FAIL_PARENT = 0.02
 
+# How far failing the parent must depress the child's score, on the 0-1 scale, once
+# ability is held fixed, before the edge is believed. 0.20 is a fifth of the range — a real
+# effect, not a rounding error — and the bar is applied to the one-sided UPPER bound rather
+# than to the point estimate.
+SCORE_EFFECT_ENABLE_BAR = 0.20
+
 
 def node_scores(cohort: Cohort, bank) -> dict[str, dict[str, float]]:
     """simulee -> node -> mean simulated score over every item measuring that node.
@@ -95,6 +101,127 @@ def node_scores(cohort: Cohort, bank) -> dict[str, dict[str, float]]:
     return scores
 
 
+def _ridge_logistic(X: np.ndarray, y: np.ndarray, penalty: float = 1e-3, iterations: int = 60):
+    """Ridge-penalised logistic regression by IRLS. Returns (coefficients, standard errors).
+
+    Penalised because separation is the normal case here, not the exception: a candidate
+    who fails a genuine prerequisite essentially never passes the dependent skill, so the
+    unpenalised coefficient runs to minus infinity and carries no interval. A small ridge
+    keeps the estimate finite and the comparison between edges meaningful; it shrinks every
+    coefficient toward zero equally, so it cannot manufacture a difference between a real
+    edge and a spurious one.
+    """
+    n, k = X.shape
+    beta = np.zeros(k)
+    for _ in range(iterations):
+        eta = np.clip(X @ beta, -30, 30)
+        p = 1.0 / (1.0 + np.exp(-eta))
+        w = np.clip(p * (1 - p), 1e-6, None)
+        gradient = X.T @ (y - p) - penalty * beta
+        hessian = (X * w[:, None]).T @ X + penalty * np.eye(k)
+        try:
+            step = np.linalg.solve(hessian, gradient)
+        except np.linalg.LinAlgError:  # pragma: no cover — singular design
+            break
+        beta = beta + step
+        if np.max(np.abs(step)) < 1e-8:
+            break
+    eta = np.clip(X @ beta, -30, 30)
+    p = 1.0 / (1.0 + np.exp(-eta))
+    w = np.clip(p * (1 - p), 1e-6, None)
+    hessian = (X * w[:, None]).T @ X + penalty * np.eye(k)
+    try:
+        covariance = np.linalg.inv(hessian)
+        se = np.sqrt(np.clip(np.diag(covariance), 0, None))
+    except np.linalg.LinAlgError:  # pragma: no cover
+        se = np.full(k, np.nan)
+    return beta, se
+
+
+def ability_conditioned_effect(
+    cohort: Cohort,
+    scores: dict[str, dict[str, float]],
+    parent: str,
+    child: str,
+) -> dict:
+    """The residual prerequisite effect, after ability is held fixed.
+
+    WHY THE UNCONDITIONED RATE IS NOT A TEST OF AN EDGE
+
+    P(pass child | fail parent) is what the architecture's own
+    `validate_prerequisite_edges.py` computes and what the validation document proposes as
+    the Phase 0b gate. Measured on the DGP-2 cohort it clears the enable bar for EVERY edge
+    the graph asserts — including the eight deliberately removed from the world. It has
+    zero discriminating power.
+
+    The reason is ability. A candidate who fails C1.1 is a weak candidate and will probably
+    fail C1.2 as well, whether or not C1.1 is a prerequisite for C1.2. Any two nodes under
+    one main competency are correlated through theta, so the conditional is near zero for
+    every pair in the graph.
+
+    The statistic that does discriminate is the coefficient on "failed the parent" in
+
+        child_score = a + b * theta + c * failed_parent
+
+    A real prerequisite makes `c` strongly negative: failing the parent depresses the child
+    BEYOND what ability already explains. A spurious edge leaves `c` near zero, because
+    within an ability level the two nodes are conditionally independent.
+
+    Two earlier forms were tried and discarded, both for the same reason — a node score is
+    a mean over the ~10 items measuring it, so thresholding it throws away almost
+    everything. Stratified cell means left both cells unpopulated inside every ability
+    stratum; a logistic model on a pass indicator left too few passes to estimate at all,
+    and returned undefined for all thirty edges. Regressing the score itself keeps the
+    data.
+
+    Simulation uses true theta. A live study would substitute the CAT estimate, whose
+    measurement error attenuates the correction — so the live version is conservative
+    rather than exact, and any report using it should say so.
+    """
+    main = parent.split(".", 1)[0]
+    theta: list[float] = []
+    failed_parent: list[float] = []
+    child_score: list[float] = []
+    for simulee in cohort.simulees:
+        row = scores.get(simulee.simulee_id, {})
+        if parent not in row or child not in row or main not in simulee.theta:
+            continue
+        theta.append(float(simulee.theta[main]))
+        failed_parent.append(float(row[parent] <= STRONG_FAILURE))
+        child_score.append(float(row[child]))
+
+    n = len(theta)
+    y = np.array(child_score)
+    fails = np.array(failed_parent)
+    # The outcome is the child's CONTINUOUS score, not a pass indicator. Thresholding it
+    # was tried and is unusable: a node score is a mean over the ~10 items measuring it, so
+    # requiring >= 0.80 leaves too few passes to estimate anything, and the coefficient
+    # came back undefined for all thirty edges. The continuous version asks the same
+    # question — does failing the parent depress the child beyond what ability explains —
+    # without discarding most of the data to a cut point.
+    if n < 100 or fails.sum() < 20 or fails.sum() == n or y.std() < 1e-9:
+        return {"coefficient": None, "se": None, "n": n, "upper_95": None}
+
+    X = np.column_stack([np.ones(n), np.array(theta), fails])
+    coefficients, residuals, rank, _sv = np.linalg.lstsq(X, y, rcond=None)
+    if rank < X.shape[1]:
+        return {"coefficient": None, "se": None, "n": n, "upper_95": None}
+
+    fitted = X @ coefficients
+    sigma_squared = float(np.sum((y - fitted) ** 2) / max(n - X.shape[1], 1))
+    covariance = sigma_squared * np.linalg.inv(X.T @ X)
+    coefficient = float(coefficients[2])
+    standard_error = float(np.sqrt(max(covariance[2, 2], 0.0)))
+    return {
+        "coefficient": round(coefficient, 4),
+        "se": round(standard_error, 4),
+        "n": n,
+        # One-sided 95% UPPER bound on the effect. An edge is believed only if even the
+        # least favourable plausible value is a real suppression.
+        "upper_95": round(coefficient + 1.645 * standard_error, 4),
+    }
+
+
 def edge_report(cohort: Cohort, scores: dict[str, dict[str, float]]) -> list[dict]:
     rows = []
     truth = {s.simulee_id: s.nodes for s in cohort.simulees}
@@ -116,6 +243,7 @@ def edge_report(cohort: Cohort, scores: dict[str, dict[str, float]]) -> list[dic
 
         block_interval = clopper_pearson(passed_child_given_fail, failed_parent)
         informative = failed_parent >= MINIMUM_INFORMATIVE_PAIRS
+        effect = ability_conditioned_effect(cohort, scores, parent, child)
         # The upper bound, not the point estimate: an edge is enabled on what the data
         # can rule out, not on what it happens to have shown.
         may_block = bool(
@@ -136,10 +264,26 @@ def edge_report(cohort: Cohort, scores: dict[str, dict[str, float]]) -> list[dic
                     round(passed_parent_given_pass_child / passed_child, 5) if passed_child else None
                 ),
                 "informative": informative,
+                "ability_conditioned_coefficient": effect["coefficient"],
+                "ability_conditioned_upper_95": effect["upper_95"],
+                "ability_conditioned_n": effect["n"],
                 "verdict": (
                     "ENABLE BLOCKING"
                     if may_block
                     else ("KEEP INERT — not measured" if not informative else "KEEP INERT — bar not met")
+                ),
+                # The verdict the unconditioned rate cannot reach. An edge earns blocking
+                # only if failing the parent suppresses the child WITHIN an ability
+                # stratum; otherwise the apparent dependency is theta, which every pair of
+                # nodes under one main shares.
+                "verdict_ability_conditioned": (
+                    "ENABLE BLOCKING"
+                    if effect["upper_95"] is not None and effect["upper_95"] <= -SCORE_EFFECT_ENABLE_BAR
+                    else (
+                        "KEEP INERT — not measured"
+                        if effect["coefficient"] is None
+                        else "KEEP INERT — no residual effect beyond ability"
+                    )
                 ),
             }
         )
@@ -224,20 +368,46 @@ def main() -> None:
     )
 
     enable = [r for r in rows if r["verdict"] == "ENABLE BLOCKING"]
+    enable_conditioned = [r for r in rows if r["verdict_ability_conditioned"] == "ENABLE BLOCKING"]
     unmeasured = [r for r in rows if not r["informative"]]
+    real = [r for r in rows if r["in_true_structure"]]
+    spurious = [r for r in rows if not r["in_true_structure"]]
+
     print(f"Phase 0b — offline edge validity on {cohort.dgp}, {len(cohort.simulees)} simulees")
-    print(f"  edges asserted by the graph      : {len(rows)}")
-    print(f"  edges with >= {MINIMUM_INFORMATIVE_PAIRS} informative pairs : {len(rows) - len(unmeasured)}")
-    print(f"  edges that clear the enable bar  : {len(enable)}")
+    print(f"  edges asserted by the graph          : {len(rows)}  ({len(real)} real, {len(spurious)} absent from the world)")
+    print(f"  edges with >= {MINIMUM_INFORMATIVE_PAIRS} informative pairs     : {len(rows) - len(unmeasured)}")
+    print(f"  enabled by P(pass child | fail parent): {len(enable)}")
+    print(f"  enabled by ability-conditioned effect : {len(enable_conditioned)}")
     print()
-    print(f"  {'parent':>8} {'child':>8} {'fails':>7} {'P(pass child|fail parent)':>26} {'UCB':>7}  verdict")
-    for row in sorted(rows, key=lambda r: (r["p_pass_child_given_fail_parent"] is None, r["p_pass_child_given_fail_parent"] or 0)):
+    print(f"  {'parent':>8} {'child':>8} {'real?':>6} {'fails':>7} {'P(pass|fail)':>13} {'UCB':>8} {'effect UB':>10}  unconditioned -> conditioned")
+    for row in sorted(rows, key=lambda r: (r["in_true_structure"], r["ability_conditioned_upper_95"] or 0)):
         p = row["p_pass_child_given_fail_parent"]
         u = row["upper_95"]
+        lift_value = row["ability_conditioned_upper_95"]
         print(
-            f"  {row['parent']:>8} {row['child']:>8} {row['n_parent_failures']:>7} "
-            f"{('—' if p is None else f'{p:.4f}'):>26} {('—' if u is None else f'{u:.4f}'):>7}  {row['verdict']}"
+            f"  {row['parent']:>8} {row['child']:>8} {str(row['in_true_structure']):>6} "
+            f"{row['n_parent_failures']:>7} {('—' if p is None else f'{p:.4f}'):>13} "
+            f"{('—' if u is None else f'{u:.4f}'):>8} "
+            f"{('—' if lift_value is None else f'{lift_value:+.3f}'):>10}  "
+            f"{'ENABLE' if row['verdict'] == 'ENABLE BLOCKING' else 'inert':>6} -> "
+            f"{'ENABLE' if row['verdict_ability_conditioned'] == 'ENABLE BLOCKING' else 'inert'}"
         )
+
+    if spurious:
+        caught_raw = sum(1 for r in spurious if r["verdict"] != "ENABLE BLOCKING")
+        caught_lift = sum(
+            1 for r in spurious if r["verdict_ability_conditioned"] != "ENABLE BLOCKING"
+        )
+        kept_raw = sum(1 for r in real if r["verdict"] == "ENABLE BLOCKING")
+        kept_lift = sum(
+            1 for r in real if r["verdict_ability_conditioned"] == "ENABLE BLOCKING"
+        )
+        print()
+        print("  Discrimination — can the check tell a real edge from a spurious one?")
+        print(f"    spurious edges refused : {caught_raw}/{len(spurious)} unconditioned, "
+              f"{caught_lift}/{len(spurious)} ability-conditioned")
+        print(f"    real edges retained    : {kept_raw}/{len(real)} unconditioned, "
+              f"{kept_lift}/{len(real)} ability-conditioned")
     if matrix:
         print()
         print("  Layer 4 replay precondition (A3):")
