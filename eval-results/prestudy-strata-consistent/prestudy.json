@@ -1,0 +1,143 @@
+{
+ "cohort": "DGP-1",
+ "n_simulees": 600,
+ "ability_distribution": "eight fixed strata",
+ "node_heterogeneity": true,
+ "rows": [
+  {
+   "n_bands": 4,
+   "band_width": 2.0,
+   "stop_rule": "se",
+   "exact_level_accuracy": 0.87111,
+   "within_one_level": 1.0,
+   "mean_questions": 7.3656,
+   "median_questions": 7.0,
+   "marginal_reliability": 0.42369,
+   "decision_consistency": 0.90265,
+   "median_se": 0.51483,
+   "n": 1800,
+   "confusion": {
+    "1->1": 1535,
+    "1->2": 34,
+    "2->1": 198,
+    "2->2": 33
+   },
+   "accuracy_vs_5band_se_pp": 17.278,
+   "questions_vs_5band_se": 0.0
+  },
+  {
+   "n_bands": 4,
+   "band_width": 2.0,
+   "stop_rule": "band_probability",
+   "exact_level_accuracy": 0.87,
+   "within_one_level": 1.0,
+   "mean_questions": 6.5694,
+   "median_questions": 6.0,
+   "marginal_reliability": 0.34184,
+   "decision_consistency": 0.8805,
+   "median_se": 0.55211,
+   "n": 1800,
+   "confusion": {
+    "1->1": 1547,
+    "1->2": 22,
+    "2->1": 212,
+    "2->2": 19
+   },
+   "accuracy_vs_5band_se_pp": 17.167,
+   "questions_vs_5band_se": -0.796
+  },
+  {
+   "n_bands": 5,
+   "band_width": 1.6,
+   "stop_rule": "se",
+   "exact_level_accuracy": 0.69833,
+   "within_one_level": 1.0,
+   "mean_questions": 7.3656,
+   "median_questions": 7.0,
+   "marginal_reliability": 0.42369,
+   "decision_consistency": 0.79885,
+   "median_se": 0.51483,
+   "n": 1800,
+   "confusion": {
+    "1->1": 1152,
+    "1->2": 70,
+    "2->1": 473,
+    "2->2": 105
+   },
+   "accuracy_vs_5band_se_pp": 0.0,
+   "questions_vs_5band_se": 0.0
+  },
+  {
+   "n_bands": 5,
+   "band_width": 1.6,
+   "stop_rule": "band_probability",
+   "exact_level_accuracy": 0.70167,
+   "within_one_level": 1.0,
+   "mean_questions": 7.1733,
+   "median_questions": 6.0,
+   "marginal_reliability": 0.41182,
+   "decision_consistency": 0.78928,
+   "median_se": 0.50617,
+   "n": 1800,
+   "confusion": {
+    "1->1": 1164,
+    "1->2": 58,
+    "2->1": 479,
+    "2->2": 99
+   },
+   "accuracy_vs_5band_se_pp": 0.334,
+   "questions_vs_5band_se": -0.192
+  },
+  {
+   "n_bands": 8,
+   "band_width": 1.0,
+   "stop_rule": "se",
+   "exact_level_accuracy": 0.30389,
+   "within_one_level": 0.95056,
+   "mean_questions": 7.3656,
+   "median_questions": 7.0,
+   "marginal_reliability": 0.42369,
+   "decision_consistency": 0.54887,
+   "median_se": 0.51483,
+   "n": 1800,
+   "confusion": {
+    "1->1": 256,
+    "1->2": 21,
+    "1->3": 2,
+    "2->1": 1000,
+    "2->2": 258,
+    "2->3": 32,
+    "3->1": 87,
+    "3->2": 111,
+    "3->3": 33
+   },
+   "accuracy_vs_5band_se_pp": -39.444,
+   "questions_vs_5band_se": 0.0
+  },
+  {
+   "n_bands": 8,
+   "band_width": 1.0,
+   "stop_rule": "band_probability",
+   "exact_level_accuracy": 0.33389,
+   "within_one_level": 0.95889,
+   "mean_questions": 10.4233,
+   "median_questions": 12.0,
+   "marginal_reliability": 0.46252,
+   "decision_consistency": 0.59953,
+   "median_se": 0.44425,
+   "n": 1800,
+   "confusion": {
+    "1->1": 253,
+    "1->2": 26,
+    "2->1": 945,
+    "2->2": 331,
+    "2->3": 14,
+    "3->1": 74,
+    "3->2": 140,
+    "3->3": 17
+   },
+   "accuracy_vs_5band_se_pp": -36.444,
+   "questions_vs_5band_se": 3.058
+  }
+ ]
+}
