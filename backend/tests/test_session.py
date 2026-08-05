@@ -239,3 +239,58 @@ def test_shipped_bank_precision_reachability_has_not_regressed(bank_id):
 
     assert pools, f"{bank_id}: no measurable variables"
     assert _unreachable(pools) == KNOWN_UNREACHABLE_POOLS[bank_id]
+
+
+class TestTheBankFloorArithmeticIsSound:
+    """The prescription must actually close the gap it prescribes for.
+
+    `bank_floor` says "N more items at b = theta fixes this variable". That is only useful
+    if adding N items of the stated information really reaches the target — an off-by-one
+    in the ceiling division, or a mismatch between the deficit and the per-item value,
+    would produce a work order that does not work.
+    """
+
+    def test_adding_the_prescribed_items_reaches_the_target(self):
+        from evaluation.bank_floor import PRIOR_SD, analyse_bank
+
+        report = analyse_bank("AIE", theta=0.0)
+        required = report["rows"][0]["required_precision"]
+
+        short = [r for r in report["rows"] if not r["reachable"]]
+        assert short, "no unreachable variables; the test would be vacuous"
+
+        for row in short:
+            closed = row["attained_precision"] + (
+                row["items_needed"] * row["replacement_item_information"]
+            )
+            assert closed >= required, (
+                f"{row['variable']}: {row['items_needed']} items leaves it short "
+                f"({closed:.4f} < {required:.4f})"
+            )
+            # And not wastefully over: one fewer item must NOT suffice, or the count is
+            # inflated and the work order costs more than it needs to.
+            if row["items_needed"] > 1:
+                one_fewer = row["attained_precision"] + (
+                    (row["items_needed"] - 1) * row["replacement_item_information"]
+                )
+                assert one_fewer < required, (
+                    f"{row['variable']}: {row['items_needed'] - 1} items would already do"
+                )
+
+    def test_attained_precision_and_best_se_agree(self):
+        """SE = 1/sqrt(precision). If these disagree, one of them is being computed wrong."""
+        from evaluation.bank_floor import analyse_bank
+
+        for row in analyse_bank("AIE", theta=0.0)["rows"]:
+            assert row["best_attainable_se"] == pytest.approx(
+                row["attained_precision"] ** -0.5, abs=1e-3
+            )
+
+    def test_it_agrees_with_the_reachability_test_above(self):
+        """Two independent routes to 'which variables are short' must name the same set."""
+        from evaluation.bank_floor import analyse_bank
+
+        computed = {
+            r["variable"] for r in analyse_bank("AIE", theta=0.0)["rows"] if not r["reachable"]
+        }
+        assert computed == KNOWN_UNREACHABLE_POOLS["AIE"]

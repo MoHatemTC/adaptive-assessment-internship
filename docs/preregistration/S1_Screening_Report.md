@@ -470,6 +470,42 @@ The legacy `item_bank.json` fails the same check on all five competencies unifor
 attainable SE 0.598 against a 0.55 target). The prior diagnosis of "one weak pool" was an
 artefact of a test that asserted in sorted order and aborted on the first.
 
+### 4.1 What it would take to fix — and it is smaller than it sounds
+
+"16 of 33 unreachable" is a diagnosis, not a work order. Information adds, so each shortfall
+is a number in precision units and "how many more items" has an exact answer. At the cheapest
+possible fix — items at `b = θ` with the bank's own median discrimination, so these are a
+**lower bound**:
+
+| bank | variables | unreachable | items needed |
+|---|---:|---:|---:|
+| **AIE** | 33 | 16 | **28** |
+| **DA** | 6 | 5 | **15** |
+| PY | 10 | 0 | 0 |
+
+**Twenty-eight items closes AIE entirely.** That reframes the finding: it reads like a
+structural defect and it is a fortnight of authoring. And the distribution is lopsided —
+**7 of the 16 need exactly one item**, missing the target by a hair:
+
+| variable | items | best attainable SE | deficit | items needed |
+|---|---:|---:|---:|---:|
+| C3.6 | 7 | 0.757 | 1.562 | 3 |
+| C6.2 | 4 | 0.810 | 1.781 | 3 |
+| C6.9 | 5 | 0.725 | 1.405 | 3 |
+| … | | | | |
+| C6.10 | 9 | **0.555** | **0.055** | **1** |
+| C6.15 | 10 | 0.558 | 0.096 | 1 |
+| C6.3 | 6 | 0.559 | 0.107 | 1 |
+
+C6.10 misses by 0.005 of a standard error. Nine of its items already exist; a tenth,
+well-targeted, would make it measurable.
+
+Reported at θ = 0, which is where a bank is most informative — so every count understates
+what a candidate at θ = 2 would need. Verified by test: adding the prescribed items reaches
+the target, and one fewer does not, so the counts are neither short nor padded.
+
+Full table: `bank_floor.md`, regenerate with `python -m evaluation.bank_floor`.
+
 ---
 
 ## 5. Tier-1 invariants
@@ -645,7 +681,9 @@ interval narrowed at each persona added.
 8. **Fix the centre points before any future factorial.** Deterministic replicates estimate
    zero pure error, which silently disables the activity rule (§1.3). Vary the seed across
    centre points so they replicate the sampling rather than the arithmetic.
-9. **The bank's measurement floor is the more urgent finding.** 16 of 33 AIE variables cannot
-   reach the precision target at any test length, concentrated in the main the graph most
-   connects. That bounds every accuracy number this programme will produce, and no propagation
-   setting improves it.
+9. **Write 28 items.** The bank's measurement floor is the most urgent finding and also the
+   most tractable one: 16 of 33 AIE variables cannot reach the precision target at any test
+   length, concentrated in the main the graph most connects — and **28 well-targeted items
+   closes every gap**, with 7 of the 16 needing exactly one (§4.1). That bounds every accuracy
+   number this programme will produce, no propagation setting improves it, and unlike
+   propagation it is fixable this month.
