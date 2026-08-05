@@ -15,3 +15,11 @@
 # Clopper-Pearson bounds, BCa bootstrap, DeLong, and the tetrachoric solve for the
 # within-candidate error correlation `r`.
 scipy>=1.11,<2
+
+# Judged metrics (plan section 6). Pinned exactly, not by range: DeepEval has moved its
+# parameter enum (LLMTestCaseParams -> SingleTurnParams) between releases, and a metric
+# that silently changes shape makes two runs incomparable without saying so.
+#
+# Install into a SEPARATE environment, never the one that runs pytest:
+#   python -m venv .venv-eval && .venv-eval/bin/pip install -r requirements-eval.txt
+deepeval==4.1.5
