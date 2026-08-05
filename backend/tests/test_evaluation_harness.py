@@ -272,3 +272,72 @@ class TestSeededSubsamplesDifferInMembership:
             # Exactly one member from each block of 10.
             blocks = {value // 10 for value in drawn}
             assert len(blocks) == 200, f"seed {seed} drew twice from one block"
+
+
+class TestTheConfidenceGateHasNothingToDiscriminate:
+    """The `C` factor is a modality filter on DGP-2, not a confidence gate.
+
+    Confidence reaching `is_strong_success` takes exactly two values: 1.00 from MCQ and
+    code, 0.90 from voice/open. `grader_error_sd` is 0 on DGP-2 — only DGP-3 carries
+    grader noise — so there is no spread for a threshold to cut into.
+
+    Consequences, both load-bearing for how the study reads:
+      - no threshold below 0.9 changes anything, and one above 0.9 removes voice
+        wholesale, so `C` is aliased onto the modality allowlist `M`;
+      - P09, defined as a candidate who is confidently graded and wrong, has no gate to
+        attack — its +0.15 moves 0.90 to 1.00 and clears what P01 already cleared.
+
+    Pinned because it is a claim about the harness that would silently stop being true if
+    the DGP or the voice responder changed, and the study's reading of `C` depends on it.
+    """
+
+    def test_dgp2_gives_every_simulee_zero_grader_error(self):
+        from app.services.orchestrator import registry
+        from evaluation.dgp import build_cohort, read_graph_prerequisites
+
+        bank = registry.get_bank("AIE")
+        edges = read_graph_prerequisites(registry.profile("AIE").graph_path)
+        cohort = build_cohort(
+            dgp="DGP-2", n=40, seed=5, bank=bank, bank_id="AIE",
+            mains=bank.variables(), graph_prerequisites=edges,
+        )
+        assert {s.grader_error_sd for s in cohort.simulees} == {0.0}
+
+    def test_voice_confidence_is_a_point_mass_without_grader_error(self):
+        from evaluation import personas, responder
+        from evaluation.dgp import Simulee
+
+        from app.services.orchestrator import registry
+
+        voice = next(
+            i for i in registry.get_bank("AIE").all_items() if i.modality in ("voice", "open")
+        )
+        main = voice.measures[0].variable.split(".")[0]
+
+        def confidences(persona_id: str) -> set[float]:
+            simulee = Simulee(
+                simulee_id="sim-1", family="monotonic", stratum=4,
+                theta={main: 0.0}, persona=persona_id, grader_error_sd=0.0,
+            )
+            plan = responder.plan_for(simulee, voice, main)
+            graded = responder.voice_response(voice, plan, simulee)
+            return {round(e.confidence, 6) for e in graded.evaluation.criterion_evidence}
+
+        assert confidences("P01") == {0.90}
+        # P09's +0.15 clips at 1.0 — the same side of any threshold P01 already cleared.
+        assert confidences("P09") == {1.00}
+
+    def test_no_confidence_lands_between_the_gate_and_the_point_mass(self):
+        """A threshold in [0.0, 0.9) filters nothing; one in (0.9, 1.0] filters voice."""
+        from app.services.competency_graph.config import PropagationConfig
+
+        observed = {0.90, 1.00}
+        default_gate = PropagationConfig().minimum_propagation_confidence
+        assert all(c >= default_gate for c in observed), "the default gate rejects nothing"
+
+        tightened = 0.95
+        rejected = {c for c in observed if c < tightened}
+        assert rejected == {0.90}, (
+            "tightening C removes exactly the voice/open evidence and nothing else, which "
+            "makes it a modality filter rather than a confidence filter"
+        )
