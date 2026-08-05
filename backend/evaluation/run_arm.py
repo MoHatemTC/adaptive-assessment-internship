@@ -103,7 +103,8 @@ def _force_enable_edges(graph_service):
 
 
 async def _run_all(
-    *, arm_name, cohort, out_dir, limit, max_steps, trace_every, run_name="", resume=False
+    *, arm_name, cohort, out_dir, limit, max_steps, trace_every, run_name="", resume=False,
+    sample_seed=0,
 ):
     from evaluation import HAS_GRAPH, responder
     from evaluation.session_runner import run_session
@@ -156,11 +157,40 @@ async def _run_all(
     # Shuffling makes "stopped at k sessions" a random subsample instead of a truncation.
     import numpy as _np
 
+    # WHICH candidates this cell runs on. `sample_seed` of 0 means "the cohort's own seed",
+    # which gives every cell the SAME sample — that identical pairing is what buys the
+    # paired design its variance reduction, and it is the right default for a factorial
+    # contrast.
+    #
+    # A non-zero value draws a different stratified subsample, and exists for centre
+    # points. Replicates that run on identical candidates in a deterministic harness are
+    # not replicates: they return the same number, pure error comes out as exactly 0, and
+    # the |effect| > 2*SE activity rule divides by it and calls every effect active. A
+    # centre point has to replicate the SAMPLING, not the arithmetic.
+    #
+    # The subsample must differ in MEMBERSHIP, not merely in order — reshuffling the same
+    # 200 candidates returns the same aggregate and estimates the same zero pure error.
+    # So a seeded cell takes one RANDOM member from each stride block rather than a fixed
+    # phase within it. A fixed phase gives only `step` distinct samples and collides
+    # readily: the first version of this shifted the stride by a fraction of a step, and
+    # three of the four centre seeds landed in the same integer bucket and drew identical
+    # cohorts. Per-block selection preserves the stratification exactly — one candidate per
+    # block, blocks unchanged — while making the draw genuinely random.
     simulees = list(cohort.simulees)
+    rng_seed = int(sample_seed) if sample_seed else cohort.seed
     if limit and limit < len(simulees):
         step = len(simulees) / limit
-        simulees = [simulees[int(i * step)] for i in range(limit)]
-    order = _np.random.default_rng(cohort.seed).permutation(len(simulees))
+        if sample_seed:
+            picker = _np.random.default_rng(rng_seed)
+            chosen = []
+            for i in range(limit):
+                low = int(i * step)
+                high = min(len(simulees), int((i + 1) * step))
+                chosen.append(simulees[int(picker.integers(low, max(high, low + 1)))])
+            simulees = chosen
+        else:
+            simulees = [simulees[int(i * step)] for i in range(limit)]
+    order = _np.random.default_rng(rng_seed).permutation(len(simulees))
     simulees = [simulees[int(i)] for i in order]
     def _resolved_policy_summary(bank_id: str | None) -> dict | None:
         """The permission lattice actually in force, for R1.
@@ -247,6 +277,9 @@ async def _run_all(
                     "n_planned": len(simulees),
                     "n_written": n_written,
                     "cohort_seed": cohort.seed,
+                    # 0 = the cohort's own seed, i.e. the shared paired sample. Non-zero
+                    # marks a cell that drew its own subsample; centre points do.
+                    "sample_seed": int(sample_seed),
                     # Retained under its old name so existing readers keep working; it is
                     # the final count only when status == "complete".
                     "n": n_written,
@@ -342,6 +375,14 @@ def main() -> None:
         action="store_true",
         help="continue an interrupted cell, skipping sessions already written",
     )
+    parser.add_argument(
+        "--sample-seed",
+        type=int,
+        default=0,
+        help="0 = the cohort's shared paired sample. Non-zero draws a different stratified "
+             "subsample, so centre-point replicates replicate the SAMPLING rather than the "
+             "arithmetic and pure error is not identically zero.",
+    )
     args = parser.parse_args()
 
     factors = json.loads(args.factors) if args.factors else {}
@@ -365,6 +406,7 @@ def main() -> None:
             trace_every=args.trace_every,
             run_name=args.run_name,
             resume=args.resume,
+            sample_seed=args.sample_seed,
         )
     )
 

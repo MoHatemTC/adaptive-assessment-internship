@@ -112,6 +112,8 @@ def _run_cell(
     ]
     if expected_session_length > 0:
         command += ["--expected-session-length", str(expected_session_length)]
+    if getattr(cell, "sample_seed", 0):
+        command += ["--sample-seed", str(cell.sample_seed)]
     if resume:
         command.append("--resume")
 
@@ -180,6 +182,12 @@ def main() -> None:
                         help="DGP-2 is the realistic arm and the only one that prices a wrong edge")
     parser.add_argument("--persona", nargs="*", default=["P01"])
     parser.add_argument("--n", type=int, default=400, help="sessions per cell, before persona weighting")
+    parser.add_argument(
+        "--equal-n",
+        action="store_true",
+        help="ignore persona cell-size weights; every persona gets exactly --n. Use when "
+             "comparing personas, where unequal precision reads as an effect.",
+    )
     parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
     parser.add_argument("--trace-every", type=int, default=0)
     parser.add_argument("--expected-session-length", type=float, default=0.0)
@@ -199,7 +207,12 @@ def main() -> None:
         if cohort_path is None:
             missing_cohorts.append((args.dgp, persona))
             continue
-        limit = int(round(args.n * personas_module.weight_for(persona)))
+        # Persona weights exist so the decisive personas get the n their own safety gates
+        # need. They are wrong for a CONTRAST between personas, where the comparison is
+        # cleaner at equal n and the difference in precision would otherwise be read as a
+        # difference in the thing being measured.
+        weight = 1.0 if args.equal_n else personas_module.weight_for(persona)
+        limit = int(round(args.n * weight))
         for cell in cells:
             jobs.append((cell, cohort_path, persona, limit))
 

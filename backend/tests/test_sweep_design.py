@@ -254,3 +254,44 @@ class TestOneSweepPerOutputDirectory:
         os.close(os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
         with pytest.raises(FileExistsError):
             os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+
+
+class TestCentrePointsReplicateSamplingNotArithmetic:
+    """Amendment 13.5. Deterministic replicates estimate zero pure error.
+
+    The harness is deterministic given (simulee, item), and the four centre points differ
+    only in M and E, which change nothing measurable. So the replicates returned IDENTICAL
+    numbers, pure-error SD came out as exactly 0.0, SE(effect) was 0, and the
+    |effect| > 2*SE activity rule marked every non-zero effect active — including one of
+    +0.0017. That is what a divide-by-almost-zero looks like when nothing checks for it.
+
+    A centre point has to replicate the SAMPLING. These tests pin that it does.
+    """
+
+    def test_factorial_cells_share_one_sample(self, cells):
+        """Pairing across the factorial is what buys the variance reduction."""
+        factorial = [c for c in cells if c.kind == "factorial"]
+        assert {c.sample_seed for c in factorial} == {0}
+
+    def test_every_centre_point_draws_a_different_sample(self, cells):
+        centre = [c for c in cells if c.kind == "centre"]
+        seeds = [c.sample_seed for c in centre]
+        assert 0 not in seeds, "a centre point reused the shared sample"
+        assert len(set(seeds)) == len(seeds), "two centre points share a seed"
+
+    def test_the_seeds_are_fixed_so_the_design_reproduces(self):
+        from evaluation.design import CENTRE_SAMPLE_SEEDS, build_design
+
+        first = [c.sample_seed for c in build_design() if c.kind == "centre"]
+        second = [c.sample_seed for c in build_design() if c.kind == "centre"]
+        assert first == second == list(CENTRE_SAMPLE_SEEDS)
+
+    def test_the_sample_seed_reaches_the_manifest(self, cells):
+        """A cell that cannot say which candidates it ran on is not reproducible."""
+        assert all("sample_seed" in c.as_dict() for c in cells)
+
+    def test_the_caveat_about_curvature_is_stated(self):
+        """Pure error now includes sampling, so curvature is only detectable above it."""
+        caveats = " ".join(design_document()["caveats"]).lower()
+        assert "sampling variability" in caveats
+        assert "curvature" in caveats

@@ -212,3 +212,63 @@ class TestTruncatedRunsAreRecoverable:
         path = tmp_path / "results.jsonl"
         path.write_text('{"a": 1}\n{"b": 2}\n', encoding="utf-8")
         assert _read_jsonl(path) == [{"a": 1}, {"b": 2}]
+
+
+class TestSeededSubsamplesDifferInMembership:
+    """A seeded cell must draw DIFFERENT candidates, not the same ones reordered.
+
+    Reshuffling one sample returns the same aggregate and estimates the same zero pure
+    error, so order alone is not enough. The first implementation shifted the stride by a
+    fraction of a step, which gives only `step` distinct samples — three of the four
+    centre seeds landed in the same bucket and drew identical cohorts.
+    """
+
+    @staticmethod
+    def _sample(population, limit, sample_seed, cohort_seed=42):
+        import numpy as np
+
+        simulees = list(population)
+        rng_seed = int(sample_seed) if sample_seed else cohort_seed
+        if limit and limit < len(simulees):
+            step = len(simulees) / limit
+            if sample_seed:
+                picker = np.random.default_rng(rng_seed)
+                chosen = []
+                for i in range(limit):
+                    low = int(i * step)
+                    high = min(len(simulees), int((i + 1) * step))
+                    chosen.append(simulees[int(picker.integers(low, max(high, low + 1)))])
+                simulees = chosen
+            else:
+                simulees = [simulees[int(i * step)] for i in range(limit)]
+        order = np.random.default_rng(rng_seed).permutation(len(simulees))
+        return [simulees[int(i)] for i in order]
+
+    def test_different_seeds_give_substantially_different_members(self):
+        from evaluation.design import CENTRE_SAMPLE_SEEDS
+
+        population = list(range(2000))
+        samples = [set(self._sample(population, 200, s)) for s in CENTRE_SAMPLE_SEEDS]
+
+        assert all(len(s) == 200 for s in samples)
+        assert len({frozenset(s) for s in samples}) == len(samples), "two seeds drew the same set"
+        for i, a in enumerate(samples):
+            for b in samples[i + 1:]:
+                # Independent stratified draws of 200 from 2000 overlap ~10% by chance.
+                # Anything near 200 means the seeds are not separating the samples.
+                assert len(a & b) < 60, f"overlap {len(a & b)} is far above chance"
+
+    def test_seed_zero_is_the_deterministic_shared_sample(self):
+        population = list(range(2000))
+        assert self._sample(population, 200, 0) == self._sample(population, 200, 0)
+
+    def test_stratification_survives_the_random_draw(self):
+        """One candidate per stride block, blocks unchanged — the strata are preserved."""
+        from evaluation.design import CENTRE_SAMPLE_SEEDS
+
+        population = list(range(2000))
+        for seed in CENTRE_SAMPLE_SEEDS:
+            drawn = sorted(self._sample(population, 200, seed))
+            # Exactly one member from each block of 10.
+            blocks = {value // 10 for value in drawn}
+            assert len(blocks) == 200, f"seed {seed} drew twice from one block"

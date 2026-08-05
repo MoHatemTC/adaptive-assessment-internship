@@ -106,6 +106,11 @@ GENERATORS = {"M": ("D", "K", "C"), "E": ("D", "K", "S")}
 
 N_CENTRE_POINTS = 4
 
+#: One candidate subsample per centre-point replicate. Arbitrary but fixed: the design has
+#: to be reproducible, and what matters is only that they DIFFER — a replicate that reuses
+#: the shared sample measures the arithmetic rather than the sampling.
+CENTRE_SAMPLE_SEEDS = (10_007, 20_011, 30_013, 40_017)
+
 
 @dataclass(frozen=True)
 class Cell:
@@ -115,6 +120,15 @@ class Cell:
     kind: str  # "factorial" | "centre"
     levels: dict[str, str]  # factor -> "low" | "high" | "centre"
     env: dict[str, str] = field(default_factory=dict)
+    # 0 = the cohort's shared paired sample, which every factorial cell uses so that the
+    # contrast between them is paired. Centre points get distinct non-zero values so their
+    # replicates differ in WHICH candidates they ran on.
+    #
+    # Without this, replicates in a deterministic harness return identical numbers, pure
+    # error is exactly 0, and the |effect| > 2*SE activity rule divides by zero-ish and
+    # declares every effect active — including one of +0.0017. Measured that way in the
+    # first S1 run; see amendment 13.5.
+    sample_seed: int = 0
 
     def as_dict(self) -> dict:
         return {
@@ -122,6 +136,7 @@ class Cell:
             "kind": self.kind,
             "levels": dict(self.levels),
             "env": dict(self.env),
+            "sample_seed": self.sample_seed,
         }
 
 
@@ -187,6 +202,8 @@ def build_design() -> list[Cell]:
                 kind="centre",
                 levels=levels,
                 env=_env_for(levels),
+                # Distinct per replicate, and fixed so the design is reproducible.
+                sample_seed=CENTRE_SAMPLE_SEEDS[index % len(CENTRE_SAMPLE_SEEDS)],
             )
         )
 
@@ -248,6 +265,10 @@ def design_document() -> dict:
             f"Pure error has {N_CENTRE_POINTS - 1} degrees of freedom. The 2-sigma rule "
             "for declaring a factor active is a screening heuristic, not a hypothesis test.",
             "Curvature is undefined for M and E, which are categorical.",
+            "Centre points draw DIFFERENT candidate subsamples from the factorial cells, "
+            "so pure error includes sampling variability. That is what makes it pure "
+            "error at all in a deterministic harness — but it means the curvature "
+            "estimate carries that sampling too, and is only detectable above it.",
         ],
         "cells": [c.as_dict() for c in cells],
     }
