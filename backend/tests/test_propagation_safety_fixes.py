@@ -106,6 +106,11 @@ class TestS2BandProbabilityStopIsReachable:
 
     def test_the_rule_fires_when_it_is_given_a_probability(self, monkeypatch):
         monkeypatch.setattr(settings, "cat_band_probability_stop_enabled", True)
+        # Pinned explicitly rather than relying on the default. The rule being able to
+        # stop at an SE of 0.9 is the PRE-5 defect, not a property worth preserving —
+        # this test asserts the flag is doing what it says, and the test below asserts
+        # what happens when it is turned off.
+        monkeypatch.setattr(settings, "cat_band_probability_stop_conjunctive", False)
         stop = convergence.evaluate(
             standard_error=0.9,  # too wide for a precision stop
             band_history=[3, 4, 3],  # unstable, so no stable-band stop either
@@ -115,6 +120,70 @@ class TestS2BandProbabilityStopIsReachable:
         )
         assert stop.should_stop is True
         assert stop.reason == "band_probability"
+
+    def test_the_conjunctive_rule_refuses_to_stop_on_an_imprecise_posterior(self, monkeypatch):
+        """PRE-5. Mass concentrated in one band is not the same claim as a precise estimate.
+
+        Near a cut point the two come apart sharply, and the non-conjunctive rule runs
+        BEFORE the precision rule — so it could finalise a competency at any standard
+        error at all. Every propagation configuration in the study is judged by its effect
+        on a posterior, so a stopping rule that ends sessions at an arbitrary precision
+        would confound the sweep with a second defect.
+        """
+        monkeypatch.setattr(settings, "cat_band_probability_stop_enabled", True)
+        monkeypatch.setattr(settings, "cat_band_probability_stop_conjunctive", True)
+
+        def stop_at(standard_error: float):
+            return convergence.evaluate(
+                standard_error=standard_error,
+                band_history=[3, 4, 3],
+                questions_answered=settings.cat_precision_min_questions,
+                items_remaining=20,
+                band_probability=0.95,
+            )
+
+        assert stop_at(0.9).should_stop is False, "stopped with SE far above target"
+        # And it still fires once precision is actually there — conjunctive means a
+        # refinement of the precision stop, not the removal of the rule.
+        precise = stop_at(settings.cat_se_target - 0.01)
+        assert precise.should_stop is True
+        assert precise.reason == "band_probability"
+
+    def test_no_session_reports_a_blank_stop_reason(self):
+        """PRE-2. A blank is not a stop reason; it is the absence of one.
+
+        A session-level rule ends the run while variables are still open. Those never ran
+        a stopping rule, so their reason stayed at the `""` default and was copied into
+        the report — 34-38% of sessions in one arm. The analysis then bucketed `""`
+        alongside the named reasons and printed a percentage next to it.
+        """
+        from app.services.adaptive.convergence import TERMINAL_STOP_REASONS
+        from tests.conftest import orchestrator_for
+
+        orchestrator = orchestrator_for("AIE")
+        for session_stop in ("time_limit", "item_budget", "no_candidates_available", ""):
+            state = orchestrator.begin(["C1", "C3"])
+            report = orchestrator.summarise(state, session_stop)
+            reasons = [v.stop_reason for v in report.variables]
+
+            assert "" not in reasons, f"blank stop reason after a {session_stop!r} stop"
+            assert set(reasons) <= TERMINAL_STOP_REASONS, (
+                f"unnamed stop reasons {sorted(set(reasons) - TERMINAL_STOP_REASONS)}"
+            )
+            # The PRE-2 verification as stated: the distribution sums to 1 over named
+            # reasons, with nothing falling outside it.
+            histogram: dict[str, int] = {}
+            for reason in reasons:
+                histogram[reason] = histogram.get(reason, 0) + 1
+            assert sum(histogram.values()) == len(report.variables)
+
+    def test_a_session_level_stop_is_distinguishable_from_a_competencys_own_budget(self):
+        """Otherwise "ran out of questions" and "the clock ended the run" read alike."""
+        from tests.conftest import orchestrator_for
+
+        orchestrator = orchestrator_for("AIE")
+        report = orchestrator.summarise(orchestrator.begin(["C1"]), "time_limit")
+        assert report.variables[0].stop_reason == "session_time_limit"
 
     def test_finalisation_passes_a_probability_through(self, monkeypatch):
         """The wiring, asserted where it was missing rather than where it works."""

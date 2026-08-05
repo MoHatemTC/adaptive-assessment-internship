@@ -63,6 +63,8 @@ from app.services.competency_graph.evidence import (
     evidence_id_for,
 )
 from app.services.competency_graph.graph import CompetencyGraphService
+from app.services.adaptive.convergence import SESSION_STOP_FOR, StopReason
+from app.services.competency_graph import manifest as graph_manifest
 from app.services.competency_graph.ledger import EvidenceLedger
 from app.services.competency_graph.propagation import apply_direct_evidence
 from app.services.competency_graph.report import build_main_report, build_node_reports
@@ -208,6 +210,7 @@ class Orchestrator:
 
         intake = intake or {}
         confidence = confidence or {}
+        manifest = self._propagation_manifest()
         return AssessmentState(
             session_id=f"asmt_{uuid.uuid4().hex[:12]}",
             variables={
@@ -219,7 +222,102 @@ class Orchestrator:
                 for variable in target_variables
             },
             started_at=time.time(),
+            propagation_manifest=manifest,
+            propagation_manifest_hash=graph_manifest.manifest_hash(manifest) if manifest else "",
         )
+
+    def _propagation_manifest(self) -> dict:
+        """The propagation configuration in force, or {} when there is no graph.
+
+        Built at `begin` and again per response, so drift can be detected. Never raises:
+        a session that cannot describe its configuration is worse than one that cannot
+        record it, but only slightly, and refusing to start is worse than both.
+        """
+        if not graph_config.graph_enabled():
+            return {}
+        try:
+            from app.services.orchestrator.registry import get_propagation_policy
+
+            resolved = get_propagation_policy(self._bank_id)
+        except (ImportError, KeyError, OSError, ValueError):
+            resolved = None
+        try:
+            return graph_manifest.propagation_manifest(
+                graph_config.propagation_config_from_settings(
+                    minimum_failures_to_block=self._minimum_failures_to_block()
+                ),
+                resolved,
+                bank_id=self._bank_id or "",
+            )
+        except ValueError:
+            logger.exception("propagation configuration is invalid — recording no manifest")
+            return {}
+
+    @staticmethod
+    def _stamp_open_variables(state: AssessmentState, session_stop_reason: str) -> None:
+        """Give every still-open competency a named reason for ending.
+
+        THE PRE-2 FIX. A session-level rule — the clock, the item budget, no admissible
+        candidate — ends the run while variables are still open. Those variables never ran
+        a stopping rule, so their `stop_reason` stayed at its `""` default and was copied
+        into the report unchanged. That produced blank reasons in a third of sessions in
+        one arm, and the analysis bucketed the blank alongside the named reasons and
+        printed a percentage beside it, as though "" were a way of finishing.
+
+        The variable did end, and the reason is knowable: the session ended. Naming it
+        `session_*` also keeps it distinguishable from a competency that reached its own
+        budget, which is a different fact about the assessment.
+
+        Applied at the reporting boundary rather than by changing the schema default,
+        because `""` on a live `VariableState` correctly means "still running" — that is
+        the state a mid-session read should see.
+        """
+        fallback = SESSION_STOP_FOR.get(session_stop_reason, StopReason.SESSION_ENDED)
+        for variable_state in state.variables.values():
+            if variable_state.finalised or variable_state.stop_reason not in (
+                "",
+                StopReason.IN_PROGRESS,
+            ):
+                continue
+            variable_state.stop_reason = fallback
+
+    def _note_manifest_drift(self, state: AssessmentState, *, evidence_marker: str) -> None:
+        """Record any change to the propagation configuration since the session began.
+
+        Appends rather than overwrites, and names the fields that moved: "something
+        changed" is not actionable, "upward_decay went from 0.7 to 0.3 at item X" is.
+        """
+        current = self._propagation_manifest()
+        if not current:
+            return
+        digest = graph_manifest.manifest_hash(current)
+        if digest == state.propagation_manifest_hash:
+            return
+        if not state.propagation_manifest_hash:
+            # First response of a session begun before the manifest existed, or one whose
+            # manifest could not be built. Adopt rather than report drift against nothing.
+            state.propagation_manifest = current
+            state.propagation_manifest_hash = digest
+            return
+
+        before = (state.propagation_manifest or {}).get("factors", {})
+        after = current.get("factors", {})
+        changed = sorted(
+            key for key in set(before) | set(after) if before.get(key) != after.get(key)
+        )
+        logger.warning(
+            "propagation configuration changed mid-session at %s: %s", evidence_marker, changed
+        )
+        state.propagation_manifest_drift.append(
+            {
+                "at_evidence": evidence_marker,
+                "from_hash": state.propagation_manifest_hash,
+                "to_hash": digest,
+                "changed": changed,
+            }
+        )
+        state.propagation_manifest = current
+        state.propagation_manifest_hash = digest
 
     # --- step 2: fill the queue -------------------------------------------
     async def fill_queue(
@@ -747,6 +845,13 @@ class Orchestrator:
         attempt_no = state.served_item_ids.count(item.item_id) + 1
         now = datetime.now(timezone.utc).isoformat()
 
+        # The manifest was written at `begin`, but this config is rebuilt from settings on
+        # every response — so a setting moved mid-session makes the recorded manifest a
+        # description of a configuration that stopped applying. Detect it here rather than
+        # trusting that nobody does it: a sweep harness that fails to isolate one cell
+        # produces exactly this, and produces it silently.
+        self._note_manifest_drift(state, evidence_marker=f"{item.item_id}#{attempt_no}")
+
         seen_variables: set[str] = set()
         events: list[EvidenceEvent] = []
         for outcome in graded.outcomes:
@@ -1056,12 +1161,13 @@ class Orchestrator:
             return True, "item_budget"
         if state.presenting is None and not state.queue:
             return True, "no_candidates_available"
-        return False, ""
+        return False, StopReason.IN_PROGRESS
 
     # --- reporting ----------------------------------------------------------
     def summarise(self, state: AssessmentState, stop_reason: str = "") -> AssessmentReport:
         """The end-of-assessment report. Nothing here is inferred."""
         by_item = {i.item_id: i for i in self._bank.all_items()}
+        self._stamp_open_variables(state, stop_reason)
 
         def modalities_for(variable: str) -> list[str]:
             """Every modality this main was ASKED in.
@@ -1110,11 +1216,30 @@ class Orchestrator:
                 )
 
             precision_index = round(variables_module.certainty(variable_state), 1)
+            # PRE-6, applied HERE and only here. The posterior is 33-45% overconfident
+            # when a competency is several skills rather than one; widening it at the
+            # reporting boundary corrects what a reader sees without feeding back into
+            # `variable_state.standard_error`, which the stopping rule reads.
+            widening = settings.interval_widening_for(variable)
+            raw_se = variable_state.standard_error
+            reported_se = raw_se * widening
+            reported_interval = (
+                variables_module.posterior_interval(variable_state) if measured else None
+            )
+            if reported_interval is not None and widening > 1.0:
+                # Widen about the point estimate, so the interval stays centred on the
+                # ability being reported rather than drifting toward the prior.
+                centre = variable_state.theta_hat
+                reported_interval = tuple(
+                    centre + (bound - centre) * widening for bound in reported_interval
+                )
             reports.append(
                 VariableReport(
                     variable=variable,
                     theta_hat=round(variable_state.theta_hat, 4),
-                    standard_error=round(variable_state.standard_error, 4),
+                    standard_error=round(reported_se, 4),
+                    standard_error_raw=round(raw_se, 4),
+                    interval_widening_factor=round(widening, 4),
                     precision_index_pct=precision_index,
                     certainty_pct=precision_index,
                     level=level if measured else None,
@@ -1123,8 +1248,8 @@ class Orchestrator:
                     band_probability=round(max(bands.values()), 4) if bands else 0.0,
                     most_probable_band=most_probable if measured else None,
                     credible_interval_95=(
-                        tuple(round(x, 3) for x in variables_module.posterior_interval(variable_state))
-                        if measured
+                        tuple(round(x, 3) for x in reported_interval)
+                        if reported_interval is not None
                         else None
                     ),
                     aberrant_response_count=aberrant_by_variable.get(variable, 0),
@@ -1163,6 +1288,15 @@ class Orchestrator:
                 "preview_inferred_nodes": dict(state.graph_preview_inferred_nodes),
                 "preview_blocked_nodes": list(state.graph_preview_blocked_nodes),
                 "preview_refuted_nodes": list(state.graph_preview_refuted_nodes),
+                # Where each enforced inference came from, for the depth- and edge-
+                # stratified safety analysis. Pooling those distances into one
+                # wrong-inference rate reports two different mechanisms as one number.
+                "inferred_mastery_records": dict(state.graph_inferred_mastery_records),
+                # What this session was configured to do, and whether that held for all
+                # of it. INV-P8 asserts `manifest_drift` is empty.
+                "manifest": dict(state.propagation_manifest),
+                "manifest_hash": state.propagation_manifest_hash,
+                "manifest_drift": list(state.propagation_manifest_drift),
             }
 
         return AssessmentReport(

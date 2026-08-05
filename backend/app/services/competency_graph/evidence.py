@@ -56,9 +56,18 @@ class EvidenceEvent:
     source: str
     evidence_kind: str = "direct"
 
-    # Provenance
-    source_node: str | None = None
-    propagation_distance: int = 0
+    # Provenance. `directly_tested` is the only one left, and it is always True: an
+    # EvidenceEvent IS a direct observation.
+    #
+    # `source_node` and `propagation_distance` used to sit here and were never set by
+    # anything — no constructor anywhere passed a distance other than 0. They described an
+    # inferred-evidence path that does not exist and must not: an inferred conclusion that
+    # arrived as an EvidenceEvent would carry a score and a weight into the posterior,
+    # which is the double-counting the InferredNodeSignal contract exists to make
+    # impossible. Dead fields that imply a forbidden design are worse than absent ones.
+    #
+    # Inference provenance lives on `CompetencyNodeState.inferred_support`, on the node
+    # that RECEIVED the inference rather than on the direct event that caused it.
     directly_tested: bool = True
 
     rubric_criterion_id: str | None = None

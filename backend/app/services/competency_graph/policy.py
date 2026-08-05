@@ -228,6 +228,7 @@ def resolve_policy(
     deployment_inference: bool,
     deployment_blocking: bool,
     deployment_minimum_failures_to_block: int = 2,
+    deployment_accepted_validation_statuses: tuple[str, ...] | None = None,
 ) -> ResolvedPolicy:
     """Fold deployment, bank and edge configuration into one decision per edge.
 
@@ -238,6 +239,18 @@ def resolve_policy(
     """
     bank = graph.policy
     accepted = set(bank.accepted_validation_statuses)
+
+    # A deployment may narrow the accepted statuses; it may never widen them. Intersection,
+    # never union — a union would let a permissive deployment override a bank that
+    # deliberately restricted itself, which inverts the most-restrictive-wins rule the rest
+    # of this function exists to implement.
+    #
+    # None means "no opinion", NOT ("validated",). The difference decides whether a bank
+    # that widened its own list keeps that choice: with a default of ("validated",) the
+    # intersection would silently cut it back, and the symptom would be fewer inferences —
+    # which reads as a quiet system rather than a misconfigured one.
+    if deployment_accepted_validation_statuses is not None:
+        accepted &= {s.strip().lower() for s in deployment_accepted_validation_statuses}
 
     # A bank may tighten the failure requirement, never loosen it: blocking is the
     # strongest claim the system makes, and this is the knob that prices it.

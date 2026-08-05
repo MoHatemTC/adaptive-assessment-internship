@@ -366,6 +366,18 @@ def graph_enabled() -> bool:
 
 
 def shadow_mode_enabled() -> bool:
+    """Whether the audit mirrors are computed and persisted.
+
+    This was declared, documented as live, shown in the operator UI, and read by nothing —
+    the exact defect `graph_enabled` above was introduced to fix, reintroduced. The mirror
+    sets were populated unconditionally, so an operator turning shadow mode off saw no
+    change.
+
+    Narrowed to one real meaning: it governs the MIRROR, not enforcement. It deliberately
+    does not force `enforce_inference` off, because it defaults True — an operator setting
+    GRAPH_UPWARD_INFERENCE_ENABLED=true would then see nothing happen until they found and
+    cleared a second flag, which is the trap this module exists to prevent.
+    """
     return graph_enabled() and settings.graph_shadow_mode
 
 

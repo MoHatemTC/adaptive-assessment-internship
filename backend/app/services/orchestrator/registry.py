@@ -173,6 +173,7 @@ def _policy_cached(bank_id: str) -> ResolvedPolicy | None:
         deployment_inference=settings.graph_upward_inference_enabled,
         deployment_blocking=settings.graph_descendant_blocking_enabled,
         deployment_minimum_failures_to_block=settings.graph_minimum_failures_to_block,
+        deployment_accepted_validation_statuses=settings.accepted_validation_statuses(),
     )
 
 

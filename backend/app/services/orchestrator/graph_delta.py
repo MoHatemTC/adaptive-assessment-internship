@@ -143,8 +143,9 @@ class GraphDelta:
             # The mirror records what reached K, not every ancestor the traversal touched.
             # An ancestor one observation short of the corroboration requirement is not a
             # conclusion the graph drew and would mis-state the mirror as agreement.
-            self.shadow_inferred_mastered.update(result.corroborated_nodes)
-            self.shadow_inferred_mastered -= self.mastered | self.not_mastered
+            if graph_config.shadow_mode_enabled():
+                self.shadow_inferred_mastered.update(result.corroborated_nodes)
+                self.shadow_inferred_mastered -= self.mastered | self.not_mastered
             self.inferred_mastered.update(result.inferred_mastered_nodes)
             self.inferred_mastered -= self.mastered | self.not_mastered
 
@@ -168,7 +169,8 @@ class GraphDelta:
                     "enforced": signal.node in self.inferred_mastered,
                 }
 
-            self.shadow_blocked.update(result.shadow_blocked_nodes)
+            if graph_config.shadow_mode_enabled():
+                self.shadow_blocked.update(result.shadow_blocked_nodes)
             self.blocked.update(result.blocked_nodes)
             # Direct evidence reopens a block, and a node demonstrated directly is not
             # blocked by anything. Without this the block is permanent and contradiction

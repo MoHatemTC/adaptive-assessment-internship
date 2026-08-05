@@ -143,6 +143,35 @@ class Settings(BaseSettings):
     # trusted.
     cat_band_probability_stop_enabled: bool = False
     cat_band_probability_target: float = Field(default=0.80, gt=0.0, lt=1.0)
+    # Require the precision target TOO, rather than accepting P(band) instead of it.
+    #
+    # Without this the rule is evaluated before the precision rule and never sees the
+    # standard error, so it can finalise a competency whose posterior is far wider than
+    # target — concentrated mass in one band is not a precise estimate, and near a cut
+    # point the two claims come apart. Off by default so no shipped report changes; the
+    # evaluation harness turns it on, because every propagation configuration there is
+    # judged by its effect on a posterior and the posterior has to mean one thing.
+    cat_band_probability_stop_conjunctive: bool = False
+
+    # REPORTING ONLY. Widen the reported SE and credible interval by a measured factor.
+    #
+    # The posterior is calibrated when a competency really is one skill and 30-40%
+    # overconfident when it is several: SE calibration RMSE/SE landed at 1.33-1.45 under
+    # DGP-2 against a 0.95-1.10 bar, and 95% intervals covered 83-87% against a 93-97%
+    # bar. That was measured and then reported as a diagnostic while the engine went on
+    # shipping the overconfident interval.
+    #
+    # Applied at the reporting boundary and NOWHERE else. Widening
+    # `VariableState.standard_error` would move the precision stop, change session length,
+    # and so change the posterior the factor was calibrated against — a self-referential
+    # correction. `VariableReport` carries the raw SE alongside the widened one so the
+    # adjustment is auditable rather than invisible.
+    cat_interval_widening_enabled: bool = False
+    cat_interval_widening_factor: float = Field(default=1.0, ge=1.0, le=3.0)
+    # Per-competency overrides as a JSON object, e.g. {"C1": 1.33, "C6": 1.45}. The
+    # factor is a property of how multidimensional a competency is, so one global number
+    # is the wrong shape wherever that differs by main.
+    cat_interval_widening_by_variable: str = ""
 
     # Flag a response that the current posterior did not expect. Report-only: no branch
     # may read it and change an estimate.
@@ -398,6 +427,22 @@ class Settings(BaseSettings):
             self.orchestrator_item_seconds_by_modality,
             "ORCHESTRATOR_ITEM_SECONDS_BY_MODALITY",
         )
+
+    def interval_widening_for(self, variable: str) -> float:
+        """The reporting widening factor for one competency. 1.0 when disabled.
+
+        A per-variable override wins over the global factor; a missing one falls back to
+        it. Never below 1.0 — this exists to widen an overconfident interval, and letting
+        it narrow one would turn a calibration correction into a second way to overstate
+        precision.
+        """
+        if not self.cat_interval_widening_enabled:
+            return 1.0
+        overrides = self._parsed_float_map(
+            self.cat_interval_widening_by_variable, "CAT_INTERVAL_WIDENING_BY_VARIABLE"
+        )
+        factor = overrides.get((variable or "").lower(), self.cat_interval_widening_factor)
+        return max(1.0, float(factor))
 
     @staticmethod
     def _parsed_csv(raw: str) -> tuple[str, ...]:

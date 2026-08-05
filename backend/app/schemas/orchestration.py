@@ -285,6 +285,16 @@ class AssessmentState(BaseModel):
     # Preview beliefs the session went on to measure and disprove — the evidence that an
     # authored edge is wrong, and the reason recording the forecast is worth anything.
     graph_preview_refuted_nodes: list[dict] = Field(default_factory=list)
+
+    # WHAT CONFIGURATION THIS SESSION RAN UNDER. Written once at `begin`; INV-P8 reads it.
+    # Without it a sweep cell cannot say which of nine factor values produced its numbers,
+    # and a result that cannot name its configuration cannot be reproduced or believed.
+    propagation_manifest: dict = Field(default_factory=dict)
+    propagation_manifest_hash: str = ""
+    # Every mid-session change to that configuration. Normally empty — and the assertion
+    # is that it is empty, because the manifest describes the whole session only if
+    # nothing moved underneath it. Each entry: {at_evidence, from_hash, to_hash, changed}.
+    propagation_manifest_drift: list[dict] = Field(default_factory=list)
     # Set by record_response; after_response refills affected variables.
     graph_last_affected_mains: list[str] = Field(default_factory=list)
 
@@ -314,7 +324,16 @@ class AssessmentState(BaseModel):
 class VariableReport(BaseModel):
     variable: str
     theta_hat: float
+    # The REPORTED standard error, widened by `interval_widening_factor` when the
+    # deployment applies a calibration correction. `standard_error_raw` is the posterior's
+    # own value, which is what the stopping rule read.
+    #
+    # Both are present so the correction is auditable. A single widened number cannot be
+    # checked against the rule that produced the session, and a single raw number is the
+    # overconfident one that was measured at 33-45% too narrow.
     standard_error: float
+    standard_error_raw: float = 0.0
+    interval_widening_factor: float = 1.0
     # A monotone remap of the posterior SD. NOT the probability that the reported level is
     # correct — at SE 0.55 this reads 90 while P(correct band) is about 0.64 at a band
     # centre and 0.47 near a boundary. `certainty_pct` is retained as a deprecated alias
