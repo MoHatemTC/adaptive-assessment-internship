@@ -1,0 +1,58 @@
+{
+ "deepeval": "4.1.5",
+ "judge_model": "openai/gpt-5.6-sol",
+ "runs_per_case": 5,
+ "canary_results": [
+  {
+   "canary_id": "must_fail__fabricated_item",
+   "expected": "fail",
+   "verdict": false,
+   "median": 0.0,
+   "flip_rate": 0.0,
+   "prefilter_passed": true,
+   "prefilter_failures": []
+  },
+  {
+   "canary_id": "must_fail__inference_as_observation",
+   "expected": "fail",
+   "verdict": false,
+   "median": 0.0,
+   "flip_rate": 0.0,
+   "prefilter_passed": true,
+   "prefilter_failures": []
+  },
+  {
+   "canary_id": "must_pass__inference_labelled",
+   "expected": "pass",
+   "verdict": true,
+   "median": 1.0,
+   "flip_rate": 0.0,
+   "prefilter_passed": true,
+   "prefilter_failures": []
+  },
+  {
+   "canary_id": "must_pass__direct_claim",
+   "expected": "pass",
+   "verdict": true,
+   "median": 1.0,
+   "flip_rate": 0.0,
+   "prefilter_passed": true,
+   "prefilter_failures": []
+  }
+ ],
+ "reliability": {
+  "cases": 4,
+  "cases_usable": 4,
+  "mean_flip_rate": 0.0,
+  "max_flip_rate_allowed": 0.1,
+  "cases_straddling_threshold": [],
+  "canaries": {
+   "canaries": 4,
+   "missed": [],
+   "valid": true,
+   "note": "A missed canary invalidates every judged score in the run. The judge is not measuring the property the metric names."
+  },
+  "cohens_kappa": null,
+  "kappa_note": "NOT COMPUTABLE. Cohen's kappa requires two rater populations; repeated draws from one judge are one population sampled repeatedly. What is measured here is self-consistency, and a judge can be perfectly self-consistent and consistently wrong. Section 6.4's kappa >= 0.60 bar is therefore unmet and unmeasurable, so EVERY judged result in this study is descriptive and none of it has authority over a Tier-2 or Tier-3 endpoint."
+ }
+}

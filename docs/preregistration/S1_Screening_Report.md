@@ -9,12 +9,24 @@ calibrated cell size, the blocking floor, and the adversarial and judged lanes.
 
 ## 0. The short version
 
-**H1 is not rescued, and the reason is structural rather than statistical.**
+**H1 is falsified, and two independent §9 kill criteria fire.**
 
-The plan treats the propagation surface as nine factors with reachable levels, and asks which
-of them move the wrong-inference rate. Three of those levels turn out to be unreachable on this
-bank — not rare, not underpowered, but impossible — and each is provable from the graph and the
-configuration alone, at zero session cost.
+> **`r` = 0.83, 95% CI [0.593, 0.995].** The pre-registration says corroboration cannot reach
+> the gate when `r > 0.4` and the K sweep should stop. It is not close: the *lower* bound of
+> the interval is 0.59. §2.2's own table puts `K = 4` at 13.5% wrong when `r = 0.8`, against a
+> 3% gate — so even a graph that could satisfy `K` would not be rescued by it.
+>
+> **No factor moved the wrong-inference rate.** Nine of 36 cells produced any measurable
+> inference at all; across those the rate spans 13.8%–19.3% and the *best* upper bound is
+> 21.4% against a 3% gate. No factor is active on that response.
+
+Either trigger alone ends the study. Both fire, and they fire for different reasons — one about
+the candidates, one about the configuration surface — which is the strongest form the negative
+could take.
+
+Underneath them, three levels of that surface turn out to be unreachable on this bank. Not rare,
+not underpowered: impossible, and provable from the graph and the configuration alone at zero
+session cost.
 
 ### Finding 1 — `K ≥ 2` cannot be satisfied
 
@@ -80,7 +92,84 @@ it is a working safety control.
 
 ---
 
-## 1. Safety rates as measured
+## 1. The S1 screening result
+
+**36/36 cells, complete Resolution-IV design, P01, DGP-2, C-full, n = 200 per cell
+(7,200 sessions).** Persona stratification was started and not finished — see §10.
+
+### 1.1 `r`, the primary objective — and the first kill criterion
+
+| quantity | value |
+|---|---|
+| tetrachoric `r` | **0.833** (Bonett–Price cross-check 0.827) |
+| 95% CI (candidate-clustered bootstrap) | **[0.593, 0.995]** |
+| candidates with ≥2 verified inferences | 69 (15 with exactly one) |
+| design effect `1 + (m̄−1)·r` | **9.71** |
+| §9 kill criterion `r > 0.4` | **FIRES** |
+
+`r` is the number the plan says decides whether H1 has an answer at all, and it lands at 0.83.
+A candidate's inference errors are almost perfectly repeating: when the graph is wrong about
+someone once, it is wrong about them again. That is the regime where corroboration does nothing
+— §2.2's table puts `K = 4` at 13.5% wrong when `r = 0.8`.
+
+So the `K` finding in §0 and this one are independent and mutually reinforcing. Even if the
+graph gained the branching that would make `K ≥ 2` satisfiable, `r = 0.83` says the extra
+observations would not be independent enough to help.
+
+The design effect of 9.71 is worth stating separately: any wrong-inference rate computed over
+these events has an interval roughly **√9.71 ≈ 3.1× wider** than a naive binomial one. Every
+figure in §2 already accounts for this being unaccounted for — they are Clopper–Pearson bounds
+that assume independence, and are therefore optimistic.
+
+### 1.2 Which cells produced any evidence at all
+
+**27 of 36 cells are UNMEASURABLE** — firing volume below 2% of the best cell's 0.805 verified
+inferences per session. Per §4.3 that is *unmeasurable, not safe*.
+
+| level | cells measurable |
+|---|---|
+| `K` high (=3) | **0 / 16** |
+| `K` centre (=2) | **0 / 4** |
+| `K` low (=1) | 9 / 16 |
+| `S` high (=0.95), among `K` low | **1 / 8** |
+| `S` low (=0.80), among `K` low | 8 / 8 |
+
+Every `K ≥ 2` cell in the design produced nothing, which is §0's Finding 1 reproduced across
+the whole factorial rather than in one probe. Raising the success-score threshold to 0.95 has
+nearly the same effect: it is a second way to switch propagation off rather than to tune it.
+
+### 1.3 Main effects — and why the activity rule could not run
+
+Across the 9 measurable cells, the wrong-inference rate spans **13.8%–19.3%**, and the **best
+upper bound in the entire design is 21.4% against a 3% gate**. No factor is active on that
+response. `K` reports `n/a` because it did not vary among cells that fired — which is the
+analysis refusing to enter a zero from a cell that never fired, since that zero would drag the
+effect toward "this factor makes propagation safer" precisely because it made it inoperative.
+
+On the descriptive responses the effects are real but negligible: `D` moves questions per
+session by **+0.08 items** (24.11 → 24.19) and exact-level accuracy by **+0.0017** (0.649 →
+0.651). Across all 36 cells accuracy spans 0.648–0.658 and questions 24.09–24.21. **Nothing in
+the propagation surface buys a question.** §0's exchange rate — one question is worth at most
+0.5pp of accuracy — never comes into play, because there is no saving to price.
+
+**A methodological defect, reported rather than worked around.** The centre-point pure-error SD
+came out as **exactly 0.0**, so `SE(effect) = 0` and the 2σ rule marked every non-zero effect
+"active", including one of +0.0017. The cause is that the harness is deterministic given
+`(simulee, item)`, and the four centre points differ only in `M` and `E` — which change nothing
+measurable — so the replicates are *identical*, not merely similar. **Centre-point replicates in
+a deterministic simulation estimate zero pure error, and the activity rule degenerates.** The
+fix is to vary the seed across centre points so they replicate the sampling rather than the
+arithmetic. Until then, read the effect sizes and ignore the "active" column.
+
+### 1.4 PRE-2 confirmed at scale
+
+**Zero blank stop reasons across all 36 cells.** A representative distribution: precision 96.3%,
+question budget 2.7%, time budget 1.0% — summing to 1 over named reasons, which is the
+verification §1 asks for.
+
+---
+
+## 2. Safety rates as measured
 
 C-full / DGP-2 / P01, 200 sessions, `K = 1`, `D = 4`:
 
@@ -119,7 +208,7 @@ conclusions need the S2/S3 sample sizes, not this one.
 
 ---
 
-## 2. Preconditions
+## 3. Preconditions
 
 | # | Status | Evidence |
 |---|---|---|
@@ -140,7 +229,7 @@ test on the lookup rather than on the number.
 
 ---
 
-## 3. What the bank can measure at all
+## 4. What the bank can measure at all
 
 Found while repairing a failing test, and it bounds everything above.
 
@@ -158,7 +247,7 @@ artefact of a test that asserted in sorted order and aborted on the first.
 
 ---
 
-## 4. Tier-1 invariants
+## 5. Tier-1 invariants
 
 36 assertions across INV-P1..P10 plus two additions. All pass.
 
@@ -178,7 +267,7 @@ behaviour.
 
 ---
 
-## 5. Design and calibration
+## 6. Design and calibration
 
 Resolution IV, 2^(7−2) = 32 factorial + 4 centre points over `D, K, C, S, λ, M, E`. Generators
 `M = D·K·C`, `E = D·K·S`, chosen so the categorical factors carry the generated columns. The
@@ -209,7 +298,7 @@ threshold reads as a failure of the thing being measured.
 
 ---
 
-## 6. Adversarial lane
+## 7. Adversarial lane
 
 | ID | Result |
 |---|---|
@@ -223,7 +312,7 @@ confirmation the safety rule asks for.
 
 ---
 
-## 7. Judged layer (§6)
+## 8. Judged layer (§6)
 
 Built, executed, **descriptive in full**.
 
@@ -246,7 +335,7 @@ Five independent locks keep `pytest` from making a billed call; four are asserte
 
 ---
 
-## 8. Threats to validity
+## 9. Threats to validity
 
 §11 of the pre-registration stands unchanged. Four are worth restating because this pass
 sharpened them.
@@ -266,10 +355,35 @@ sharpened them.
 
 ---
 
-## 9. What should happen next
+## 10. What was not finished
 
-1. **Do not run S2 on `K` or `D`.** Both have one reachable state on this bank. A response
-   surface would trace a curve through a single point.
+**Persona stratification.** The S1 design was launched over P01, P02 and P09 at the sizes §3.2
+requires (P02 at 3x, P09 at 2x). P01 completed 36/36; P02 reached 24 cells with none complete
+before the pass ended, and P09 was not started. The partial P02 cells are kept under
+`eval-results/sweep_s1_incomplete_P02/` rather than deleted, and are **not** analysed — a
+partial persona folded into a complete design would break the balance the effects depend on.
+
+So every number in §1 is P01, the canonical persona. That matters for how far they generalise:
+**P02 is the persona the plan says decides the answer**, and a 40-session probe put its
+wrong-inference rate at 34% against P01's 16%. The direction is what §3.2 predicts and the n is
+far too small to quote as a result, but it means §1's rates are a *floor* rather than a typical
+value.
+
+None of the four findings in §0, and neither kill criterion, depends on the persona axis:
+`K >= 2` is unsatisfiable by graph topology, `D > 1` by arithmetic, and `r = 0.83` was measured
+on P01 where errors should repeat *least* — a spiky candidate's errors would repeat more.
+
+**Also not run:** S2, S3, and the golden-set judging beyond the canary validation.
+
+---
+
+## 11. What should happen next
+
+0. **Do not run S2 at all.** Two §9 kill criteria fired. The pre-registration is explicit that
+   `r > 0.4` stops the K sweep and that no active factor falsifies H1 — both happened, and the
+   plan's own design says the correct response is to report and stop, not to look harder.
+1. **In particular, do not run S2 on `K` or `D`.** Both have one reachable state on this bank.
+   A response surface would trace a curve through a single point.
 2. **Corroboration is a graph-authoring question, not a tuning one.** `K ≥ 2` needs ancestors
    with two or more distinct descendants, and the AIE graph has none. Either the graph gains
    branching — an authoring decision carrying its own validity burden — or `K` is removed from
@@ -280,10 +394,17 @@ sharpened them.
    null effect.
 4. **Blocking stays off.** 8.2% false blocking against a 2% gate, inside the predicted
    structural floor, exactly as §0 anticipated.
-5. **The per-edge table is the only route to a non-empty safe region**, and it now exists.
-   C6.9 → C6.10 is wrong 42% of the time while C3.4 → C3.5 is wrong 12.5%. Sizing an S2 that can
-   separate edges — rather than factors, which are inert — is the useful next experiment.
-6. **The bank's measurement floor is the more urgent finding.** 16 of 33 AIE variables cannot
+5. **If the question is ever reopened, reopen it on EDGES, not on factors.** The per-edge
+   table now exists and shows a 3.4x spread — C6.9 → C6.10 wrong 42% of the time against
+   C3.4 → C3.5 at 12.5%. That is the only axis in this study with any signal left in it. It is
+   not a recommendation to run S2 now: `r = 0.83` bounds what any edge subset can achieve,
+   because it is a statement about candidates rather than about edges. Reopening would need new
+   pre-registration, and should be triggered by the graph gaining branching or by gold-set
+   evidence that `r` is lower in the world than in this DGP — not by this study.
+6. **Fix the centre points before any future factorial.** Deterministic replicates estimate
+   zero pure error, which silently disables the activity rule (§1.3). Vary the seed across
+   centre points so they replicate the sampling rather than the arithmetic.
+7. **The bank's measurement floor is the more urgent finding.** 16 of 33 AIE variables cannot
    reach the precision target at any test length, concentrated in the main the graph most
    connects. That bounds every accuracy number this programme will produce, and no propagation
    setting improves it.

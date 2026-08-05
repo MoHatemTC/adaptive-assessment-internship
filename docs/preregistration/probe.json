@@ -1,0 +1,171 @@
+{
+ "cohort": "eval-results/cohorts/cohort_DGP-2_P01_n2000_seed42.json",
+ "arm": "C-full",
+ "dgp": "DGP-2",
+ "probe_sessions_per_corner": 50,
+ "corroboration_feasibility": {
+  "bank_id": "AIE",
+  "available": true,
+  "prerequisite_edges": 30,
+  "parents": 30,
+  "direct_children_per_parent": {
+   "1": 30
+  },
+  "parents_supporting_k_by_depth": {
+   "1": {
+    "1": 30,
+    "2": 0,
+    "3": 0,
+    "4": 0
+   },
+   "2": {
+    "1": 30,
+    "2": 27,
+    "3": 0,
+    "4": 0
+   },
+   "3": {
+    "1": 30,
+    "2": 27,
+    "3": 24,
+    "4": 0
+   },
+   "4": {
+    "1": 30,
+    "2": 27,
+    "3": 24,
+    "4": 21
+   }
+  },
+  "k_structurally_possible_at_depth_1": {
+   "1": true,
+   "2": false,
+   "3": false,
+   "4": false
+  }
+ },
+ "corners": {
+  "D-lo_K-lo": {
+   "corner": "D-lo_K-lo",
+   "ok": true,
+   "sessions": 50,
+   "wall_seconds": 12.98,
+   "seconds_per_session": 0.26,
+   "records_path": "eval-results/probe_runs/corners/D-lo_K-lo/D-lo_K-lo.jsonl",
+   "cohort_path": "eval-results/cohorts/cohort_DGP-2_P01_n2000_seed42.json",
+   "items_per_session_mean": 24.44,
+   "items_per_session_p90": 28,
+   "verified_inferences": 24,
+   "verified_per_session": 0.48,
+   "firing_session_rate": 0.3,
+   "wrong_inference_rate": 0.125,
+   "mean_cluster_size": 1.6,
+   "multi_record_clusters": 7,
+   "psi_level_discordance": 0.34667
+  },
+  "D-lo_K-hi": {
+   "corner": "D-lo_K-hi",
+   "ok": true,
+   "sessions": 50,
+   "wall_seconds": 12.34,
+   "seconds_per_session": 0.247,
+   "records_path": "eval-results/probe_runs/corners/D-lo_K-hi/D-lo_K-hi.jsonl",
+   "cohort_path": "eval-results/cohorts/cohort_DGP-2_P01_n2000_seed42.json",
+   "items_per_session_mean": 24.44,
+   "items_per_session_p90": 28,
+   "verified_inferences": 0,
+   "verified_per_session": 0.0,
+   "firing_session_rate": 0.0,
+   "wrong_inference_rate": null,
+   "mean_cluster_size": 0.0,
+   "multi_record_clusters": 0,
+   "psi_level_discordance": 0.34667
+  },
+  "D-hi_K-lo": {
+   "corner": "D-hi_K-lo",
+   "ok": true,
+   "sessions": 50,
+   "wall_seconds": 12.99,
+   "seconds_per_session": 0.26,
+   "records_path": "eval-results/probe_runs/corners/D-hi_K-lo/D-hi_K-lo.jsonl",
+   "cohort_path": "eval-results/cohorts/cohort_DGP-2_P01_n2000_seed42.json",
+   "items_per_session_mean": 24.58,
+   "items_per_session_p90": 29,
+   "verified_inferences": 24,
+   "verified_per_session": 0.48,
+   "firing_session_rate": 0.3,
+   "wrong_inference_rate": 0.125,
+   "mean_cluster_size": 1.6,
+   "multi_record_clusters": 7,
+   "psi_level_discordance": 0.35333
+  },
+  "D-hi_K-hi": {
+   "corner": "D-hi_K-hi",
+   "ok": true,
+   "sessions": 50,
+   "wall_seconds": 12.87,
+   "seconds_per_session": 0.257,
+   "records_path": "eval-results/probe_runs/corners/D-hi_K-hi/D-hi_K-hi.jsonl",
+   "cohort_path": "eval-results/cohorts/cohort_DGP-2_P01_n2000_seed42.json",
+   "items_per_session_mean": 24.58,
+   "items_per_session_p90": 29,
+   "verified_inferences": 0,
+   "verified_per_session": 0.0,
+   "firing_session_rate": 0.0,
+   "wrong_inference_rate": null,
+   "mean_cluster_size": 0.0,
+   "multi_record_clusters": 0,
+   "psi_level_discordance": 0.35333
+  }
+ },
+ "expected_session_length": 24.58,
+ "sizing": {
+  "slowest_corner": "D-lo_K-lo",
+  "seconds_per_session": 0.26,
+  "workers": 24,
+  "hours": 1.0,
+  "cells": 36,
+  "personas": [
+   "P01",
+   "P02",
+   "P09"
+  ],
+  "persona_weight_total": 6.0,
+  "sessions_per_cell_raw": 1538,
+  "mean_cluster_size": 1.6,
+  "assumed_r_for_deff": 0.2,
+  "design_effect": 1.12,
+  "sessions_per_cell": 1373,
+  "total_sessions": 296568.0
+ },
+ "power": {
+  "sessions_per_cell": 1373,
+  "baseline_verified_inferences_per_session": 0.48,
+  "unmeasurable_volume_floor": 0.0096,
+  "unmeasurable_note": "A cell whose firing volume falls below this is declared UNMEASURABLE, not safe. An unfalsifiable 'looks fine' is the failure mode this exists to stop.",
+  "accuracy_endpoint": {
+   "psi_level_discordance": 0.35333,
+   "detectable_margin_pp_at_80_power": 3.989,
+   "n_for_2pp_margin_at_80_power": 5462,
+   "n_for_2pp_margin_at_90_power": 7565
+  },
+  "safety_gates": [
+   {
+    "gate": "C-DAG-03_wrong_inference",
+    "threshold": 0.03,
+    "events_needed_at_true_rate_zero": 101,
+    "events_expected_at_baseline_volume": 659.0,
+    "decidable": true,
+    "verdict": "decidable"
+   },
+   {
+    "gate": "C-DAG-04_false_blocking",
+    "threshold": 0.02,
+    "events_needed_at_true_rate_zero": 154,
+    "events_expected_at_baseline_volume": 659.0,
+    "decidable": true,
+    "verdict": "decidable"
+   }
+  ]
+ }
+}

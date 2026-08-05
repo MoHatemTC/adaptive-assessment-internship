@@ -5,7 +5,7 @@
 **Design arithmetic:** `plan_math.py`. Every sample size below is derived, not chosen.
 
 > **Amendments after implementation begin are recorded in §13, never by editing the text above it.**
-> Three amendments are already filed. Read §13 before acting on §2.3, §5 INV-P1, or §4.4.
+> Five amendments are filed. Read §13 before acting on §2.3, §4.2, §4.4, §5 INV-P1, or §3.2.
 
 ---
 
@@ -498,3 +498,36 @@ decide **even at a true rate of zero** is reported as "not decidable at n=…" r
 wide upper bound that reads like a failure. A reduced screening stage can still fire the §9
 kill criteria — "no active factor" and "r > 0.4" are both reachable at reduced n — which is
 why screening is the stage worth running first.
+
+### 13.4 — S1 ran on P01 only; the persona axis is incomplete (filed 2026-08-05)
+
+**Assumed:** §3.2's persona stratification, with P02 at 3x and P09 at 2x the cell size, as part
+of S1.
+
+**Found:** the design was launched over all three. P01 completed 36/36 cells at n = 200. P02
+reached 24 cells with none complete before the pass ended; P09 was not started.
+
+**Changed:** S1 is reported on P01 alone. The partial P02 cells are retained but excluded — a
+partial persona folded into a complete design breaks the balance the main effects depend on.
+
+The consequence is stated where it bites: §1's rates are a floor rather than a typical value,
+because P02 is the persona §3.2 says decides the answer and a small probe put its
+wrong-inference rate at roughly twice P01's. Neither kill criterion depends on the persona axis:
+`K >= 2` is unsatisfiable by graph topology, `D > 1` by arithmetic, and `r = 0.83` was measured
+on the persona whose errors should repeat LEAST.
+
+### 13.5 — the activity rule degenerates on a deterministic harness (filed 2026-08-05)
+
+**Assumed:** §4.2's centre-point replicates supply an estimate of pure error, against which
+|effect| > 2 sigma declares a factor active.
+
+**Found:** the harness is deterministic given `(simulee, item)`, and the four centre points
+differ only in `M` and `E`, which change nothing measurable. The replicates are therefore
+IDENTICAL, pure-error SD is exactly 0.0, `SE(effect)` is 0, and every non-zero effect — down to
++0.0017 — is marked active.
+
+**Changed:** the activity column is reported as unusable for this run and the effect sizes are
+read directly. A future factorial must vary the seed across centre points so that they replicate
+the sampling rather than the arithmetic. This does not affect either kill criterion: "no factor
+moved the wrong-inference rate" rests on the rate spanning 13.8-19.3% with a best upper bound of
+21.4% against a 3% gate, not on the 2-sigma test.
