@@ -31,6 +31,12 @@ the one assumption the verdict rests on. `r` fell to 0.766 and stayed far above 
 the wrong-inference rate on a *perfect graph* is still 7.1% against a 3% gate. Half the error
 is wrong edges and half is the response process, and neither half alone passes (§1.5).
 
+**The last knob was then swept to its optimum, and still fails.** The confidence threshold is
+the only factor with reachable levels; its operating characteristic (§1.6) shows the best
+setting is 0.90, not the shipped 0.80, worth a threefold reduction — and landing at a 13.6%
+upper bound against a 3% gate. Every configuration this engine can express has now been
+measured or shown unreachable.
+
 Underneath them, four levels of that surface turn out to be unreachable or misnamed on this
 bank. Not rare, not underpowered: impossible, and provable from the graph, the item bank and
 the configuration alone at zero session cost.
@@ -331,7 +337,56 @@ On DGP-3 the same persona produces **55% more wrong inferences** than the canoni
 premise is correct, the gate is doing real work once it has variance to act on, and it is still
 not enough: 10.9% against a 3% gate.
 
-### 1.6 PRE-2 confirmed at scale
+### 1.6 Where the confidence threshold should sit — deliverable 4
+
+§10 deliverable 4 asks for operating-characteristic curves with the gate drawn, and it had
+never been produced. It is also the one question §11 left open. Swept on DGP-3 — the only arm
+where confidence has variance — with every other factor held at the configuration S1 found both
+reachable and permissive (D=1, K=1, S=0.80, λ=0.7, all modalities, all edges), 200 sessions
+per point:
+
+**P01 (canonical)**
+
+| `C` | verified | volume/sess | wrong rate | 95% UCB | clears 3%? |
+|---|---:|---:|---:|---:|:--:|
+| 0.80 *(shipped)* | 91 | 0.455 | 13.2% | 20.5% | no |
+| 0.85 | 54 | 0.270 | 11.1% | 20.8% | no |
+| **0.90** | 44 | 0.220 | **4.5%** | 13.6% | no |
+| 0.93 – 1.00 | 44 | 0.220 | 4.5% | 13.6% | no |
+
+**P09 (confidently graded, wrong)**
+
+| `C` | verified | volume/sess | wrong rate | 95% UCB | clears 3%? |
+|---|---:|---:|---:|---:|:--:|
+| 0.80 *(shipped)* | 134 | 0.670 | 15.7% | 21.8% | no |
+| 0.90 | 129 | 0.645 | 16.3% | 22.6% | no |
+| 0.95 | 107 | 0.535 | 15.0% | 21.8% | no |
+| **1.00** | 49 | 0.245 | **8.2%** | 17.7% | no |
+
+**The gate works, and it saturates at 0.90.** On P01 the wrong-inference rate falls from 13.2%
+to 4.5% — a threefold improvement — as `C` rises to 0.90. Above 0.90 *nothing changes at all*:
+44 verified inferences at every threshold from 0.93 to 1.00. That is the two-value distribution
+from Finding 4 showing through. By 0.90 every voice observation has been cut and what remains
+is a point mass at 1.00, which no threshold below 1.00 can touch. **So the answer to "where
+should it sit" is 0.90; every setting above that is indistinguishable from it and the shipped
+0.80 is strictly worse than both.**
+
+**And it is not enough.** The best upper bound anywhere on either curve is 13.6%, four and a
+half times the 3% gate. Tightening the one factor with reachable levels, to its optimum, on the
+arm most favourable to it, still fails.
+
+**P09 defeats the gate until it is maximal.** Its inflated confidence keeps it above every
+threshold that filters P01: from 0.80 to 0.95 its rate barely moves (15.7% → 15.0%) while
+P01's has already fallen by two thirds. Only `C = 1.00` touches it, and even then it lands at
+8.2%. That is §3.2's premise realised precisely — a candidate who is confidently graded and
+wrong is exactly the candidate a confidence gate cannot stop.
+
+**The coverage confound is small.** `C` also decides DIRECT node status, so raising it shrinks
+what counts as measured — but directly-mastered nodes per session fall only from 9.24 to 8.90
+(4%) across the whole range, and accuracy and question count are flat. The improvement at 0.90
+is real filtering, not the assessment quietly measuring less.
+
+### 1.7 PRE-2 confirmed at scale
 
 **Zero blank stop reasons across all 36 cells.** A representative distribution: precision 96.3%,
 question budget 2.7%, time budget 1.0% — summing to 1 over named reasons, which is the
@@ -581,13 +636,16 @@ interval narrowed at each persona added.
    evidence that `r` is lower in the world than in this DGP — not by this study.
 6. **DGP-3 has been run, and it closed the question** (§1.5). `r` fell to 0.766 and stayed far
    above the threshold; a perfect graph still produces 7.1% wrong inference against a 3% gate.
-   There is no remaining arm whose result would change the verdict. **Calibrating the confidence
-   threshold is the one open question that is worth answering** — it is currently set where
-   almost nothing arrives, and DGP-3 shows it does real work when it can act.
-7. **Fix the centre points before any future factorial.** Deterministic replicates estimate
+   There is no remaining arm whose result would change the verdict.
+7. **If propagation is ever enabled, set `C = 0.90`, not the shipped 0.80** (§1.6). It is a
+   threefold improvement on the canonical persona and nothing above it buys anything — the
+   curve is flat from 0.90 to 1.00. This is a recommendation about a *default*, not a licence:
+   no threshold on the curve clears the gate, and a confidently-graded-and-wrong candidate
+   evades every setting below 1.00.
+8. **Fix the centre points before any future factorial.** Deterministic replicates estimate
    zero pure error, which silently disables the activity rule (§1.3). Vary the seed across
    centre points so they replicate the sampling rather than the arithmetic.
-8. **The bank's measurement floor is the more urgent finding.** 16 of 33 AIE variables cannot
+9. **The bank's measurement floor is the more urgent finding.** 16 of 33 AIE variables cannot
    reach the precision target at any test length, concentrated in the main the graph most
    connects. That bounds every accuracy number this programme will produce, and no propagation
    setting improves it.
