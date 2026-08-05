@@ -1,0 +1,817 @@
+<title>Propagation study — test coverage, findings and blockers</title>
+<style>
+  :root {
+    color-scheme: light;
+    --paper:      #fafbfc;
+    --panel:      #ffffff;
+    --ink:        #12151a;
+    --muted:      #5b6672;
+    --rule:       #dfe3e8;
+    --rule-soft:  #edf0f3;
+    --s1:         #2a78d6;
+    --s2:         #eb6834;
+    --good:       #0ca30c;
+    --warn:       #fab219;
+    --crit:       #d03b3b;
+    --chip-bg:    #eef2f6;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --paper: #14171b; --panel: #191d22; --ink: #e9ecef; --muted: #98a2ae;
+      --rule: #2a2f36; --rule-soft: #21262c;
+      --s1: #3987e5; --s2: #d95926; --chip-bg: #21262c;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --paper: #14171b; --panel: #191d22; --ink: #e9ecef; --muted: #98a2ae;
+    --rule: #2a2f36; --rule-soft: #21262c;
+    --s1: #3987e5; --s2: #d95926; --chip-bg: #21262c;
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --paper: #fafbfc; --panel: #ffffff; --ink: #12151a; --muted: #5b6672;
+    --rule: #dfe3e8; --rule-soft: #edf0f3;
+    --s1: #2a78d6; --s2: #eb6834; --chip-bg: #eef2f6;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: var(--serif); font-size: 17px; line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px 96px; }
+  .col { max-width: 66ch; }
+  h1, h2, h3 { text-wrap: balance; margin: 0; font-weight: 600; letter-spacing: -0.01em; }
+  h1 { font-size: clamp(28px, 4.2vw, 40px); line-height: 1.15; }
+  h2 { font-size: 25px; line-height: 1.25; }
+  h3 { font-size: 19px; line-height: 1.3; }
+  p { margin: 0; }
+  a { color: var(--s1); }
+  .label {
+    font-family: var(--mono); font-size: 11px; letter-spacing: .11em;
+    text-transform: uppercase; color: var(--muted); font-weight: 500;
+  }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .stack   { display: flex; flex-direction: column; gap: 18px; }
+  .stack-s { display: flex; flex-direction: column; gap: 10px; }
+  .stack-l { display: flex; flex-direction: column; gap: 34px; }
+  section { display: flex; flex-direction: column; gap: 22px; }
+
+  header.masthead {
+    border-bottom: 2px solid var(--ink); padding: 56px 0 22px;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .meta { display: flex; flex-wrap: wrap; gap: 10px 26px; }
+  .meta div { display: flex; flex-direction: column; gap: 2px; }
+  .meta .v { font-family: var(--mono); font-size: 14px; font-variant-numeric: tabular-nums; }
+
+  .verdict {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(196px, 1fr)); gap: 1px;
+    background: var(--rule); border: 1px solid var(--rule);
+  }
+  .tile { background: var(--panel); padding: 18px 18px 20px; display: flex; flex-direction: column; gap: 7px; }
+  .tile .big { font-family: var(--mono); font-size: 30px; font-variant-numeric: tabular-nums; line-height: 1; }
+  .tile .sub { font-size: 13.5px; color: var(--muted); line-height: 1.45; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 2px; background: var(--chip-bg); color: var(--ink);
+  }
+  .chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+  .chip.fail::before { background: var(--crit); }
+  .chip.pass::before { background: var(--good); }
+  .chip.part::before { background: var(--warn); }
+  .chip.none::before { background: var(--muted); }
+
+  .panel {
+    background: var(--panel); border: 1px solid var(--rule); padding: 22px 22px 18px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .panel > figcaption { display: flex; flex-direction: column; gap: 5px; }
+  .panel .cap { font-size: 14px; color: var(--muted); line-height: 1.5; }
+  .scroll { overflow-x: auto; }
+  svg { display: block; width: 100%; height: auto; }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .swatch { width: 11px; height: 11px; border-radius: 2px; display: inline-block; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 12px 8px 0; border-bottom: 1px solid var(--rule-soft); vertical-align: top; }
+  th { font-family: var(--mono); font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+  td.n, th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  tbody tr:last-child td { border-bottom: none; }
+
+  blockquote {
+    margin: 0; padding: 16px 20px; border-left: 3px solid var(--s1);
+    background: var(--rule-soft); font-size: 16px;
+  }
+  code { font-family: var(--mono); font-size: .9em; background: var(--rule-soft); padding: 1px 5px; border-radius: 2px; }
+  .divider { border: none; border-top: 1px solid var(--rule); margin: 0; }
+  ul { margin: 0; padding-left: 1.15em; }
+  li { margin-bottom: 7px; }
+  li::marker { color: var(--muted); }
+
+  #tip {
+    position: fixed; pointer-events: none; opacity: 0; transform: translate(-50%, -120%);
+    background: var(--ink); color: var(--paper); font-family: var(--mono); font-size: 12px;
+    padding: 6px 9px; border-radius: 3px; white-space: pre; z-index: 20; transition: opacity .1s;
+  }
+  .hit { cursor: crosshair; }
+  .hit:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+
+<header class="masthead">
+  <div class="label">Pre-registered study · C-shipped with configurable propagation</div>
+  <h1>What was tested, what was not, and what the tests found</h1>
+  <p class="col" style="font-size:19px; color:var(--muted)">
+    A consolidated coverage and findings report for the propagation study: the executable
+    test surface, the measured safety scores, the analyses that could not be run, and the
+    blockers that decide which of those are fixable.
+  </p>
+  <div class="meta">
+    <div><span class="label">Tests</span><span class="v">606 passing · 1 skipped</span></div>
+    <div><span class="label">Simulated sessions</span><span class="v">36,000</span></div>
+    <div><span class="label">Designs completed</span><span class="v">5 × Resolution-IV</span></div>
+    <div><span class="label">Verdict</span><span class="v">H1 falsified</span></div>
+  </div>
+</header>
+
+<main class="stack-l" style="padding-top:38px">
+
+<!-- ───────────────────────── VERDICT ───────────────────────── -->
+<section>
+  <div class="stack-s col">
+    <div class="label">The scoreboard</div>
+    <h2>Every safety gate failed, and both pre-registered stop conditions fired</h2>
+    <p>
+      The gates below are the pre-registration's own, with its own thresholds. Rates are
+      Clopper–Pearson upper bounds on the best-performing cell of any completed design —
+      the most favourable reading the data supports.
+    </p>
+  </div>
+
+  <div class="verdict">
+    <div class="tile">
+      <span class="chip fail">Fail · 4.5×</span>
+      <span class="big">13.6%</span>
+      <span class="sub">Wrong inference, best 95% upper bound anywhere<br><span class="num">gate &lt; 3%</span></span>
+    </div>
+    <div class="tile">
+      <span class="chip fail">Fail · 2.4×</span>
+      <span class="big">4.9%</span>
+      <span class="sub">False blocking, lowest cell rate observed<br><span class="num">gate &lt; 2%</span></span>
+    </div>
+    <div class="tile">
+      <span class="chip fail">Fail</span>
+      <span class="big">0.81</span>
+      <span class="sub">Inference precision, best case<br><span class="num">gate ≥ 0.97</span></span>
+    </div>
+    <div class="tile">
+      <span class="chip fail">Kill criterion fired</span>
+      <span class="big">r = 0.88</span>
+      <span class="sub">Within-candidate error correlation<br><span class="num">stop if r &gt; 0.40</span></span>
+    </div>
+  </div>
+
+  <blockquote class="col">
+    Two independent stop conditions fired, for different reasons — one about the candidates,
+    one about the configuration surface. Either alone ends the study.
+  </blockquote>
+</section>
+
+<hr class="divider">
+
+<!-- ───────────────────────── r ───────────────────────── -->
+<section>
+  <div class="stack-s col">
+    <div class="label">Primary objective</div>
+    <h2>The correlation that decides whether corroboration can work at all</h2>
+    <p>
+      Requiring <code>K</code> independent observations only reduces the error rate if those
+      observations are independent. If a candidate's misjudged node drives every inference
+      drawn from them, more observations buy nothing. The pre-registration sets the stop
+      condition at <code>r &gt; 0.4</code>.
+    </p>
+    <p>
+      It rose and its interval narrowed at every step as harder personas were added, and it
+      stayed far above the line even on the arm with a genuinely noisy grader. A result that
+      strengthens as the evidence broadens is the opposite of one that depends on where it
+      was found.
+    </p>
+  </div>
+
+  <figure class="panel">
+    <figcaption>
+      <div class="label">Tetrachoric r, with candidate-clustered bootstrap 95% CI</div>
+      <div class="cap">Every interval sits entirely to the right of the stop line.</div>
+    </figcaption>
+    <div class="scroll">
+      <svg viewBox="0 0 720 214" role="img" aria-label="Tetrachoric r for four arm groupings, all far above the 0.4 stop threshold.">
+        <!-- grid -->
+        <g stroke="var(--rule-soft)" stroke-width="1">
+          <line x1="150" y1="26" x2="150" y2="176"/><line x1="258" y1="26" x2="258" y2="176"/>
+          <line x1="474" y1="26" x2="474" y2="176"/><line x1="582" y1="26" x2="582" y2="176"/>
+          <line x1="690" y1="26" x2="690" y2="176"/>
+        </g>
+        <!-- stop threshold -->
+        <line x1="366" y1="20" x2="366" y2="182" stroke="var(--crit)" stroke-width="2" stroke-dasharray="5 4"/>
+        <text x="366" y="14" text-anchor="middle" class="num" font-size="11" fill="var(--crit)">stop if r &gt; 0.40</text>
+
+        <g class="num" font-size="12" fill="var(--muted)">
+          <text x="150" y="196" text-anchor="middle">0.0</text>
+          <text x="366" y="196" text-anchor="middle">0.4</text>
+          <text x="582" y="196" text-anchor="middle">0.8</text>
+          <text x="690" y="196" text-anchor="middle">1.0</text>
+        </g>
+
+        <!-- rows -->
+        <g class="hit" data-tip="DGP-2 · P01 only&#10;r = 0.833   CI [0.593, 0.995]&#10;69 candidates with 2+ inferences">
+          <rect x="0" y="26" width="720" height="34" fill="transparent"/>
+          <text x="142" y="47" text-anchor="end" font-family="var(--mono)" font-size="12" fill="var(--ink)">DGP-2 · P01</text>
+          <line x1="470" y1="43" x2="687" y2="43" stroke="var(--s1)" stroke-width="2"/>
+          <line x1="470" y1="37" x2="470" y2="49" stroke="var(--s1)" stroke-width="2"/>
+          <line x1="687" y1="37" x2="687" y2="49" stroke="var(--s1)" stroke-width="2"/>
+          <circle cx="600" cy="43" r="5.5" fill="var(--s1)" stroke="var(--panel)" stroke-width="2"/>
+        </g>
+        <g class="hit" data-tip="DGP-2 · P01 + P02&#10;r = 0.861   CI [0.722, 0.961]&#10;147 candidates with 2+ inferences">
+          <rect x="0" y="60" width="720" height="34" fill="transparent"/>
+          <text x="142" y="81" text-anchor="end" font-family="var(--mono)" font-size="12" fill="var(--ink)">+ P02</text>
+          <line x1="540" y1="77" x2="669" y2="77" stroke="var(--s1)" stroke-width="2"/>
+          <line x1="540" y1="71" x2="540" y2="83" stroke="var(--s1)" stroke-width="2"/>
+          <line x1="669" y1="71" x2="669" y2="83" stroke="var(--s1)" stroke-width="2"/>
+          <circle cx="615" cy="77" r="5.5" fill="var(--s1)" stroke="var(--panel)" stroke-width="2"/>
+        </g>
+        <g class="hit" data-tip="DGP-2 · P01 + P02 + P09&#10;r = 0.880   CI [0.781, 0.953]&#10;235 candidates with 2+ inferences&#10;design effect 9.96">
+          <rect x="0" y="94" width="720" height="34" fill="transparent"/>
+          <text x="142" y="115" text-anchor="end" font-family="var(--mono)" font-size="12" fill="var(--ink)">+ P09</text>
+          <line x1="572" y1="111" x2="665" y2="111" stroke="var(--s1)" stroke-width="2"/>
+          <line x1="572" y1="105" x2="572" y2="117" stroke="var(--s1)" stroke-width="2"/>
+          <line x1="665" y1="105" x2="665" y2="117" stroke="var(--s1)" stroke-width="2"/>
+          <circle cx="625" cy="111" r="5.5" fill="var(--s1)" stroke="var(--panel)" stroke-width="2"/>
+          <text x="678" y="115" class="num" font-size="12" fill="var(--ink)">0.880</text>
+        </g>
+        <g class="hit" data-tip="DGP-3 · P01 + P09 (noisy grader, perfect graph)&#10;r = 0.766   CI [0.676, 0.877]&#10;122 candidates with 2+ inferences">
+          <rect x="0" y="128" width="720" height="34" fill="transparent"/>
+          <text x="142" y="149" text-anchor="end" font-family="var(--mono)" font-size="12" fill="var(--s2)">DGP-3 · both</text>
+          <line x1="515" y1="145" x2="624" y2="145" stroke="var(--s2)" stroke-width="2"/>
+          <line x1="515" y1="139" x2="515" y2="151" stroke="var(--s2)" stroke-width="2"/>
+          <line x1="624" y1="139" x2="624" y2="151" stroke="var(--s2)" stroke-width="2"/>
+          <circle cx="564" cy="145" r="5.5" fill="var(--s2)" stroke="var(--panel)" stroke-width="2"/>
+          <text x="637" y="149" class="num" font-size="12" fill="var(--ink)">0.766</text>
+        </g>
+      </svg>
+    </div>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--s1)"></i>DGP-2 — 8 of 30 edges wrong, noiseless grader</span>
+      <span><i class="swatch" style="background:var(--s2)"></i>DGP-3 — all edges correct, grader noise 0.10</span>
+    </div>
+  </figure>
+</section>
+
+<hr class="divider">
+
+<!-- ───────────────────────── RATES ───────────────────────── -->
+<section>
+  <div class="stack-s col">
+    <div class="label">Safety rates</div>
+    <h2>A perfect graph still fails the gate by four times</h2>
+    <p>
+      The two data-generating arms decompose the error. DGP-2 has 8 of 30 prerequisite edges
+      wrong and a noiseless grader; DGP-3 has every edge correct and a noisy one. Roughly half
+      the error comes from each source — and <strong>neither half alone comes close to
+      passing</strong>. That removes the most attractive remaining hypothesis: this is not an
+      edge-quality problem that better authoring would fix.
+    </p>
+  </div>
+
+  <figure class="panel">
+    <figcaption>
+      <div class="label">Wrong-inference rate by arm · bar = point estimate, tick = 95% upper bound</div>
+      <div class="cap">200 sessions per cell, pooled over the cells that produced any measurable inference.</div>
+    </figcaption>
+    <div class="scroll">
+      <svg viewBox="0 0 720 250" role="img" aria-label="Wrong-inference rate for five persona-by-arm combinations, all far above the 3 percent gate.">
+        <g stroke="var(--rule-soft)" stroke-width="1">
+          <line x1="86" y1="200" x2="700" y2="200"/>
+          <line x1="86" y1="132" x2="700" y2="132"/>
+          <line x1="86" y1="64" x2="700" y2="64"/>
+        </g>
+        <g class="num" font-size="11" fill="var(--muted)">
+          <text x="78" y="204" text-anchor="end">0%</text>
+          <text x="78" y="136" text-anchor="end">10%</text>
+          <text x="78" y="68" text-anchor="end">20%</text>
+        </g>
+
+        <!-- gate -->
+        <line x1="86" y1="179.6" x2="700" y2="179.6" stroke="var(--crit)" stroke-width="2" stroke-dasharray="5 4"/>
+        <text x="700" y="175" text-anchor="end" class="num" font-size="11" fill="var(--crit)">gate 3%</text>
+
+        <!-- DGP-2 bars -->
+        <g class="hit" data-tip="DGP-2 · P01 (canonical)&#10;122 wrong / 805 verified = 15.2%&#10;95% UCB 21.4%">
+          <rect x="120" y="96.9" width="62" height="103.1" rx="4" fill="var(--s1)"/>
+          <line x1="120" y1="54.5" x2="182" y2="54.5" stroke="var(--s1)" stroke-width="2.5"/>
+          <line x1="151" y1="54.5" x2="151" y2="96.9" stroke="var(--s1)" stroke-width="1.5" stroke-dasharray="3 3"/>
+          <text x="151" y="219" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="var(--ink)">P01</text>
+          <text x="151" y="90" text-anchor="middle" class="num" font-size="12" fill="var(--ink)">15.2</text>
+        </g>
+        <g class="hit" data-tip="DGP-2 · P02 (spiky self-taught)&#10;141 wrong / 835 verified = 16.9%&#10;95% UCB 20.3%">
+          <rect x="196" y="85.1" width="62" height="114.9" rx="4" fill="var(--s1)"/>
+          <line x1="196" y1="62.1" x2="258" y2="62.1" stroke="var(--s1)" stroke-width="2.5"/>
+          <line x1="227" y1="62.1" x2="227" y2="85.1" stroke="var(--s1)" stroke-width="1.5" stroke-dasharray="3 3"/>
+          <text x="227" y="219" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="var(--ink)">P02</text>
+          <text x="227" y="78" text-anchor="middle" class="num" font-size="12" fill="var(--ink)">16.9</text>
+        </g>
+        <g class="hit" data-tip="DGP-2 · P09 (verbose shallow)&#10;157 wrong / 1021 verified = 15.4%&#10;95% UCB 19.6%">
+          <rect x="272" y="95.4" width="62" height="104.6" rx="4" fill="var(--s1)"/>
+          <line x1="272" y1="66.9" x2="334" y2="66.9" stroke="var(--s1)" stroke-width="2.5"/>
+          <line x1="303" y1="66.9" x2="303" y2="95.4" stroke="var(--s1)" stroke-width="1.5" stroke-dasharray="3 3"/>
+          <text x="303" y="219" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="var(--ink)">P09</text>
+          <text x="303" y="88" text-anchor="middle" class="num" font-size="12" fill="var(--ink)">15.4</text>
+        </g>
+        <text x="227" y="238" text-anchor="middle" class="label" fill="var(--muted)">DGP-2 · wrong edges</text>
+
+        <!-- DGP-3 bars -->
+        <g class="hit" data-tip="DGP-3 · P01 (perfect graph, noisy grader)&#10;29 wrong / 411 verified = 7.1%&#10;95% UCB 13.6% — the best bound anywhere">
+          <rect x="452" y="152.0" width="62" height="48.0" rx="4" fill="var(--s2)"/>
+          <line x1="452" y1="107.3" x2="514" y2="107.3" stroke="var(--s2)" stroke-width="2.5"/>
+          <line x1="483" y1="107.3" x2="483" y2="152.0" stroke="var(--s2)" stroke-width="1.5" stroke-dasharray="3 3"/>
+          <text x="483" y="219" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="var(--ink)">P01</text>
+          <text x="483" y="145" text-anchor="middle" class="num" font-size="12" fill="var(--ink)">7.1</text>
+        </g>
+        <g class="hit" data-tip="DGP-3 · P09&#10;69 wrong / 631 verified = 10.9%&#10;95% UCB 15.1%&#10;55% worse than P01 — the confidence gate finally has variance to act on">
+          <rect x="528" y="125.6" width="62" height="74.4" rx="4" fill="var(--s2)"/>
+          <line x1="528" y1="97.5" x2="590" y2="97.5" stroke="var(--s2)" stroke-width="2.5"/>
+          <line x1="559" y1="97.5" x2="559" y2="125.6" stroke="var(--s2)" stroke-width="1.5" stroke-dasharray="3 3"/>
+          <text x="559" y="219" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="var(--ink)">P09</text>
+          <text x="559" y="118" text-anchor="middle" class="num" font-size="12" fill="var(--ink)">10.9</text>
+        </g>
+        <text x="521" y="238" text-anchor="middle" class="label" fill="var(--muted)">DGP-3 · perfect edges</text>
+      </svg>
+    </div>
+  </figure>
+</section>
+
+<hr class="divider">
+
+<!-- ───────────────────────── OC CURVE ───────────────────────── -->
+<section>
+  <div class="stack-s col">
+    <div class="label">Operating characteristic · deliverable 4</div>
+    <h2>The confidence gate works, saturates at 0.90, and is still not enough</h2>
+    <p>
+      The confidence threshold is the only factor left with reachable levels — corroboration
+      cannot be satisfied on this graph, depth beyond one hop is below the weight floor, and
+      decay collapses to an on/off switch. Swept on DGP-3, the one arm where confidence has
+      any variance.
+    </p>
+  </div>
+
+  <figure class="panel">
+    <figcaption>
+      <div class="label">Wrong-inference rate vs the confidence threshold C</div>
+      <div class="cap">
+        Flat from 0.90 to 1.00 on P01: by 0.90 every voice observation has been cut and what
+        remains is a point mass at confidence 1.00 that no lower threshold can touch.
+      </div>
+    </figcaption>
+    <div class="scroll">
+      <svg viewBox="0 0 720 236" role="img" aria-label="Wrong-inference rate against the confidence threshold, for two personas, never reaching the 3 percent gate.">
+        <g stroke="var(--rule-soft)" stroke-width="1">
+          <line x1="100" y1="200" x2="680" y2="200"/>
+          <line x1="100" y1="155.6" x2="680" y2="155.6"/>
+          <line x1="100" y1="111.1" x2="680" y2="111.1"/>
+          <line x1="100" y1="66.7" x2="680" y2="66.7"/>
+        </g>
+        <g class="num" font-size="11" fill="var(--muted)">
+          <text x="92" y="204" text-anchor="end">0%</text>
+          <text x="92" y="159" text-anchor="end">5%</text>
+          <text x="92" y="115" text-anchor="end">10%</text>
+          <text x="92" y="70" text-anchor="end">15%</text>
+          <text x="120" y="221" text-anchor="middle">0.80</text>
+          <text x="250" y="221" text-anchor="middle">0.85</text>
+          <text x="380" y="221" text-anchor="middle">0.90</text>
+          <text x="510" y="221" text-anchor="middle">0.95</text>
+          <text x="640" y="221" text-anchor="middle">1.00</text>
+        </g>
+        <line x1="100" y1="173.3" x2="680" y2="173.3" stroke="var(--crit)" stroke-width="2" stroke-dasharray="5 4"/>
+        <text x="680" y="169" text-anchor="end" class="num" font-size="11" fill="var(--crit)">gate 3%</text>
+
+        <!-- P09 -->
+        <polyline fill="none" stroke="var(--s2)" stroke-width="2"
+          points="120,60.7 250,60.7 380,55.3 458,63.3 510,67.1 562,68.3 640,127.5"/>
+        <g fill="var(--s2)">
+          <circle cx="120" cy="60.7" r="4.5"/><circle cx="250" cy="60.7" r="4.5"/>
+          <circle cx="380" cy="55.3" r="4.5"/><circle cx="458" cy="63.3" r="4.5"/>
+          <circle cx="510" cy="67.1" r="4.5"/><circle cx="562" cy="68.3" r="4.5"/>
+          <circle cx="640" cy="127.5" r="5.5" stroke="var(--panel)" stroke-width="2"/>
+        </g>
+        <text x="380" y="45" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="var(--s2)">P09 — evades the gate</text>
+
+        <!-- P01 -->
+        <polyline fill="none" stroke="var(--s1)" stroke-width="2"
+          points="120,82.8 250,101.2 380,159.6 458,159.6 510,159.6 562,159.6 640,159.6"/>
+        <g fill="var(--s1)">
+          <circle cx="120" cy="82.8" r="4.5"/><circle cx="250" cy="101.2" r="4.5"/>
+          <circle cx="380" cy="159.6" r="5.5" stroke="var(--panel)" stroke-width="2"/>
+          <circle cx="458" cy="159.6" r="4.5"/><circle cx="510" cy="159.6" r="4.5"/>
+          <circle cx="562" cy="159.6" r="4.5"/><circle cx="640" cy="159.6" r="4.5"/>
+        </g>
+        <text x="530" y="151" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="var(--s1)">P01 — flat past 0.90</text>
+
+        <!-- hit targets -->
+        <g class="hit" data-tip="C = 0.80 (shipped)&#10;P01  13.2% wrong · 0.455 inferences/session&#10;P09  15.7% wrong · 0.670 inferences/session"><rect x="100" y="30" width="65" height="175" fill="transparent"/></g>
+        <g class="hit" data-tip="C = 0.85&#10;P01  11.1% wrong · 0.270/session&#10;P09  15.7% wrong · 0.670/session"><rect x="185" y="30" width="65" height="175" fill="transparent"/></g>
+        <g class="hit" data-tip="C = 0.90  ← the optimum&#10;P01   4.5% wrong · 0.220/session&#10;P09  16.3% wrong · 0.645/session"><rect x="348" y="30" width="65" height="175" fill="transparent"/></g>
+        <g class="hit" data-tip="C = 0.95&#10;P01   4.5% wrong (unchanged)&#10;P09  15.0% wrong · 0.535/session"><rect x="478" y="30" width="65" height="175" fill="transparent"/></g>
+        <g class="hit" data-tip="C = 1.00&#10;P01   4.5% wrong (unchanged)&#10;P09   8.2% wrong — only a maximal gate touches it"><rect x="608" y="30" width="65" height="175" fill="transparent"/></g>
+      </svg>
+    </div>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--s1)"></i>P01 canonical</span>
+      <span><i class="swatch" style="background:var(--s2)"></i>P09 confidently graded, wrong</span>
+    </div>
+  </figure>
+
+  <div class="col stack-s">
+    <p>
+      <strong>P09 defeats the gate until it is maximal.</strong> From 0.80 to 0.95 its rate
+      barely moves while P01's has already fallen by two thirds. Only <code>C&nbsp;=&nbsp;1.00</code>
+      touches it. A candidate who is confidently graded and wrong is precisely the candidate a
+      confidence gate cannot stop — which is what that persona was designed to expose.
+    </p>
+    <p>
+      The coverage confound was checked rather than assumed: <code>C</code> also decides direct
+      node status, so a tighter gate could "improve" safety by measuring less. Directly-mastered
+      nodes fall only from 9.24 to 8.90 per session across the whole range, with accuracy flat.
+      The gain at 0.90 is real filtering.
+    </p>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ───────────────────────── COVERAGE ───────────────────────── -->
+<section>
+  <div class="stack-s col">
+    <div class="label">Test surface</div>
+    <h2>What is tested</h2>
+    <p>
+      607 executable tests. The two areas that carry the study's claims — the propagation
+      engine and the evaluation harness — were built or substantially rewritten in this pass;
+      the CAT engine was inherited and is exercised as a dependency.
+    </p>
+  </div>
+
+  <figure class="panel">
+    <figcaption><div class="label">Tests by area</div></figcaption>
+    <div class="scroll">
+      <svg viewBox="0 0 720 214" role="img" aria-label="Test counts by area: CAT engine 269, propagation and graph 146, study harness 114, UI and boundary 41, voice 37.">
+        <g class="hit" data-tip="CAT engine — IRT, selection, sessions, budgets&#10;269 tests · inherited, exercised as a dependency">
+          <rect x="0" y="12" width="720" height="34" fill="transparent"/>
+          <text x="196" y="34" text-anchor="end" font-family="var(--mono)" font-size="12.5" fill="var(--ink)">CAT engine</text>
+          <rect x="206" y="18" width="420" height="22" rx="4" fill="var(--s1)" opacity="0.42"/>
+          <text x="636" y="34" class="num" font-size="12.5" fill="var(--ink)">269</text>
+        </g>
+        <g class="hit" data-tip="Propagation &amp; competency graph&#10;146 tests · includes the 36 Tier-1 invariants INV-P1..P12">
+          <rect x="0" y="50" width="720" height="34" fill="transparent"/>
+          <text x="196" y="72" text-anchor="end" font-family="var(--mono)" font-size="12.5" fill="var(--ink)">Propagation &amp; graph</text>
+          <rect x="206" y="56" width="228" height="22" rx="4" fill="var(--s1)"/>
+          <text x="444" y="72" class="num" font-size="12.5" fill="var(--ink)">146</text>
+        </g>
+        <g class="hit" data-tip="Evaluation harness, design, personas, statistics&#10;114 tests · all new in this pass">
+          <rect x="0" y="88" width="720" height="34" fill="transparent"/>
+          <text x="196" y="110" text-anchor="end" font-family="var(--mono)" font-size="12.5" fill="var(--ink)">Study harness</text>
+          <rect x="206" y="94" width="178" height="22" rx="4" fill="var(--s1)"/>
+          <text x="394" y="110" class="num" font-size="12.5" fill="var(--ink)">114</text>
+        </g>
+        <g class="hit" data-tip="Streamlit UI, observability, LLM boundary&#10;41 tests">
+          <rect x="0" y="126" width="720" height="34" fill="transparent"/>
+          <text x="196" y="148" text-anchor="end" font-family="var(--mono)" font-size="12.5" fill="var(--ink)">UI &amp; boundary</text>
+          <rect x="206" y="132" width="64" height="22" rx="4" fill="var(--s1)" opacity="0.42"/>
+          <text x="280" y="148" class="num" font-size="12.5" fill="var(--ink)">41</text>
+        </g>
+        <g class="hit" data-tip="Voice &amp; multimodality&#10;37 tests · 1 skipped (needs the graph module)">
+          <rect x="0" y="164" width="720" height="34" fill="transparent"/>
+          <text x="196" y="186" text-anchor="end" font-family="var(--mono)" font-size="12.5" fill="var(--ink)">Voice &amp; modality</text>
+          <rect x="206" y="170" width="58" height="22" rx="4" fill="var(--s1)" opacity="0.42"/>
+          <text x="274" y="186" class="num" font-size="12.5" fill="var(--ink)">37</text>
+        </g>
+      </svg>
+    </div>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--s1)"></i>Built or rewritten in this pass</span>
+      <span><i class="swatch" style="background:var(--s1); opacity:.42"></i>Inherited, exercised as a dependency</span>
+    </div>
+  </figure>
+
+  <div class="panel">
+    <div class="label">Gate tiers — coverage against the pre-registration</div>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Tier</th><th>What it asserts</th><th class="n">Tests</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="num">Tier 1</td>
+            <td>Deterministic invariants INV-P1…P10, plus two additions. Any failure aborts the run.</td>
+            <td class="n">36</td><td><span class="chip pass">Complete</span></td>
+          </tr>
+          <tr>
+            <td class="num">Tier 2</td>
+            <td>Exact-level accuracy, non-inferiority at a 2pp margin. One primary endpoint.</td>
+            <td class="n">—</td><td><span class="chip part">Measured, not gated</span></td>
+          </tr>
+          <tr>
+            <td class="num">Tier 3</td>
+            <td>Safety rates as one-sided 95% upper bounds — wrong inference, false blocking, precision, r.</td>
+            <td class="n">—</td><td><span class="chip fail">All gates failed</span></td>
+          </tr>
+          <tr>
+            <td class="num">Tier 4</td>
+            <td>Descriptive — questions, duration, stop reasons, exposure, coverage.</td>
+            <td class="n">—</td><td><span class="chip pass">Reported</span></td>
+          </tr>
+          <tr>
+            <td class="num">ADV 1–5</td>
+            <td>Adversarial: injection, replay, self-report, corroboration farming.</td>
+            <td class="n">17</td><td><span class="chip pass">Complete</span></td>
+          </tr>
+          <tr>
+            <td class="num">§6 GEval</td>
+            <td>Judged report quality. Canary validation executed; 60-report golden set not judged.</td>
+            <td class="n">17</td><td><span class="chip part">Descriptive only</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="cap">
+      Tier 2 is marked "measured, not gated" because the non-inferiority comparison is
+      meaningless here: propagation saves 0.08 questions per session, so there is no efficiency
+      claim to trade accuracy against.
+    </p>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ───────────────────────── NOT TESTED ───────────────────────── -->
+<section>
+  <div class="stack-s col">
+    <div class="label">The other half of the report</div>
+    <h2>What is not tested, and what blocks it</h2>
+    <p>
+      Three different reasons appear below, and they are not interchangeable. Some things were
+      deliberately not run because the pre-registration says running them would be wrong. Some
+      are structurally impossible on this bank. Only the last group is a resource question.
+    </p>
+  </div>
+
+  <div class="panel">
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Not tested</th><th>Why</th><th>Blocker</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>S2 response surface</strong><br><span class="cap">and S3 confirmation</span></td>
+            <td>Two kill criteria fired. The pre-registration is explicit that the correct response is to report and stop.</td>
+            <td><span class="chip none">By design</span><br><span class="cap">Running it would violate the protocol</span></td>
+          </tr>
+          <tr>
+            <td><strong>Corroboration K ≥ 2</strong></td>
+            <td>Every parent in the AIE graph has exactly one direct child. An ancestor needs K distinct descendants and structurally has one.</td>
+            <td><span class="chip fail">Unreachable</span><br><span class="cap">Needs graph re-authoring, not tuning</span></td>
+          </tr>
+          <tr>
+            <td><strong>Depth D &gt; 1</strong></td>
+            <td>Edge strength 0.5 puts a two-hop inference at 0.1225 against a 0.15 weight floor — below it in the best case.</td>
+            <td><span class="chip fail">Unreachable</span><br><span class="cap">Arithmetic, not policy</span></td>
+          </tr>
+          <tr>
+            <td><strong>Confidence gate calibration</strong></td>
+            <td>The shipped 0.80 rejects under 1% of the evidence reaching it, even with a noisy grader. Where it should sit against a <em>real</em> grader is unknown.</td>
+            <td><span class="chip part">Needs the gold set</span><br><span class="cap">250 expert-labelled cases; not simulable</span></td>
+          </tr>
+          <tr>
+            <td><strong>Persona prevalence <code>p</code></strong></td>
+            <td>Propagation's cost lands on candidates who learned out of order. Break-even needs the share of the pipeline that is spiky.</td>
+            <td><span class="chip part">Not answerable here</span><br><span class="cap">A field question, permanently</span></td>
+          </tr>
+          <tr>
+            <td><strong>Order-dependent personas</strong><br><span class="cap">P05, P06, P12</span></td>
+            <td>Specified positionally, but the response draw must stay pure in (candidate, item) or the paired design loses its variance reduction.</td>
+            <td><span class="chip part">Traded deliberately</span><br><span class="cap">Order-free surrogates keep the marginal effect, lose the serial correlation</span></td>
+          </tr>
+          <tr>
+            <td><strong>Judge agreement κ</strong></td>
+            <td>Cohen's κ needs two rater populations. Repeated draws from one judge measure self-consistency; a judge can be consistent and consistently wrong.</td>
+            <td><span class="chip fail">Unmeasurable</span><br><span class="cap">No human raters — permanent without them</span></td>
+          </tr>
+          <tr>
+            <td><strong>Everything, on real candidates</strong></td>
+            <td>No human has sat this assessment. Grader confidence is generated by the harness and has never been compared to a real grader.</td>
+            <td><span class="chip fail">Blocking for production</span><br><span class="cap">The standing threat to validity</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <figure class="panel">
+    <figcaption>
+      <div class="label">Cells that produced any measurable inference</div>
+      <div class="cap">
+        A cell firing below 2% of baseline volume is <strong>unmeasurable, not safe</strong>. The
+        pattern repeats identically across independent arms — what a structural cause predicts
+        and a statistical one does not.
+      </div>
+    </figcaption>
+    <div class="scroll">
+      <svg viewBox="0 0 720 128" role="img" aria-label="Of 180 design cells across five designs, 47 produced measurable inference and 133 did not.">
+        <g class="hit" data-tip="DGP-2 · 108 cells across P01, P02, P09&#10;28 measurable · 80 unmeasurable&#10;every K≥2 cell produced nothing">
+          <rect x="0" y="10" width="720" height="42" fill="transparent"/>
+          <text x="126" y="36" text-anchor="end" font-family="var(--mono)" font-size="12.5" fill="var(--ink)">DGP-2 · 108</text>
+          <rect x="136" y="18" width="139" height="24" rx="4" fill="var(--s1)"/>
+          <rect x="279" y="18" width="397" height="24" rx="4" fill="var(--rule)"/>
+          <text x="150" y="35" class="num" font-size="12" fill="#fff">28</text>
+          <text x="666" y="35" text-anchor="end" class="num" font-size="12" fill="var(--muted)">80 unmeasurable</text>
+        </g>
+        <g class="hit" data-tip="DGP-3 · 72 cells across P01, P09&#10;19 measurable · 53 unmeasurable">
+          <rect x="0" y="56" width="720" height="42" fill="transparent"/>
+          <text x="126" y="82" text-anchor="end" font-family="var(--mono)" font-size="12.5" fill="var(--ink)">DGP-3 · 72</text>
+          <rect x="136" y="64" width="142" height="24" rx="4" fill="var(--s2)"/>
+          <rect x="282" y="64" width="394" height="24" rx="4" fill="var(--rule)"/>
+          <text x="150" y="81" class="num" font-size="12" fill="#fff">19</text>
+          <text x="666" y="81" text-anchor="end" class="num" font-size="12" fill="var(--muted)">53 unmeasurable</text>
+        </g>
+      </svg>
+    </div>
+  </figure>
+</section>
+
+<hr class="divider">
+
+<!-- ───────────────────────── BANK ───────────────────────── -->
+<section>
+  <div class="stack-s col">
+    <div class="label">The most tractable finding</div>
+    <h2>Twenty-eight items would make the AI Engineer bank measurable</h2>
+    <p>
+      Sixteen of AIE's 33 sub-competencies cannot reach the precision target with their entire
+      item pool administered — they can only ever stop on the question budget. Thirteen of the
+      sixteen sit in C6, the competency the graph's prerequisite edges mostly connect.
+    </p>
+    <p>
+      Information adds, so the shortfall is a number and "how many more items" has an exact
+      answer. At the cheapest possible fix — items targeted at the candidate's ability, with
+      the bank's own median discrimination — these are a <strong>lower bound</strong>:
+    </p>
+  </div>
+
+  <figure class="panel">
+    <figcaption>
+      <div class="label">Items required to make every sub-competency reachable</div>
+      <div class="cap">Verified by test: the prescribed count reaches the target, and one fewer does not.</div>
+    </figcaption>
+    <div class="scroll">
+      <svg viewBox="0 0 720 166" role="img" aria-label="Items needed: AIE 28, DA 15, PY none.">
+        <g class="hit" data-tip="AIE — 16 of 33 sub-competencies unreachable&#10;28 items closes every gap&#10;7 of the 16 need exactly one item">
+          <rect x="0" y="8" width="720" height="44" fill="transparent"/>
+          <text x="126" y="36" text-anchor="end" font-family="var(--mono)" font-size="13" fill="var(--ink)">AIE</text>
+          <rect x="136" y="16" width="420" height="26" rx="4" fill="var(--s2)"/>
+          <text x="572" y="36" class="num" font-size="14" fill="var(--ink)">28 items</text>
+          <text x="150" y="34" class="num" font-size="12" fill="#fff">16 of 33 short</text>
+        </g>
+        <g class="hit" data-tip="DA — 5 of 6 sub-competencies unreachable&#10;15 items closes every gap">
+          <rect x="0" y="54" width="720" height="44" fill="transparent"/>
+          <text x="126" y="82" text-anchor="end" font-family="var(--mono)" font-size="13" fill="var(--ink)">DA</text>
+          <rect x="136" y="62" width="225" height="26" rx="4" fill="var(--s2)"/>
+          <text x="377" y="82" class="num" font-size="14" fill="var(--ink)">15 items</text>
+          <text x="150" y="80" class="num" font-size="12" fill="#fff">5 of 6 short</text>
+        </g>
+        <g class="hit" data-tip="PY — every sub-competency already reachable">
+          <rect x="0" y="100" width="720" height="44" fill="transparent"/>
+          <text x="126" y="128" text-anchor="end" font-family="var(--mono)" font-size="13" fill="var(--ink)">PY</text>
+          <rect x="136" y="108" width="4" height="26" rx="2" fill="var(--good)"/>
+          <text x="152" y="128" class="num" font-size="14" fill="var(--muted)">none needed — all 10 reachable</text>
+        </g>
+      </svg>
+    </div>
+  </figure>
+
+  <blockquote class="col">
+    C6.10 misses the target by <span class="num">0.005</span> of a standard error. Nine of its
+    items already exist; a tenth, well-targeted, would make it measurable. This reads like a
+    structural defect and it is a fortnight of authoring.
+  </blockquote>
+</section>
+
+<hr class="divider">
+
+<!-- ───────────────────────── LIMITS ───────────────────────── -->
+<section>
+  <div class="stack-s col">
+    <div class="label">Read this before quoting anything above</div>
+    <h2>Known limits of these numbers</h2>
+  </div>
+  <div class="panel col" style="max-width:none">
+    <ul>
+      <li>
+        <strong>Every session is simulated.</strong> No real candidate has sat this assessment,
+        and grader confidence is generated by the harness. Nothing here transfers to production
+        without the gold set.
+      </li>
+      <li>
+        <strong>The upper bounds are optimistic.</strong> Clopper–Pearson assumes independent
+        observations; the measured design effect is 9.96, so a correctly clustered interval is
+        roughly 3.2× wider than the ones quoted.
+      </li>
+      <li>
+        <strong>The screening activity rule degenerated.</strong> The harness is deterministic
+        given (candidate, item) and the centre points differed only in factors that change
+        nothing, so pure error came out as exactly zero and every non-zero effect was marked
+        "active" — including one of 0.0017. Effect sizes are readable; the activity column is
+        not. Fixed for future runs; deliberately not applied retroactively, because re-running
+        one arm and not another would make them incomparable.
+      </li>
+      <li>
+        <strong>One published figure was withdrawn.</strong> An early 40-session probe put P02's
+        wrong-inference rate at 34% against P01's 16%. At 200 sessions across a complete design
+        it is 16.9% against 15.2%. The probe was noise; P02's real cost is on blocking and
+        accuracy, not inference.
+      </li>
+      <li>
+        <strong>Depth and edge stratification cannot be applied retrospectively.</strong> The
+        engine discarded traversal provenance before this pass, so no depth- or edge-stratified
+        figure may cite the earlier run as its source.
+      </li>
+    </ul>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ───────────────────────── NEXT ───────────────────────── -->
+<section>
+  <div class="stack-s col">
+    <div class="label">What to do</div>
+    <h2>Two actions, neither of them another sweep</h2>
+  </div>
+  <div class="verdict">
+    <div class="tile">
+      <span class="chip pass">Fixable this month</span>
+      <span class="big">28</span>
+      <span class="sub">items to write, closing every unreachable sub-competency in AIE. Seven of the sixteen gaps need exactly one item.</span>
+    </div>
+    <div class="tile">
+      <span class="chip part">Needs the gold set</span>
+      <span class="big">C = 0.90</span>
+      <span class="sub">the threshold to ship <em>if</em> propagation is ever enabled — a threefold improvement on 0.80, and nothing above it buys anything. A default, not a licence.</span>
+    </div>
+    <div class="tile">
+      <span class="chip none">Do not run</span>
+      <span class="big">S2 / S3</span>
+      <span class="sub">Both kill criteria fired. Every configuration the engine can express has now been measured or shown unreachable.</span>
+    </div>
+  </div>
+</section>
+
+</main>
+</div>
+
+<div id="tip" role="status" aria-live="polite"></div>
+
+<script>
+  (function () {
+    var tip = document.getElementById('tip');
+    function show(e, text) {
+      tip.textContent = text;
+      tip.style.opacity = '1';
+      tip.style.left = e.clientX + 'px';
+      tip.style.top = e.clientY + 'px';
+    }
+    function hide() { tip.style.opacity = '0'; }
+    document.querySelectorAll('.hit').forEach(function (node) {
+      var text = node.getAttribute('data-tip');
+      if (!text) return;
+      node.setAttribute('tabindex', '0');
+      node.addEventListener('mousemove', function (e) { show(e, text); });
+      node.addEventListener('mouseleave', hide);
+      node.addEventListener('focus', function () {
+        var r = node.getBoundingClientRect();
+        show({ clientX: r.left + r.width / 2, clientY: r.top + 12 }, text);
+      });
+      node.addEventListener('blur', hide);
+    });
+  })();
+</script>
