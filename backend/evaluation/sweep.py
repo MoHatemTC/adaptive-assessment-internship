@@ -228,6 +228,36 @@ def main() -> None:
         return
 
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    # ONE SWEEP PER OUTPUT DIRECTORY. Two sweeps writing the same cells append to the same
+    # JSONL files, and the result is not merely duplicated sessions — it is interleaved
+    # partial lines, which read as corruption in a file whose only problem is that two
+    # processes owned it. Nothing downstream can tell that apart from a genuinely damaged
+    # run, so the whole dataset has to be discarded.
+    #
+    # O_EXCL is the check: creating the lock and testing for it are one operation, so two
+    # sweeps starting together cannot both pass.
+    lock_path = out_dir / ".sweep.lock"
+    try:
+        handle = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        stale = lock_path.read_text(encoding="utf-8").strip()
+        raise SystemExit(
+            f"{lock_path} exists: another sweep ({stale}) is writing here, or one died "
+            "without cleaning up. Two sweeps sharing an output directory corrupt each "
+            "other's results. Check with `pgrep -af evaluation.sweep`, then delete the "
+            "lock if no sweep is running."
+        ) from None
+    with os.fdopen(handle, "w") as lock:
+        lock.write(f"pid={os.getpid()} out={out_dir}\n")
+
+    try:
+        _run_sweep(args, jobs, cells, out_dir)
+    finally:
+        lock_path.unlink(missing_ok=True)
+
+
+def _run_sweep(args, jobs, cells, out_dir: Path) -> None:
     (out_dir / "design.json").write_text(
         json.dumps(design_document(), indent=1), encoding="utf-8"
     )

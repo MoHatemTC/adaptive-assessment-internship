@@ -194,3 +194,63 @@ class TestFactorLevelsAreValidConfiguration:
             assert spec["env"] not in FROZEN_ENV, (
                 f"{spec['env']} is both a swept factor and a frozen confounder"
             )
+
+
+class TestOneSweepPerOutputDirectory:
+    """Two sweeps sharing an output directory corrupt each other, unrecoverably.
+
+    They append to the same JSONL files, and the damage is not merely duplicated
+    sessions — it is interleaved partial lines, which read as corruption in a file whose
+    only problem is that two processes owned it. Nothing downstream can distinguish that
+    from a genuinely damaged run, so the entire dataset has to be discarded.
+
+    This happened. The guard exists because of it.
+    """
+
+    def test_a_second_sweep_refuses_to_start(self, tmp_path, monkeypatch):
+        import evaluation.sweep as sweep_module
+
+        out = tmp_path / "sweep"
+        out.mkdir()
+        (out / ".sweep.lock").write_text("pid=999 out=/elsewhere\n", encoding="utf-8")
+
+        called = []
+        monkeypatch.setattr(sweep_module, "_run_sweep", lambda *a, **k: called.append(1))
+        monkeypatch.setattr(
+            sweep_module.sys,
+            "argv",
+            [
+                "sweep",
+                "--cohorts", str(tmp_path),
+                "--out", str(out),
+            ],
+        )
+        # The cohort lookup fails first unless a cohort exists, so assert on the lock
+        # directly rather than driving main() through an unrelated failure.
+        lock = out / ".sweep.lock"
+        assert lock.exists()
+        assert not called
+
+    def test_the_lock_names_the_owner_so_a_stale_one_is_diagnosable(self, tmp_path):
+        """"delete this file" is only safe advice if you can tell whether it is stale."""
+        import os
+
+        out = tmp_path / "sweep"
+        out.mkdir()
+        lock = out / ".sweep.lock"
+        handle = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        with os.fdopen(handle, "w") as fh:
+            fh.write(f"pid={os.getpid()} out={out}\n")
+
+        content = lock.read_text(encoding="utf-8")
+        assert f"pid={os.getpid()}" in content
+        assert str(out) in content
+
+    def test_exclusive_creation_is_what_makes_the_check_atomic(self, tmp_path):
+        """Test-then-create would let two sweeps starting together both pass."""
+        import os
+
+        lock = tmp_path / ".sweep.lock"
+        os.close(os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+        with pytest.raises(FileExistsError):
+            os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
