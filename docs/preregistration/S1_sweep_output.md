@@ -1,17 +1,18 @@
 # S1 screening — results
 
-- cells analysed: **72**
+- cells analysed: **108**
   - P01: 36/36 cells complete
   - P02: 36/36 cells complete
+  - P09: 36/36 cells complete
 - baseline firing volume: **0.8900** verified inferences/session
-- cells declared UNMEASURABLE (below 2% of baseline): **54**
+- cells declared UNMEASURABLE (below 2% of baseline): **80**
 
 ## Within-candidate error correlation `r`
 
-- point estimate: **0.8606** (cross-check 0.85221)
-- 95% CI: [0.7223, 0.96103]
-- clusters: 147 with 2+, 33 with one
-- design effect: **9.547**
+- point estimate: **0.87984** (cross-check 0.87127)
+- 95% CI: [0.7807, 0.95341]
+- clusters: 235 with 2+, 34 with one
+- design effect: **9.956**
 - §9 kill criterion (r > 0.4): **FIRES** on the one-sided upper bound of the 95% CI
 
 ## Main effects
@@ -104,6 +105,50 @@ _|effect| > 2 x SE(effect), where SE comes from centre-point pure error with 3 d
 
 _|effect| > 2 x SE(effect), where SE comes from centre-point pure error with 0 degrees of freedom. A SCREENING HEURISTIC for choosing which factors deserve a response surface — not a hypothesis test at any alpha._
 
+### P09
+
+**exact_level_accuracy** — 32 cells, pure error SD 0.009265 on 3 df, SE(effect) 0.003276
+
+| factor | effect | mean(low) | mean(high) | active |
+|---|---:|---:|---:|:--:|
+| D | +0.00333 | 0.63000 | 0.63333 | no |
+| K | +0.00000 | 0.63167 | 0.63167 | no |
+| C | +0.00000 | 0.63167 | 0.63167 | no |
+| S | -0.00333 | 0.63333 | 0.63000 | no |
+| L | +0.00000 | 0.63167 | 0.63167 | no |
+| M | +0.00000 | 0.63167 | 0.63167 | no |
+| E | +0.00000 | 0.63167 | 0.63167 | no |
+
+_|effect| > 2 x SE(effect), where SE comes from centre-point pure error with 3 degrees of freedom. A SCREENING HEURISTIC for choosing which factors deserve a response surface — not a hypothesis test at any alpha._
+
+**questions_per_session** — 32 cells, pure error SD 0.133104 on 3 df, SE(effect) 0.047059
+
+| factor | effect | mean(low) | mean(high) | active |
+|---|---:|---:|---:|:--:|
+| D | -0.01250 | 23.77250 | 23.76000 | no |
+| K | +0.00000 | 23.76625 | 23.76625 | no |
+| C | +0.00000 | 23.76625 | 23.76625 | no |
+| S | -0.01750 | 23.77500 | 23.75750 | no |
+| L | +0.00000 | 23.76625 | 23.76625 | no |
+| M | +0.00000 | 23.76625 | 23.76625 | no |
+| E | +0.00000 | 23.76625 | 23.76625 | no |
+
+_|effect| > 2 x SE(effect), where SE comes from centre-point pure error with 3 degrees of freedom. A SCREENING HEURISTIC for choosing which factors deserve a response surface — not a hypothesis test at any alpha._
+
+**wrong_inference_rate** — 10 cells, pure error SD None on 0 df, SE(effect) None
+
+| factor | effect | mean(low) | mean(high) | active |
+|---|---:|---:|---:|:--:|
+| D | -0.00093 | 0.14530 | 0.14437 | no |
+| K | — | — | — | n/a |
+| C | +0.00093 | 0.14437 | 0.14530 | no |
+| S | +0.02963 | 0.13891 | 0.16854 | no |
+| L | +0.04059 | 0.12048 | 0.16107 | no |
+| M | +0.04059 | 0.12048 | 0.16107 | no |
+| E | -0.00093 | 0.14530 | 0.14437 | no |
+
+_|effect| > 2 x SE(effect), where SE comes from centre-point pure error with 0 degrees of freedom. A SCREENING HEURISTIC for choosing which factors deserve a response surface — not a hypothesis test at any alpha._
+
 ## Cells
 
 | cell | persona | n | verified | volume/sess | wrong rate | UCB | measurable |
@@ -180,3 +225,39 @@ _|effect| > 2 x SE(effect), where SE comes from centre-point pure error with 0 d
 | r29_D-hi_K-hi_C-hi_S-lo_L-hi_M-hi_E-lo | P02 | 200 | 0 | 0.0000 | — | — | **NO** |
 | r30_D-hi_K-hi_C-hi_S-hi_L-lo_M-hi_E-hi | P02 | 200 | 0 | 0.0000 | — | — | **NO** |
 | r31_D-hi_K-hi_C-hi_S-hi_L-hi_M-hi_E-hi | P02 | 200 | 0 | 0.0000 | — | — | **NO** |
+| c00_D-ce_K-ce_C-ce_S-ce_L-ce_M-lo_E-lo | P09 | 200 | 0 | 0.0000 | — | — | **NO** |
+| c01_D-ce_K-ce_C-ce_S-ce_L-ce_M-hi_E-lo | P09 | 200 | 0 | 0.0000 | — | — | **NO** |
+| c02_D-ce_K-ce_C-ce_S-ce_L-ce_M-lo_E-hi | P09 | 200 | 0 | 0.0000 | — | — | **NO** |
+| c03_D-ce_K-ce_C-ce_S-ce_L-ce_M-hi_E-hi | P09 | 200 | 0 | 0.0000 | — | — | **NO** |
+| r00_D-lo_K-lo_C-lo_S-lo_L-lo_M-lo_E-lo | P09 | 200 | 83 | 0.4150 | 0.1205 | 0.1958 | yes |
+| r01_D-lo_K-lo_C-lo_S-lo_L-hi_M-lo_E-lo | P09 | 200 | 83 | 0.4150 | 0.1205 | 0.1958 | yes |
+| r02_D-lo_K-lo_C-lo_S-hi_L-lo_M-lo_E-hi | P09 | 200 | 0 | 0.0000 | — | — | **NO** |
+| r03_D-lo_K-lo_C-lo_S-hi_L-hi_M-lo_E-hi | P09 | 200 | 0 | 0.0000 | — | — | **NO** |
+| r04_D-lo_K-lo_C-hi_S-lo_L-lo_M-hi_E-lo | P09 | 200 | 83 | 0.4150 | 0.1205 | 0.1958 | yes |
+| r05_D-lo_K-lo_C-hi_S-lo_L-hi_M-hi_E-lo | P09 | 200 | 173 | 0.8650 | 0.1965 | 0.2529 | yes |
+| r06_D-lo_K-lo_C-hi_S-hi_L-lo_M-hi_E-hi | P09 | 200 | 0 | 0.0000 | — | — | **NO** |
+| r07_D-lo_K-lo_C-hi_S-hi_L-hi_M-hi_E-hi | P09 | 200 | 89 | 0.4450 | 0.1685 | 0.2476 | yes |
+| r08_D-lo_K-hi_C-lo_S-lo_L-lo_M-hi_E-hi | P09 | 200 | 0 | 0.0000 | — | — | **NO** |
+| r09_D-lo_K-hi_C-lo_S-lo_L-hi_M-hi_E-hi | P09 | 200 | 0 | 0.0000 | — | — | **NO** |
+| r10_D-lo_K-hi_C-lo_S-hi_L-lo_M-hi_E-lo | P09 | 200 | 0 | 0.0000 | — | — | **NO** |
+| r11_D-lo_K-hi_C-lo_S-hi_L-hi_M-hi_E-lo | P09 | 200 | 0 | 0.0000 | — | — | **NO** |
+| r12_D-lo_K-hi_C-hi_S-lo_L-lo_M-lo_E-hi | P09 | 200 | 0 | 0.0000 | — | — | **NO** |
+| r13_D-lo_K-hi_C-hi_S-lo_L-hi_M-lo_E-hi | P09 | 200 | 0 | 0.0000 | — | — | **NO** |
+| r14_D-lo_K-hi_C-hi_S-hi_L-lo_M-lo_E-lo | P09 | 200 | 0 | 0.0000 | — | — | **NO** |
+| r15_D-lo_K-hi_C-hi_S-hi_L-hi_M-lo_E-lo | P09 | 200 | 0 | 0.0000 | — | — | **NO** |
+| r16_D-hi_K-lo_C-lo_S-lo_L-lo_M-hi_E-hi | P09 | 200 | 83 | 0.4150 | 0.1205 | 0.1958 | yes |
+| r17_D-hi_K-lo_C-lo_S-lo_L-hi_M-hi_E-hi | P09 | 200 | 172 | 0.8600 | 0.1919 | 0.2480 | yes |
+| r18_D-hi_K-lo_C-lo_S-hi_L-lo_M-hi_E-lo | P09 | 200 | 0 | 0.0000 | — | — | **NO** |
+| r19_D-hi_K-lo_C-lo_S-hi_L-hi_M-hi_E-lo | P09 | 200 | 89 | 0.4450 | 0.1685 | 0.2476 | yes |
+| r20_D-hi_K-lo_C-hi_S-lo_L-lo_M-lo_E-hi | P09 | 200 | 83 | 0.4150 | 0.1205 | 0.1958 | yes |
+| r21_D-hi_K-lo_C-hi_S-lo_L-hi_M-lo_E-hi | P09 | 200 | 83 | 0.4150 | 0.1205 | 0.1958 | yes |
+| r22_D-hi_K-lo_C-hi_S-hi_L-lo_M-lo_E-lo | P09 | 200 | 0 | 0.0000 | — | — | **NO** |
+| r23_D-hi_K-lo_C-hi_S-hi_L-hi_M-lo_E-lo | P09 | 200 | 0 | 0.0000 | — | — | **NO** |
+| r24_D-hi_K-hi_C-lo_S-lo_L-lo_M-lo_E-lo | P09 | 200 | 0 | 0.0000 | — | — | **NO** |
+| r25_D-hi_K-hi_C-lo_S-lo_L-hi_M-lo_E-lo | P09 | 200 | 0 | 0.0000 | — | — | **NO** |
+| r26_D-hi_K-hi_C-lo_S-hi_L-lo_M-lo_E-hi | P09 | 200 | 0 | 0.0000 | — | — | **NO** |
+| r27_D-hi_K-hi_C-lo_S-hi_L-hi_M-lo_E-hi | P09 | 200 | 0 | 0.0000 | — | — | **NO** |
+| r28_D-hi_K-hi_C-hi_S-lo_L-lo_M-hi_E-lo | P09 | 200 | 0 | 0.0000 | — | — | **NO** |
+| r29_D-hi_K-hi_C-hi_S-lo_L-hi_M-hi_E-lo | P09 | 200 | 0 | 0.0000 | — | — | **NO** |
+| r30_D-hi_K-hi_C-hi_S-hi_L-lo_M-hi_E-hi | P09 | 200 | 0 | 0.0000 | — | — | **NO** |
+| r31_D-hi_K-hi_C-hi_S-hi_L-hi_M-hi_E-hi | P09 | 200 | 0 | 0.0000 | — | — | **NO** |
