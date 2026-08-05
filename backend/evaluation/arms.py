@@ -156,9 +156,27 @@ FROZEN_ENV = {
     # B ships 0.80 and C ships 0.55. Frozen to C's value: a stable-band stop at SE 0.80 is
     # a different stopping rule, not a different adaptation architecture.
     "CAT_STABILITY_SE_CEILING": "0.55",
-    "CAT_EXPOSURE_TOP_K": "1",
+    # PRE-3. Was "1", which is maximally concentrated selection and which
+    # docs/operations.md forbids in production. Every exposure figure in the prior study
+    # was measured there and does not transfer. 3 is the shipped default, so exposure
+    # numbers from this study describe a configuration someone might actually run.
+    #
+    # It is frozen rather than swept because it is a confounder, not a factor: top_k
+    # changes which items are served, which changes the evidence, which changes every
+    # propagation input.
+    "CAT_EXPOSURE_TOP_K": "3",
     "CAT_CONTENT_BALANCE_FLOOR": "0.80",
     "CAT_BAND_PROBABILITY_STOP_ENABLED": "false",
+    # PRE-5. The P(band) rule, when an arm turns it on, must be a refinement of the
+    # precision stop rather than an alternative to it. Every propagation configuration is
+    # judged by its effect on a posterior, so a rule that can finalise at an arbitrary SE
+    # would confound the sweep with a second defect. Off in production, on here.
+    "CAT_BAND_PROBABILITY_STOP_CONJUNCTIVE": "true",
+    # R3. Blocking now requires two consistent failures; the prior 4.8-5.1% false-blocking
+    # figures were measured at one. Frozen so that a factor sweep moves it deliberately or
+    # not at all — an unpinned threshold that changed between the two studies would make
+    # the blocking numbers incomparable without anything saying so.
+    "GRAPH_MINIMUM_FAILURES_TO_BLOCK": "2",
     "ORCHESTRATOR_MAX_ITEMS": "120",
     "ORCHESTRATOR_TIME_LIMIT_MINUTES": "90",
     "ORCHESTRATOR_SHORTLIST_SIZE": "5",

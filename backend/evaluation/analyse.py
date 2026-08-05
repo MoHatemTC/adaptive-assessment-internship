@@ -79,7 +79,8 @@ class Frame:
         self.stop_reason: list[str] = []
         self.observations: list[int] = []
         self.credible: list[list[float]] = []
-        self.coverage_ok: list[bool] = []
+        # Tri-state: True / False / None where the arm has no coverage gate.
+        self.coverage_ok: list[bool | None] = []
         self.modalities: list[list[str]] = []
 
         for record in records:
@@ -99,7 +100,11 @@ class Frame:
                 self.stop_reason.append(variable["stop_reason"])
                 self.observations.append(variable["observations"])
                 self.credible.append(variable.get("credible_interval_95") or [])
-                self.coverage_ok.append(variable.get("graph_coverage_satisfied", True))
+                # None = this arm has no coverage gate. Kept as None and excluded from the
+                # rate rather than counted as a pass: an arm that never ran the gate did
+                # not satisfy it, and scoring it 1.0 makes C-off look like it cleared a
+                # check it does not have.
+                self.coverage_ok.append(variable.get("graph_coverage_satisfied"))
                 self.modalities.append(variable.get("modalities_used", []))
 
     def index(self) -> dict[tuple[str, str], int]:
@@ -118,6 +123,18 @@ def _align(ref: Frame, test: Frame):
 
 
 # --- per-arm absolute metrics ----------------------------------------------------------
+
+
+def _rate_over_gated(values: list[bool | None]) -> float:
+    """Satisfaction rate over the variables the gate actually applied to.
+
+    NaN, not 1.0, when it applied to none. An arm without a coverage gate has not
+    satisfied it — the gate did not run — and reporting 100% for that arm invites the
+    comparison "C-off's coverage is as good as C-shipped's", which is a statement about
+    a check one of them never performed.
+    """
+    applicable = [bool(v) for v in values if v is not None]
+    return round(float(np.mean(applicable)), 5) if applicable else float("nan")
 
 
 def absolute_metrics(frame: Frame) -> dict:
@@ -200,7 +217,8 @@ def absolute_metrics(frame: Frame) -> dict:
         "p90_duration_minutes": round(float(np.percentile(durations, 90)), 3),
         "duration_over_90min_rate": round(float(np.mean(durations > 90.0)), 5),
         "converged_rate": round(float(np.mean(frame.converged)), 5),
-        "coverage_satisfied_rate": round(float(np.mean(frame.coverage_ok)), 5),
+        "coverage_satisfied_rate": _rate_over_gated(frame.coverage_ok),
+        "coverage_gate_applicable_n": sum(v is not None for v in frame.coverage_ok),
         "modality_blueprint_compliance": round(blueprint, 5),
         "information_realization_ratio": (
             round(float(realized.sum() / expected.sum()), 5) if expected.sum() > 0 else float("nan")
@@ -397,6 +415,8 @@ def dag_safety(records: list[dict], cohort: Cohort) -> dict:
     should_block_total = should_block_missed = 0
     duplicate_events = 0
     sessions_with_inference = 0
+    inferred_by_source = {s: {"n": 0, "wrong": 0} for s in ("enforced", "shadow", "preview")}
+    blocked_by_source = {s: {"n": 0, "wrong": 0} for s in ("enforced", "shadow", "preview")}
 
     for record in records:
         graph = record.get("graph") or {}
@@ -404,7 +424,41 @@ def dag_safety(records: list[dict], cohort: Cohort) -> dict:
         if not nodes:
             continue
 
-        inferred = list(graph.get("inferred_mastered") or [])
+        # THREE SOURCES, NEVER POOLED. Each answers a different question, and an arm
+        # usually has evidence from exactly one of them:
+        #
+        #   enforced  what the deployment ACTED on. Empty in C-shipped and C-hybrid,
+        #             which hold the switches off by definition.
+        #   shadow    what the graph CONCLUDED under the live edge set without acting.
+        #             Also empty in C-shipped — not because of the enforcement gate but
+        #             because the AIE edges all ship `unvalidated` and are inert, so the
+        #             traversal draws nothing to mirror.
+        #   preview   what the graph WOULD conclude if the unvalidated edges were
+        #             trusted. The only source with any events at all on the shipped
+        #             configuration: 30 inferences per 20 sessions where the other two
+        #             record zero.
+        #
+        # Coalescing them would compute a wrong-inference rate that means "acted on" for
+        # one arm and "hypothetically, on edges nobody has validated" for another, and
+        # report both in one column. The rates are computed per source and the source is
+        # named; §8's stratification rules say which one a given claim may cite.
+        for source, key in (
+            ("enforced", "inferred_mastered"),
+            ("shadow", "shadow_inferred_mastered"),
+            ("preview", "preview_inferred"),
+        ):
+            for node in list(graph.get(key) or []):
+                if node not in nodes:
+                    continue
+                inferred_by_source[source]["n"] += 1
+                inferred_by_source[source]["wrong"] += int(nodes[node] == 0)
+
+        # The headline numerator: what the deployment acted on, falling back to what it
+        # concluded. Preview is deliberately NOT folded in — it is reported beside this,
+        # never inside it.
+        inferred = list(
+            graph.get("inferred_mastered") or graph.get("shadow_inferred_mastered") or []
+        )
         if inferred:
             sessions_with_inference += 1
         for node in inferred:
@@ -412,7 +466,18 @@ def dag_safety(records: list[dict], cohort: Cohort) -> dict:
                 inferred_total += 1
                 inferred_wrong += int(nodes[node] == 0)
 
-        blocked = list(graph.get("blocked") or [])
+        for source, key in (
+            ("enforced", "blocked"),
+            ("shadow", "shadow_blocked"),
+            ("preview", "preview_blocked"),
+        ):
+            for node in list(graph.get(key) or []):
+                if node not in nodes:
+                    continue
+                blocked_by_source[source]["n"] += 1
+                blocked_by_source[source]["wrong"] += int(nodes[node] == 1)
+
+        blocked = list(graph.get("blocked") or graph.get("shadow_blocked") or [])
         for node in blocked:
             if node in nodes:
                 blocked_total += 1
@@ -472,8 +537,14 @@ def dag_safety(records: list[dict], cohort: Cohort) -> dict:
 
             # C-DAG-15 OVER-CONVERGENCE. A main that claimed convergence while the graph
             # still had required sub-competencies unmeasured, or with nodes waived.
+            # Only counted where a coverage gate exists. On an arm without one there is
+            # no such thing as converging past it, and folding those variables into the
+            # denominator dilutes the rate for the arms that do have the gate.
+            coverage = variable.get("graph_coverage_satisfied")
+            if coverage is None:
+                continue
             over_convergence_denominator += 1
-            if not variable.get("graph_coverage_satisfied", True):
+            if not coverage:
                 over_converged += 1
             elif (record.get("graph") or {}).get("waived", {}).get(variable["variable"]):
                 over_converged += 1
@@ -492,6 +563,96 @@ def dag_safety(records: list[dict], cohort: Cohort) -> dict:
         "C-DAG-11_duplicate_evidence": rate(duplicate_events, max(1, sum(
             (r.get("graph") or {}).get("processed_evidence_ids", 0) for r in records
         ))),
+        # Which evidence the headline rate above is actually made of. Named rather than
+        # implied: on C-shipped it is preview-only, and a reader has to know that before
+        # comparing it with C-full's enforced number.
+        "wrong_inference_source": _dominant_source(inferred_by_source),
+        "false_blocking_source": _dominant_source(blocked_by_source),
+        "wrong_inference_by_source": {
+            s: rate(v["wrong"], v["n"]) for s, v in inferred_by_source.items()
+        },
+        "false_blocking_by_source": {
+            s: rate(v["wrong"], v["n"]) for s, v in blocked_by_source.items()
+        },
+        # C-DAG-03d / C-DAG-03e. Depth-1 inference (the immediate parent) and depth-4
+        # inference (three decayed hops) are different mechanisms; run 3 reported them as
+        # one number. Per-edge is the second stratification, and the one that supports a
+        # remedy — an edge with a bad rate can be removed from the allowlist, whereas a
+        # bad pooled rate can only turn the whole feature off.
+        **_stratified_inference(records, truth),
+    }
+
+
+def _dominant_source(by_source: dict[str, dict]) -> str:
+    """Which source the HEADLINE rate is made of.
+
+    Only `enforced` and `shadow` are candidates, in that order, because those are what
+    the headline reads. Preview is never the answer here even when it is the only source
+    with events — a rate computed from edges nobody validated is not the same claim, and
+    labelling it as though it were would let it be compared with C-full's enforced number.
+    "none" is the honest answer for the shipped configuration: it concludes nothing, so
+    there is nothing to be right or wrong about, and `wrong_inference_by_source` carries
+    the preview figure separately for anyone who wants the hypothetical.
+    """
+    for source in ("enforced", "shadow"):
+        if by_source[source]["n"]:
+            return source
+    return "none"
+
+
+def _stratified_inference(records: list[dict], truth: dict[str, dict]) -> dict:
+    """Wrong-inference rate by propagation distance and by traversed edge.
+
+    Reads `graph.inferred_records`, which carries the distance and the edge path the
+    traversal used. Those were computed and discarded before this branch, which is why
+    the pre-registration's claim that this analysis "costs nothing, the data already
+    exists" had to be withdrawn (amendment 13.1) — and why run 3 cannot be re-stratified.
+    """
+    by_depth: dict[int, dict] = defaultdict(lambda: {"n": 0, "wrong": 0})
+    by_edge: dict[tuple[str, str], dict] = defaultdict(lambda: {"n": 0, "wrong": 0})
+
+    for record in records:
+        nodes = truth.get(record["simulee_id"], {})
+        if not nodes:
+            continue
+        for node, provenance in ((record.get("graph") or {}).get("inferred_records") or {}).items():
+            if node not in nodes:
+                continue
+            wrong = int(nodes[node] == 0)
+            depth = provenance.get("distance")
+            if depth is not None:
+                by_depth[int(depth)]["n"] += 1
+                by_depth[int(depth)]["wrong"] += wrong
+            # Blame every edge on the path. An inference that traversed three edges is
+            # evidence about all three: the analysis cannot say which one was wrong from
+            # one observation, and attributing it only to the first or the last would
+            # invent a precision the data does not have. Aggregated over many
+            # inferences, a genuinely bad edge separates from the ones it shares paths with.
+            path = provenance.get("edge_path") or []
+            for parent, child in zip(path[1:], path):
+                by_edge[(parent, child)]["n"] += 1
+                by_edge[(parent, child)]["wrong"] += wrong
+
+    def block(counts: dict) -> dict:
+        return {
+            "events": counts["wrong"],
+            "verified": counts["n"],
+            "rate": round(counts["wrong"] / counts["n"], 5) if counts["n"] else None,
+            "upper_95": (
+                round(stats.clopper_pearson_upper(counts["wrong"], counts["n"]), 5)
+                if counts["n"]
+                else None
+            ),
+        }
+
+    return {
+        "C-DAG-03d_wrong_inference_by_depth": {
+            str(depth): block(counts) for depth, counts in sorted(by_depth.items())
+        },
+        "C-DAG-03e_wrong_inference_by_edge": {
+            f"{parent}->{child}": block(counts)
+            for (parent, child), counts in sorted(by_edge.items())
+        },
     }
 
 

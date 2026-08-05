@@ -300,9 +300,18 @@ async def _run(*, orchestrator, bank, simulee, mains, arm, max_steps, keep_trace
                 "converged": bool(vstate.converged),
                 "stop_reason": vstate.stop_reason,
                 # Fields Approach C's report added. Read defensively so one runner serves
-                # both branches: absent on B means "no graph", not "not satisfied".
-                "graph_coverage_satisfied": bool(
-                    getattr(variable_report, "graph_coverage_satisfied", True)
+                # both branches — but TRI-STATE, not boolean.
+                #
+                # Defaulting a missing field to True says "coverage satisfied" for an arm
+                # that has no coverage gate at all, so C-off and B score a perfect gate
+                # they never ran. None means "no graph"; the analysis excludes it rather
+                # than counting it as a pass. `summarise` now returns the graph block only
+                # when the master switch is on, so this path is reached routinely and not
+                # only on the B branch.
+                "graph_coverage_satisfied": (
+                    None
+                    if getattr(variable_report, "graph_coverage_satisfied", None) is None
+                    else bool(variable_report.graph_coverage_satisfied)
                 ),
                 "graph_unmeasured_nodes": list(
                     getattr(variable_report, "graph_unmeasured_nodes", []) or []
@@ -339,6 +348,25 @@ async def _run(*, orchestrator, bank, simulee, mains, arm, max_steps, keep_trace
         "direct_mastered": list(getattr(state, "graph_direct_mastered_nodes", []) or []),
         "direct_not_mastered": list(getattr(state, "graph_direct_not_mastered_nodes", []) or []),
         "blocked": list(getattr(state, "graph_blocked_nodes", []) or []),
+        # THE ENFORCED SETS ABOVE ARE EMPTY IN EVERY ARM THAT DOES NOT ENFORCE.
+        #
+        # `graph_inferred_mastered_nodes` and `graph_blocked_nodes` are gated on the
+        # deployment switches, which C-shipped and C-hybrid hold off by definition. A
+        # safety analysis reading only those counts zero events for exactly the arms the
+        # study is about, and reports a wrong-inference rate of 0/0 — which renders as
+        # "no evidence of harm" rather than "no evidence".
+        #
+        # The mirrors carry what the graph CONCLUDED under the same configuration. That is
+        # the quantity C-DAG-03/04 are asking about: what would happen if this were
+        # switched on, verified against node truth that costs nothing here.
+        "shadow_inferred_mastered": list(
+            getattr(state, "graph_shadow_inferred_mastered_nodes", []) or []
+        ),
+        "shadow_blocked": list(getattr(state, "graph_shadow_blocked_nodes", []) or []),
+        # Per-inference provenance: node -> {source_node, distance, edge_path, ...}.
+        # Depth- and edge-stratified wrong-inference rates (C-DAG-03d/03e) read this and
+        # cannot be computed without it.
+        "inferred_records": dict(getattr(state, "graph_inferred_mastery_records", {}) or {}),
         "contradicted": list(getattr(state, "graph_contradicted_nodes", []) or []),
         "contradiction_events": list(getattr(state, "graph_contradictions", []) or []),
         "waived": dict(getattr(state, "graph_waived_nodes", {}) or {}),

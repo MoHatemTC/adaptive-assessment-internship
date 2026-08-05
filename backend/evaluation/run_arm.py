@@ -129,8 +129,80 @@ async def _run_all(*, arm_name, cohort, out_dir, limit, max_steps, trace_every):
         simulees = [simulees[int(i * step)] for i in range(limit)]
     order = _np.random.default_rng(cohort.seed).permutation(len(simulees))
     simulees = [simulees[int(i)] for i in order]
+    def _resolved_policy_summary(bank_id: str | None) -> dict | None:
+        """The permission lattice actually in force, for R1.
+
+        Recorded because the harness rewrites the edge flags after resolution: without
+        this, a C-full result cannot be distinguished from a claim about the edges as
+        they ship, and the shipped ones are all inert.
+        """
+        if not HAS_GRAPH:
+            return None
+        try:
+            from app.services.orchestrator.registry import get_propagation_policy
+
+            resolved = get_propagation_policy(bank_id)
+        except (ImportError, KeyError, OSError, ValueError):
+            return None
+        return resolved.summary() if resolved is not None else None
+
     out_dir.mkdir(parents=True, exist_ok=True)
     results_path = out_dir / f"{arm_name}__{cohort.dgp}.jsonl"
+    manifest_path = out_dir / f"{arm_name}__{cohort.dgp}.manifest.json"
+
+    # PRE-8: WRITTEN BEFORE THE LOOP, NOT AFTER IT.
+    #
+    # The manifest used to be the last artefact produced, so any run that was killed —
+    # the documented normal case, since every run so far has been stopped early — left a
+    # .jsonl of results with no record of the settings that produced them. Results whose
+    # configuration is unknown are not partial results; they are unusable ones.
+    #
+    # `status` carries what the old schema could not: a manifest that exists before the
+    # count does has to be able to say the count is not final yet. A reader finding
+    # "running" on a run nobody is running knows it died, which is also information the
+    # old shape could not express.
+    def write_manifest(*, status: str, n_written: int) -> None:
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "arm": arm_name,
+                    "arm_description": ARMS[arm_name].description,
+                    "dgp": cohort.dgp,
+                    "status": status,
+                    "n_planned": len(simulees),
+                    "n_written": n_written,
+                    "cohort_seed": cohort.seed,
+                    # Retained under its old name so existing readers keep working; it is
+                    # the final count only when status == "complete".
+                    "n": n_written,
+                    "bank_id": cohort.bank_id,
+                    "mains": mains,
+                    "has_graph_module": HAS_GRAPH,
+                    "force_enable_edges": ARMS[arm_name].force_enable_edges,
+                    # R1: the harness forces every PREREQUISITE edge live, AFTER all three
+                    # policy levels have resolved. Recorded rather than left to be
+                    # reconstructed, so nobody reads a C-full number as a statement about
+                    # the shipped edge set.
+                    "policy_override": "harness:force_enable_edges"
+                    if ARMS[arm_name].force_enable_edges
+                    else None,
+                    "resolved_policy": _resolved_policy_summary(cohort.bank_id),
+                    "results": results_path.name,
+                    "settings": {
+                        key: getattr(settings, key)
+                        for key in sorted(type(settings).model_fields)
+                        if key.startswith(
+                            ("cat_", "graph_", "competency_", "orchestrator_", "code_")
+                        )
+                        and not key.endswith(("_api_key", "_key"))
+                    },
+                },
+                indent=1,
+            ),
+            encoding="utf-8",
+        )
+
+    write_manifest(status="running", n_written=0)
 
     written = 0
     with results_path.open("w", encoding="utf-8") as handle:
@@ -150,27 +222,7 @@ async def _run_all(*, arm_name, cohort, out_dir, limit, max_steps, trace_every):
             if written % 100 == 0:
                 print(f"  {arm_name} {cohort.dgp}: {written}/{len(simulees)}", flush=True)
 
-    manifest = {
-        "arm": arm_name,
-        "arm_description": ARMS[arm_name].description,
-        "dgp": cohort.dgp,
-        "cohort_seed": cohort.seed,
-        "n": written,
-        "bank_id": cohort.bank_id,
-        "mains": mains,
-        "has_graph_module": HAS_GRAPH,
-        "force_enable_edges": ARMS[arm_name].force_enable_edges,
-        "results": results_path.name,
-        "settings": {
-            key: getattr(settings, key)
-            for key in sorted(type(settings).model_fields)
-            if key.startswith(("cat_", "graph_", "competency_", "orchestrator_", "code_"))
-            and not key.endswith(("_api_key", "_key"))
-        },
-    }
-    (out_dir / f"{arm_name}__{cohort.dgp}.manifest.json").write_text(
-        json.dumps(manifest, indent=1), encoding="utf-8"
-    )
+    write_manifest(status="complete", n_written=written)
     print(f"{arm_name} {cohort.dgp}: {written} sessions -> {results_path}")
 
 
