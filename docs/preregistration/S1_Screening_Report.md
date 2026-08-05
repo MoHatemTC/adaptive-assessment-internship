@@ -1,9 +1,10 @@
 # C-shipped with configurable propagation — S1 screening report
 
 **Pre-registration:** `C_Shipped_Propagation_Test_Plan.md` in this directory, with amendments 13.1–13.3.
-**In this pass:** preconditions, the configuration surface, Tier-1 invariants, S1 screening at a
-calibrated cell size, the blocking floor, and the adversarial and judged lanes.
-**Not in this pass:** S2 response surface, S3 confirmation. Deliverable 11 is not produced.
+**In this pass:** preconditions, the configuration surface, Tier-1 invariants, S1 screening on
+two personas at a calibrated cell size, the blocking floor, and the adversarial and judged lanes.
+**Not in this pass:** S2 response surface, S3 confirmation, persona P09. Deliverable 11 is not
+produced.
 
 ---
 
@@ -11,14 +12,15 @@ calibrated cell size, the blocking floor, and the adversarial and judged lanes.
 
 **H1 is falsified, and two independent §9 kill criteria fire.**
 
-> **`r` = 0.83, 95% CI [0.593, 0.995].** The pre-registration says corroboration cannot reach
+> **`r` = 0.86, 95% CI [0.722, 0.961].** The pre-registration says corroboration cannot reach
 > the gate when `r > 0.4` and the K sweep should stop. It is not close: the *lower* bound of
-> the interval is 0.59. §2.2's own table puts `K = 4` at 13.5% wrong when `r = 0.8`, against a
+> the interval is 0.72. §2.2's own table puts `K = 4` at 13.5% wrong when `r = 0.8`, against a
 > 3% gate — so even a graph that could satisfy `K` would not be rescued by it.
 >
-> **No factor moved the wrong-inference rate.** Nine of 36 cells produced any measurable
-> inference at all; across those the rate spans 13.8%–19.3% and the *best* upper bound is
-> 21.4% against a 3% gate. No factor is active on that response.
+> **No factor moved the wrong-inference rate.** Eighteen of 72 cells produced any measurable
+> inference at all; across those the pooled rate is 15.2% (P01) and 16.9% (P02), and the *best*
+> upper bound anywhere in either design is 20.3% against a 3% gate. No factor is active on
+> that response, in either persona.
 
 Either trigger alone ends the study. Both fire, and they fire for different reasons — one about
 the candidates, one about the configuration surface — which is the strongest form the negative
@@ -94,37 +96,46 @@ it is a working safety control.
 
 ## 1. The S1 screening result
 
-**36/36 cells, complete Resolution-IV design, P01, DGP-2, C-full, n = 200 per cell
-(7,200 sessions).** Persona stratification was started and not finished — see §10.
+**72/72 cells, two complete Resolution-IV designs — P01 and P02 — at DGP-2, C-full,
+n = 200 per cell (14,400 sessions).** Equal n by design: the persona cell-size weights exist
+so a decisive persona gets the power its own gates need, and they are wrong for a *contrast*,
+where unequal precision reads as a difference in the thing being measured. P09 was not run
+(§10).
 
 ### 1.1 `r`, the primary objective — and the first kill criterion
 
 | quantity | value |
 |---|---|
-| tetrachoric `r` | **0.833** (Bonett–Price cross-check 0.827) |
-| 95% CI (candidate-clustered bootstrap) | **[0.593, 0.995]** |
-| candidates with ≥2 verified inferences | 69 (15 with exactly one) |
-| design effect `1 + (m̄−1)·r` | **9.71** |
+| tetrachoric `r` | **0.861** (Bonett–Price cross-check 0.852) |
+| 95% CI (candidate-clustered bootstrap) | **[0.722, 0.961]** |
+| candidates with ≥2 verified inferences | 147 (33 with exactly one) |
+| design effect `1 + (m̄−1)·r` | **9.55** |
 | §9 kill criterion `r > 0.4` | **FIRES** |
 
-`r` is the number the plan says decides whether H1 has an answer at all, and it lands at 0.83.
+Pooled over both personas. On P01 alone it was 0.833 [0.593, 0.995]; adding P02 raised the
+point estimate and halved the interval width, so the conclusion strengthened rather than
+softened when the harder persona was added.
+
+`r` is the number the plan says decides whether H1 has an answer at all, and it lands at 0.86.
 A candidate's inference errors are almost perfectly repeating: when the graph is wrong about
 someone once, it is wrong about them again. That is the regime where corroboration does nothing
 — §2.2's table puts `K = 4` at 13.5% wrong when `r = 0.8`.
 
 So the `K` finding in §0 and this one are independent and mutually reinforcing. Even if the
-graph gained the branching that would make `K ≥ 2` satisfiable, `r = 0.83` says the extra
+graph gained the branching that would make `K ≥ 2` satisfiable, `r = 0.86` says the extra
 observations would not be independent enough to help.
 
-The design effect of 9.71 is worth stating separately: any wrong-inference rate computed over
-these events has an interval roughly **√9.71 ≈ 3.1× wider** than a naive binomial one. Every
+The design effect of 9.55 is worth stating separately: any wrong-inference rate computed over
+these events has an interval roughly **√9.55 ≈ 3.1× wider** than a naive binomial one. Every
 figure in §2 already accounts for this being unaccounted for — they are Clopper–Pearson bounds
 that assume independence, and are therefore optimistic.
 
 ### 1.2 Which cells produced any evidence at all
 
-**27 of 36 cells are UNMEASURABLE** — firing volume below 2% of the best cell's 0.805 verified
-inferences per session. Per §4.3 that is *unmeasurable, not safe*.
+**54 of 72 cells are UNMEASURABLE** — 27 in each persona arm — with firing volume below 2% of
+the best cell's 0.890 verified inferences per session. Per §4.3 that is *unmeasurable, not
+safe*. The pattern is identical in both arms, which is what a structural cause predicts and a
+statistical one does not.
 
 | level | cells measurable |
 |---|---|
@@ -140,17 +151,21 @@ nearly the same effect: it is a second way to switch propagation off rather than
 
 ### 1.3 Main effects — and why the activity rule could not run
 
-Across the 9 measurable cells, the wrong-inference rate spans **13.8%–19.3%**, and the **best
-upper bound in the entire design is 21.4% against a 3% gate**. No factor is active on that
-response. `K` reports `n/a` because it did not vary among cells that fired — which is the
-analysis refusing to enter a zero from a cell that never fired, since that zero would drag the
-effect toward "this factor makes propagation safer" precisely because it made it inoperative.
+Across the 9 measurable cells in each arm, the wrong-inference rate spans **13.8%–19.3%**
+(P01) and **12.8%–27.3%** (P02), and the **best upper bound anywhere in either design is 20.3%
+against a 3% gate**. No factor is active on that response in either persona. `K` reports `n/a`
+because it did not vary among cells that fired — which is the analysis refusing to enter a zero
+from a cell that never fired, since that zero would drag the effect toward "this factor makes
+propagation safer" precisely because it made it inoperative.
 
-On the descriptive responses the effects are real but negligible: `D` moves questions per
-session by **+0.08 items** (24.11 → 24.19) and exact-level accuracy by **+0.0017** (0.649 →
-0.651). Across all 36 cells accuracy spans 0.648–0.658 and questions 24.09–24.21. **Nothing in
-the propagation surface buys a question.** §0's exchange rate — one question is worth at most
-0.5pp of accuracy — never comes into play, because there is no saving to price.
+On the descriptive responses the effects are real but negligible, and they do not agree between
+personas: `D` moves exact-level accuracy by **+0.0017** on P01 and **−0.0017** on P02, and
+questions per session by **+0.08 items** (24.11 → 24.19). Accuracy spans 0.648–0.658 on P01 and
+sits near 0.611 on P02; questions span 24.09–24.21 and 24.5 respectively. **Nothing in the
+propagation surface buys a question.** §0's exchange rate — one question is worth at most 0.5pp
+of accuracy — never comes into play, because there is no saving to price. An effect that
+reverses sign between personas at a magnitude of 0.0017 is noise being read as structure, which
+is the next paragraph's subject.
 
 **A methodological defect, reported rather than worked around.** The centre-point pure-error SD
 came out as **exactly 0.0**, so `SE(effect) = 0` and the 2σ rule marked every non-zero effect
@@ -161,7 +176,49 @@ a deterministic simulation estimate zero pure error, and the activity rule degen
 fix is to vary the seed across centre points so they replicate the sampling rather than the
 arithmetic. Until then, read the effect sizes and ignore the "active" column.
 
-### 1.4 PRE-2 confirmed at scale
+**This has since been fixed** (`--sample-seed`, and each centre point drawing its own
+stratified subsample — measured overlap 15–26 of 200 where it was 200). The fix landed after
+both arms had run and deliberately was not applied retroactively: re-running one arm under it
+and not the other would have made the two incomparable, which costs more than the degenerate
+activity column does. It takes effect for the next factorial.
+
+### 1.4 P01 vs P02 — the decisive persona, and a correction
+
+§3.2 says P02 decides the answer: propagation infers a prerequisite from a dependent skill,
+which is valid exactly when candidates learn in order, and P02 is the candidate who did not.
+Both arms at n = 200 per cell:
+
+| | P01 (canonical) | P02 (spiky self-taught) |
+|---|---:|---:|
+| measurable cells | 9 / 36 | 9 / 36 |
+| verified inferences | 805 | 835 |
+| pooled wrong-inference rate | **15.2%** | **16.9%** |
+| worst cell | 19.3% | **27.3%** |
+| best cell UCB | 21.4% | 20.3% |
+| false blocking, range across cells | 4.6–8.6% | **7.8–13.2%** |
+| exact-level accuracy | 0.651 | **0.611** |
+| questions per session | 24.15 | 24.52 |
+
+**A correction to an earlier figure in this programme.** A 40-session probe run while the
+harness was being built put P02's wrong-inference rate at 34% against P01's 16%, and that was
+quoted as P02 roughly doubling the rate. At n = 200 across a complete design it does not: 16.9%
+against 15.2%. The probe was noise, and the earlier figure should not be used.
+
+What P02 *does* do, clearly, is elsewhere:
+
+- **False blocking rises by roughly half** (7.8–13.2% against 4.6–8.6%). That is the finding
+  §3.2 predicts, landing on the mechanism that actually denies a candidate the chance to answer
+  — and it takes the rate to more than six times the 2% gate.
+- **Accuracy falls 4pp** (0.611 against 0.651). A candidate whose node abilities do not sit at
+  one level is simply harder to measure, independent of propagation.
+- **The worst single cell reaches 27.3%**, against P01's 19.3%. The tail is worse even where the
+  pooled figure is close.
+
+So P02 does not rescue or worsen the inference verdict — both personas fail the 3% gate by
+five to six times — but it confirms that blocking's cost is concentrated exactly where the plan
+said it would be, and it does so on a complete design rather than a probe.
+
+### 1.5 PRE-2 confirmed at scale
 
 **Zero blank stop reasons across all 36 cells.** A representative distribution: precision 96.3%,
 question budget 2.7%, time budget 1.0% — summing to 1 over named reasons, which is the
@@ -352,28 +409,29 @@ sharpened them.
   warm-up window — the one question those three personas exist to probe.
 - **Run 3 cannot be re-stratified.** Depth and edge provenance did not exist before this branch,
   so no depth- or edge-stratified figure may cite run 3 as its source (amendment 13.1).
+- **P09 is untested.** It is the persona that attacks the confidence gate rather than the graph,
+  and it is the one axis on which this verdict could still be wrong in an interesting way.
 
 ---
 
 ## 10. What was not finished
 
-**Persona stratification.** The S1 design was launched over P01, P02 and P09 at the sizes §3.2
-requires (P02 at 3x, P09 at 2x). P01 completed 36/36; P02 reached 24 cells with none complete
-before the pass ended, and P09 was not started. The partial P02 cells are kept under
-`eval-results/sweep_s1_incomplete_P02/` rather than deleted, and are **not** analysed — a
-partial persona folded into a complete design would break the balance the effects depend on.
+**P09 was not run.** §3.2's third decisive persona attacks the confidence gate — a candidate
+who is confidently graded and wrong. P01 and P02 both completed; P09 did not start. It is the
+one remaining axis on which this study's verdict could still be wrong in an interesting way,
+because it targets the gate rather than the graph.
 
-So every number in §1 is P01, the canonical persona. That matters for how far they generalise:
-**P02 is the persona the plan says decides the answer**, and a 40-session probe put its
-wrong-inference rate at 34% against P01's 16%. The direction is what §3.2 predicts and the n is
-far too small to quote as a result, but it means §1's rates are a *floor* rather than a typical
-value.
-
-None of the four findings in §0, and neither kill criterion, depends on the persona axis:
-`K >= 2` is unsatisfiable by graph topology, `D > 1` by arithmetic, and `r = 0.83` was measured
-on P01 where errors should repeat *least* — a spiky candidate's errors would repeat more.
+The first attempt at the persona axis, at the §3.2 cell-size weights, was abandoned partway;
+its partial cells are kept under `eval-results/sweep_s1_incomplete_P02/` and are **not**
+analysed. A partial persona folded into a complete design breaks the balance the effects
+depend on.
 
 **Also not run:** S2, S3, and the golden-set judging beyond the canary validation.
+
+Neither kill criterion depends on the persona axis. `K >= 2` is unsatisfiable by graph
+topology and `D > 1` by arithmetic — both hold for any candidate — and `r` rose from 0.83 to
+0.86 with a *narrower* interval when P02 was added, so the harder persona strengthened the
+conclusion rather than qualifying it.
 
 ---
 
@@ -397,7 +455,7 @@ on P01 where errors should repeat *least* — a spiky candidate's errors would r
 5. **If the question is ever reopened, reopen it on EDGES, not on factors.** The per-edge
    table now exists and shows a 3.4x spread — C6.9 → C6.10 wrong 42% of the time against
    C3.4 → C3.5 at 12.5%. That is the only axis in this study with any signal left in it. It is
-   not a recommendation to run S2 now: `r = 0.83` bounds what any edge subset can achieve,
+   not a recommendation to run S2 now: `r = 0.86` bounds what any edge subset can achieve,
    because it is a statement about candidates rather than about edges. Reopening would need new
    pre-registration, and should be triggered by the graph gaining branching or by gold-set
    evidence that `r` is lower in the world than in this DGP — not by this study.

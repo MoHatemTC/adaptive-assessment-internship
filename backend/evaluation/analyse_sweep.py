@@ -284,7 +284,33 @@ def analyse(sweep_dir: Path, cohorts_dir: Path) -> dict:
                 responses, levels, list(FACTORS), centre_values
             )
 
-    design_complete = bool(index.get("design_complete", False))
+    # COMPLETENESS IS CHECKED PER PERSONA, FROM THE MANIFESTS.
+    #
+    # `index.json` describes only the most recent sweep invocation, while this analysis
+    # reads every cell on disk. An arm run earlier — or one abandoned partway — would be
+    # analysed under a `design_complete` flag that was never about it. The manifests are
+    # per cell and cannot disagree with themselves that way.
+    expected_cells = len(
+        json.loads((sweep_dir / "design.json").read_text(encoding="utf-8"))["cells"]
+    )
+    by_persona: dict[str, dict] = {}
+    for cell in cells:
+        row = by_persona.setdefault(cell["persona"], {"cells": 0, "complete": 0})
+        row["cells"] += 1
+        manifest = cell["manifest"]
+        if manifest.get("status") == "complete" and manifest.get("n_written") == manifest.get(
+            "n_planned"
+        ):
+            row["complete"] += 1
+    for persona, row in by_persona.items():
+        row["expected"] = expected_cells
+        row["design_complete"] = (
+            row["complete"] == expected_cells and row["cells"] == expected_cells
+        )
+
+    design_complete = bool(by_persona) and all(
+        row["design_complete"] for row in by_persona.values()
+    )
     unmeasurable = [c["cell_id"] for c in per_cell if not c["measurable"]]
 
     for cell in per_cell:
@@ -293,6 +319,7 @@ def analyse(sweep_dir: Path, cohorts_dir: Path) -> dict:
     return {
         "sweep": str(sweep_dir),
         "design_complete": design_complete,
+        "completeness_by_persona": by_persona,
         "cells": len(per_cell),
         "cells_unmeasurable": len(unmeasurable),
         "unmeasurable_cell_ids": sorted(set(unmeasurable)),
@@ -316,6 +343,9 @@ def render(report: dict) -> str:
         add("> the resolution promises. Treat them as descriptive.\n")
 
     add(f"- cells analysed: **{report['cells']}**")
+    for persona, row in sorted(report.get("completeness_by_persona", {}).items()):
+        mark = "complete" if row["design_complete"] else "**INCOMPLETE**"
+        add(f"  - {persona}: {row['complete']}/{row['expected']} cells {mark}")
     add(f"- baseline firing volume: **{report['baseline_volume_per_session']:.4f}** verified inferences/session")
     add(
         f"- cells declared UNMEASURABLE (below {UNMEASURABLE_FRACTION:.0%} of baseline): "
