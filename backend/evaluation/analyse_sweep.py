@@ -43,6 +43,28 @@ UNMEASURABLE_FRACTION = 0.02
 R_KILL_THRESHOLD = 0.4
 
 
+def _read_jsonl(path: Path) -> list[dict]:
+    """Records from a JSONL file, tolerating a truncated final line.
+
+    A run killed mid-write leaves a partial last line — and killed runs are the documented
+    normal case here, which is why the resume path exists at all. Dying on it would mean
+    the analysis cannot read exactly the runs that most need reading.
+
+    Only the LAST line may be partial. A malformed line anywhere else means the file is
+    corrupt rather than merely incomplete, and that is worth failing on.
+    """
+    records: list[dict] = []
+    lines = [line for line in path.open(encoding="utf-8") if line.strip()]
+    for index, line in enumerate(lines):
+        try:
+            records.append(json.loads(line))
+        except json.JSONDecodeError:
+            if index == len(lines) - 1:
+                break
+            raise
+    return records
+
+
 def _load_cells(sweep_dir: Path) -> list[dict]:
     design = json.loads((sweep_dir / "design.json").read_text(encoding="utf-8"))
     levels_by_id = {c["cell_id"]: c["levels"] for c in design["cells"]}
@@ -58,7 +80,7 @@ def _load_cells(sweep_dir: Path) -> list[dict]:
         manifest = cell_dir / f"{cell_id}.manifest.json"
         if not results.exists():
             continue
-        records = [json.loads(line) for line in results.open(encoding="utf-8") if line.strip()]
+        records = _read_jsonl(results)
         cells.append(
             {
                 "cell_id": cell_id,

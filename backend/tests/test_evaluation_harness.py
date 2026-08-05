@@ -177,3 +177,38 @@ class TestFrozenEnvHoldsThePreconditions:
         known = {name.upper() for name in Settings.model_fields}
         unknown = {k for k in FROZEN_ENV if k not in known}
         assert unknown == set(), f"FROZEN_ENV sets keys no setting reads: {sorted(unknown)}"
+
+
+class TestTruncatedRunsAreRecoverable:
+    """A killed run leaves a partial final line, and killed runs are the normal case.
+
+    Both the reader and the resume path used to mishandle it: the reader raised, and the
+    resume counted the fragment as a record and then appended onto it, producing a line
+    nothing could parse. The analysis would then die on exactly the runs that most needed
+    reading.
+    """
+
+    def test_the_reader_tolerates_a_truncated_last_line(self, tmp_path):
+        from evaluation.analyse_sweep import _read_jsonl
+
+        path = tmp_path / "results.jsonl"
+        path.write_text('{"a": 1}\n{"b": 2}\n{"c": 3', encoding="utf-8")
+        assert _read_jsonl(path) == [{"a": 1}, {"b": 2}]
+
+    def test_corruption_anywhere_else_still_raises(self, tmp_path):
+        """Incomplete is recoverable; corrupt is not, and the two must not be conflated."""
+        import json
+
+        from evaluation.analyse_sweep import _read_jsonl
+
+        path = tmp_path / "results.jsonl"
+        path.write_text('{"a": 1}\nNOT JSON\n{"c": 3}\n', encoding="utf-8")
+        with pytest.raises(json.JSONDecodeError):
+            _read_jsonl(path)
+
+    def test_a_complete_file_reads_unchanged(self, tmp_path):
+        from evaluation.analyse_sweep import _read_jsonl
+
+        path = tmp_path / "results.jsonl"
+        path.write_text('{"a": 1}\n{"b": 2}\n', encoding="utf-8")
+        assert _read_jsonl(path) == [{"a": 1}, {"b": 2}]

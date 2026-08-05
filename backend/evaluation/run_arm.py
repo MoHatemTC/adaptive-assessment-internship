@@ -190,8 +190,26 @@ async def _run_all(
     # done, without recording a cursor that could disagree with the file.
     done = 0
     if resume and results_path.exists():
-        with results_path.open(encoding="utf-8") as handle:
-            done = sum(1 for line in handle if line.strip())
+        # A killed run leaves a partial final line. Counting it would both overstate the
+        # progress by one and append the next record onto the fragment, producing a line
+        # nothing can parse — so the fragment is dropped and the file truncated to the
+        # last complete record before anything is added to it.
+        raw = results_path.read_text(encoding="utf-8")
+        complete = []
+        for line in raw.splitlines(keepends=True):
+            if not line.strip():
+                continue
+            if not line.endswith("\n"):
+                break
+            try:
+                json.loads(line)
+            except json.JSONDecodeError:
+                break
+            complete.append(line)
+        done = len(complete)
+        if len("".join(complete)) != len(raw):
+            results_path.write_text("".join(complete), encoding="utf-8")
+            print(f"{basename}: dropped a truncated trailing record before resuming")
         if done >= len(simulees):
             print(f"{basename}: already complete ({done} sessions)")
             return
