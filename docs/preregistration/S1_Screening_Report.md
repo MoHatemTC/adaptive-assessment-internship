@@ -26,6 +26,11 @@ Either trigger alone ends the study. Both fire, and they fire for different reas
 the candidates, one about the configuration surface — which is the strongest form the negative
 could take.
 
+**And the confirmatory arm closed it.** DGP-3 — correct edges, noisy grader — was run to test
+the one assumption the verdict rests on. `r` fell to 0.766 and stayed far above the threshold;
+the wrong-inference rate on a *perfect graph* is still 7.1% against a 3% gate. Half the error
+is wrong edges and half is the response process, and neither half alone passes (§1.5).
+
 Underneath them, four levels of that surface turn out to be unreachable or misnamed on this
 bank. Not rare, not underpowered: impossible, and provable from the graph, the item bank and
 the configuration alone at zero session cost.
@@ -278,7 +283,55 @@ gate by five to six times, and the best upper bound anywhere in 108 cells is 19.
 does confirm is that **blocking's** cost lands exactly where the plan said it would, on a
 complete design rather than a probe.
 
-### 1.5 PRE-2 confirmed at scale
+### 1.5 DGP-3 — the confirmatory arm, and the question closed
+
+§11 of the first draft of this report named one experiment worth running: DGP-3. It is the only
+arm carrying grader error (`grader_error_sd = 0.10`), so it is the only place the confidence
+gate has variance to act on — and it is the only test of the assumption the entire negative
+verdict rests on, namely that `r` is high because candidates repeat their errors rather than
+because the harness gave the grader none.
+
+It also isolates a source. **DGP-3 has all 30 edges correct** (`wrong = 0, missing = 0`), where
+DGP-2 has 8 of 30 wrong. So the two arms decompose the error:
+
+| | DGP-2 | DGP-3 |
+|---|---|---|
+| edges | 8 of 30 wrong | **all correct** |
+| grader | noiseless | **`sd = 0.10`** |
+| P01 wrong-inference rate | 15.2% | **7.1%** |
+| P01 best cell UCB | 21.4% | **13.6%** |
+| P01 false blocking | 4.6–8.6% | 5.5–10.2% |
+| `r` | 0.880 [0.781, 0.953] | **0.766 [0.676, 0.877]** |
+
+Two complete Resolution-IV designs, 72/72 cells, 14,400 sessions.
+
+**Three things, and all of them close rather than open the question.**
+
+**1. `r` fell, and nowhere near far enough.** From 0.880 to 0.766, with a lower bound of 0.676
+against the 0.4 kill threshold. So the correlation *was* partly an artefact of a noiseless
+grader — but only partly, and the criterion still fires by a wide margin. This was the single
+assumption the negative rested on, and it survives its own test.
+
+**2. A perfect graph still fails the gate.** With every edge correct, the wrong-inference rate
+is 7.1% and the best upper bound anywhere in 36 cells is 13.6% — **more than four times the 3%
+gate**. Roughly half the error on DGP-2 came from wrong edges and half from the response
+process, and *neither half alone comes close to passing*. That removes the most attractive
+remaining hypothesis: this is not an edge-quality problem that better authoring would fix.
+
+**3. P09 becomes a real test, and shows the effect it was designed to show.**
+
+| | P01 | P09 | difference |
+|---|---:|---:|---|
+| DGP-2 (gate inert) | 15.2% | 15.4% | none |
+| **DGP-3 (gate has variance)** | **7.1%** | **10.9%** | **+55%** |
+
+On DGP-2 the two personas were indistinguishable, exactly as Finding 4 predicted — a candidate
+built to slip past the confidence gate cannot be measured against a gate that rejects nothing.
+On DGP-3 the same persona produces **55% more wrong inferences** than the canonical one. §3.2's
+premise is correct, the gate is doing real work once it has variance to act on, and it is still
+not enough: 10.9% against a 3% gate.
+
+### 1.6 PRE-2 confirmed at scale
 
 **Zero blank stop reasons across all 36 cells.** A representative distribution: precision 96.3%,
 question budget 2.7%, time budget 1.0% — summing to 1 over named reasons, which is the
@@ -469,9 +522,10 @@ sharpened them.
   warm-up window — the one question those three personas exist to probe.
 - **Run 3 cannot be re-stratified.** Depth and edge provenance did not exist before this branch,
   so no depth- or edge-stratified figure may cite run 3 as its source (amendment 13.1).
-- **The confidence gate is untested.** P09 ran, but Finding 4 shows DGP-2 gives it a two-point
-  confidence distribution with nothing to discriminate — so this study measured propagation's
-  behaviour under a gate that never rejected anything. DGP-3 is where that becomes a real test.
+- **The confidence gate is tested but not calibrated.** DGP-3 gives it variance and it does
+  real work there (§1.5), but the *shipped* threshold of 0.80 still rejects under 1% of the
+  evidence that reaches it. The gate is set below almost the whole distribution, and no part of
+  this study establishes where it should sit.
 
 ---
 
@@ -482,16 +536,16 @@ earlier attempt at the §3.2 cell-size weights was abandoned partway; its partia
 under `eval-results/sweep_s1_incomplete_P02/` and are **not** analysed, because a partial
 persona folded into a complete design breaks the balance the effects depend on.
 
-**Not run: S2, S3, and DGP-3.**
+**DGP-3 was run** (§1.5), which closes the gap this section previously named. The confidence
+gate is now tested, `r` has been measured under grader noise, and a perfect-graph arm exists.
+
+**Not run: S2, S3, DGP-0 and DGP-1.**
 
 S2 and S3 are recommended against rather than merely skipped — see §11.
 
-DGP-3 is the one that matters and is the honest gap. It is the only arm carrying grader error
-(`grader_error_sd = 0.10`), and Finding 4 shows that **P09 is only testable there**: on DGP-2
-the confidence distribution is two points, so the persona built to attack the confidence gate
-has no gate to attack. This study therefore contains no test of the confidence gate at all.
-That is a narrower claim than "P09 was tested and propagation survived it", and it is the
-correct one.
+DGP-0 is the null arm and would be the right check if any propagation benefit had been found.
+None was, so there is no artefact to rule out. DGP-1 is DGP-3 without grader noise; the two
+arms run bracket it.
 
 The judged layer ran its canary validation only; the 60-report golden set was not judged.
 
@@ -525,12 +579,11 @@ interval narrowed at each persona added.
    because it is a statement about candidates rather than about edges. Reopening would need new
    pre-registration, and should be triggered by the graph gaining branching or by gold-set
    evidence that `r` is lower in the world than in this DGP — not by this study.
-6. **The one experiment worth running is DGP-3, not S2.** It is cheap — one arm, the harness
-   already supports it — and it is the only way to test the confidence gate at all, because
-   DGP-2 gives that gate a two-point distribution with nothing to discriminate (Finding 4). It
-   would also tell you whether `r` falls when grader error is genuinely noisy rather than
-   absent, which is the single assumption the whole negative verdict rests on. If `r` stays
-   near 0.88 under grader noise, the question is closed for good.
+6. **DGP-3 has been run, and it closed the question** (§1.5). `r` fell to 0.766 and stayed far
+   above the threshold; a perfect graph still produces 7.1% wrong inference against a 3% gate.
+   There is no remaining arm whose result would change the verdict. **Calibrating the confidence
+   threshold is the one open question that is worth answering** — it is currently set where
+   almost nothing arrives, and DGP-3 shows it does real work when it can act.
 7. **Fix the centre points before any future factorial.** Deterministic replicates estimate
    zero pure error, which silently disables the activity rule (§1.3). Vary the seed across
    centre points so they replicate the sampling rather than the arithmetic.
