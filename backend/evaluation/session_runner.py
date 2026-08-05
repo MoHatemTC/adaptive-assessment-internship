@@ -178,6 +178,16 @@ async def _run(*, orchestrator, bank, simulee, mains, arm, max_steps, keep_trace
         stop, stop_reason = orchestrator.should_stop(state)
         if stop:
             break
+        # P12 abandons. The cap is drawn per SIMULEE in the cohort, not per step here: a
+        # per-item hazard would make whether an item was answered depend on its position,
+        # and the paired design cannot survive that. A candidate who walks out leaves the
+        # remaining competencies unfinalised, which is the point — incomplete sessions and
+        # zero-weight events are what P12 exists to produce.
+        abandon_after = getattr(simulee, "abandon_after", None)
+        if abandon_after is not None and step >= abandon_after:
+            stop_reason = "abandoned"
+            break
+
         nxt = orchestrator.next_item(state)
         if nxt is None:
             stop_reason = "no_candidates_available"
@@ -396,6 +406,10 @@ async def _run(*, orchestrator, bank, simulee, mains, arm, max_steps, keep_trace
         "simulee_id": simulee.simulee_id,
         "family": simulee.family,
         "stratum": simulee.stratum,
+        # Stratification is pre-declared per §8 and persona is one of the axes, so it has
+        # to be on the record rather than inferred from the filename — a re-analysis that
+        # reads the JSONL alone must still be able to split by it.
+        "persona": getattr(simulee, "persona", "P01"),
         "session_id": state.session_id,
         "items_administered": int(state.items_administered),
         "served_item_ids": list(state.served_item_ids),

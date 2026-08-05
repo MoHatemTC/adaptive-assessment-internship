@@ -49,6 +49,8 @@ from pathlib import Path
 
 import numpy as np
 
+from . import personas as _personas
+
 DGP_ARMS = ("DGP-0", "DGP-1", "DGP-2", "DGP-3")
 
 PROFILE_FAMILIES = (
@@ -96,6 +98,22 @@ class Simulee:
     slip_ceiling: float = 1.0
     # SD of grader error added to a non-MCQ score before it is reported.
     grader_error_sd: float = 0.0
+
+    # Which of the fourteen response processes this candidate has. See `personas.py`.
+    # Defaults to canonical, so every cohort file written before personas existed loads
+    # unchanged and behaves exactly as it did.
+    persona: str = "P01"
+    # PER-NODE ability, for a candidate whose skills do not sit at one level.
+    #
+    # Empty means node ability tracks `theta`, which is what every simulee did before.
+    # Non-empty is what makes P02 the decisive persona: propagation infers a prerequisite
+    # from a dependent skill, and that is valid exactly when the two abilities are the
+    # same number. Here they are not.
+    theta_node: dict[str, float] = field(default_factory=dict)
+    # Items this candidate answers before abandoning, or None to finish. Drawn per
+    # simulee, never per step: a per-item hazard would make responses depend on position
+    # and break the pairing the whole design rests on.
+    abandon_after: int | None = None
 
 
 @dataclass
@@ -207,12 +225,27 @@ def _draw_nodes(
     order: list[str],
     edge_strength: float,
     rng: np.random.Generator,
+    node_theta_sd: float = 0.0,
+    prerequisite_violation_rate: float = 0.0,
+    theta_node_out: dict[str, float] | None = None,
 ) -> dict[str, int]:
-    """True mastery per sub-competency, respecting the TRUE prerequisite structure."""
+    """True mastery per sub-competency, respecting the TRUE prerequisite structure.
+
+    `node_theta_sd` and `prerequisite_violation_rate` are what make a candidate spiky.
+    They belong HERE rather than in the responder because spikiness is a property of what
+    the candidate actually knows, not of how they answer — and the whole question about
+    propagation is whether knowing one thing licenses a claim about another.
+    """
     mastered: dict[str, int] = {}
     for node in order:
         main = node.split(".", 1)[0]
         ability = theta.get(main, 0.0)
+        if node_theta_sd > 0.0:
+            # Per-node ability, uncorrelated across nodes within a main. A candidate who
+            # learned from projects rather than a curriculum.
+            ability = float(ability + rng.normal(0.0, node_theta_sd))
+            if theta_node_out is not None:
+                theta_node_out[node] = ability
         b = difficulty.get(node, 0.0)
         p = float(1.0 / (1.0 + np.exp(-1.7 * (ability - b))))
         value = int(rng.random() < p)
@@ -220,6 +253,11 @@ def _draw_nodes(
         blocked = False
         for parent in parents.get(node, ()):
             if mastered.get(parent, 1) == 0 and rng.random() < edge_strength:
+                # The prerequisite relation holds for most people and not for this one.
+                # This is the generative statement of "learned out of order", and it is
+                # the exact case an upward inference gets wrong.
+                if prerequisite_violation_rate and rng.random() < prerequisite_violation_rate:
+                    continue
                 blocked = True
                 break
         if blocked:
@@ -270,13 +308,21 @@ def build_cohort(
     graph_prerequisites: list[tuple[str, str]],
     wrong_edge_fraction: float = 0.25,
     edge_strength: float = 0.85,
+    persona: str = "P01",
 ) -> Cohort:
-    """Generate `n` simulees under one DGP arm.
+    """Generate `n` simulees under one DGP arm, all of one persona.
 
     `n` is rounded UP to a multiple of (8 strata x 5 families) so the design stays balanced;
     an unbalanced cell would make the by-family reporting the validation document asks for
     incomparable across families.
+
+    PERSONA IS A COHORT-LEVEL ATTRIBUTE, NOT A SIXTH FAMILY. Adding it to the loop below
+    would make 8 x 5 x 14 = 560 cells, break the rounding contract, and — worse — change
+    what `bca_bootstrap` clusters on, since it resamples within profile family. One
+    cohort file per (DGP x persona) keeps every file containing all five families, so the
+    clustering is untouched and the balanced design still balances.
     """
+    profile = _personas.get(persona)
     if dgp not in DGP_ARMS:
         raise ValueError(f"unknown DGP arm {dgp!r}; expected one of {DGP_ARMS}")
 
@@ -331,6 +377,7 @@ def build_cohort(
                 simulee_id = f"sim-{len(simulees):05d}"
                 srng = np.random.default_rng(_seed_of("simulee", dgp, seed, stratum, family, k))
                 theta = _theta_for(family, stratum, mains, srng)
+                theta_node: dict[str, float] = {}
                 nodes = (
                     {}
                     if dgp == "DGP-0"
@@ -343,8 +390,19 @@ def build_cohort(
                         order=order,
                         edge_strength=edge_strength,
                         rng=srng,
+                        node_theta_sd=profile.node_theta_sd,
+                        prerequisite_violation_rate=profile.prerequisite_violation_rate,
+                        theta_node_out=theta_node,
                     )
                 )
+                # Drawn per SIMULEE, never per step. A per-item abandonment hazard would
+                # make a response depend on its position in the sequence, which is exactly
+                # what the pairing across arms cannot survive.
+                abandon_after = None
+                if profile.abandon_rate > 0.0:
+                    abandon_after = int(
+                        6 + srng.geometric(profile.abandon_rate)
+                    )
                 simulees.append(
                     Simulee(
                         simulee_id=simulee_id,
@@ -358,6 +416,9 @@ def build_cohort(
                         # over-confident inference rule is least robust to.
                         slip_ceiling=0.95 if dgp == "DGP-3" else 1.0,
                         grader_error_sd=0.10 if dgp == "DGP-3" else 0.0,
+                        persona=persona,
+                        theta_node=theta_node,
+                        abandon_after=abandon_after,
                     )
                 )
 

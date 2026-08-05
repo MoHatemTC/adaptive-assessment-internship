@@ -39,6 +39,12 @@ def main() -> None:
         help="DGP-2 only: share of graph edges the world does not have",
     )
     parser.add_argument("--dgp", nargs="*", default=None, help="subset of DGP arms")
+    parser.add_argument(
+        "--persona",
+        nargs="*",
+        default=["P01"],
+        help="persona ids (see evaluation/personas.py). One cohort file per DGP x persona.",
+    )
     args = parser.parse_args()
 
     from evaluation.dgp import DGP_ARMS, build_cohort, read_graph_prerequisites
@@ -58,19 +64,25 @@ def main() -> None:
 
     out = Path(args.out)
     for dgp in (args.dgp or DGP_ARMS):
-        cohort = build_cohort(
-            dgp=dgp,
-            n=args.n,
-            seed=args.seed,
-            bank=bank,
-            bank_id=bank_id,
-            mains=mains,
-            graph_prerequisites=graph_edges,
-            wrong_edge_fraction=args.wrong_edge_fraction,
-        )
-        path = cohort.save(out / f"cohort_{dgp}_n{len(cohort.simulees)}_seed{args.seed}.json")
-        print(f"{dgp:8s} {len(cohort.simulees):5d} simulees -> {path}")
-        print(f"         {cohort.notes}")
+        for persona in args.persona:
+            cohort = build_cohort(
+                dgp=dgp,
+                n=args.n,
+                seed=args.seed,
+                bank=bank,
+                bank_id=bank_id,
+                mains=mains,
+                graph_prerequisites=graph_edges,
+                wrong_edge_fraction=args.wrong_edge_fraction,
+                persona=persona,
+            )
+            # Persona is in the FILENAME, not only in the records. A run's results are
+            # named after its cohort, so a persona that appeared only inside the file
+            # would produce two result sets that overwrite each other.
+            name = f"cohort_{dgp}_{persona}_n{len(cohort.simulees)}_seed{args.seed}.json"
+            path = cohort.save(out / name)
+            print(f"{dgp:8s} {persona} {len(cohort.simulees):5d} simulees -> {path}")
+            print(f"         {cohort.notes}")
 
 
 if __name__ == "__main__":
