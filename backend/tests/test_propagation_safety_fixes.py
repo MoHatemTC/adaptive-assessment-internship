@@ -53,6 +53,7 @@ def _orchestrator(bank):
             grader,
             graph=registry.get_graph_service("AIE"),
             coverage_critical_only=registry.profile("AIE").coverage_critical_only,
+            bank_id="AIE",
         )
     return Orchestrator(bank, grader)
 
@@ -265,3 +266,71 @@ class TestS4BandsAreEvenlyWide:
         far_below = float(BAND_CUTS[0]) - 1.5
         just_above = float(BAND_CUTS[0]) + 0.1
         assert ability_band(far_below)[0] != ability_band(just_above)[0]
+
+
+# --- S6 -------------------------------------------------------------------------------
+
+
+@requires_graph
+class TestS6PolicyResolvesTheOrchestratorsOwnBank:
+    """A blocking threshold read for the wrong bank is a wrong threshold, silently.
+
+    `_minimum_failures_to_block` resolved the policy with no bank id, so the registry fell
+    back to `settings.active_bank`. `app.main` keeps one orchestrator per bank, so on any
+    deployment serving more than one, every orchestrator but the active one read a
+    threshold authored for a different graph.
+
+    It is invisible in the shipped data because all three banks currently resolve to the
+    deployment floor of 2 — which is exactly why it needs a test on the LOOKUP rather than
+    on the number. The day a bank tightens to 3 is the day the defect starts blocking
+    candidates on fewer failures than their bank asked for, and nothing would have failed.
+    """
+
+    def test_the_orchestrator_asks_for_its_own_bank(self, monkeypatch):
+        from app.services.orchestrator import registry
+        from tests.conftest import orchestrator_for
+
+        orchestrator = orchestrator_for("DA")
+
+        asked: list[str | None] = []
+        real = registry.get_propagation_policy
+
+        def spy(bank_id=None):
+            asked.append(bank_id)
+            return real(bank_id)
+
+        monkeypatch.setattr(registry, "get_propagation_policy", spy)
+        orchestrator._minimum_failures_to_block()
+
+        assert asked == ["DA"], (
+            f"resolved the policy for {asked} instead of the orchestrator's own bank; "
+            "with no id the registry falls back to settings.active_bank"
+        )
+
+    def test_banks_that_disagree_get_their_own_threshold(self, monkeypatch):
+        """The consequence, stated as behaviour rather than as a call signature.
+
+        Every shipped bank currently resolves to the deployment floor of 2, so the
+        thresholds have to be forced apart to observe it at all.
+        """
+        from app.services.competency_graph.policy import GraphPolicy, ResolvedPolicy
+        from app.services.orchestrator import registry
+        from tests.conftest import orchestrator_for
+
+        aie = orchestrator_for("AIE")
+        da = orchestrator_for("DA")
+
+        thresholds = {"AIE": 2, "DA": 3}
+
+        def fake(bank_id=None):
+            return ResolvedPolicy(
+                deployment_inference=False,
+                deployment_blocking=False,
+                bank_policy=GraphPolicy(),
+                minimum_failures_to_block=thresholds.get(bank_id or "AIE", 2),
+            )
+
+        monkeypatch.setattr(registry, "get_propagation_policy", fake)
+
+        assert aie._minimum_failures_to_block() == 2
+        assert da._minimum_failures_to_block() == 3

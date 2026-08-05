@@ -301,12 +301,39 @@ class Settings(BaseSettings):
     graph_upward_decay: float = Field(default=0.70, gt=0.0, le=1.0)
     graph_minimum_inferred_weight: float = Field(default=0.15, ge=0.0, le=1.0)
     graph_maximum_inferred_weight: float = Field(default=0.60, ge=0.0, le=1.0)
-    graph_maximum_propagation_depth: int = Field(default=4, ge=1)
+    # 0 is legal and means "draw no upward conclusion at all". That is NOT the same as
+    # GRAPH_UPWARD_INFERENCE_ENABLED=false, which means "draw it, record it in the audit
+    # mirror, act on none of it". The distinction is load-bearing: the first produces no
+    # provenance to audit later, the second produces the audit trail that decides whether
+    # to switch it on. A depth floor of 1 made the first state unreachable.
+    graph_maximum_propagation_depth: int = Field(default=4, ge=0)
+    # Blank defers to `graph_maximum_propagation_depth`. Set either one to sweep inference
+    # depth without moving the blocking frontier, or the reverse.
+    graph_maximum_inference_depth: int | None = Field(default=None, ge=0)
+    graph_maximum_blocking_depth: int | None = Field(default=None, ge=0)
+
+    # Independent strong successes before an ancestor may be inferred mastered. At 1 an
+    # inference carries the whole per-observation error rate, measured at 22.4% wrong.
+    # What counts as independent is `graph_corroboration_independence`; at anything weaker
+    # than `source_node` the requirement can be satisfied by answering clones of one item,
+    # which makes it a decoration rather than a control.
+    graph_minimum_corroborations: int = Field(default=1, ge=1)
+    graph_corroboration_independence: str = "source_node"
+
     # One multiple-choice hit does not imply prerequisite mastery. The specification asks
-    # for two confirming items first; that is not implemented, so one hit implies nothing.
+    # for two confirming items first; `graph_minimum_corroborations` is now that knob.
     graph_allow_mcq_single_hit_inference: bool = False
     graph_allow_code_upward_inference: bool = True
     graph_allow_voice_upward_inference: bool = True
+    # Explicit modality allowlist, comma-separated, e.g. "code" or "code,voice". Blank
+    # derives the set from the three booleans above, so an existing .env is unaffected.
+    # Unlike the booleans this can separate `voice` from `open`, which they cannot.
+    graph_inference_modalities: str = ""
+    # Edge validation statuses this DEPLOYMENT will act on, comma-separated. Blank means
+    # no opinion and the bank's own list stands. A deployment may only narrow: the two
+    # lists are intersected, never unioned, so this can turn a permissive bank down and
+    # can never turn a restrictive one up. "refuted" is refused outright.
+    graph_accepted_validation_statuses: str = ""
 
     # --- graph selection effects ----------------------------------------------
     # Penalties, not exclusions. An excluded item can never disprove the belief that
@@ -371,6 +398,42 @@ class Settings(BaseSettings):
             self.orchestrator_item_seconds_by_modality,
             "ORCHESTRATOR_ITEM_SECONDS_BY_MODALITY",
         )
+
+    @staticmethod
+    def _parsed_csv(raw: str) -> tuple[str, ...]:
+        return tuple(part.strip().lower() for part in (raw or "").split(",") if part.strip())
+
+    def inference_modalities(self) -> frozenset[str] | None:
+        """The explicit modality allowlist, or None to derive it from the legacy booleans.
+
+        Raises on an unknown member rather than dropping it. The other environment parsers
+        on this class warn and continue, because a bad weight override changes a ranking;
+        a bad modality name changes which evidence is allowed to license an inference, and
+        failing open there means propagating from a modality nobody authorised.
+        """
+        parsed = self._parsed_csv(self.graph_inference_modalities)
+        if not parsed:
+            return None
+        known = {"mcq", "code", "voice", "open"}
+        unknown = {m for m in parsed if m not in known} - {"audio"}
+        if unknown:
+            raise ValueError(
+                f"GRAPH_INFERENCE_MODALITIES names unknown modalities {sorted(unknown)}; "
+                f"known: {sorted(known)}"
+            )
+        return frozenset("voice" if m == "audio" else m for m in parsed)
+
+    def accepted_validation_statuses(self) -> tuple[str, ...] | None:
+        """The deployment's edge allowlist, or None for "no opinion"."""
+        parsed = self._parsed_csv(self.graph_accepted_validation_statuses)
+        if not parsed:
+            return None
+        if "refuted" in parsed:
+            raise ValueError(
+                "GRAPH_ACCEPTED_VALIDATION_STATUSES may not contain 'refuted': it is the "
+                "one verdict meaning the edge was tested and found wrong"
+            )
+        return parsed
 
     def modality_minimums(self) -> dict[str, int]:
         """Parsed per-main modality floor. Never raises."""

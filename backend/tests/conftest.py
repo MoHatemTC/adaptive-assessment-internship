@@ -83,4 +83,5 @@ def orchestrator_for(bank_id: str, grader: GraderAgent | None = None) -> Orchest
         grader or GraderAgent(),
         graph=registry.get_graph_service(bank_id),
         coverage_critical_only=registry.profile(bank_id).coverage_critical_only,
+        bank_id=bank_id,
     )

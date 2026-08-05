@@ -42,6 +42,25 @@ class GraphUpdateResult:
     reopened_nodes: frozenset[str] = frozenset()
     contradicted_nodes: frozenset[str] = frozenset()
 
+    # WHAT THE GRAPH CONCLUDED, as distinct from what it wrote.
+    #
+    # `inferred_signals` is every ancestor the traversal reached — one per hop, before any
+    # corroboration or enforcement test. It is the raw traversal output and it always was.
+    #
+    # `corroborated_nodes` is the subset whose support reached K on this event, computed
+    # whether or not the deployment enforces inference. `blocked_nodes` above is now
+    # enforcement-gated, so `shadow_blocked_nodes` carries the same conclusion for a
+    # deployment that is only watching. These two are what an audit mirror reads, and
+    # keeping them separate from the enforced sets is what stops a report claiming an
+    # inference the deployment did not make.
+    corroborated_nodes: frozenset[str] = frozenset()
+    pending_corroboration_nodes: frozenset[str] = frozenset()
+    # The subset of `corroborated_nodes` actually written to node status. Empty whenever
+    # the deployment does not enforce inference — which is the only difference between the
+    # two, and the one a consumer must not have to re-derive.
+    inferred_mastered_nodes: frozenset[str] = frozenset()
+    shadow_blocked_nodes: frozenset[str] = frozenset()
+
     # SCORE-affecting nodes only. Drives main-competency rollup, so a node whose status
     # changed without its score moving must not appear here (review C17): a blocked
     # descendant is a reason to re-pick, not a reason to recompute an estimate.
@@ -116,6 +135,13 @@ def apply_direct_evidence(
     inferred: list[InferredNodeSignal] = []
     blocked: set[str] = set()
     reopened: set[str] = set()
+    # Ancestors whose support reached K on this event, and those still short of it. Both
+    # are computed whatever the deployment switch says; `enforce_inference` decides only
+    # whether the corroborated ones are written into node status.
+    corroborated: set[str] = set()
+    pending: set[str] = set()
+    inferred_mastered: set[str] = set()
+    shadow_blocked: set[str] = set()
 
     node_state.direct_observations += 1
     node_state.status_confidence = confidence
@@ -140,21 +166,55 @@ def apply_direct_evidence(
             direct_effective=direct_effective,
             modality=event.modality,
             source_evidence_id=event.evidence_id,
+            source_item_id=event.item_id,
             config=config,
         )
         for signal in inferred:
             graph_state.ensure_nodes({signal.node})
             ancestor = graph_state.nodes[signal.node]
-            # Inferred mastery never overwrites a direct verdict, in either direction.
+
+            # RECORDING SUPPORT IS NOT DRAWING A CONCLUSION. The provenance goes in
+            # unconditionally — before the status guard, before the corroboration count,
+            # before enforcement — because it is the evidence on which all three are
+            # later judged. Recording it only when it changed something is how the audit
+            # mirror ends up empty for exactly the deployments that need to read it.
+            ancestor.record_inferred_support(
+                config.independence_key(signal),
+                {
+                    "source_node": signal.source_node,
+                    "source_item_id": signal.source_item_id,
+                    "evidence_id": signal.source_evidence_id,
+                    "modality": signal.modality,
+                    "distance": signal.distance,
+                    "strength": signal.strength,
+                    "edge_path": list(signal.edge_path),
+                    "at": now,
+                },
+            )
+            ancestor.inferred_evidence_ids.add(signal.source_evidence_id)
+            ancestor.last_inferred_update_at = now
+
+            # Inferred mastery never overwrites a verdict the graph already holds for a
+            # stronger reason. BLOCKED and CONTRADICTED belong in this guard alongside the
+            # two direct verdicts: a blocked node is one whose prerequisite failed, and
+            # silently promoting it to INFERRED_MASTERED both loses the block and hides
+            # the disagreement that produced it — the opposite of the explicit reopen path
+            # a direct success takes above.
             if ancestor.status in (
                 CompetencyStatus.DIRECT_MASTERED,
                 CompetencyStatus.DIRECT_NOT_MASTERED,
+                CompetencyStatus.BLOCKED,
+                CompetencyStatus.CONTRADICTED,
             ):
                 continue
-            ancestor.status = CompetencyStatus.INFERRED_MASTERED
-            ancestor.inferred_observations += 1
-            ancestor.inferred_evidence_ids.add(signal.source_evidence_id)
-            ancestor.last_inferred_update_at = now
+
+            if len(ancestor.inferred_support) < config.minimum_corroborations:
+                pending.add(signal.node)
+                continue
+            corroborated.add(signal.node)
+            if config.enforce_inference:
+                ancestor.status = CompetencyStatus.INFERRED_MASTERED
+                inferred_mastered.add(signal.node)
 
     elif strong_failure:
         node_state.status = CompetencyStatus.DIRECT_NOT_MASTERED
@@ -176,7 +236,7 @@ def apply_direct_evidence(
         # question, blocking a skill they have costs them the assessment.
         if node_state.strong_failure_observations < config.minimum_failures_to_block:
             blocked_pending = graph.blockable_descendants(
-                event.target_node, max_depth=config.maximum_propagation_depth
+                event.target_node, max_depth=config.blocking_depth
             )
             if blocked_pending:
                 logger.debug(
@@ -187,7 +247,7 @@ def apply_direct_evidence(
             descendants: set[str] = set()
         else:
             descendants = graph.blockable_descendants(
-                event.target_node, max_depth=config.maximum_propagation_depth
+                event.target_node, max_depth=config.blocking_depth
             )
 
         for descendant in descendants:
@@ -196,6 +256,13 @@ def apply_direct_evidence(
             # A node already demonstrated directly is not blocked by a later failure
             # upstream: it is evidence AGAINST the edge, not a reason to hide the node.
             if state.status is CompetencyStatus.DIRECT_MASTERED:
+                continue
+            # Concluded either way; written only under enforcement. Same rule as
+            # inference above, and for the same reason: the mirror has to keep recording
+            # what a deployment WOULD block, or there is no evidence on which to decide
+            # whether to let it.
+            shadow_blocked.add(descendant)
+            if not config.enforce_blocking:
                 continue
             blocked.add(descendant)
             state.status = CompetencyStatus.BLOCKED
@@ -217,6 +284,7 @@ def apply_direct_evidence(
                     direct_effective=direct_effective,
                     modality=event.modality,
                     source_evidence_id=event.evidence_id,
+                    source_item_id=event.item_id,
                     config=config,
                     ignore_edge_validation=True,
                 )
@@ -226,7 +294,7 @@ def apply_direct_evidence(
                 descendant
                 for descendant in graph.blockable_descendants(
                     event.target_node,
-                    max_depth=config.maximum_propagation_depth,
+                    max_depth=config.blocking_depth,
                     ignore_edge_validation=True,
                 )
                 # Mirrors the enforced rule: a node already demonstrated directly is
@@ -261,6 +329,10 @@ def apply_direct_evidence(
         direct_updates=(event,),
         inferred_signals=tuple(inferred),
         blocked_nodes=frozenset(blocked),
+        corroborated_nodes=frozenset(corroborated),
+        pending_corroboration_nodes=frozenset(pending),
+        inferred_mastered_nodes=frozenset(inferred_mastered),
+        shadow_blocked_nodes=frozenset(shadow_blocked),
         reopened_nodes=frozenset(reopened),
         contradicted_nodes=contradicted,
         changed_nodes=changed,
@@ -274,7 +346,10 @@ def apply_direct_evidence(
             "target": event.target_node,
             "status": str(graph_state.nodes[event.target_node].status),
             "inferred": [s.node for s in inferred],
+            "corroborated": sorted(corroborated),
+            "pending_corroboration": sorted(pending),
             "blocked": sorted(blocked),
+            "shadow_blocked": sorted(shadow_blocked),
             "reopened": sorted(reopened),
             "contradicted": sorted(contradicted),
             "preview_inferred": [s.node for s in preview_inferred],

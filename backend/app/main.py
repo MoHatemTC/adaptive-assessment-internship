@@ -101,6 +101,7 @@ def _orchestrator_for(bank_id: str) -> Orchestrator:
         GraderAgent(code_engine=_cat_code_engine),
         graph=registry.get_graph_service(bank_id),
         coverage_critical_only=registry.profile(bank_id).coverage_critical_only,
+        bank_id=bank_id,
     )
 
 

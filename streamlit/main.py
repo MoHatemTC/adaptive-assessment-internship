@@ -139,6 +139,7 @@ def engine(bank_id: str) -> Orchestrator:
         GraderAgent(CodeAdaptiveSession(JsonQuestionRepository())),
         graph=registry.get_graph_service(bank_id),
         coverage_critical_only=registry.profile(bank_id).coverage_critical_only,
+        bank_id=bank_id,
     )
 
 

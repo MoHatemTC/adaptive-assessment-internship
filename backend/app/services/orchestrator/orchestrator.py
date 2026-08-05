@@ -82,6 +82,7 @@ class Orchestrator:
         *,
         graph: CompetencyGraphService | None = None,
         coverage_critical_only: bool | None = None,
+        bank_id: str | None = None,
     ) -> None:
         """`graph` is the competency graph that belongs to `bank`.
 
@@ -90,11 +91,18 @@ class Orchestrator:
         bank what measures it, so a mismatched pair marks every required node unmeasured
         and vetoes convergence forever. Left None, a deprecated fallback loads the active
         bank's graph and `_graph` checks whether it actually matches.
+
+        `bank_id` names which bank that is, for the resolved-policy lookups. It is separate
+        from `bank` because the repository does not carry its own id. Without it those
+        lookups fall through to `settings.active_bank`, which is wrong wherever more than
+        one bank is served at once — and `app.main` keeps one orchestrator per bank
+        precisely so that it can be.
         """
         self._bank = bank
         self._grader = grader
         self._graph_service = graph
         self._coverage_critical_only = coverage_critical_only
+        self._bank_id = bank_id
         self._graph_checked = False
 
     # --- graph and coverage policy -----------------------------------------
@@ -147,11 +155,16 @@ class Orchestrator:
 
         Read from the resolved policy rather than the graph file, so the deployment floor
         has already been applied and a bank can only ever tighten it.
+
+        Resolved for THIS orchestrator's bank. Passing no id resolves `settings.active_bank`
+        instead, so an orchestrator serving DA on a deployment whose active bank is AIE
+        would silently enforce AIE's threshold — a wrong number, in the direction of
+        blocking a candidate on fewer failures than their bank asked for.
         """
         try:
             from app.services.orchestrator.registry import get_propagation_policy
 
-            resolved = get_propagation_policy()
+            resolved = get_propagation_policy(self._bank_id)
         except (ImportError, KeyError, OSError, ValueError):
             return None
         return resolved.minimum_failures_to_block if resolved is not None else None

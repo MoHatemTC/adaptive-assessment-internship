@@ -94,6 +94,7 @@ async def _run_all(*, arm_name, cohort, out_dir, limit, max_steps, trace_every):
             GraderAgent(code_engine=CodeAdaptiveSession(JsonQuestionRepository())),
             graph=graph,
             coverage_critical_only=registry.profile(bank_id).coverage_critical_only,
+            bank_id=bank_id,
         )
     else:
         # Approach B: no registry, no graph. The bank file is the same one, addressed

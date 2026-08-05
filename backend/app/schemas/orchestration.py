@@ -248,6 +248,18 @@ class AssessmentState(BaseModel):
     # written into the direct set, where it satisfied the coverage gate — letting a
     # deduction stand in for the measurement the gate exists to require.
     graph_inferred_mastered_nodes: list[str] = Field(default_factory=list)
+    # WHERE each of those came from, keyed by the same node ids. A sibling of the flat
+    # list rather than a widening of it: that list is consumed as a set by the UI, by the
+    # preview tests and by every session dump already written, and none of them read the
+    # provenance.
+    #
+    # node -> {source_node, source_item_id, distance, strength, modality, evidence_id,
+    #          edge_path: list[str], enforced: bool}
+    #
+    # `edge_path` is what makes a wrong inference attributable to an EDGE rather than only
+    # to a depth, and removing the edges that are wrong is the only remedy that does not
+    # also remove the edges that are right.
+    graph_inferred_mastery_records: dict[str, dict] = Field(default_factory=dict)
     graph_contradicted_nodes: list[str] = Field(default_factory=list)
     # Every contradiction detected, as an event. A set membership that quietly disappears
     # when the contradiction is resolved is not a record that it happened.

@@ -5,6 +5,42 @@ from dataclasses import dataclass, field
 from .models import CompetencyStatus
 
 
+def _support_from_dict(raw: dict) -> dict[str, dict]:
+    """Read `inferred_support`, reconstructing it for sessions persisted before it existed.
+
+    A session in flight across the deploy that introduced corroboration has
+    `inferred_evidence_ids` and no support map. Those ids record THAT an inference
+    happened, never from which source node — so the independence key cannot be recovered
+    and the true count is unknowable.
+
+    Reconstruct them as a single collective observation rather than one each. That is the
+    conservative direction: it can only delay an inference to an ancestor, never license
+    one that the configured K would have refused. Marked `legacy` so a manifest reader can
+    see the count is a floor rather than a measurement.
+    """
+    support = raw.get("inferred_support")
+    if isinstance(support, dict) and support:
+        return {str(k): dict(v) for k, v in support.items()}
+
+    legacy_ids = sorted(raw.get("inferred_evidence_ids") or [])
+    if not legacy_ids:
+        return {}
+    return {
+        "legacy:pre-corroboration": {
+            "source_node": "",
+            "source_item_id": "",
+            "evidence_id": legacy_ids[0],
+            "modality": "",
+            "distance": None,
+            "strength": 0.0,
+            "edge_path": [],
+            "at": raw.get("last_inferred_update_at"),
+            "legacy": True,
+            "legacy_evidence_ids": legacy_ids,
+        }
+    }
+
+
 @dataclass
 class CompetencyNodeState:
     competency_id: str
@@ -27,12 +63,39 @@ class CompetencyNodeState:
     direct_evidence_ids: set[str] = field(default_factory=set)
     inferred_evidence_ids: set[str] = field(default_factory=set)
 
+    # WHAT SUPPORTS AN INFERENCE, keyed by whatever the configured independence rule says
+    # makes two observations two. One entry per independent observation; the value is the
+    # strongest provenance record seen for that key.
+    #
+    # This is deliberately one structure serving two jobs, because they are the same fact.
+    # `len(inferred_support)` is the corroboration count the K requirement reads, and each
+    # value carries the distance, source node and edge path that a depth- or edge-
+    # stratified safety analysis needs. Storing them apart would let the count and the
+    # evidence for it drift.
+    #
+    # Record shape: {source_node, source_item_id, evidence_id, modality, distance,
+    #                strength, edge_path: list[str], at}
+    inferred_support: dict[str, dict] = field(default_factory=dict)
+
     blocked_by: set[str] = field(default_factory=set)
     contradictions: list[dict] = field(default_factory=list)
 
     last_direct_update_at: str | None = None
     last_inferred_update_at: str | None = None
 
+    def record_inferred_support(self, key: str, record: dict) -> None:
+        """Add or strengthen one independent observation supporting this node.
+
+        Keeps the STRONGEST record per key rather than the first or the last, so a second
+        look at the same source through a better path improves the provenance without
+        inflating the count — which is the invariant the whole corroboration rule rests on.
+        """
+        existing = self.inferred_support.get(key)
+        if existing is None or float(record.get("strength", 0.0)) > float(
+            existing.get("strength", 0.0)
+        ):
+            self.inferred_support[key] = record
+        self.inferred_observations = len(self.inferred_support)
 
     def to_dict(self) -> dict:
         return {
@@ -45,6 +108,7 @@ class CompetencyNodeState:
             "status_confidence": self.status_confidence,
             "direct_evidence_ids": sorted(self.direct_evidence_ids),
             "inferred_evidence_ids": sorted(self.inferred_evidence_ids),
+            "inferred_support": {k: dict(v) for k, v in sorted(self.inferred_support.items())},
             "blocked_by": sorted(self.blocked_by),
             "contradictions": list(self.contradictions),
             "last_direct_update_at": self.last_direct_update_at,
@@ -64,6 +128,7 @@ class CompetencyNodeState:
             status_confidence=float(raw.get("status_confidence", 0.0)),
             direct_evidence_ids=set(raw.get("direct_evidence_ids") or []),
             inferred_evidence_ids=set(raw.get("inferred_evidence_ids") or []),
+            inferred_support=_support_from_dict(raw),
             blocked_by=set(raw.get("blocked_by") or []),
             contradictions=list(raw.get("contradictions") or []),
             last_direct_update_at=raw.get("last_direct_update_at"),

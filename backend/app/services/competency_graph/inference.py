@@ -42,6 +42,20 @@ class InferredNodeSignal:
     source_evidence_id: str
     modality: str
 
+    # WHICH item, and WHICH edges. Both are provenance, and both were absent.
+    #
+    # `distance` alone cannot answer the question the safety analysis asks. A two-hop
+    # inference through A->B->C and one through A->B'->C were the same record, so a
+    # wrong-inference rate could be attributed to a depth but never to an edge — and
+    # "remove the edges that are wrong" is the only remedy that does not also remove the
+    # edges that are right. `edge_path` is the winning-strength path, inclusive of both
+    # ends: (source_node, ..., node).
+    #
+    # `source_item_id` exists for the corroboration independence rule, which has to be
+    # able to ask whether two observations came from the same item.
+    source_item_id: str = ""
+    edge_path: tuple[str, ...] = ()
+
 
 def infer_ancestors(
     graph: CompetencyGraphService,
@@ -52,6 +66,7 @@ def infer_ancestors(
     source_evidence_id: str,
     config: PropagationConfig,
     ignore_edge_validation: bool = False,
+    source_item_id: str = "",
 ) -> list[InferredNodeSignal]:
     """Prerequisite ancestors supported by a strong success on `target_node`.
 
@@ -72,12 +87,16 @@ def infer_ancestors(
         return []
 
     multiplier = config.source_multiplier(modality)
-    best: dict[str, tuple[int, float]] = {}
-    queue: deque[tuple[str, int, float]] = deque([(target_node, 0, 1.0)])
+    # value = (distance, strength, path). The path is carried alongside the strength so
+    # the recorded route is the one that WON, not merely a route that exists.
+    best: dict[str, tuple[int, float, tuple[str, ...]]] = {}
+    queue: deque[tuple[str, int, float, tuple[str, ...]]] = deque(
+        [(target_node, 0, 1.0, (target_node,))]
+    )
 
     while queue:
-        node, depth, strength_so_far = queue.popleft()
-        if depth >= config.maximum_propagation_depth:
+        node, depth, strength_so_far, path = queue.popleft()
+        if depth >= config.inference_depth:
             continue
         for edge in graph.prerequisite_edges_into(node):
             if not (edge.allow_upward_inference or ignore_edge_validation):
@@ -87,13 +106,14 @@ def infer_ancestors(
             known = best.get(parent)
             if known is not None and known[1] >= strength:
                 continue
-            best[parent] = (depth + 1, strength)
-            queue.append((parent, depth + 1, strength))
+            parent_path = path + (parent,)
+            best[parent] = (depth + 1, strength, parent_path)
+            queue.append((parent, depth + 1, strength, parent_path))
 
     best.pop(target_node, None)
 
     signals: list[InferredNodeSignal] = []
-    for node, (distance, path_strength) in sorted(best.items()):
+    for node, (distance, path_strength, edge_path) in sorted(best.items()):
         weight = (
             direct_effective
             * path_strength
@@ -111,6 +131,8 @@ def infer_ancestors(
                 strength=round(weight, 6),
                 source_evidence_id=source_evidence_id,
                 modality=modality,
+                source_item_id=source_item_id,
+                edge_path=edge_path,
             )
         )
     return signals

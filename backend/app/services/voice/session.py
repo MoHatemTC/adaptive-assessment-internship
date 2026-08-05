@@ -37,6 +37,7 @@ class VoiceAssessmentRunner:
             GraderAgent(),
             graph=registry.get_graph_service(resolved),
             coverage_critical_only=registry.profile(resolved).coverage_critical_only,
+            bank_id=resolved,
         )
         self._started = 0.0
 

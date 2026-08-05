@@ -45,6 +45,18 @@ class GraphDelta:
     contradicted: set[str] = field(default_factory=set)
     contradictions: list[dict] = field(default_factory=list)
 
+    # WHERE EACH INFERENCE CAME FROM: node -> {source_node, distance, edge_path, ...}.
+    #
+    # A sibling of `inferred_mastered` rather than a replacement for it. That set is a
+    # `list[str]` on the session and is consumed as one — Streamlit intersects it, the
+    # preview tests do set arithmetic on it, and every historical session dump holds it in
+    # that shape. Widening the type would break all three to add a field none of them
+    # read, so the provenance goes beside it.
+    #
+    # Without this, a wrong-inference rate can be reported but never attributed: depth and
+    # edge were computed during the traversal and then discarded one line later.
+    inferred_records: dict[str, dict] = field(default_factory=dict)
+
     # The unvalidated-edge forecast: node -> where the belief came from. Recorded so a
     # session says what the edges WOULD have concluded; read by reporting and by the edge
     # validation script, and by nothing that decides anything.
@@ -70,6 +82,7 @@ class GraphDelta:
             shadow_blocked=set(state.graph_shadow_blocked_nodes),
             contradicted=set(state.graph_contradicted_nodes),
             contradictions=list(state.graph_contradictions),
+            inferred_records=dict(state.graph_inferred_mastery_records),
             preview_inferred=dict(state.graph_preview_inferred_nodes),
             preview_blocked=set(state.graph_preview_blocked_nodes),
         )
@@ -87,14 +100,20 @@ class GraphDelta:
         self.node_states = graph_state.to_dict()
         self.processed_evidence_ids = ledger.processed_ids()
 
-        blocking_enforced = graph_config.descendant_blocking_enabled()
-        # Symmetrical with blocking, and new. `graph_upward_inference_enabled` was declared
-        # in settings, documented as the switch for upward inference, and read by nothing:
-        # inference was gated only by the per-edge flag, so an operator turning the feature
-        # off saw no change. Enforced here rather than baked into the edge set, so the
-        # mirror below still records what the graph would have concluded.
-        inference_enforced = graph_config.upward_inference_enabled()
-
+        # ENFORCEMENT IS NOT DECIDED HERE ANY MORE. It is decided once, in
+        # `PropagationConfig.enforce_inference` / `enforce_blocking`, which is what
+        # `propagation.apply_direct_evidence` consults before writing node status.
+        #
+        # Reading the same switches again here made this the second place that could
+        # answer "is inference on", and the two answered differently: propagation wrote
+        # INFERRED_MASTERED into node state unconditionally while this gate kept it out of
+        # `inferred_mastered`. One report then carried both `graph_inferred_mastered_nodes`
+        # correctly empty and `graph.mains[].nodes_inferred` — computed from that same node
+        # state — non-empty. Whichever field a reader happened to trust, the other was
+        # there to contradict it.
+        #
+        # `result.blocked_nodes` and `result.corroborated_nodes` now arrive already gated;
+        # the shadow sets arrive alongside them, ungated, for the audit mirror.
         for result in results:
             if result.unscorable:
                 # No node changed, so no queue slot is stale and no main is affected. An
@@ -120,15 +139,37 @@ class GraphDelta:
 
             # Inference is recorded separately from direct mastery, whatever the flags
             # say. Merging the two is what let a deduction satisfy the coverage gate.
-            self.shadow_inferred_mastered.update(s.node for s in result.inferred_signals)
+            #
+            # The mirror records what reached K, not every ancestor the traversal touched.
+            # An ancestor one observation short of the corroboration requirement is not a
+            # conclusion the graph drew and would mis-state the mirror as agreement.
+            self.shadow_inferred_mastered.update(result.corroborated_nodes)
             self.shadow_inferred_mastered -= self.mastered | self.not_mastered
-            if inference_enforced:
-                self.inferred_mastered.update(s.node for s in result.inferred_signals)
+            self.inferred_mastered.update(result.inferred_mastered_nodes)
             self.inferred_mastered -= self.mastered | self.not_mastered
 
-            self.shadow_blocked.update(result.blocked_nodes)
-            if blocking_enforced:
-                self.blocked.update(result.blocked_nodes)
+            for signal in result.inferred_signals:
+                if signal.node not in result.corroborated_nodes:
+                    continue
+                known = self.inferred_records.get(signal.node)
+                if known is not None and float(known.get("strength", 0.0)) >= signal.strength:
+                    continue
+                # Provenance for the depth- and edge-stratified safety analysis. Kept per
+                # node at its winning strength, which is the path the conclusion actually
+                # rests on.
+                self.inferred_records[signal.node] = {
+                    "source_node": signal.source_node,
+                    "source_item_id": signal.source_item_id,
+                    "distance": signal.distance,
+                    "strength": signal.strength,
+                    "modality": signal.modality,
+                    "evidence_id": signal.source_evidence_id,
+                    "edge_path": list(signal.edge_path),
+                    "enforced": signal.node in self.inferred_mastered,
+                }
+
+            self.shadow_blocked.update(result.shadow_blocked_nodes)
+            self.blocked.update(result.blocked_nodes)
             # Direct evidence reopens a block, and a node demonstrated directly is not
             # blocked by anything. Without this the block is permanent and contradiction
             # recovery — which needs the node served again — can never fire.
@@ -206,6 +247,7 @@ class GraphDelta:
             "graph_direct_mastered_nodes": sorted(self.mastered),
             "graph_direct_not_mastered_nodes": sorted(self.not_mastered),
             "graph_inferred_mastered_nodes": sorted(self.inferred_mastered),
+            "graph_inferred_mastery_records": dict(sorted(self.inferred_records.items())),
             "graph_blocked_nodes": sorted(self.blocked),
             "graph_contradicted_nodes": sorted(self.contradicted),
             "graph_contradictions": self.contradictions,
