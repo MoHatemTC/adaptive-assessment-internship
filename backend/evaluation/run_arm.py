@@ -29,13 +29,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from evaluation.arms import ARMS, FROZEN_ENV  # noqa: E402
 
 
-def _apply_env(arm_name: str) -> dict[str, str]:
-    """Freeze list first, then the arm's own flags. Returns what was applied.
+def _apply_env(arm_name: str, factors: dict[str, str] | None = None) -> dict[str, str]:
+    """Freeze list first, then the arm's own flags, then this cell's factor levels.
 
     Refuses to proceed if `Settings` already exists. A flag applied after that object is
     built is read by nothing while looking applied: the run completes, the manifest records
     the arm's name, and every arm silently produces the default configuration's numbers.
     An assertion is the only defence, because nothing downstream can tell the difference.
+
+    `factors` is how a sweep cell reaches this process. It is deliberately the LAST layer
+    and deliberately not allowed to touch the freeze list: FROZEN_ENV holds the
+    confounders that must not vary between cells, so a factor colliding with one would
+    silently convert a controlled comparison into an uncontrolled one. That is an error,
+    not an override.
     """
     if arm_name not in ARMS:
         raise SystemExit(f"unknown arm {arm_name!r}; expected one of {sorted(ARMS)}")
@@ -45,8 +51,33 @@ def _apply_env(arm_name: str) -> dict[str, str]:
             f"arm {arm_name!r} would be ignored. Import order in run_arm.py is load-bearing."
         )
     applied = {**FROZEN_ENV, **ARMS[arm_name].env}
+
+    for key, value in (factors or {}).items():
+        if key in FROZEN_ENV:
+            raise SystemExit(
+                f"factor {key!r} collides with the freeze list. FROZEN_ENV exists to hold "
+                "the confounders constant across cells; letting a factor move one would "
+                "make the design measure two things and attribute them to one."
+            )
+        applied[key] = str(value)
+
     os.environ.update(applied)
     return applied
+
+
+def current_factors() -> dict[str, str]:
+    """The factor levels in force, as the manifest records them.
+
+    ONE definition, used both to write the manifest and to check a resume against it.
+    They were computed separately and differed by the freeze-list keys, so every resume
+    compared a set against a strict superset of itself and refused — a guard that fires
+    on every correct input is worse than no guard, because the fix is to remove it.
+    """
+    return {
+        key: value
+        for key, value in os.environ.items()
+        if key.startswith(("GRAPH_", "CAT_")) and key not in FROZEN_ENV
+    }
 
 
 def _force_enable_edges(graph_service):
@@ -71,7 +102,9 @@ def _force_enable_edges(graph_service):
     return CompetencyGraphService(replace(graph, edges=edges))
 
 
-async def _run_all(*, arm_name, cohort, out_dir, limit, max_steps, trace_every):
+async def _run_all(
+    *, arm_name, cohort, out_dir, limit, max_steps, trace_every, run_name="", resume=False
+):
     from evaluation import HAS_GRAPH, responder
     from evaluation.session_runner import run_session
     from app.config.settings import settings
@@ -147,8 +180,32 @@ async def _run_all(*, arm_name, cohort, out_dir, limit, max_steps, trace_every):
         return resolved.summary() if resolved is not None else None
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    results_path = out_dir / f"{arm_name}__{cohort.dgp}.jsonl"
-    manifest_path = out_dir / f"{arm_name}__{cohort.dgp}.manifest.json"
+    basename = run_name or f"{arm_name}__{cohort.dgp}"
+    results_path = out_dir / f"{basename}.jsonl"
+    manifest_path = out_dir / f"{basename}.manifest.json"
+
+    # RESUME. The simulee order above is already deterministic — a stride, then a shuffle
+    # seeded on the cohort — so the first N of it are the same N on every invocation.
+    # Counting the lines already written therefore identifies exactly which simulees are
+    # done, without recording a cursor that could disagree with the file.
+    done = 0
+    if resume and results_path.exists():
+        with results_path.open(encoding="utf-8") as handle:
+            done = sum(1 for line in handle if line.strip())
+        if done >= len(simulees):
+            print(f"{basename}: already complete ({done} sessions)")
+            return
+        # A resume that changed the configuration would silently splice two cells into
+        # one file, and nothing downstream could separate them again.
+        if manifest_path.exists():
+            previous = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if previous.get("factors") and previous["factors"] != current_factors():
+                raise SystemExit(
+                    f"{basename}: refusing to resume — the factor levels on disk differ "
+                    f"from the ones requested. Delete the cell to re-run it."
+                )
+        simulees = simulees[done:]
+        print(f"{basename}: resuming after {done} sessions")
 
     # PRE-8: WRITTEN BEFORE THE LOOP, NOT AFTER IT.
     #
@@ -188,6 +245,9 @@ async def _run_all(*, arm_name, cohort, out_dir, limit, max_steps, trace_every):
                     else None,
                     "resolved_policy": _resolved_policy_summary(cohort.bank_id),
                     "results": results_path.name,
+                    # The factor levels for this cell, so a result can name its own
+                    # configuration without joining back to the sweep design file.
+                    "factors": current_factors(),
                     "settings": {
                         key: getattr(settings, key)
                         for key in sorted(type(settings).model_fields)
@@ -202,10 +262,10 @@ async def _run_all(*, arm_name, cohort, out_dir, limit, max_steps, trace_every):
             encoding="utf-8",
         )
 
-    write_manifest(status="running", n_written=0)
+    write_manifest(status="running", n_written=done)
 
-    written = 0
-    with results_path.open("w", encoding="utf-8") as handle:
+    written = done
+    with results_path.open("a" if done else "w", encoding="utf-8") as handle:
         for index, simulee in enumerate(simulees):
             record = await run_session(
                 orchestrator=orchestrator,
@@ -239,11 +299,42 @@ def main() -> None:
         default=50,
         help="keep a full step trace for every Nth session (0 = never)",
     )
+    parser.add_argument(
+        "--factors",
+        default="",
+        help=(
+            "JSON object of extra env vars for this sweep cell, e.g. "
+            '\'{"GRAPH_MAXIMUM_PROPAGATION_DEPTH": "1"}\'. Applied after the arm and '
+            "refused if it collides with the freeze list."
+        ),
+    )
+    parser.add_argument(
+        "--run-name",
+        default="",
+        help="output basename; defaults to <arm>__<dgp>. A sweep uses the cell id.",
+    )
+    parser.add_argument(
+        "--expected-session-length",
+        type=float,
+        default=0.0,
+        help="E[L] from the throughput probe, for the order-free persona surrogates",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="continue an interrupted cell, skipping sessions already written",
+    )
     args = parser.parse_args()
 
-    _apply_env(args.arm)
+    factors = json.loads(args.factors) if args.factors else {}
+    _apply_env(args.arm, factors)
 
     from evaluation.dgp import Cohort
+
+    if args.expected_session_length > 0:
+        from evaluation import responder
+
+        responder.set_expected_session_length(args.expected_session_length)
 
     cohort = Cohort.load(args.cohort)
     asyncio.run(
@@ -254,6 +345,8 @@ def main() -> None:
             limit=args.limit,
             max_steps=args.max_steps,
             trace_every=args.trace_every,
+            run_name=args.run_name,
+            resume=args.resume,
         )
     )
 
