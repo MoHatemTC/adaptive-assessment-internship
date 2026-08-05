@@ -99,7 +99,25 @@ therefore not a confidence gate being tightened; it is a second modality allowli
 onto `M`. That is why `C` moved the rate slightly rather than sharply: it deleted 12% of the
 evidence rather than filtering the least certain of it.
 
-**This is why P09 cannot be evaluated on DGP-2.** §3.2 defines P09 as a candidate who is
+**Confirmed on DGP-3, and refined.** Grader noise (`grader_error_sd = 0.10`) does make the
+distribution non-degenerate — 16 distinct confidences instead of 2 — so the two-point mass is
+specific to DGP-2. But the *shipped* threshold barely moves even then:
+
+| arm | distinct confidences | min | rejected at C=0.80 | at C=0.95 |
+|---|---:|---:|---:|---:|
+| DGP-2 / P01 | 2 | 0.900 | 0.0% | 11.7% |
+| DGP-3 / P01 | **16** | 0.776 | **0.8%** | 11.7% |
+| DGP-3 / P09 | 12 | 0.924 | 0.0% | **3.1%** |
+
+So the gate that licenses propagation **is set where almost nothing arrives**. Voice is a
+minority of evidence and MCQ/code report 1.00, so even with a noisy grader the shipped 0.80
+rejects under 1% of what reaches it. It only discriminates at 0.95 — and there it does exactly
+what §3.2 designed P09 to expose, rejecting P01 nearly four times as often as P09.
+
+That is the useful form of the finding: the confidence gate is not calibrated against the
+confidences it receives.
+
+**And it is why P09 cannot be evaluated on DGP-2.** §3.2 defines P09 as a candidate who is
 confidently graded and wrong, attacking the gate that permits propagation — but with a
 two-point confidence distribution there is no gate to attack. P09's `+0.15` moves 0.90 to 1.00
 and clears the same threshold P01 already cleared. It is measurable only on DGP-3, where

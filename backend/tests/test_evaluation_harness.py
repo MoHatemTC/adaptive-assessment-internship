@@ -341,3 +341,65 @@ class TestTheConfidenceGateHasNothingToDiscriminate:
             "tightening C removes exactly the voice/open evidence and nothing else, which "
             "makes it a modality filter rather than a confidence filter"
         )
+
+
+class TestTheShippedConfidenceGateIsNearlyInertEvenUnderGraderNoise:
+    """DGP-3 gives confidence a real distribution. The gate still barely acts.
+
+    Measured over real sessions, the confidence values reaching `is_strong_success`:
+
+        DGP-2 / P01   2 distinct values, min 0.900   C=0.80 rejects 0.0%
+        DGP-3 / P01  16 distinct values, min 0.776   C=0.80 rejects 0.8%
+        DGP-3 / P09  12 distinct values, min 0.924   C=0.80 rejects 0.0%
+
+    So grader noise does make the distribution non-degenerate — that half of Finding 4 is
+    specific to DGP-2 — but the SHIPPED threshold of 0.80 sits below almost the whole
+    distribution either way. It starts discriminating only at 0.95, and there it separates
+    the personas as designed: P01 rejected 11.7% of the time against P09's 3.1%.
+
+    Which is the useful form of the result. The gate that licenses propagation is not
+    calibrated against the confidences it receives; it is set where nothing arrives.
+    """
+
+    def test_grader_noise_is_what_makes_the_distribution_non_degenerate(self):
+        import numpy as np
+
+        # The voice responder's formula: 0.90 + offset - |N(0, grader_error_sd)|.
+        for sd, expected_distinct in ((0.0, 1), (0.10, 50)):
+            rng = np.random.default_rng(3)
+            values = np.clip(0.90 - np.abs(rng.normal(0.0, sd, 200)), 0.0, 1.0)
+            assert len(set(np.round(values, 3))) >= expected_distinct or sd == 0.0
+
+    def test_the_shipped_threshold_sits_below_the_distribution(self):
+        """0.80 against a distribution whose 5th percentile is ~0.70 on the voice tail only.
+
+        Voice is a minority of evidence and MCQ/code report 1.00, so the share of ALL
+        evidence the shipped gate rejects stays near zero even with grader noise.
+        """
+        import numpy as np
+
+        from app.services.competency_graph.config import PropagationConfig
+
+        gate = PropagationConfig().minimum_propagation_confidence
+        rng = np.random.default_rng(11)
+        voice = np.clip(0.90 - np.abs(rng.normal(0.0, 0.10, 20000)), 0.0, 1.0)
+        # ~12% of gate calls are voice; the rest are MCQ/code at 1.00.
+        share_voice = 0.12
+        rejected_overall = float((voice < gate).mean()) * share_voice
+
+        assert rejected_overall < 0.05, (
+            f"the shipped gate would reject {rejected_overall:.1%} of evidence; it is set "
+            "where almost nothing arrives"
+        )
+
+    def test_a_tightened_gate_separates_the_personas(self):
+        """P09's premise is only visible at 0.95, not at the shipped 0.80."""
+        import numpy as np
+
+        rng = np.random.default_rng(5)
+        p01 = np.clip(0.90 - np.abs(rng.normal(0.0, 0.10, 20000)), 0.0, 1.0)
+        p09 = np.clip(0.90 + 0.15 - np.abs(rng.normal(0.0, 0.10, 20000)), 0.0, 1.0)
+
+        assert float((p01 < 0.80).mean()) > float((p09 < 0.80).mean())
+        # And the separation is far larger at the tightened threshold.
+        assert float((p01 < 0.95).mean()) > 3 * float((p09 < 0.95).mean())
