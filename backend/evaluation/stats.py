@@ -425,3 +425,331 @@ def decision_consistency(band_probability_rows: list[dict[str, float]]) -> float
         return float("nan")
     per = [sum(float(p) ** 2 for p in row.values()) for row in band_probability_rows]
     return float(np.mean(per))
+
+
+# --- within-candidate error correlation -------------------------------------------------
+
+
+def tetrachoric(table: np.ndarray, *, tol: float = 1e-9) -> float:
+    """Tetrachoric correlation from a 2x2 table of binary indicators.
+
+    THE STUDY'S PRIMARY OBJECTIVE, and the input to the K decision. Corroboration only
+    reduces the wrong-inference rate if the errors it averages over are independent. If a
+    candidate's misjudged node drives every inference drawn from it, requiring more
+    observations of the same candidate buys nothing, and the plan's section 2.2 table
+    collapses from "K=3 clears the gate" to "no K clears it".
+
+    Phi (the plain correlation of the two indicators) is the wrong estimator here: it is
+    bounded by the marginals, so two indicators that are both rare cannot show a high phi
+    even when they are perfectly dependent. The tetrachoric assumes the binary outcomes
+    are thresholded draws from a bivariate normal — which is exactly the latent-trait
+    story the rest of this harness already commits to — and estimates the correlation of
+    that latent pair.
+
+    scipy has no tetrachoric, so it is solved directly: fix the thresholds at the inverse
+    normal of the observed marginals, then find the rho whose bivariate orthant
+    probability reproduces the observed (1,1) cell. Monotone in rho, so a bisection is
+    both sufficient and robust; Newton would be faster and can leave the interval.
+
+    Returns NaN when the table is degenerate — a zero margin means one indicator never
+    varied, and a correlation with something constant is not defined rather than zero.
+    """
+    from scipy.stats import multivariate_normal
+
+    table = np.asarray(table, dtype=float)
+    n = float(table.sum())
+    if n <= 0:
+        return float("nan")
+
+    p_row = float((table[1, 0] + table[1, 1]) / n)
+    p_col = float((table[0, 1] + table[1, 1]) / n)
+    if not (0.0 < p_row < 1.0) or not (0.0 < p_col < 1.0):
+        return float("nan")
+
+    # Thresholds, with the sign convention that "1" is the upper tail.
+    h = float(norm.ppf(1.0 - p_row))
+    k = float(norm.ppf(1.0 - p_col))
+    target = float(table[1, 1] / n)
+
+    def orthant(rho: float) -> float:
+        """P(X > h, Y > k) under a standard bivariate normal with correlation rho."""
+        return float(
+            multivariate_normal(mean=[0.0, 0.0], cov=[[1.0, rho], [rho, 1.0]]).cdf(
+                [-h, -k]
+            )
+        )
+
+    low, high = -0.999, 0.999
+    if target <= orthant(low):
+        return low
+    if target >= orthant(high):
+        return high
+    for _ in range(200):
+        mid = 0.5 * (low + high)
+        if orthant(mid) < target:
+            low = mid
+        else:
+            high = mid
+        if high - low < tol:
+            break
+    return float(0.5 * (low + high))
+
+
+def bonett_price_tetrachoric(table: np.ndarray) -> float:
+    """Closed-form tetrachoric approximation, as a cross-check on the solved value.
+
+    Two independent routes to one number. The solver could silently converge to a wrong
+    root through a sign error in the threshold convention, and that mistake would be
+    invisible in the output — a plausible correlation is still a plausible correlation.
+    """
+    table = np.asarray(table, dtype=float)
+    a, b, c, d = table[0, 0], table[0, 1], table[1, 0], table[1, 1]
+    if min(a, b, c, d) <= 0:
+        a, b, c, d = a + 0.5, b + 0.5, c + 0.5, d + 0.5
+    p_row = (c + d) / table.sum() if table.sum() else 0.5
+    p_col = (b + d) / table.sum() if table.sum() else 0.5
+    p_min = min(p_row, 1 - p_row, p_col, 1 - p_col)
+    if p_min <= 0:
+        return float("nan")
+    c_exp = (1.0 - abs(p_row - p_col) / 5.0 - (0.5 - p_min) ** 2) / 2.0
+    omega = (a * d) / (b * c)
+    return float(np.cos(np.pi / (1.0 + omega**c_exp)))
+
+
+def within_candidate_error_correlation(
+    pairs_by_candidate: dict[str, list[int]],
+    *,
+    resamples: int = 2000,
+    seed: int = 20260805,
+) -> dict:
+    """`r`: how correlated two inference errors are when they share a candidate.
+
+    `pairs_by_candidate` maps a candidate id to the correctness indicators (1 = wrong) of
+    every verified inference for that candidate. Within each candidate, all C(m, 2)
+    unordered pairs are formed and pooled into one 2x2 table.
+
+    Clusters of size 1 contribute nothing and are counted separately. A candidate with one
+    inference says nothing about whether that candidate's errors repeat, and silently
+    dropping them would hide how little of the data actually speaks to the question.
+
+    The CI is a cluster bootstrap over candidates, not over pairs. Pairs from one candidate
+    are the dependency being measured, so resampling them independently would assume away
+    the thing the statistic exists to estimate.
+    """
+    rng = np.random.default_rng(seed)
+    candidates = [c for c, v in pairs_by_candidate.items() if len(v) >= 2]
+    singletons = sum(1 for v in pairs_by_candidate.values() if len(v) == 1)
+
+    def table_for(ids: list[str]) -> np.ndarray:
+        table = np.zeros((2, 2), dtype=float)
+        for cid in ids:
+            values = pairs_by_candidate[cid]
+            for i in range(len(values)):
+                for j in range(i + 1, len(values)):
+                    x, y = int(values[i]), int(values[j])
+                    # Unordered: enter both orientations so the table is symmetric and the
+                    # marginals are equal, which is what the estimator assumes.
+                    table[x, y] += 1.0
+                    table[y, x] += 1.0
+        return table
+
+    if len(candidates) < 2:
+        return {
+            "estimable": False,
+            "reason": "fewer than 2 candidates have 2+ verified inferences",
+            "clusters_with_multiple": len(candidates),
+            "clusters_with_one": singletons,
+            "point": None,
+            "ci95": None,
+        }
+
+    table = table_for(candidates)
+    pairs = float(table.sum() / 2.0)
+    point = tetrachoric(table)
+    if not np.isfinite(point):
+        return {
+            "estimable": False,
+            "reason": "degenerate margin: every paired inference had the same outcome",
+            "clusters_with_multiple": len(candidates),
+            "clusters_with_one": singletons,
+            "pairs": pairs,
+            "point": None,
+            "ci95": None,
+        }
+
+    draws = []
+    for _ in range(resamples):
+        sample = [candidates[i] for i in rng.integers(0, len(candidates), len(candidates))]
+        value = tetrachoric(table_for(sample))
+        if np.isfinite(value):
+            draws.append(value)
+
+    ci = (
+        (float(np.percentile(draws, 2.5)), float(np.percentile(draws, 97.5)))
+        if len(draws) >= 100
+        else None
+    )
+    mean_cluster = float(np.mean([len(pairs_by_candidate[c]) for c in candidates]))
+    return {
+        "estimable": True,
+        "point": round(float(point), 5),
+        "cross_check_bonett_price": round(float(bonett_price_tetrachoric(table)), 5),
+        "ci95": [round(ci[0], 5), round(ci[1], 5)] if ci else None,
+        "clusters_with_multiple": len(candidates),
+        "clusters_with_one": singletons,
+        "pairs": pairs,
+        "mean_cluster_size": round(mean_cluster, 3),
+        # What r actually COSTS: the factor by which clustering inflates the variance of
+        # any rate computed over these inferences. Reported beside r because a correlation
+        # is abstract and a design effect is the number that changes a sample size.
+        "design_effect": round(1.0 + (mean_cluster - 1.0) * max(float(point), 0.0), 3),
+        "bootstrap_draws": len(draws),
+    }
+
+
+def reliability_at_population_sd(
+    theta_hat: np.ndarray, se: np.ndarray, true_theta: np.ndarray, population_sd: float = 1.0
+) -> dict:
+    """Marginal reliability, re-weighted to a STATED population, and the raw value beside it.
+
+    PRE-4. `marginal_reliability` divides by the observed spread of theta_hat, and this
+    cohort's spread is a design choice: eight strata deliberately spanning [-2.8, 2.8] give
+    an SD near 2.0 where a real intake is closer to 1.0. Reliability rises with the spread
+    of the population it is measured on, so the design cohort inflates it — a figure of
+    0.95 on this cohort can be 0.79 on the population it will serve.
+
+    That makes an unqualified reliability number not merely imprecise but uninterpretable:
+    it is a property of the cohort as much as of the instrument, and nothing in the output
+    said which cohort. Both are now reported, with the assumed SD named.
+
+    The re-weighting is importance sampling: each candidate is weighted by how likely their
+    true ability would be under N(0, population_sd) relative to the flat design density.
+    """
+    theta_hat = np.asarray(theta_hat, float)
+    se = np.asarray(se, float)
+    true_theta = np.asarray(true_theta, float)
+
+    raw = marginal_reliability(theta_hat, se)
+    if theta_hat.size < 2 or population_sd <= 0:
+        return {
+            "marginal_reliability_design_cohort": raw,
+            "marginal_reliability_at_population_sd": float("nan"),
+            "population_sd": population_sd,
+            "design_cohort_theta_sd": float(np.std(true_theta, ddof=1)) if true_theta.size > 1 else float("nan"),
+        }
+
+    design_sd = float(np.std(true_theta, ddof=1))
+    # Target density over the flat-ish design density. The design is uniform across strata
+    # by construction, so its density is constant and cancels except for the range.
+    weights = norm.pdf(true_theta, loc=0.0, scale=population_sd)
+    total = float(weights.sum())
+    if total <= 0:
+        reweighted = float("nan")
+    else:
+        weights = weights / total
+        error = float(np.sum(weights * se**2))
+        mean_theta = float(np.sum(weights * theta_hat))
+        variance = float(np.sum(weights * (theta_hat - mean_theta) ** 2))
+        observed = variance + error
+        reweighted = float(1.0 - error / observed) if observed > 0 else float("nan")
+
+    return {
+        "marginal_reliability_design_cohort": round(raw, 5) if np.isfinite(raw) else raw,
+        "marginal_reliability_at_population_sd": (
+            round(reweighted, 5) if np.isfinite(reweighted) else reweighted
+        ),
+        "population_sd": population_sd,
+        "design_cohort_theta_sd": round(design_sd, 4),
+        "note": (
+            "Reliability is conditional on the ability spread it is measured over. The "
+            "design cohort is deliberately wide, so its figure is an upper bound on what "
+            f"a N(0, {population_sd}) intake would see."
+        ),
+    }
+
+
+def main_effects(
+    responses: dict[str, float],
+    levels: dict[str, dict[str, str]],
+    factors: list[str],
+    centre_responses: list[float],
+) -> dict:
+    """Screening main effects from a two-level fractional factorial, with pure error.
+
+    `effect = mean(y | high) - mean(y | low)`, which for a balanced design is the ordinary
+    least-squares estimate and needs no model fitting.
+
+    Pure error comes from the centre-point replicates, so the error estimate does not
+    assume the linear model is right — which matters, because that model is exactly what
+    the curvature check below is testing.
+
+    THE 2-SIGMA RULE IS A SCREENING HEURISTIC AND IS LABELLED AS ONE. With 3 degrees of
+    freedom the standard error is itself very uncertain, and treating |effect| > 2*SE as a
+    hypothesis test at any particular alpha would be false precision. It is a triage rule
+    for deciding which two or three factors deserve a response surface.
+    """
+    cells = [c for c in responses if c in levels]
+    usable = [c for c in cells if np.isfinite(responses[c])]
+    dropped = [c for c in cells if not np.isfinite(responses[c])]
+
+    centre = [float(v) for v in centre_responses if np.isfinite(v)]
+    if len(centre) >= 2:
+        pure_error_sd = float(np.std(centre, ddof=1))
+        pure_error_df = len(centre) - 1
+    else:
+        pure_error_sd = float("nan")
+        pure_error_df = 0
+
+    n_factorial = len(usable)
+    effect_se = (
+        2.0 * pure_error_sd / np.sqrt(n_factorial) if n_factorial and np.isfinite(pure_error_sd) else float("nan")
+    )
+
+    rows = {}
+    for factor in factors:
+        high = [responses[c] for c in usable if levels[c].get(factor) == "high"]
+        low = [responses[c] for c in usable if levels[c].get(factor) == "low"]
+        if not high or not low:
+            rows[factor] = {
+                "effect": None,
+                "n_high": len(high),
+                "n_low": len(low),
+                "active": None,
+                "note": "factor did not vary among cells with a finite response",
+            }
+            continue
+        effect = float(np.mean(high) - np.mean(low))
+        rows[factor] = {
+            "effect": round(effect, 6),
+            "mean_high": round(float(np.mean(high)), 6),
+            "mean_low": round(float(np.mean(low)), 6),
+            "n_high": len(high),
+            "n_low": len(low),
+            "active": (
+                bool(abs(effect) > 2.0 * effect_se) if np.isfinite(effect_se) else None
+            ),
+        }
+
+    factorial_mean = float(np.mean([responses[c] for c in usable])) if usable else float("nan")
+    curvature = (
+        float(factorial_mean - np.mean(centre)) if centre and np.isfinite(factorial_mean) else float("nan")
+    )
+
+    return {
+        "effects": rows,
+        "pure_error_sd": round(pure_error_sd, 6) if np.isfinite(pure_error_sd) else None,
+        "pure_error_df": pure_error_df,
+        "effect_standard_error": round(effect_se, 6) if np.isfinite(effect_se) else None,
+        "factorial_mean": round(factorial_mean, 6) if np.isfinite(factorial_mean) else None,
+        "centre_mean": round(float(np.mean(centre)), 6) if centre else None,
+        "curvature": round(curvature, 6) if np.isfinite(curvature) else None,
+        "cells_used": n_factorial,
+        # Named, not counted. Which cells are missing decides whether what remains is
+        # still balanced, and a bare count cannot answer that.
+        "cells_dropped": sorted(dropped),
+        "activity_rule": (
+            "|effect| > 2 x SE(effect), where SE comes from centre-point pure error with "
+            f"{pure_error_df} degrees of freedom. A SCREENING HEURISTIC for choosing which "
+            "factors deserve a response surface — not a hypothesis test at any alpha."
+        ),
+    }
