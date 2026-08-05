@@ -16,3 +16,6 @@ graphify-out/
 
 # Evaluation harness outputs (research scaffolding, not part of this branch)
 eval-results/
+
+# Simulation outputs. Large, regenerable, and specific to one run.
+eval-results/
