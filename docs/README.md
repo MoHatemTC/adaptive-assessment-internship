@@ -14,6 +14,21 @@ optional competency graph layer.
 | [operations.md](operations.md) | you are running this, or something is wrong |
 | [evidence.md](evidence.md) | you want the measurements behind the defaults |
 | [microservices.md](microservices.md) | you are splitting this into services |
+| [preregistration/](preregistration/) | you are running, reading or extending the propagation study |
+
+## The propagation study
+
+| Document | What it is |
+|---|---|
+| [C_Shipped_Propagation_Test_Plan.md](preregistration/C_Shipped_Propagation_Test_Plan.md) | the pre-registration, signed before any data. Amendments in §13, never by editing the text above them |
+| [plan_math.py](preregistration/plan_math.py) | the design arithmetic. Every sample size in the plan is derived here, not chosen |
+| [S1_Screening_Report.md](preregistration/S1_Screening_Report.md) | **what the screening stage found** |
+
+The short version of the report: corroboration — the plan's headline lever — is inoperable
+on this bank. The AIE graph is a forest of chains, every parent having exactly one direct
+child, so requiring two independent observations of an ancestor cannot be satisfied at
+depth 1 by any candidate. `K` is either farmable under weak independence keying or
+unsatisfiable under strong. That is a graph-authoring finding, not a tuning one.
 
 ## What this branch is
 
