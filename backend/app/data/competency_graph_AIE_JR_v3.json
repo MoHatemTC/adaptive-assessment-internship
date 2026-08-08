@@ -1,0 +1,76 @@
+{
+  "version": "1.0",
+  "bank_id": "AIE-JR-V3",
+  "notes": "Coverage-only projection of the imported bank's measurable taxonomy. It deliberately has no prerequisite edges and cannot create synthetic evidence.",
+  "policy": {
+    "upward_inference": false,
+    "descendant_blocking": false,
+    "accepted_validation_statuses": [
+      "validated"
+    ],
+    "minimum_failures_to_block": 2
+  },
+  "nodes": [
+    {
+      "competency_id": "C1",
+      "title": "Software and AI Application Engineering",
+      "node_type": "main",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": []
+    },
+    {
+      "competency_id": "C1.1",
+      "title": "Core Python & programming fundamentals",
+      "node_type": "sub_competency",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": [
+        "C1"
+      ],
+      "shared": false
+    },
+    {
+      "competency_id": "C1.2",
+      "title": "Data structures & algorithms",
+      "node_type": "sub_competency",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": [
+        "C1"
+      ],
+      "shared": false
+    },
+    {
+      "competency_id": "C1.3",
+      "title": "Code quality & engineering workflow",
+      "node_type": "sub_competency",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": [
+        "C1"
+      ],
+      "shared": false
+    }
+  ],
+  "edges": [
+    {
+      "from": "C1.1",
+      "to": "C1",
+      "relation": "CONTRIBUTES_TO",
+      "weight": 0.333333
+    },
+    {
+      "from": "C1.2",
+      "to": "C1",
+      "relation": "CONTRIBUTES_TO",
+      "weight": 0.333333
+    },
+    {
+      "from": "C1.3",
+      "to": "C1",
+      "relation": "CONTRIBUTES_TO",
+      "weight": 0.333333
+    }
+  ]
+}

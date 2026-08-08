@@ -5,12 +5,15 @@ An agent-driven CAT engine that measures a candidate across many competencies us
 whichever modality — will narrow the weakest estimate fastest, and finishing each
 competency as soon as it is measured.
 
-Open/voice answers are collected via **Gemini Live** (`gemini-3.1-flash-preview`) only.
-Picker and open rubric grading go through **LiteLLM** (`openai/gpt-5.6-sol`). Typed
-transcripts are not accepted for open items.
+Open/voice answers prefer **Gemini Live** through LiteLLM. A deployment may explicitly
+enable typed fallback with `ALLOW_TEXT_FALLBACK=true`, which keeps remote and accessibility
+testing possible when realtime audio is unavailable. Picker and open rubric grading also
+go through LiteLLM.
 
-Canonical bank and rubrics live under `backend/app/data/` (`question_bank.json`,
-`rubrics/` for code, `voice_rubrics/` + inline open criteria for voice).
+Banks and rubrics live under `backend/app/data/` and are paired through the bank registry.
+The original `DA`, `PY`, and `AIE` banks remain available; `AIE-JR-V3` and `JAI-600` are
+additional human-test banks. See `streamlit/README.md` for their calibration limitations
+and local/hosted setup.
 
 ```text
 backend/
@@ -32,9 +35,9 @@ backend/
         grader.py                    Grader Agent — routes by modality
         orchestrator.py              the loop
         prompts.py                   the single delegated decision
-    data/question_bank.json          145 items: 120 MCQ + 25 code, 40 variables
+    data/question_bank*.json         registered assessment banks (old and new)
   scripts/build_unified_bank.py      fuses both source banks; --check verifies
-  tests/                             145 tests, no network, no sandbox, no database
+  tests/                             deterministic, API, and Streamlit regressions
 ```
 
 ## The loop
@@ -177,11 +180,11 @@ assessment can span HTTP requests and resume on a different worker.
 
 ## Tester harness
 
-A Streamlit UI for checking the engine — the queue and why each item was shortlisted, every
-update, the trajectory, the engine's own log, and bank diagnostics. See `streamlit/README.md`.
+A Streamlit UI supports candidate-safe human testing by default and a trusted, instrumented
+tester mode. See `streamlit/README.md`.
 
 ```bash
-streamlit run streamlit/main.py
+./scripts/run_streamlit.sh
 ```
 
 ## Tests
@@ -190,16 +193,15 @@ streamlit run streamlit/main.py
 cd backend && PYTHONPATH=. pytest
 ```
 
-**145 tests**, no network, no sandbox, no database. The 101 from both engines are unchanged
-— unifying the scale was required to leave them that way, and the bit-identity test is what
-proves it. The 44 new ones cover the fractional update, the calibration mapping, the parity
-diagnostic, the queue invariants, the finalisation rule ("the picker is never invoked for a
-finalised variable", asserted where it is enforced), a full mixed session that must use
-both modalities, and a sandbox failure that must move no estimate.
+The default suite makes no billed model or sandbox calls. It covers binary-update identity,
+fractional updates, calibration mapping, parity diagnostics, queue/finalisation invariants,
+mixed-modality sessions, API boundaries, and Streamlit flows. Sandbox infrastructure
+failures are explicitly tested to ensure they move no candidate estimate.
 
-## Not implemented
+## Calibration status
 
-Open-ended items. `grader.py` and `calibration.py` raise `NotImplementedError` rather than
-guessing: how an open-ended item's difficulty is authored, and whether it carries a
-guessing floor, are questions the open-ended grading design has to answer first. The
-envelope, the `GradedOutcome` currency and the θ update all accommodate it already.
+The engine supports MCQ, code, and open/voice items. Operational score bands remain
+provisional until independent response data passes the repository's psychometric and
+human-grader gates. The two imported human-test banks are particularly explicit about this:
+their CAT parameters are traceable syntheses from semantically related prior-bank strata,
+not empirical calibration of the new item wording.

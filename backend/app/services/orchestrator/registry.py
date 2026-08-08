@@ -18,13 +18,17 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 
 from app.config.settings import settings
 from app.services.competency_graph import load_competency_graph
 from app.services.competency_graph.graph import CompetencyGraphService
-from app.services.competency_graph.policy import ResolvedPolicy, apply_policy, resolve_policy
+from app.services.competency_graph.policy import (
+    ResolvedPolicy,
+    apply_policy,
+    resolve_policy,
+)
 from app.services.orchestrator.bank import BankReporting, JsonUnifiedBank
 
 logger = logging.getLogger(__name__)
@@ -37,9 +41,7 @@ class UnknownBankError(KeyError):
     usually an env var or a request field, and 'KeyError: AIE2' helps nobody."""
 
     def __init__(self, bank_id: str) -> None:
-        super().__init__(
-            f"unknown bank {bank_id!r}; registered: {sorted(REGISTRY)}"
-        )
+        super().__init__(f"unknown bank {bank_id!r}; registered: {sorted(REGISTRY)}")
 
 
 @dataclass(frozen=True)
@@ -88,6 +90,25 @@ REGISTRY: dict[str, BankProfile] = {
         # could never be satisfied and every session would end on the budget escape.
         # Critical-only reduces the requirement to five. See `docs/competency_graph.md`.
         coverage_critical_only=True,
+    ),
+    "AIE-JR-V3": BankProfile(
+        bank_id="AIE-JR-V3",
+        title="Junior AI Engineer v3 (60 items)",
+        bank_path=DATA / "question_bank_AIE_JR_v3.json",
+        graph_path=DATA / "competency_graph_AIE_JR_v3.json",
+        mains=("C1",),
+        # The generated coverage graph contains exactly the three measurable nodes.
+        coverage_critical_only=False,
+    ),
+    "JAI-600": BankProfile(
+        bank_id="JAI-600",
+        title="Junior AI Engineer 2026 (600 items)",
+        bank_path=DATA / "question_bank_JAI_2026_600.json",
+        graph_path=DATA / "competency_graph_JAI_2026_600.json",
+        mains=("C1", "C2", "C3", "C4", "C5", "C6"),
+        # Each main has only 3-5 nodes, so full direct coverage is reachable under the
+        # twelve-question per-main limit and is preferable to silently weakening it.
+        coverage_critical_only=False,
     ),
 }
 
@@ -148,7 +169,7 @@ def describe() -> list[dict]:
     return described
 
 
-@lru_cache(maxsize=None)
+@cache
 def _bank_cached(bank_id: str) -> JsonUnifiedBank:
     return JsonUnifiedBank(REGISTRY[bank_id].bank_path)
 
@@ -163,7 +184,7 @@ def get_propagation_policy(bank_id: str | None = None) -> ResolvedPolicy | None:
     return _policy_cached(resolve_bank_id(bank_id))
 
 
-@lru_cache(maxsize=None)
+@cache
 def _policy_cached(bank_id: str) -> ResolvedPolicy | None:
     graph_path = REGISTRY[bank_id].graph_path
     if graph_path is None:
@@ -177,7 +198,7 @@ def _policy_cached(bank_id: str) -> ResolvedPolicy | None:
     )
 
 
-@lru_cache(maxsize=None)
+@cache
 def _graph_cached(bank_id: str) -> CompetencyGraphService | None:
     """The graph for this bank, with the propagation policy already applied.
 

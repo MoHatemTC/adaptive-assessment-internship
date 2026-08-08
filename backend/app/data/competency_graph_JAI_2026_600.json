@@ -1,0 +1,439 @@
+{
+  "version": "1.0",
+  "bank_id": "JAI-600",
+  "notes": "Coverage-only projection of the imported bank's measurable taxonomy. It deliberately has no prerequisite edges and cannot create synthetic evidence.",
+  "policy": {
+    "upward_inference": false,
+    "descendant_blocking": false,
+    "accepted_validation_statuses": [
+      "validated"
+    ],
+    "minimum_failures_to_block": 2
+  },
+  "nodes": [
+    {
+      "competency_id": "C1",
+      "title": "AI Software Engineering",
+      "node_type": "main",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": []
+    },
+    {
+      "competency_id": "C2",
+      "title": "Data Preparation and Engineering",
+      "node_type": "main",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": []
+    },
+    {
+      "competency_id": "C3",
+      "title": "Machine Learning Foundations",
+      "node_type": "main",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": []
+    },
+    {
+      "competency_id": "C4",
+      "title": "Model and Deep Learning Engineering",
+      "node_type": "main",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": []
+    },
+    {
+      "competency_id": "C5",
+      "title": "LLM, NLP, RAG and Agentic AI",
+      "node_type": "main",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": []
+    },
+    {
+      "competency_id": "C6",
+      "title": "Deployment and MLOps",
+      "node_type": "main",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": []
+    },
+    {
+      "competency_id": "C1.1",
+      "title": "Python Programming",
+      "node_type": "sub_competency",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": [
+        "C1"
+      ],
+      "shared": false
+    },
+    {
+      "competency_id": "C1.2",
+      "title": "Clean and Testable Code",
+      "node_type": "sub_competency",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": [
+        "C1"
+      ],
+      "shared": false
+    },
+    {
+      "competency_id": "C1.3",
+      "title": "Development Workflow",
+      "node_type": "sub_competency",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": [
+        "C1"
+      ],
+      "shared": false
+    },
+    {
+      "competency_id": "C2.1",
+      "title": "Data Collection and Storage",
+      "node_type": "sub_competency",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": [
+        "C2"
+      ],
+      "shared": false
+    },
+    {
+      "competency_id": "C2.2",
+      "title": "Data Cleaning and Preprocessing",
+      "node_type": "sub_competency",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": [
+        "C2"
+      ],
+      "shared": false
+    },
+    {
+      "competency_id": "C2.3",
+      "title": "Exploratory Data Analysis",
+      "node_type": "sub_competency",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": [
+        "C2"
+      ],
+      "shared": false
+    },
+    {
+      "competency_id": "C2.4",
+      "title": "Feature Engineering and Data Pipelines",
+      "node_type": "sub_competency",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": [
+        "C2"
+      ],
+      "shared": false
+    },
+    {
+      "competency_id": "C3.1",
+      "title": "Problem Formulation",
+      "node_type": "sub_competency",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": [
+        "C3"
+      ],
+      "shared": false
+    },
+    {
+      "competency_id": "C3.2",
+      "title": "Supervised Learning",
+      "node_type": "sub_competency",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": [
+        "C3"
+      ],
+      "shared": false
+    },
+    {
+      "competency_id": "C3.3",
+      "title": "Unsupervised Learning",
+      "node_type": "sub_competency",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": [
+        "C3"
+      ],
+      "shared": false
+    },
+    {
+      "competency_id": "C3.4",
+      "title": "Model Evaluation and Selection",
+      "node_type": "sub_competency",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": [
+        "C3"
+      ],
+      "shared": false
+    },
+    {
+      "competency_id": "C4.1",
+      "title": "Experiment Design",
+      "node_type": "sub_competency",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": [
+        "C4"
+      ],
+      "shared": false
+    },
+    {
+      "competency_id": "C4.2",
+      "title": "Neural Network Implementation",
+      "node_type": "sub_competency",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": [
+        "C4"
+      ],
+      "shared": false
+    },
+    {
+      "competency_id": "C4.3",
+      "title": "Model Improvement and Optimization",
+      "node_type": "sub_competency",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": [
+        "C4"
+      ],
+      "shared": false
+    },
+    {
+      "competency_id": "C5.1",
+      "title": "NLP and Embeddings",
+      "node_type": "sub_competency",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": [
+        "C5"
+      ],
+      "shared": false
+    },
+    {
+      "competency_id": "C5.2",
+      "title": "LLM APIs and Prompt Design",
+      "node_type": "sub_competency",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": [
+        "C5"
+      ],
+      "shared": false
+    },
+    {
+      "competency_id": "C5.3",
+      "title": "Retrieval-Augmented Generation",
+      "node_type": "sub_competency",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": [
+        "C5"
+      ],
+      "shared": false
+    },
+    {
+      "competency_id": "C5.4",
+      "title": "Agentic Workflows",
+      "node_type": "sub_competency",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": [
+        "C5"
+      ],
+      "shared": false
+    },
+    {
+      "competency_id": "C5.5",
+      "title": "Model Adaptation and Inference",
+      "node_type": "sub_competency",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": [
+        "C5"
+      ],
+      "shared": false
+    },
+    {
+      "competency_id": "C6.1",
+      "title": "Model and AI Service Deployment",
+      "node_type": "sub_competency",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": [
+        "C6"
+      ],
+      "shared": false
+    },
+    {
+      "competency_id": "C6.2",
+      "title": "Reproducibility and Automation",
+      "node_type": "sub_competency",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": [
+        "C6"
+      ],
+      "shared": false
+    },
+    {
+      "competency_id": "C6.3",
+      "title": "Monitoring and Operations",
+      "node_type": "sub_competency",
+      "critical": true,
+      "context_specific": false,
+      "main_competencies": [
+        "C6"
+      ],
+      "shared": false
+    }
+  ],
+  "edges": [
+    {
+      "from": "C1.1",
+      "to": "C1",
+      "relation": "CONTRIBUTES_TO",
+      "weight": 0.333333
+    },
+    {
+      "from": "C1.2",
+      "to": "C1",
+      "relation": "CONTRIBUTES_TO",
+      "weight": 0.333333
+    },
+    {
+      "from": "C1.3",
+      "to": "C1",
+      "relation": "CONTRIBUTES_TO",
+      "weight": 0.333333
+    },
+    {
+      "from": "C2.1",
+      "to": "C2",
+      "relation": "CONTRIBUTES_TO",
+      "weight": 0.25
+    },
+    {
+      "from": "C2.2",
+      "to": "C2",
+      "relation": "CONTRIBUTES_TO",
+      "weight": 0.25
+    },
+    {
+      "from": "C2.3",
+      "to": "C2",
+      "relation": "CONTRIBUTES_TO",
+      "weight": 0.25
+    },
+    {
+      "from": "C2.4",
+      "to": "C2",
+      "relation": "CONTRIBUTES_TO",
+      "weight": 0.25
+    },
+    {
+      "from": "C3.1",
+      "to": "C3",
+      "relation": "CONTRIBUTES_TO",
+      "weight": 0.25
+    },
+    {
+      "from": "C3.2",
+      "to": "C3",
+      "relation": "CONTRIBUTES_TO",
+      "weight": 0.25
+    },
+    {
+      "from": "C3.3",
+      "to": "C3",
+      "relation": "CONTRIBUTES_TO",
+      "weight": 0.25
+    },
+    {
+      "from": "C3.4",
+      "to": "C3",
+      "relation": "CONTRIBUTES_TO",
+      "weight": 0.25
+    },
+    {
+      "from": "C4.1",
+      "to": "C4",
+      "relation": "CONTRIBUTES_TO",
+      "weight": 0.333333
+    },
+    {
+      "from": "C4.2",
+      "to": "C4",
+      "relation": "CONTRIBUTES_TO",
+      "weight": 0.333333
+    },
+    {
+      "from": "C4.3",
+      "to": "C4",
+      "relation": "CONTRIBUTES_TO",
+      "weight": 0.333333
+    },
+    {
+      "from": "C5.1",
+      "to": "C5",
+      "relation": "CONTRIBUTES_TO",
+      "weight": 0.2
+    },
+    {
+      "from": "C5.2",
+      "to": "C5",
+      "relation": "CONTRIBUTES_TO",
+      "weight": 0.2
+    },
+    {
+      "from": "C5.3",
+      "to": "C5",
+      "relation": "CONTRIBUTES_TO",
+      "weight": 0.2
+    },
+    {
+      "from": "C5.4",
+      "to": "C5",
+      "relation": "CONTRIBUTES_TO",
+      "weight": 0.2
+    },
+    {
+      "from": "C5.5",
+      "to": "C5",
+      "relation": "CONTRIBUTES_TO",
+      "weight": 0.2
+    },
+    {
+      "from": "C6.1",
+      "to": "C6",
+      "relation": "CONTRIBUTES_TO",
+      "weight": 0.333333
+    },
+    {
+      "from": "C6.2",
+      "to": "C6",
+      "relation": "CONTRIBUTES_TO",
+      "weight": 0.333333
+    },
+    {
+      "from": "C6.3",
+      "to": "C6",
+      "relation": "CONTRIBUTES_TO",
+      "weight": 0.333333
+    }
+  ]
+}
