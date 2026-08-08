@@ -43,3 +43,34 @@ a compromised or buggy graph service can do is change which question is asked ne
     cd deploy && docker compose up --build
 
 Each service answers `GET /health` and `GET /config`. Nothing calls anything yet.
+
+Note: the compose file is asserted for consistency with the code — every declared port is
+checked against it by the test suite — but it has not been executed. No container here has
+been built or run.
+
+## Testing it
+
+    cd services && python -m pytest      # 67 tests: the seam and the contracts
+
+**Run separately from `backend/`, deliberately.** `backend/pytest.ini` sets `LITELLM_*` and
+`E2B_*` placeholders that the monolith's `Settings` requires at import, and the services
+share no configuration with it. One rootdir would mean either the services inherit the
+monolith's environment — hiding exactly the coupling this suite exists to prove is absent —
+or the monolith fails to import.
+
+What it covers, given that no route does anything yet: the contract envelopes (hardest,
+since they are the only code whose meaning survives the migration), that all four services
+report the same contract version, that `/config` leaks no credential, that the catch-all
+does not shadow `/health`, that declared ports match the compose file, and that no service
+imports another or the monolith.
+
+The route-ordering tests are the ones that earn their keep. `/{path:path}` matches
+everything including `/health`, and the operator endpoints survive only because they are
+registered first — a property of line ordering whose symptom, when broken, is a liveness
+probe returning 501 during an incident.
+
+## Why these boundaries
+
+[ADR-0001](../docs/adr/0001-service-boundaries.md) — the seams, what was deliberately not
+split, the alternatives rejected, and the posterior-isolation rule that makes the
+decomposition safe. Start there if you are reviewing this.
