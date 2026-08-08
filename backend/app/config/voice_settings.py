@@ -68,6 +68,14 @@ class VoiceSettings(BaseSettings):
     # — required for Streamlit Cloud / remote hosts that cannot run a second uvicorn.
     allow_text_fallback: bool = False
 
+    # Process-local rooms are convenient for the helper service but must be bounded.
+    # Terminal rooms remain briefly pollable so Streamlit can collect their package.
+    live_room_retention_seconds: int = Field(default=3_600, ge=60)
+    live_room_max_count: int = Field(default=500, ge=1)
+    # The ring contains exception text and tracebacks intended for a trusted tester, not
+    # a public candidate endpoint. Explicitly opt in only on an isolated debug service.
+    live_debug_api_enabled: bool = False
+
     # Realtime Live WebSocket server (browser mic duplex).
     # Server-side health + room APIs use live_server_base.
     # The browser iframe uses live_public_base (must be reachable from the user's machine).

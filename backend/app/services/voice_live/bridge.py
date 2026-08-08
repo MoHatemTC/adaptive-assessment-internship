@@ -106,7 +106,7 @@ class LiveInterviewBridge:
 
         try:
             self._submit(_abort())
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.debug("abort live session failed", exc_info=True)
         finally:
             self._session = None

@@ -20,8 +20,8 @@ from app.config.settings import settings
 from app.config.voice_settings import voice_settings
 from app.services import observability
 from app.services.observability import LiveHandle
-from app.services.voice.prompts import INTERVIEWER_SYSTEM, TURN_TAKING_DIRECTOR
 from app.services.voice.language import looks_non_english
+from app.services.voice.prompts import INTERVIEWER_SYSTEM, TURN_TAKING_DIRECTOR
 from app.services.voice_live.audio_codec import (
     LIVE_INPUT_RATE,
     LIVE_OUTPUT_RATE,
@@ -88,7 +88,9 @@ class StreamlitLiteLLMLiveBridge:
 
     @property
     def configured(self) -> bool:
-        return bool(settings.litellm_api_key.strip() and settings.litellm_base_url.strip())
+        return bool(
+            settings.litellm_api_key.strip() and settings.litellm_base_url.strip()
+        )
 
     @property
     def model(self) -> str:
@@ -136,7 +138,7 @@ class StreamlitLiteLLMLiveBridge:
         if self._session is not None:
             try:
                 self._submit(self._close_session(), timeout=30.0)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.debug("abort streamlit live session failed", exc_info=True)
         self._close_live_trace(
             outcome_status="error",
@@ -221,8 +223,10 @@ class StreamlitLiteLLMLiveBridge:
             self._session = None
             try:
                 await session.close()
-            except Exception:  # noqa: BLE001
-                logger.debug("close litellm live session after start failure", exc_info=True)
+            except Exception:
+                logger.debug(
+                    "close litellm live session after start failure", exc_info=True
+                )
             self._close_live_trace(
                 outcome_status="error",
                 reason_code="CONNECT_FAILED",
@@ -262,7 +266,9 @@ class StreamlitLiteLLMLiveBridge:
         await self._session.append_audio(pcm)
         await self._session.commit_audio()
         try:
-            reply = await self._collect_model_turn(role_label="interviewer", cand_id=cand_id)
+            reply = await self._collect_model_turn(
+                role_label="interviewer", cand_id=cand_id
+            )
         except Exception:
             english_stt.cancel()
             raise
@@ -325,7 +331,11 @@ class StreamlitLiteLLMLiveBridge:
         # `timeout`, always.
         while True:
             now = loop.time()
-            limit = deadline if text_grace_deadline is None else min(deadline, text_grace_deadline)
+            limit = (
+                deadline
+                if text_grace_deadline is None
+                else min(deadline, text_grace_deadline)
+            )
             remaining = limit - now
             if remaining <= 0:
                 break
@@ -372,7 +382,9 @@ class StreamlitLiteLLMLiveBridge:
                 if not pcm_chunks and not text_parts:
                     break
                 window = (
-                    TEXT_CHUNK_QUIET_SECONDS if text_parts else TEXT_AFTER_AUDIO_GRACE_SECONDS
+                    TEXT_CHUNK_QUIET_SECONDS
+                    if text_parts
+                    else TEXT_AFTER_AUDIO_GRACE_SECONDS
                 )
                 text_grace_deadline = min(loop.time() + window, deadline)
                 continue
@@ -466,7 +478,7 @@ class StreamlitLiteLLMLiveBridge:
         if session is not None:
             try:
                 await session.close()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.debug("close litellm live session failed", exc_info=True)
 
     def _close_live_trace(

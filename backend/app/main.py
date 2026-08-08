@@ -2,20 +2,33 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
-from functools import lru_cache
+import time
+from contextlib import asynccontextmanager
+from functools import cache
 from pathlib import Path
 
 import numpy as np
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import (
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app.config.settings import settings
-from app.schemas.orchestration import AssessmentState, BankItem
+from app.config.voice_settings import voice_settings
+from app.schemas.orchestration import AssessmentState, BankItem, GradedResponse
 from app.services import observability
 from app.services.code_adaptive import CodeAdaptiveSession, JsonQuestionRepository
 from app.services.orchestrator import registry, session_dump
@@ -32,20 +45,29 @@ logger = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).resolve().parents[1] / "static"
 
-app = FastAPI(title="Voice assessment Live interviewer", version="0.1.0")
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    # Live rooms need Langfuse configured in this process (separate from Streamlit).
+    observability.configure()
+    yield
+
+
+app = FastAPI(
+    title="Voice assessment Live interviewer",
+    version="0.1.0",
+    lifespan=_lifespan,
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    # This helper has no cookie-authenticated API. Wildcard origins plus credentials is
+    # invalid browser CORS policy and risks reflecting ambient credentials if auth is
+    # added later. Public non-credentialed access is the actual contract.
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("startup")
-def _configure_observability() -> None:
-    # Live rooms need Langfuse configured in this process (separate from Streamlit).
-    observability.configure()
 
 
 class CreateRoomRequest(BaseModel):
@@ -73,7 +95,8 @@ class CreateCatSessionRequest(BaseModel):
     intake: dict[str, int] | None = None
     confidence: dict[str, bool] | None = None
     use_llm: bool = True
-    seed: int = 0
+    # Explicit seeds are for deterministic tests/replay. Omission draws OS entropy.
+    seed: int | None = None
 
 
 class CatAnswerRequest(BaseModel):
@@ -82,7 +105,8 @@ class CatAnswerRequest(BaseModel):
     code: str | None = None
     transcript: str | None = None
     use_llm: bool = True
-    seed: int = 0
+    # Retained for wire compatibility; selection uses the generator persisted at create.
+    seed: int | None = None
 
 
 _cat_code_engine = CodeAdaptiveSession(JsonQuestionRepository())
@@ -90,10 +114,14 @@ _cat_code_engine = CodeAdaptiveSession(JsonQuestionRepository())
 # a session against one bank must not be able to answer it against another, and re-sending
 # the id on every call would make that possible by omission.
 _cat_sessions: dict[str, tuple[str, AssessmentState]] = {}
+_cat_rngs: dict[str, np.random.Generator] = {}
+_cat_locks: dict[str, asyncio.Lock] = {}
 _finished_sessions: set[str] = set()
+_cat_last_access: dict[str, float] = {}
+_cat_finished_at: dict[str, float] = {}
 
 
-@lru_cache(maxsize=None)
+@cache
 def _orchestrator_for(bank_id: str) -> Orchestrator:
     """One orchestrator per bank, holding that bank's graph and coverage policy."""
     return Orchestrator(
@@ -106,11 +134,59 @@ def _orchestrator_for(bank_id: str) -> Orchestrator:
 
 
 def _session(session_id: str) -> tuple[str, Orchestrator, AssessmentState]:
+    _prune_cat_sessions()
     entry = _cat_sessions.get(session_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="session not found")
     bank_id, state = entry
+    _cat_last_access[session_id] = time.time()
     return bank_id, _orchestrator_for(bank_id), state
+
+
+def _drop_cat_session(session_id: str) -> bool:
+    existed = _cat_sessions.pop(session_id, None) is not None
+    _cat_rngs.pop(session_id, None)
+    _cat_locks.pop(session_id, None)
+    _finished_sessions.discard(session_id)
+    _cat_last_access.pop(session_id, None)
+    _cat_finished_at.pop(session_id, None)
+    return existed
+
+
+def _prune_cat_sessions(*, now: float | None = None, reserve_slot: bool = False) -> int:
+    """Bound process-local state without ever evicting an assessment in progress."""
+    now = time.time() if now is None else now
+    expired = [
+        session_id
+        for session_id, finished_at in _cat_finished_at.items()
+        if now - finished_at >= settings.cat_session_retention_seconds
+    ]
+    removed = sum(_drop_cat_session(session_id) for session_id in expired)
+
+    finished = sorted(
+        _cat_finished_at,
+        key=lambda session_id: _cat_last_access.get(session_id, 0.0),
+    )
+
+    def over_capacity() -> bool:
+        count = len(_cat_sessions)
+        maximum = settings.cat_max_retained_sessions
+        return count >= maximum if reserve_slot else count > maximum
+
+    while over_capacity() and finished:
+        removed += _drop_cat_session(finished.pop(0))
+    return removed
+
+
+def _session_rng(session_id: str) -> np.random.Generator:
+    """The one exposure-control stream owned by this assessment session."""
+    rng = _cat_rngs.get(session_id)
+    if rng is None:
+        # Backward-compatible recovery for an in-memory session created before a hot
+        # reload introduced persisted RNGs. Never fall back to a constant seed.
+        rng = np.random.default_rng()
+        _cat_rngs[session_id] = rng
+    return rng
 
 
 def _ui_item(item: BankItem) -> dict:
@@ -135,7 +211,10 @@ def _ui_item(item: BankItem) -> dict:
                 "prompt": payload.get("prompt") or payload.get("question") or "",
                 "language": payload.get("language", "python"),
                 "function_name": payload.get("function_name", "solve"),
-                "starter_code": payload.get("reference_solution", ""),
+                # Candidate-facing payload. `reference_solution` is grader-only and must
+                # never cross this boundary; doing so turns every code item into an answer
+                # key. Banks may provide a deliberately incomplete starter scaffold.
+                "starter_code": payload.get("starter_code", ""),
             }
         )
     elif item.modality in ("open", "voice"):
@@ -158,7 +237,6 @@ def _cat_state_response(
     *,
     stop_reason: str = "",
     last_graded: dict | None = None,
-    open_debug: dict | None = None,
 ) -> dict:
     stop, reason = orchestrator.should_stop(state)
     reason = stop_reason or reason
@@ -175,6 +253,7 @@ def _cat_state_response(
     if stop and state.session_id not in _finished_sessions:
         # Once per session: a poll of GET /sessions/{id} must not append it again.
         _finished_sessions.add(state.session_id)
+        _cat_finished_at[state.session_id] = time.time()
         session_dump.record_session(state, bank_id, stop_reason=reason)
     return {
         "session_id": state.session_id,
@@ -185,29 +264,51 @@ def _cat_state_response(
         "open_variables": state.open_variables,
         "presenting": presenting,
         "last_graded": last_graded,
-        "open_debug": open_debug,
         "report": report,
     }
 
 
+def _candidate_grade_receipt(graded: GradedResponse) -> dict:
+    """Minimal acknowledgement safe to return while the assessment is still active.
+
+    ``GradedResponse.detail`` is an internal audit record. For MCQ it contains the correct
+    answer index; for code it can contain hidden-test diagnostics. Returning it after each
+    answer lets a client harvest the bank and lets grading feedback coach later responses,
+    changing the construct mid-session. Detailed evidence remains in state/session dumps
+    and the final assessor-facing tooling, not this candidate boundary.
+    """
+    return {
+        "item_id": graded.item_id,
+        "modality": graded.modality,
+        "accepted": True,
+        "flags": [
+            flag for flag in graded.flags if str(flag).startswith("INFRASTRUCTURE_")
+        ],
+    }
+
+
 @app.get("/health")
-def health():
+async def health():
     return {"ok": True}
 
 
 @app.get("/api/live/debug")
-def live_debug_feed(limit: int = 50):
+async def live_debug_feed(limit: int = 50):
+    if not voice_settings.live_debug_api_enabled:
+        raise HTTPException(status_code=404, detail="not found")
     return {"logs": snapshot(limit=max(1, min(limit, 200)))}
 
 
 @app.delete("/api/live/debug")
-def live_debug_clear():
+async def live_debug_clear():
+    if not voice_settings.live_debug_api_enabled:
+        raise HTTPException(status_code=404, detail="not found")
     clear_live_debug()
     return {"ok": True}
 
 
 @app.get("/api/live/config")
-def live_config():
+async def live_config():
     from app.config.settings import settings
     from app.config.voice_settings import voice_settings
 
@@ -230,7 +331,7 @@ def live_config():
 
 
 @app.get("/api/banks")
-def list_banks():
+async def list_banks():
     """Registered banks, so a client discovers them instead of hardcoding one."""
     return {"active": settings.active_bank, "banks": registry.describe()}
 
@@ -252,13 +353,23 @@ async def create_cat_session(body: CreateCatSessionRequest):
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    rng = np.random.default_rng(body.seed)
     state = await orchestrator.fill_queue(
         state,
         use_llm=body.use_llm,
-        rng=np.random.default_rng(body.seed),
+        rng=rng,
     )
     state = orchestrator.ensure_presenting(state)
+    _prune_cat_sessions(reserve_slot=True)
+    if len(_cat_sessions) >= settings.cat_max_retained_sessions:
+        raise HTTPException(
+            status_code=503,
+            detail="assessment session capacity reached; retry after a session finishes",
+        )
     _cat_sessions[state.session_id] = (bank_id, state)
+    _cat_rngs[state.session_id] = rng
+    _cat_locks[state.session_id] = asyncio.Lock()
+    _cat_last_access[state.session_id] = time.time()
     return _cat_state_response(state, orchestrator, bank_id)
 
 
@@ -268,6 +379,17 @@ async def get_cat_session(session_id: str):
     state = orchestrator.ensure_presenting(state)
     _cat_sessions[session_id] = (bank_id, state)
     return _cat_state_response(state, orchestrator, bank_id)
+
+
+@app.delete("/api/cat/sessions/{session_id}")
+async def delete_cat_session(session_id: str):
+    lock = _cat_locks.get(session_id)
+    if lock is None:
+        raise HTTPException(status_code=404, detail="session not found")
+    async with lock:
+        if not _drop_cat_session(session_id):
+            raise HTTPException(status_code=404, detail="session not found")
+    return {"ok": True}
 
 
 @app.post("/api/cat/sessions/{session_id}/answer")
@@ -280,7 +402,52 @@ async def submit_cat_answer(
     transcript_form: str | None = Form(default=None, alias="transcript"),
     use_llm_form: bool | None = Form(default=None, alias="use_llm"),
     seed_form: int | None = Form(default=None, alias="seed"),
-    audio: UploadFile | None = File(default=None),
+    audio: UploadFile | None = File(default=None),  # noqa: B008 - FastAPI dependency marker
+):
+    # Capture which item this request is answering BEFORE it waits. Two concurrent POSTs
+    # can otherwise both read the same state, grade the same presentation, then race to
+    # overwrite the session. Serializing alone is insufficient: the second request would
+    # wake up and apply its old answer to the next item whenever the modality matched.
+    _bank_id, snapshot_orchestrator, snapshot = _session(session_id)
+    snapshot = snapshot_orchestrator.ensure_presenting(snapshot)
+    snapshot_pair = snapshot_orchestrator.next_item(snapshot)
+    expected_item_id = snapshot_pair[0].item_id if snapshot_pair is not None else None
+
+    lock = _cat_locks.setdefault(session_id, asyncio.Lock())
+    async with lock:
+        _current_bank, current_orchestrator, current = _session(session_id)
+        current = current_orchestrator.ensure_presenting(current)
+        current_pair = current_orchestrator.next_item(current)
+        current_item_id = current_pair[0].item_id if current_pair is not None else None
+        if current_item_id != expected_item_id:
+            raise HTTPException(
+                status_code=409,
+                detail="stale answer: the presented item changed while this request waited",
+            )
+        return await _submit_cat_answer_unlocked(
+            session_id=session_id,
+            request=request,
+            type_form=type_form,
+            chosen_index_form=chosen_index_form,
+            code_form=code_form,
+            transcript_form=transcript_form,
+            use_llm_form=use_llm_form,
+            seed_form=seed_form,
+            audio=audio,
+        )
+
+
+async def _submit_cat_answer_unlocked(
+    *,
+    session_id: str,
+    request: Request,
+    type_form: str | None,
+    chosen_index_form: int | None,
+    code_form: str | None,
+    transcript_form: str | None,
+    use_llm_form: bool | None,
+    seed_form: int | None,
+    audio: UploadFile | None,
 ):
     bank_id, orchestrator, state = _session(session_id)
 
@@ -306,7 +473,13 @@ async def submit_cat_answer(
         code = code_form
         transcript = transcript_form
         use_llm = True if use_llm_form is None else use_llm_form
-        seed = 0 if seed_form is None else seed_form
+        seed = seed_form
+
+    if seed is not None:
+        logger.warning(
+            "answer-level seed ignored for session %s; seed the session at creation",
+            session_id,
+        )
 
     if answer_type != item.modality:
         raise HTTPException(
@@ -314,14 +487,17 @@ async def submit_cat_answer(
             detail=f"answer type mismatch: expected {item.modality}, got {answer_type}",
         )
 
-    open_debug = None
     if item.modality == "mcq":
         if chosen_index is None:
-            raise HTTPException(status_code=400, detail="chosen_index is required for mcq")
+            raise HTTPException(
+                status_code=400, detail="chosen_index is required for mcq"
+            )
         new_state, graded = orchestrator.record_response(state, item, chosen_index)
     elif item.modality == "code":
         if not code:
-            raise HTTPException(status_code=400, detail="code is required for code modality")
+            raise HTTPException(
+                status_code=400, detail="code is required for code modality"
+            )
         new_state, graded = orchestrator.record_response(state, item, code)
     elif item.modality in ("open", "voice"):
         transcript_text = (transcript or "").strip()
@@ -331,7 +507,9 @@ async def submit_cat_answer(
             if not audio_bytes:
                 raise HTTPException(status_code=400, detail="empty audio payload")
             filename = audio.filename or filename
-            transcript_text = transcribe_audio_bytes(audio_bytes, filename=filename).strip()
+            transcript_text = transcribe_audio_bytes(
+                audio_bytes, filename=filename
+            ).strip()
         if not transcript_text:
             raise HTTPException(
                 status_code=400,
@@ -340,19 +518,16 @@ async def submit_cat_answer(
         package = package_from_text(item.item_id, transcript_text)
         graded_voice = await evaluate_voice(item, package, use_llm=use_llm)
         new_state, graded = orchestrator.record_response(state, item, graded_voice)
-        open_debug = {
-            "transcript": transcript_text,
-            "word_count": package.word_count,
-            "audio_filename": filename if audio is not None else None,
-        }
     else:  # pragma: no cover
-        raise HTTPException(status_code=400, detail=f"unsupported modality {item.modality}")
+        raise HTTPException(
+            status_code=400, detail=f"unsupported modality {item.modality}"
+        )
 
     new_state = await orchestrator.after_response(
         new_state,
         item,
         use_llm=use_llm,
-        rng=np.random.default_rng(seed),
+        rng=_session_rng(session_id),
     )
     new_state = orchestrator.ensure_presenting(new_state)
     _cat_sessions[session_id] = (bank_id, new_state)
@@ -360,26 +535,23 @@ async def submit_cat_answer(
         new_state,
         orchestrator,
         bank_id,
-        last_graded={
-            "item_id": graded.item_id,
-            "modality": graded.modality,
-            "flags": graded.flags,
-            "detail": graded.detail,
-        },
-        open_debug=open_debug,
+        last_graded=_candidate_grade_receipt(graded),
     )
 
 
 @app.post("/api/live/rooms", response_model=CreateRoomResponse)
 async def create_room(body: CreateRoomRequest):
     mode = body.mode if body.mode in {"interview", "chat"} else "interview"
-    room = RealtimeLiveRoom.create(
-        item_id=body.item_id,
-        question=body.question,
-        save_recording=body.save_recording,
-        mode=mode,
-        assessment_session_id=body.assessment_session_id,
-    )
+    try:
+        room = RealtimeLiveRoom.create(
+            item_id=body.item_id,
+            question=body.question,
+            save_recording=body.save_recording,
+            mode=mode,
+            assessment_session_id=body.assessment_session_id,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     live_debug(
         "room_created",
         room_id=room.room_id,
@@ -444,8 +616,6 @@ async def live_ws(websocket: WebSocket, room_id: str):
             if event.get("type") in {"done", "error"}:
                 break
 
-    import asyncio
-
     out_task = asyncio.create_task(pump_out())
     try:
         live_debug("ws_accepted", room_id=room_id)
@@ -503,10 +673,14 @@ async def live_ws(websocket: WebSocket, room_id: str):
                 )
                 break
             if kind == "activity_start":
-                live_debug("ws_activity_start", room_id=room_id, turn=room.state.turn_state)
+                live_debug(
+                    "ws_activity_start", room_id=room_id, turn=room.state.turn_state
+                )
                 await room.activity_start()
             elif kind == "activity_end":
-                live_debug("ws_activity_end", room_id=room_id, turn=room.state.turn_state)
+                live_debug(
+                    "ws_activity_end", room_id=room_id, turn=room.state.turn_state
+                )
                 await room.activity_end()
             elif kind == "pause":
                 live_debug("ws_pause", room_id=room_id, turn=room.state.turn_state)
@@ -542,17 +716,18 @@ async def live_ws(websocket: WebSocket, room_id: str):
         if room.state.status == "live":
             try:
                 await room.finish()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.debug("finish on disconnect failed", exc_info=True)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         live_debug_exc("ws_failed", exc, room_id=room_id)
         logger.exception("live ws failed room=%s", room_id)
         room.state.status = "error"
         room.state.error = str(exc)
+        await room._close_transport()
         try:
             await websocket.send_text(json.dumps({"type": "error", "error": str(exc)}))
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception:
+            logger.debug("could not send terminal websocket error", exc_info=True)
     finally:
         out_task.cancel()
         try:
@@ -562,8 +737,8 @@ async def live_ws(websocket: WebSocket, room_id: str):
         # Ensure a Live span is closed even when the client drops mid-error.
         try:
             room._close_live_trace()
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception:
+            logger.debug("could not close live trace", exc_info=True)
         live_debug(
             "ws_closed",
             room_id=room_id,
@@ -573,7 +748,7 @@ async def live_ws(websocket: WebSocket, room_id: str):
 
 
 @app.get("/")
-def index():
+async def index():
     """Live helper service status — the full CAT UI is Streamlit, not this page."""
     from app.config.settings import settings
     from app.config.voice_settings import voice_settings
@@ -596,19 +771,19 @@ def index():
 
 
 @app.get("/chat")
-def chat_page():
+async def chat_page():
     """Optional free-form Live chat smoke page (not the CAT engine)."""
     return FileResponse(STATIC_DIR / "chat.html")
 
 
 @app.get("/interview")
-def interview_page():
+async def interview_page():
     """Assessment interview UI (embedded by Streamlit for open/voice items)."""
     return FileResponse(STATIC_DIR / "interview.html")
 
 
 @app.get("/cat")
-def cat_page():
+async def cat_page():
     """Legacy static CAT page — prefer Streamlit for the full engine."""
     return FileResponse(STATIC_DIR / "cat.html")
 

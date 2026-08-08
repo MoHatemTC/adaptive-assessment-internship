@@ -145,11 +145,11 @@
   }
 
   function debugBlock(data) {
-    if (!data.last_graded && !data.open_debug) return "";
+    if (!data.last_graded) return "";
     return `
       <details class="row">
         <summary>Last graded debug</summary>
-        <pre>${htmlEscape(JSON.stringify({ last_graded: data.last_graded, open_debug: data.open_debug }, null, 2))}</pre>
+        <pre>${htmlEscape(JSON.stringify({ last_graded: data.last_graded }, null, 2))}</pre>
       </details>
     `;
   }

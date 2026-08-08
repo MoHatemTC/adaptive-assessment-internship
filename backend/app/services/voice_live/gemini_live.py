@@ -18,6 +18,7 @@ import asyncio
 import logging
 import uuid
 from dataclasses import dataclass, field
+from typing import Any, ClassVar
 
 from google.genai import types
 
@@ -87,9 +88,7 @@ class LiveInterviewResult:
             reason_code=self.reason_code,
             turns=voice_turns,
             total_speech_seconds=self.total_speech_seconds,
-            mean_transcript_confidence=(
-                sum(known) / len(known) if known else None
-            ),
+            mean_transcript_confidence=(sum(known) / len(known) if known else None),
             word_count=len(candidate_text.split()),
             live_text=candidate_text,
             final_text=candidate_text,
@@ -144,7 +143,9 @@ class GeminiLiveInterviewer:
             )
         return self._client
 
-    def _connect_config(self, question_text: str, nonce: str) -> types.LiveConnectConfig:
+    def _connect_config(
+        self, question_text: str, nonce: str
+    ) -> types.LiveConnectConfig:
         system = (
             INTERVIEWER_SYSTEM
             + f"\nSession nonce: {nonce}"
@@ -157,7 +158,7 @@ class GeminiLiveInterviewer:
         # Manual gating is for the future AudioWorklet continuous mic stream.
         vad_disabled = voice_settings.gating_mode == "manual"
         return types.LiveConnectConfig(
-            response_modalities=["AUDIO"],
+            response_modalities=[types.Modality.AUDIO],
             system_instruction=system,
             speech_config=types.SpeechConfig(
                 voice_config=types.VoiceConfig(
@@ -186,9 +187,13 @@ class GeminiLiveInterviewer:
             "note": "Conversational Live interview is available in Streamlit voice mode.",
         }
 
-    async def ask_question(self, item_id: str, question_text: str) -> InterviewTurnAudio:
+    async def ask_question(
+        self, item_id: str, question_text: str
+    ) -> InterviewTurnAudio:
         """Open a short Live turn: interviewer reads the question aloud."""
-        session = ConversationalLiveSession(self, item_id=item_id, question_text=question_text)
+        session = ConversationalLiveSession(
+            self, item_id=item_id, question_text=question_text
+        )
         await session.start()
         audio = await session.prompt_question()
         # Keep the open session handle on the audio object via session registry
@@ -219,7 +224,7 @@ class GeminiLiveInterviewer:
 class ConversationalLiveSession:
     """One Gemini Live WebSocket conversation for a single bank item."""
 
-    _REGISTRY: dict[str, "ConversationalLiveSession"] = {}
+    _REGISTRY: ClassVar[dict[str, ConversationalLiveSession]] = {}
 
     def __init__(
         self,
@@ -237,16 +242,16 @@ class ConversationalLiveSession:
         self.interviewer_wavs: list[bytes] = []
         self.candidate_speech_seconds = 0.0
         self.probe_count = 0
-        self._ctx = None
-        self._session = None
+        self._ctx: Any = None
+        self._session: Any = None
         self._turn_counter = 0
 
     @classmethod
-    def store(cls, session: "ConversationalLiveSession") -> None:
+    def store(cls, session: ConversationalLiveSession) -> None:
         cls._REGISTRY[session.session_id] = session
 
     @classmethod
-    def get(cls, session_id: str) -> "ConversationalLiveSession | None":
+    def get(cls, session_id: str) -> ConversationalLiveSession | None:
         return cls._REGISTRY.get(session_id)
 
     @classmethod
@@ -284,9 +289,13 @@ class ConversationalLiveSession:
 
         # Manual mode: explicit activity markers. Server VAD: stream + audio_stream_end.
         if voice_settings.gating_mode == "manual":
-            await self._session.send_realtime_input(activity_start=types.ActivityStart())
             await self._session.send_realtime_input(
-                audio=types.Blob(data=pcm, mime_type=f"audio/pcm;rate={LIVE_INPUT_RATE}")
+                activity_start=types.ActivityStart()
+            )
+            await self._session.send_realtime_input(
+                audio=types.Blob(
+                    data=pcm, mime_type=f"audio/pcm;rate={LIVE_INPUT_RATE}"
+                )
             )
             await self._session.send_realtime_input(activity_end=types.ActivityEnd())
         else:
@@ -316,7 +325,9 @@ class ConversationalLiveSession:
         self.probe_count += 1
         return audio
 
-    async def _collect_model_audio(self, role_label: str = "interviewer") -> InterviewTurnAudio:
+    async def _collect_model_audio(
+        self, role_label: str = "interviewer"
+    ) -> InterviewTurnAudio:
         assert self._session is not None
         pcm_chunks: list[bytes] = []
         out_text_parts: list[str] = []
@@ -328,7 +339,10 @@ class ConversationalLiveSession:
                 continue
             if getattr(sc, "input_transcription", None) and sc.input_transcription.text:
                 in_text_parts.append(sc.input_transcription.text)
-            if getattr(sc, "output_transcription", None) and sc.output_transcription.text:
+            if (
+                getattr(sc, "output_transcription", None)
+                and sc.output_transcription.text
+            ):
                 out_text_parts.append(sc.output_transcription.text)
             model_turn = getattr(sc, "model_turn", None)
             if model_turn and model_turn.parts:
@@ -366,7 +380,9 @@ class ConversationalLiveSession:
                 }
             )
 
-        result = InterviewTurnAudio(wav_bytes=wav, transcript=transcript, role=role_label)
+        result = InterviewTurnAudio(
+            wav_bytes=wav, transcript=transcript, role=role_label
+        )
         result.session_id = self.session_id  # type: ignore[attr-defined]
         return result
 
@@ -397,12 +413,14 @@ class ConversationalLiveSession:
                         )
                     except asyncio.TimeoutError:
                         pass
-                except Exception:  # noqa: BLE001
+                except Exception:
                     logger.debug("live finish cue failed", exc_info=True)
         finally:
             await self._close()
 
-        candidate_bits = [t["text"] for t in self.turns if t["role"] == "candidate" and t.get("text")]
+        candidate_bits = [
+            t["text"] for t in self.turns if t["role"] == "candidate" and t.get("text")
+        ]
         transcript = "\n".join(candidate_bits).strip()
         status = "complete" if transcript else "unscorable"
         reason = "" if transcript else "NO_CANDIDATE_SPEECH"
@@ -420,7 +438,7 @@ class ConversationalLiveSession:
         if self._ctx is not None:
             try:
                 await self._ctx.__aexit__(None, None, None)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.debug("live session close failed", exc_info=True)
         self._ctx = None
         self._session = None

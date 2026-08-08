@@ -6,14 +6,15 @@ import io
 import wave
 from array import array
 
-
 # Gemini Live input typically expects 16-bit PCM mono @ 16 kHz.
 LIVE_INPUT_RATE = 16_000
 # Live audio responses are commonly 24 kHz PCM16 mono.
 LIVE_OUTPUT_RATE = 24_000
 
 
-def wav_bytes_to_pcm16(audio_bytes: bytes, target_rate: int = LIVE_INPUT_RATE) -> tuple[bytes, float]:
+def wav_bytes_to_pcm16(
+    audio_bytes: bytes, target_rate: int = LIVE_INPUT_RATE
+) -> tuple[bytes, float]:
     """Decode WAV (or raw-ish Streamlit capture) → mono PCM16 at target_rate.
 
     Returns (pcm_bytes, duration_seconds).
@@ -29,7 +30,9 @@ def wav_bytes_to_pcm16(audio_bytes: bytes, target_rate: int = LIVE_INPUT_RATE) -
     except wave.Error:
         # Streamlit sometimes yields webm/ogg; fall back treating as already PCM if tiny header fails.
         # Callers should prefer WAV from st.audio_input.
-        raise ValueError("unsupported audio format — record again (WAV expected)") from None
+        raise ValueError(
+            "unsupported audio format — record again (WAV expected)"
+        ) from None
 
     if sw != 2:
         raise ValueError(f"expected 16-bit PCM WAV, got sample width {sw}")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from io import BytesIO
+from typing import Any, cast
 
 from openai import APIConnectionError, APIStatusError, OpenAI, OpenAIError
 
@@ -48,20 +49,23 @@ def transcribe_audio_bytes(
     stream = BytesIO(audio_bytes)
     stream.name = filename
     try:
-        kwargs = {
-            "model": settings.litellm_transcribe_model,
-            "file": stream,
-            # The assessment is English-only. Supplying the ISO-639-1 hint prevents
-            # technical English from being decoded as romanized speech in another
-            # language, which would otherwise trigger the deterministic score clamp.
-            "prompt": (
-                "English technical interview about Python and software engineering. "
-                "Preserve programming terms, identifiers, and code syntax."
-            ),
-        }
+        prompt = (
+            "English technical interview about Python and software engineering. "
+            "Preserve programming terms, identifiers, and code syntax."
+        )
         if language:
-            kwargs["language"] = language
-        response = _stt_client().audio.transcriptions.create(**kwargs)
+            response = _stt_client().audio.transcriptions.create(
+                model=cast(Any, settings.litellm_transcribe_model),
+                file=stream,
+                prompt=prompt,
+                language=language,
+            )
+        else:
+            response = _stt_client().audio.transcriptions.create(
+                model=cast(Any, settings.litellm_transcribe_model),
+                file=stream,
+                prompt=prompt,
+            )
     except APIConnectionError as exc:
         raise RuntimeError(
             "LiteLLM transcription connection failed. "

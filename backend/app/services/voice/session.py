@@ -26,6 +26,7 @@ class VoiceAssessmentRunner:
         bank: JsonUnifiedBank | None = None,
         *,
         bank_id: str | None = None,
+        seed: int | None = None,
     ) -> None:
         from app.services.orchestrator import registry
 
@@ -40,6 +41,7 @@ class VoiceAssessmentRunner:
             bank_id=resolved,
         )
         self._started = 0.0
+        self._rng = np.random.default_rng(seed)
 
     def begin(
         self,
@@ -55,11 +57,10 @@ class VoiceAssessmentRunner:
         return state
 
     async def fill_queue(
-        self, state: AssessmentState, *, use_llm: bool = True, seed: int = 0
+        self, state: AssessmentState, *, use_llm: bool = True, seed: int | None = None
     ) -> AssessmentState:
-        return await self.orchestrator.fill_queue(
-            state, use_llm=use_llm, rng=np.random.default_rng(seed)
-        )
+        rng = self._rng if seed is None else np.random.default_rng(seed)
+        return await self.orchestrator.fill_queue(state, use_llm=use_llm, rng=rng)
 
     def ensure_presenting(self, state: AssessmentState) -> AssessmentState:
         return self.orchestrator.ensure_presenting(state)
@@ -83,7 +84,7 @@ class VoiceAssessmentRunner:
         text: str,
         *,
         use_llm: bool = True,
-        seed: int = 0,
+        seed: int | None = None,
     ) -> tuple[AssessmentState, GradedVoiceResponse, object]:
         """Evaluate a typed transcript, then record via the vendored orchestrator."""
         package = voice_evaluator.package_from_text(item.item_id, text)
@@ -98,13 +99,14 @@ class VoiceAssessmentRunner:
         package,
         *,
         use_llm: bool = True,
-        seed: int = 0,
+        seed: int | None = None,
     ) -> tuple[AssessmentState, GradedVoiceResponse, object]:
         """Evaluate a VoiceResponsePackage (from Live or text), then record."""
         graded_voice = await voice_evaluator.evaluate(item, package, use_llm=use_llm)
         new_state, graded = self.orchestrator.record_response(state, item, graded_voice)
+        rng = self._rng if seed is None else np.random.default_rng(seed)
         new_state = await self.orchestrator.after_response(
-            new_state, item, use_llm=use_llm, rng=np.random.default_rng(seed)
+            new_state, item, use_llm=use_llm, rng=rng
         )
         return new_state, graded_voice, graded
 

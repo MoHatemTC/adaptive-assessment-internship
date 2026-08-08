@@ -31,7 +31,9 @@ def live_debug_exc(event: str, exc: BaseException, **fields: Any) -> None:
         event,
         error_type=type(exc).__name__,
         error=str(exc),
-        traceback="".join(traceback.format_exception(type(exc), exc, exc.__traceback__))[-2500:],
+        traceback="".join(
+            traceback.format_exception(type(exc), exc, exc.__traceback__)
+        )[-2500:],
         **fields,
     )
 

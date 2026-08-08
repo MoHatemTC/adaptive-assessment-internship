@@ -12,7 +12,8 @@ import base64
 import json
 import logging
 import ssl
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 from urllib.parse import quote, urlparse, urlunparse
 
 import websockets
@@ -50,7 +51,9 @@ def realtime_url(base_url: str, model: str) -> str:
             path = path[: -len(suffix)]
             break
     path = f"{path}/v1/realtime"
-    return urlunparse((scheme, parsed.netloc, path, "", f"model={quote(model, safe='')}", ""))
+    return urlunparse(
+        (scheme, parsed.netloc, path, "", f"model={quote(model, safe='')}", "")
+    )
 
 
 def _ssl_context() -> ssl.SSLContext | bool | None:
@@ -97,44 +100,55 @@ class AsyncLiteLLMLiveSession:
             raise RuntimeError(
                 "LiteLLM Live is not configured — set LITELLM_BASE_URL and LITELLM_API_KEY"
             )
-        ssl_ctx = _ssl_context()
-        self._ws = await websockets.connect(
-            self.url,
-            additional_headers={"Authorization": f"Bearer {self.api_key}"},
-            max_size=None,
-            open_timeout=self.connect_timeout,
-            # Gemini Live can be busy emitting / processing audio long enough that the
-            # peer doesn't answer the websockets library's protocol ping before its
-            # timeout. That closes a healthy interview with code 1011. The same transport
-            # policy is already required by the direct Gemini Live client.
-            ping_interval=None,
-            ping_timeout=None,
-            close_timeout=15,
-            ssl=ssl_ctx,
-        )
-        await self._ws.send(json.dumps(self._session_update()))
-        self._reader_task = asyncio.create_task(self._read_loop())
-        self._writer_task = asyncio.create_task(self._write_loop())
+        try:
+            ssl_ctx = _ssl_context()
+            self._ws = await websockets.connect(
+                self.url,
+                additional_headers={"Authorization": f"Bearer {self.api_key}"},
+                max_size=None,
+                open_timeout=self.connect_timeout,
+                # Gemini Live can be busy emitting / processing audio long enough that the
+                # peer doesn't answer the websockets library's protocol ping before its
+                # timeout. That closes a healthy interview with code 1011. The same transport
+                # policy is already required by the direct Gemini Live client.
+                ping_interval=None,
+                ping_timeout=None,
+                close_timeout=15,
+                ssl=ssl_ctx,
+            )
+            await self._ws.send(json.dumps(self._session_update()))
+            self._reader_task = asyncio.create_task(self._read_loop())
+            self._writer_task = asyncio.create_task(self._write_loop())
 
-        # Wait for session.created (or error)
-        deadline = asyncio.get_running_loop().time() + self.connect_timeout
-        pending: list[dict[str, Any]] = []
-        while asyncio.get_running_loop().time() < deadline:
-            try:
-                event = await asyncio.wait_for(self._events.get(), timeout=1.0)
-            except asyncio.TimeoutError:
-                continue
-            if event.get("type") == "connected":
-                self.connected = True
-                for early in pending:
-                    await self._events.put(early)
-                if self.instructions.strip():
-                    await self.send_text(self._prime_text())
-                return
-            if event.get("type") == "error":
-                raise RuntimeError(event.get("message") or "LiteLLM realtime error")
-            pending.append(event)
-        raise RuntimeError("Timed out waiting for LiteLLM session.created")
+            # Wait for session.created (or error). Bound every individual queue wait by
+            # the remaining handshake budget; a fixed one-second poll made a configured
+            # 100ms timeout take a full second and delayed every failure response.
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + self.connect_timeout
+            pending: list[dict[str, Any]] = []
+            while (remaining := deadline - loop.time()) > 0:
+                try:
+                    event = await asyncio.wait_for(
+                        self._events.get(), timeout=min(1.0, remaining)
+                    )
+                except asyncio.TimeoutError:
+                    continue
+                if event.get("type") == "connected":
+                    self.connected = True
+                    for early in pending:
+                        await self._events.put(early)
+                    if self.instructions.strip():
+                        await self.send_text(self._prime_text())
+                    return
+                if event.get("type") == "error":
+                    raise RuntimeError(event.get("message") or "LiteLLM realtime error")
+                pending.append(event)
+            raise RuntimeError("Timed out waiting for LiteLLM session.created")
+        except BaseException:
+            # A failed handshake already owns a socket and two tasks in the common case.
+            # Do not require the caller to close an object whose connect never succeeded.
+            await self.close()
+            raise
 
     def _prime_text(self) -> str:
         return (
@@ -199,8 +213,8 @@ class AsyncLiteLLMLiveSession:
         self._closed = True
         try:
             await self._outbox.put(None)
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception:
+            logger.debug("could not signal realtime writer shutdown", exc_info=True)
         for task in (self._reader_task, self._writer_task):
             if task is not None:
                 task.cancel()
@@ -211,8 +225,8 @@ class AsyncLiteLLMLiveSession:
         if self._ws is not None:
             try:
                 await self._ws.close()
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception:
+                logger.debug("realtime websocket close failed", exc_info=True)
         self._ws = None
         self.connected = False
         await self._events.put({"type": "closed"})
@@ -224,11 +238,21 @@ class AsyncLiteLLMLiveSession:
 
     async def _write_loop(self) -> None:
         assert self._ws is not None
-        while True:
-            message = await self._outbox.get()
-            if message is None:
-                return
-            await self._ws.send(message)
+        try:
+            while True:
+                message = await self._outbox.get()
+                if message is None:
+                    return
+                await self._ws.send(message)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            # Without an event the task dies silently and producers keep filling an
+            # outbox that nobody consumes. Surface the failure to the room immediately.
+            logger.exception("LiteLLM realtime write failed")
+            await self._events.put(
+                {"type": "error", "message": f"{type(exc).__name__}: {exc}"}
+            )
 
     async def _read_loop(self) -> None:
         assert self._ws is not None
@@ -254,9 +278,11 @@ class AsyncLiteLLMLiveSession:
                 "ending the turn and keeping the transcript so far",
                 exc,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.exception("LiteLLM realtime read failed")
-            await self._events.put({"type": "error", "message": f"{type(exc).__name__}: {exc}"})
+            await self._events.put(
+                {"type": "error", "message": f"{type(exc).__name__}: {exc}"}
+            )
         finally:
             await self._events.put({"type": "closed"})
 
@@ -276,13 +302,13 @@ class AsyncLiteLLMLiveSession:
         elif kind in TEXT_DELTA_EVENTS:
             delta = event.get("delta") or ""
             if delta:
-                self._events.put_nowait({"type": "text", "text": delta, "role": "interviewer"})
+                self._events.put_nowait(
+                    {"type": "text", "text": delta, "role": "interviewer"}
+                )
         elif kind == "conversation.item.input_audio_transcription.completed":
             transcript = event.get("transcript") or ""
             if transcript:
-                self._events.put_nowait(
-                    {"type": "user_transcript", "text": transcript}
-                )
+                self._events.put_nowait({"type": "user_transcript", "text": transcript})
         elif kind in TURN_DONE_EVENTS:
             self._events.put_nowait({"type": "done"})
         elif kind == "error":

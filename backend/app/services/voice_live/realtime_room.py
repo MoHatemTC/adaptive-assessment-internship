@@ -13,13 +13,18 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import ClassVar
 
 from app.config.settings import settings
 from app.config.voice_settings import voice_settings
 from app.services import observability
 from app.services.observability import LiveHandle
-from app.services.voice.prompts import CHAT_SYSTEM, INTERVIEWER_SYSTEM, TURN_TAKING_DIRECTOR
 from app.services.voice.language import looks_non_english
+from app.services.voice.prompts import (
+    CHAT_SYSTEM,
+    INTERVIEWER_SYSTEM,
+    TURN_TAKING_DIRECTOR,
+)
 from app.services.voice_live.audio_codec import LIVE_INPUT_RATE, pcm16_to_wav_bytes
 from app.services.voice_live.gemini_live import LiveInterviewResult
 from app.services.voice_live.litellm_realtime import AsyncLiteLLMLiveSession
@@ -58,7 +63,7 @@ class RealtimeRoomState:
 class RealtimeLiveRoom:
     """One continuous Live interview room via LiteLLM realtime."""
 
-    _ROOMS: dict[str, "RealtimeLiveRoom"] = {}
+    _ROOMS: ClassVar[dict[str, RealtimeLiveRoom]] = {}
 
     def __init__(
         self,
@@ -103,7 +108,12 @@ class RealtimeLiveRoom:
         save_recording: bool = False,
         mode: str = "interview",
         assessment_session_id: str = "",
-    ) -> "RealtimeLiveRoom":
+    ) -> RealtimeLiveRoom:
+        cls.prune()
+        if len(cls._ROOMS) >= voice_settings.live_room_max_count:
+            raise RuntimeError(
+                "live room capacity reached; retry after a room finishes"
+            )
         room = cls(
             item_id=item_id,
             question=question,
@@ -115,12 +125,43 @@ class RealtimeLiveRoom:
         return room
 
     @classmethod
-    def get(cls, room_id: str) -> "RealtimeLiveRoom | None":
+    def get(cls, room_id: str) -> RealtimeLiveRoom | None:
         return cls._ROOMS.get(room_id)
 
     @classmethod
     def drop(cls, room_id: str) -> None:
         cls._ROOMS.pop(room_id, None)
+
+    @classmethod
+    def prune(cls, *, now: float | None = None) -> int:
+        """Expire old terminal rooms and evict the oldest terminal room at capacity."""
+        now = time.time() if now is None else now
+        terminal = [
+            room
+            for room in cls._ROOMS.values()
+            if room.state.status in {"finished", "error"}
+        ]
+        expired = [
+            room
+            for room in terminal
+            if now - room.state.created_at >= voice_settings.live_room_retention_seconds
+        ]
+        removed = 0
+        for room in expired:
+            removed += cls._ROOMS.pop(room.room_id, None) is not None
+
+        terminal = sorted(
+            (
+                room
+                for room in cls._ROOMS.values()
+                if room.state.status in {"finished", "error"}
+            ),
+            key=lambda room: room.state.created_at,
+        )
+        while len(cls._ROOMS) >= voice_settings.live_room_max_count and terminal:
+            room = terminal.pop(0)
+            removed += cls._ROOMS.pop(room.room_id, None) is not None
+        return removed
 
     def turn_config(self) -> dict:
         return {
@@ -140,7 +181,11 @@ class RealtimeLiveRoom:
 
     async def connect(self) -> None:
         if not settings.litellm_api_key.strip():
-            raise RuntimeError("LITELLM_API_KEY is not set — required for Live interviews")
+            message = "LITELLM_API_KEY is not set — required for Live interviews"
+            self.state.status = "error"
+            self.state.error = message
+            self._closed = True
+            raise RuntimeError(message)
         self.state.status = "connecting"
         self._live_trace = observability.start_live(
             model=settings.litellm_live_preview_model,
@@ -192,6 +237,11 @@ class RealtimeLiveRoom:
         except Exception as exc:
             self.state.status = "error"
             self.state.error = str(exc)[:500]
+            self._closed = True
+            transport: AsyncLiteLLMLiveSession | None = self._session
+            self._session = None
+            if transport is not None:
+                await transport.close()
             observability.end_live(
                 self._live_trace,
                 outcome_status="error",
@@ -222,21 +272,29 @@ class RealtimeLiveRoom:
                 "Do not add scoring advice.\n\n"
                 f"QUESTION:\n{self.state.question}"
             )
-        # Drain the Ready acknowledgement; stay primed until a real opener arrives.
-        await asyncio.sleep(0.6)
-        # Do NOT clear _prime_draining here — wait for non-Ready interviewer text/audio
-        # so early ASR hallucinations are not captured as the candidate's answer.
-        await self._session.send_text(director)
-        await self._out_queue.put(
-            {
-                "type": "status",
-                "status": "live",
-                "room_id": self.room_id,
-                "mode": self.state.mode,
-                "turn_state": self.state.turn_state,
-                "turn_config": self.turn_config(),
-            }
-        )
+        try:
+            # Drain the Ready acknowledgement; stay primed until a real opener arrives.
+            await asyncio.sleep(0.6)
+            # Do NOT clear _prime_draining here — wait for non-Ready interviewer text/audio
+            # so early ASR hallucinations are not captured as the candidate's answer.
+            assert self._session is not None
+            await self._session.send_text(director)
+            await self._out_queue.put(
+                {
+                    "type": "status",
+                    "status": "live",
+                    "room_id": self.room_id,
+                    "mode": self.state.mode,
+                    "turn_state": self.state.turn_state,
+                    "turn_config": self.turn_config(),
+                }
+            )
+        except BaseException as exc:
+            self.state.status = "error"
+            self.state.error = str(exc)[:500]
+            await self._close_transport()
+            self._close_live_trace()
+            raise
 
     async def set_turn_state(self, turn_state: str) -> None:
         self.state.turn_state = turn_state
@@ -313,11 +371,14 @@ class RealtimeLiveRoom:
             self.state.status = "error"
             self.state.error = str(exc)
             self._closed = True
+            transport, self._session = self._session, None
+            if transport is not None:
+                await transport.close()
             self._close_live_trace()
             try:
                 await self._out_queue.put({"type": "error", "error": str(exc)})
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception:
+                logger.debug("could not enqueue realtime push error", exc_info=True)
 
     async def events(self):
         while not self._closed or not self._out_queue.empty():
@@ -399,17 +460,38 @@ class RealtimeLiveRoom:
                     message = event.get("message") or "LiteLLM Live error"
                     self.state.status = "error"
                     self.state.error = message
+                    self._closed = True
+                    error_transport = self._session
+                    self._session = None
+                    if error_transport is not None:
+                        await error_transport.close()
                     self._close_live_trace()
                     await self._out_queue.put({"type": "error", "error": message})
                     return
                 elif kind == "closed":
+                    # A clean provider close is terminal too. Returning without closing
+                    # the room leaves ``events()`` blocked forever on an empty queue, and
+                    # therefore leaves the browser WebSocket waiting forever. Preserve
+                    # and package any transcript already captured so callers can grade a
+                    # completed answer (or receive an explicit unscorable result).
+                    self._closed = True
+                    closed_transport = self._session
+                    self._session = None
+                    if closed_transport is not None:
+                        await closed_transport.close()
+                    self._finalize_from_turns()
                     return
         except asyncio.CancelledError:
             raise
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.exception("realtime receive loop failed")
             self.state.status = "error"
             self.state.error = str(exc)
+            self._closed = True
+            failed_transport = self._session
+            self._session = None
+            if failed_transport is not None:
+                await failed_transport.close()
             self._close_live_trace()
             await self._out_queue.put({"type": "error", "error": str(exc)})
 
@@ -429,8 +511,10 @@ class RealtimeLiveRoom:
         try:
             await self._session.send_text(director)
             logger.info("english-only nudge sent room=%s", self.room_id)
-        except Exception:  # noqa: BLE001
-            logger.debug("english-only nudge failed room=%s", self.room_id, exc_info=True)
+        except Exception:
+            logger.debug(
+                "english-only nudge failed room=%s", self.room_id, exc_info=True
+            )
 
     def _append_turn(self, role: str, text: str) -> None:
         if role == "interviewer" and _is_ready_ack(text):
@@ -474,12 +558,12 @@ class RealtimeLiveRoom:
                         timeout=3.0,
                     )
                     await asyncio.sleep(0.3)
-                except Exception:  # noqa: BLE001
+                except Exception:
                     logger.debug("finish cue failed", exc_info=True)
         finally:
             try:
                 await asyncio.wait_for(self._close_transport(), timeout=5.0)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.debug("close transport timed out", exc_info=True)
                 self._closed = True
                 self._session = None
@@ -500,14 +584,18 @@ class RealtimeLiveRoom:
         candidate_bits = [
             t["text"]
             for t in clean_turns
-            if t["role"] == "candidate" and t.get("text") and not _is_nonsubstantive_speech(t["text"])
+            if t["role"] == "candidate"
+            and t.get("text")
+            and not _is_nonsubstantive_speech(t["text"])
         ]
         transcript = "\n".join(candidate_bits).strip()
         if not transcript:
             # Keep raw candidate text for debugging in package detail, but mark unscorable
             # when only filler/singing was captured.
             raw = "\n".join(
-                t["text"] for t in clean_turns if t["role"] == "candidate" and t.get("text")
+                t["text"]
+                for t in clean_turns
+                if t["role"] == "candidate" and t.get("text")
             ).strip()
             result = LiveInterviewResult(
                 item_id=self.state.item_id,
@@ -541,16 +629,20 @@ class RealtimeLiveRoom:
                     "turns": self.state.turns,
                 }
             )
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception:
+            logger.debug("could not enqueue realtime terminal package", exc_info=True)
         return result
 
     def _close_live_trace(self, result: LiveInterviewResult | None = None) -> None:
         if self._live_trace is None or self._live_trace.ended:
             return
         result = result or self.state.result
-        candidate_turns = sum(1 for t in self.state.turns if t.get("role") == "candidate")
-        interviewer_turns = sum(1 for t in self.state.turns if t.get("role") == "interviewer")
+        candidate_turns = sum(
+            1 for t in self.state.turns if t.get("role") == "candidate"
+        )
+        interviewer_turns = sum(
+            1 for t in self.state.turns if t.get("role") == "interviewer"
+        )
         error = self.state.error if self.state.status == "error" else ""
         observability.end_live(
             self._live_trace,
@@ -588,7 +680,7 @@ class RealtimeLiveRoom:
         if self._session is not None:
             try:
                 await self._session.close()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.debug("live close failed", exc_info=True)
         self._session = None
 
