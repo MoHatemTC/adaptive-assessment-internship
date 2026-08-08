@@ -41,7 +41,9 @@ class _Collector(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         try:
             message = record.getMessage()
-        except Exception:  # pragma: no cover — a broken format string must not kill the UI
+        except (
+            Exception
+        ):  # pragma: no cover — a broken format string must not kill the UI
             message = repr(record.msg)
         entry = {
             "time": datetime.fromtimestamp(record.created).strftime("%H:%M:%S"),
@@ -92,7 +94,9 @@ def clear() -> None:
     _COLLECTOR.records.clear()
 
 
-def note_ui_error(source: str, message: str, *, exc: BaseException | None = None) -> None:
+def note_ui_error(
+    source: str, message: str, *, exc: BaseException | None = None
+) -> None:
     """Append a synthetic Tracebook entry from Streamlit UI catch blocks."""
     entry = {
         "time": datetime.now().strftime("%H:%M:%S"),

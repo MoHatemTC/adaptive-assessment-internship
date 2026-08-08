@@ -22,6 +22,8 @@ public API or recomputed from it with the engine's own functions.
 from __future__ import annotations
 
 import asyncio
+import logging
+import os
 import sys
 import traceback
 from pathlib import Path
@@ -47,42 +49,68 @@ for path in (str(BACKEND), str(HERE)):
     if path not in sys.path:
         sys.path.insert(0, path)
 
-import session_log  # noqa: E402  — must be importable before the engine logs anything
+from cloud_config import apply_root_secrets
+
+# Settings singletons are constructed by the backend imports below.  Bridge Streamlit
+# Cloud's root TOML secrets before those imports so hosted and local deployments follow
+# the same configuration path.  No secrets file is the normal local case.
+try:
+    apply_root_secrets(st.secrets, os.environ)
+except FileNotFoundError:
+    pass
+
+import session_log
+
+logger = logging.getLogger(__name__)
 
 # Conda envs with openai 0.x explode on `from openai import APIConnectionError`. Require
 # the repo `.venv` (openai>=1.50) before importing the engine.
 try:
-    import openai as _openai_pkg
-    from openai import APIConnectionError as _APIConnectionError  # noqa: F401
+    from openai import APIConnectionError
+
+    _ = APIConnectionError
 except ImportError as _openai_exc:
     raise SystemExit(
         f"Incompatible openai package ({_openai_exc}). "
-        "From the repo root use: `.venv/bin/streamlit run streamlit/main.py` "
-        "or `./scripts/run_streamlit.sh` — not a bare conda `streamlit` with openai 0.x."
+        "From the repo root use `./scripts/run_streamlit.sh` — not a bare conda "
+        "`streamlit` with openai 0.x."
     ) from _openai_exc
 
-from app.config.settings import settings  # noqa: E402
-from app.config.voice_settings import voice_settings  # noqa: E402
-from app.schemas.voice import VoiceResponsePackage  # noqa: E402
-from app.services import observability  # noqa: E402
-from app.services.adaptive.irt import ability_band  # noqa: E402
-from app.services.code_adaptive import (  # noqa: E402
+import graph_view
+
+from app.config.settings import settings
+from app.config.voice_settings import voice_settings
+from app.schemas.voice import VoiceResponsePackage
+from app.services import observability
+from app.services.adaptive.irt import (
+    ability_band,
+    expected_fisher_information,
+)
+from app.services.code_adaptive import (
     CodeAdaptiveSession,
     JsonQuestionRepository,
+    trial,
 )
-from app.services.code_adaptive import trial  # noqa: E402
-from app.services.orchestrator import GraderAgent, Orchestrator  # noqa: E402
-from app.services.orchestrator import registry, session_dump  # noqa: E402
-from app.services.orchestrator import variables as variables_module  # noqa: E402
-from app.services.adaptive.irt import expected_fisher_information  # noqa: E402
-from app.services.orchestrator.picker import criterion_for, information_for  # noqa: E402
-from app.services.orchestrator.competency import rollup_outcomes  # noqa: E402
-from app.services.competency_graph.coverage import unmeasured_required_nodes  # noqa: E402
-from app.services.voice.evaluator import evaluate as evaluate_voice  # noqa: E402
-from app.services.voice.evaluator import package_from_text  # noqa: E402
-from app.services.voice_live.streamlit_live import StreamlitLiteLLMLiveBridge  # noqa: E402
-
-import graph_view  # noqa: E402 — Streamlit-local helper beside session_log
+from app.services.competency_graph.coverage import (
+    unmeasured_required_nodes,
+)
+from app.services.orchestrator import (
+    GraderAgent,
+    Orchestrator,
+    registry,
+    session_dump,
+)
+from app.services.orchestrator import variables as variables_module
+from app.services.orchestrator.competency import rollup_outcomes
+from app.services.orchestrator.picker import (
+    criterion_for,
+    information_for,
+)
+from app.services.voice.evaluator import evaluate as evaluate_voice
+from app.services.voice.evaluator import package_from_text
+from app.services.voice_live.streamlit_live import (
+    StreamlitLiteLLMLiveBridge,
+)
 
 
 def fisher_after(item, variable_state, variable) -> float:
@@ -97,7 +125,15 @@ def fisher_after(item, variable_state, variable) -> float:
         expected_fisher_information(posterior, item.cat.a, item.cat.b, item.cat.c)
     ) * item.loading(variable)
 
-st.set_page_config(page_title="Adaptive assessment — tester", layout="wide")
+
+st.set_page_config(
+    page_title=(
+        "Adaptive assessment — tester"
+        if settings.streamlit_tester_mode
+        else "Adaptive assessment"
+    ),
+    layout="wide",
+)
 session_log.install()
 
 # The tester options checkbox has no `value=`; this is its default, and living here rather
@@ -110,13 +146,13 @@ WIDE = {"width": "stretch"} if _ST_VERSION >= (1, 49) else {"use_container_width
 
 CRITERION_EXPLAINED = {
     "KL": "Kullback-Leibler information. Used for the first 3 observations, while the "
-          "estimate is still vague: Fisher information is local — it asks which item is "
-          "most informative exactly here, when 'here' is barely known. KL integrates over "
-          "a neighbourhood, so it prefers items that separate a whole region of ability.",
+    "estimate is still vague: Fisher information is local — it asks which item is "
+    "most informative exactly here, when 'here' is barely known. KL integrates over "
+    "a neighbourhood, so it prefers items that separate a whole region of ability.",
     "E[Fisher]": "Expected Fisher information, averaged over the posterior rather than "
-                 "taken at its mean. Used once the estimate is worth localising around. "
-                 "Information at a point estimate is only the right criterion if the point "
-                 "estimate is right.",
+    "taken at its mean. Used once the estimate is worth localising around. "
+    "Information at a point estimate is only the right criterion if the point "
+    "estimate is right.",
 }
 
 
@@ -171,7 +207,14 @@ def use_llm() -> bool:
     to the engine's choice, and produce a session that looks deterministic for a reason the
     tester cannot see.
     """
-    return bool(st.session_state.get("picker_uses_llm")) and bool(settings.litellm_api_key)
+    return bool(st.session_state.get("picker_uses_llm")) and bool(
+        settings.litellm_api_key
+    )
+
+
+def tester_mode() -> bool:
+    """Whether assessment-author instrumentation may be shown in this deployment."""
+    return bool(settings.streamlit_tester_mode)
 
 
 def render_tester_options(container, *, locked: bool) -> bool:
@@ -196,10 +239,10 @@ def render_tester_options(container, *, locked: bool) -> bool:
         "Let the picking agent use the model",
         key="use_llm_choice",
         help="Off runs the engine's own deterministic choice, which is also the fallback "
-             "whenever the model is unavailable or returns something unusable. Selection "
-             "quality is bounded either way: a pick below "
-             f"{settings.orchestrator_minimum_relative_utility:.0%} of the best available "
-             "information is overridden.",
+        "whenever the model is unavailable or returns something unusable. Selection "
+        "quality is bounded either way: a pick below "
+        f"{settings.orchestrator_minimum_relative_utility:.0%} of the best available "
+        "information is overridden.",
         disabled=locked or not settings.litellm_api_key,
     )
     if not settings.litellm_api_key:
@@ -224,12 +267,18 @@ def render_tester_options(container, *, locked: bool) -> bool:
 # --- setup screen -----------------------------------------------------------
 def render_setup() -> None:
     st.title("Adaptive assessment — MCQ · Code · Voice")
-    st.caption(
-        "Full CAT tester (same loop as cat-engine-combined-streamlit): mixed-modality "
-        "item selection, queue, θ updates, and report. Open items are answered by Live "
-        f"voice via LiteLLM (`{settings.litellm_live_preview_model}`); picker/grader use "
-        f"`{settings.litellm_model}`."
-    )
+    if tester_mode():
+        st.caption(
+            "Full CAT tester: mixed-modality item selection, queue, θ updates, and "
+            "report. Open items use Live voice through LiteLLM "
+            f"(`{settings.litellm_live_preview_model}`); picker/grader use "
+            f"`{settings.litellm_model}`."
+        )
+    else:
+        st.caption(
+            "A mixed multiple-choice, coding, and spoken assessment. Choose the "
+            "competencies you want assessed to begin."
+        )
     st.caption(
         "Choose the main competencies to be assessed, rate your level in each, and say how "
         "sure you are. The rating seeds the starting estimate; the confidence sets how "
@@ -254,7 +303,7 @@ def render_setup() -> None:
         ),
         key="bank_choice",
         help="A bank and its competency graph are selected together. The choice is "
-             "locked once the assessment begins.",
+        "locked once the assessment begins.",
     )
     # Read through the plain key, not the widget key: the widget stops rendering after
     # Begin and Streamlit collects its state (see `use_llm`).
@@ -282,7 +331,7 @@ def render_setup() -> None:
         ),
         key="main_competencies",
         help="Select one or more main competencies. Sub-competencies are inferred by the "
-             "engine from the questions administered — you never choose them here.",
+        "engine from the questions administered — you never choose them here.",
     )
     if not chosen:
         st.info("Select at least one main competency.")
@@ -300,25 +349,44 @@ def render_setup() -> None:
             or "no items"
         )
         intake[variable] = middle.slider(
-            "Your level", 1, 5, 3, key=f"level_{variable}",
+            "Your level",
+            1,
+            5,
+            3,
+            key=f"level_{variable}",
             help="1 novice to 5 expert. Mapped onto the ability scale as a starting point.",
         )
-        confident[variable] = right.radio(
-            "How sure?", ["High", "Low"], index=1, key=f"conf_{variable}",
-            help="High narrows the starting estimate for this competency; low leaves it "
-                 "wide. Either way a few answers override it.",
-        ) == "High"
+        confident[variable] = (
+            right.radio(
+                "How sure?",
+                ["High", "Low"],
+                index=1,
+                key=f"conf_{variable}",
+                help="High narrows the starting estimate for this competency; low leaves it "
+                "wide. Either way a few answers override it.",
+            )
+            == "High"
+        )
 
     st.markdown("---")
 
-    with st.expander("Tester options — not part of the examinee's flow"):
-        wants_llm = render_tester_options(st, locked=False)
+    wants_llm = bool(settings.litellm_api_key)
+    if tester_mode():
+        with st.expander("Tester options — not part of the examinee's flow"):
+            wants_llm = render_tester_options(st, locked=False)
 
     if st.button("Begin assessment", type="primary"):
-        state = engine(active_bank_id()).begin(chosen, intake=intake, confidence=confident)
+        state = engine(active_bank_id()).begin(
+            chosen, intake=intake, confidence=confident
+        )
         session_log.clear()
         st.session_state.update(
-            run=state, steps=[], rng_seed=0, finished=False, stop_reason="", pending=None,
+            run=state,
+            steps=[],
+            selection_rng=np.random.default_rng(),
+            finished=False,
+            stop_reason="",
+            pending=None,
             competencies=chosen,
             competency_names={c: by_code[c]["name"] for c in chosen},
             trials={},
@@ -373,7 +441,9 @@ def render_queue(state) -> None:
     )
 
     for variable, candidate in sorted(state.queue.items()):
-        with st.expander(f"Why these were shortlisted for {variable} — {candidate.criterion}"):
+        with st.expander(
+            f"Why these were shortlisted for {variable} — {candidate.criterion}"
+        ):
             st.caption(CRITERION_EXPLAINED.get(candidate.criterion, ""))
             variable_state = state.variables[variable]
             shortlist_rows = []
@@ -444,8 +514,10 @@ def graph_node_status(state, node_id: str) -> str:
 def render_competency_math(state) -> None:
     """Live CAT mathematics: mains, related subs, item parameters, queued candidates."""
     st.markdown("**Main competencies — live CAT estimates**")
-    st.latex(r"\hat\theta = \sum_k \theta_k\, p(\theta_k),\quad"
-             r"\mathrm{SE}=\sqrt{\sum_k(\theta_k-\hat\theta)^2 p(\theta_k)}")
+    st.latex(
+        r"\hat\theta = \sum_k \theta_k\, p(\theta_k),\quad"
+        r"\mathrm{SE}=\sqrt{\sum_k(\theta_k-\hat\theta)^2 p(\theta_k)}"
+    )
     st.caption(
         "Each main competency holds a posterior on the shared θ grid. "
         f"Precision stop targets SE ≤ {settings.cat_se_target} after at least "
@@ -466,7 +538,9 @@ def render_competency_math(state) -> None:
                 "95% CI": (
                     "—"
                     if not vs.observations
-                    else "[{:.1f}, {:.1f}]".format(*variables_module.posterior_interval(vs))
+                    else "[{:.1f}, {:.1f}]".format(
+                        *variables_module.posterior_interval(vs)
+                    )
                 ),
                 "n": vs.observations,
                 "criterion": criterion_for(vs.observations),
@@ -535,7 +609,9 @@ def render_competency_math(state) -> None:
                     "b": item.cat.b if item else None,
                     "c": item.cat.c if item else None,
                     "loading": item.loading(variable) if item else None,
-                    "subs": ", ".join(m.variable for m in item.measures) if item else "—",
+                    "subs": ", ".join(m.variable for m in item.measures)
+                    if item
+                    else "—",
                     "by": "model" if candidate.chosen_by_llm else "engine",
                     "reason": candidate.reason_code,
                 }
@@ -570,7 +646,9 @@ def render_competency_math(state) -> None:
             st.markdown("**Related sub-competency nodes (graph)**")
             st.dataframe(pd.DataFrame(sub_rows), hide_index=True, **WIDE)
     except Exception as exc:  # noqa: BLE001
-        session_log.note_ui_error("graph_view", "failed to list related sub-nodes", exc=exc)
+        session_log.note_ui_error(
+            "graph_view", "failed to list related sub-nodes", exc=exc
+        )
         st.warning(f"Could not load graph sub-nodes: {exc}")
 
 
@@ -582,9 +660,7 @@ def render_mathematics() -> None:
         st.markdown("---")
 
     st.markdown("**Update history (fractional likelihood steps)**")
-    st.latex(
-        r"L(\theta)=\bigl[P(\theta)^{s}\,(1-P(\theta))^{1-s}\bigr]^{w}"
-    )
+    st.latex(r"L(\theta)=\bigl[P(\theta)^{s}\,(1-P(\theta))^{1-s}\bigr]^{w}")
     frame = steps_frame()
     if frame.empty:
         st.caption("No questions answered yet.")
@@ -645,8 +721,12 @@ def render_edge_preview(
         rows = [
             {
                 "node": nid,
-                "title": service.graph.nodes[nid].title if nid in service.graph.nodes else nid,
-                "would be": "blocked" if nid in preview_blocked else "inferred mastered",
+                "title": service.graph.nodes[nid].title
+                if nid in service.graph.nodes
+                else nid,
+                "would be": "blocked"
+                if nid in preview_blocked
+                else "inferred mastered",
                 "from": provenance.get("source_node", "—"),
                 "hops": provenance.get("distance"),
                 "strength": provenance.get("strength"),
@@ -658,7 +738,9 @@ def render_edge_preview(
         rows.extend(
             {
                 "node": nid,
-                "title": service.graph.nodes[nid].title if nid in service.graph.nodes else nid,
+                "title": service.graph.nodes[nid].title
+                if nid in service.graph.nodes
+                else nid,
                 "would be": "blocked",
                 "from": "—",
                 "hops": None,
@@ -698,7 +780,9 @@ def render_graph_dag(state) -> None:
     try:
         service = graph_view.graph_service(active_bank_id())
     except Exception as exc:  # noqa: BLE001
-        session_log.note_ui_error("graph_view", "failed to load competency graph", exc=exc)
+        session_log.note_ui_error(
+            "graph_view", "failed to load competency graph", exc=exc
+        )
         st.error(f"Graph failed to load: {exc}")
         return
     if service is None:
@@ -753,12 +837,18 @@ def render_graph_dag(state) -> None:
 
     if include_shadow:
         displayed_blocked |= set(getattr(state, "graph_shadow_blocked_nodes", []))
-        displayed_mastered |= set(getattr(state, "graph_shadow_direct_mastered_nodes", []))
-        displayed_inferred |= set(getattr(state, "graph_shadow_inferred_mastered_nodes", []))
+        displayed_mastered |= set(
+            getattr(state, "graph_shadow_direct_mastered_nodes", [])
+        )
+        displayed_inferred |= set(
+            getattr(state, "graph_shadow_inferred_mastered_nodes", [])
+        )
         displayed_not_mastered |= set(
             getattr(state, "graph_shadow_direct_not_mastered_nodes", [])
         )
-        displayed_contradicted |= set(getattr(state, "graph_shadow_contradicted_nodes", []))
+        displayed_contradicted |= set(
+            getattr(state, "graph_shadow_contradicted_nodes", [])
+        )
     diagram_focus = set() if show_full_dag else focus
     diagram = graph_view.svg_for_subgraph(
         service,
@@ -797,7 +887,7 @@ def render_graph_dag(state) -> None:
         "Inferred",
         len(displayed_inferred),
         help="Deduced from a prerequisite relationship. Never measured, and never folded "
-             "into the ability estimate.",
+        "into the ability estimate.",
     )
     col5.metric("Blocked", len(displayed_blocked))
     col6.metric("Contradicted", len(displayed_contradicted))
@@ -859,7 +949,9 @@ def render_tracebook() -> None:
     if not errors:
         st.success("No warnings or errors in this session yet.")
         if observability.enabled():
-            st.caption("Langfuse tracing is on — engine generations are grouped by session id.")
+            st.caption(
+                "Langfuse tracing is on — engine generations are grouped by session id."
+            )
         return
 
     for record in reversed(errors[-100:]):
@@ -890,8 +982,10 @@ def render_trajectory(state) -> None:
             index="step", columns="competency", values="ability after", aggfunc="last"
         ).ffill()
         st.line_chart(pivot)
-        st.caption("Ability on the −4 to +4 scale. Every competency is on the same scale "
-                   "whichever modality measured it — that is what makes them comparable.")
+        st.caption(
+            "Ability on the −4 to +4 scale. Every competency is on the same scale "
+            "whichever modality measured it — that is what makes them comparable."
+        )
     with right:
         st.markdown("**Posterior precision index by competency**")
         precision_col = (
@@ -932,28 +1026,50 @@ def render_trajectory(state) -> None:
                     )
                 ),
                 "level": str(level) if measured else "—",
-                "band": band if measured else "Not assessed",
+                "band": (
+                    band
+                    + (
+                        ""
+                        if settings.cat_band_decisions_certified
+                        and variable_state.converged
+                        else "  (provisional)"
+                    )
+                    if measured
+                    else "Not assessed"
+                ),
                 "answers": variable_state.observations,
                 "criterion now": criterion_for(variable_state.observations),
                 "status": (
                     f"finalised · {variable_state.stop_reason}"
-                    if variable_state.finalised else "open"
+                    if variable_state.finalised
+                    else "open"
                 ),
                 "converged": variable_state.converged,
+                "decision status": (
+                    "certified"
+                    if measured
+                    and variable_state.converged
+                    and settings.cat_band_decisions_certified
+                    else "provisional"
+                    if measured
+                    else "not assessed"
+                ),
             }
         )
     st.dataframe(pd.DataFrame(rows), hide_index=True, **WIDE)
     st.caption(
         "`level` and `band` stay blank until something has actually been observed: the "
         "starting estimate is a prior, not a measurement, and showing a band for it would "
-        "read as one. `converged` is true only for a stop earned on precision or a settled "
-        "band — running out of items is a budget outcome, not a measurement."
+        "read as one. `converged` records the model's stopping outcome; certification is "
+        "kept separate and remains provisional until external band-accuracy gates pass."
     )
 
 
 def render_logs() -> None:
     tally = session_log.counts()
-    st.caption(" · ".join(f"{k} {v}" for k, v in sorted(tally.items())) or "No events yet.")
+    st.caption(
+        " · ".join(f"{k} {v}" for k, v in sorted(tally.items())) or "No events yet."
+    )
     records = session_log.records()
     if not records:
         st.caption(
@@ -974,52 +1090,90 @@ def render_diagnostics() -> None:
     st.dataframe(
         pd.DataFrame(
             [
-                {"setting": "precision target (SE)", "value": str(settings.cat_se_target),
-                 "meaning": "posterior SD that maps to precision-index 90; "
-                            "precision stop also needs the min-questions floor"},
-                {"setting": "precision min questions", "value": str(settings.cat_precision_min_questions),
-                 "meaning": "precision stop cannot fire before this many scored items"},
-                {"setting": "min / max questions", "value": f"{settings.cat_min_questions} / {settings.cat_max_questions}",
-                 "meaning": "per-competency bounds before the band-stability rule may fire"},
-                {"setting": "shortlist size", "value": str(settings.orchestrator_shortlist_size),
-                 "meaning": "items offered to the picking agent per competency"},
-                {"setting": "minimum relative utility",
-                 "value": str(settings.orchestrator_minimum_relative_utility),
-                 "meaning": "below this fraction of the best information, the model's pick "
-                            "is overridden"},
-                {"setting": "whole-assessment cap", "value": str(settings.orchestrator_max_items),
-                 "meaning": "items across every competency before the session stops"},
-                {"setting": "code scoring split", "value": str(settings.code_approach),
-                 "meaning": "tests own functional correctness; the model judges quality"},
-                {"setting": "picking agent", "value": "model" if use_llm() else "engine only",
-                 "meaning": "the engine's deterministic choice is always the fallback"},
-                {"setting": "trial runs per question",
-                 "value": f"{settings.code_trial_runs_per_question} × "
-                          f"{settings.code_trial_run_tests} public cases",
-                 "meaning": "candidates may run the example cases before submitting; "
-                            "hidden cases are never reachable and nothing is graded"},
-                {"setting": "tracing",
-                 "value": "langfuse" if observability.enabled() else "off",
-                 "meaning": "every model call is traced and grouped by session id; "
-                            "candidate source code is never sent"},
-                {"setting": "graph shadow mode",
-                 "value": str(settings.graph_shadow_mode),
-                 "meaning": "runs graph propagation in analysis-only mode (no posterior changes)"},
-                {"setting": "graph filtering",
-                 "value": str(settings.graph_filtering_enabled),
-                 "meaning": "filters candidate items using persisted blocked / mastered nodes"},
-                {"setting": "graph utility",
-                 "value": str(settings.graph_utility_enabled),
-                 "meaning": "adds graph-based utility modifiers on top of KL / E[Fisher]"},
-                {"setting": "graph master switch",
-                 "value": str(settings.competency_graph_enabled),
-                 "meaning": "off disables every graph effect below, whatever they say"},
-                {"setting": "graph convergence gate",
-                 "value": str(settings.graph_convergence_gate_enabled),
-                 "meaning": "prevents finalisation while graph contradictions remain"},
+                {
+                    "setting": "precision target (SE)",
+                    "value": str(settings.cat_se_target),
+                    "meaning": "posterior SD that maps to precision-index 90; "
+                    "precision stop also needs the min-questions floor",
+                },
+                {
+                    "setting": "precision min questions",
+                    "value": str(settings.cat_precision_min_questions),
+                    "meaning": "precision stop cannot fire before this many scored items",
+                },
+                {
+                    "setting": "min / max questions",
+                    "value": f"{settings.cat_min_questions} / {settings.cat_max_questions}",
+                    "meaning": "per-competency bounds before the band-stability rule may fire",
+                },
+                {
+                    "setting": "shortlist size",
+                    "value": str(settings.orchestrator_shortlist_size),
+                    "meaning": "items offered to the picking agent per competency",
+                },
+                {
+                    "setting": "minimum relative utility",
+                    "value": str(settings.orchestrator_minimum_relative_utility),
+                    "meaning": "below this fraction of the best information, the model's pick "
+                    "is overridden",
+                },
+                {
+                    "setting": "whole-assessment cap",
+                    "value": str(settings.orchestrator_max_items),
+                    "meaning": "items across every competency before the session stops",
+                },
+                {
+                    "setting": "code scoring split",
+                    "value": str(settings.code_approach),
+                    "meaning": "tests own functional correctness; the model judges quality",
+                },
+                {
+                    "setting": "picking agent",
+                    "value": "model" if use_llm() else "engine only",
+                    "meaning": "the engine's deterministic choice is always the fallback",
+                },
+                {
+                    "setting": "trial runs per question",
+                    "value": f"{settings.code_trial_runs_per_question} × "
+                    f"{settings.code_trial_run_tests} public cases",
+                    "meaning": "candidates may run the example cases before submitting; "
+                    "hidden cases are never reachable and nothing is graded",
+                },
+                {
+                    "setting": "tracing",
+                    "value": "langfuse" if observability.enabled() else "off",
+                    "meaning": "every model call is traced and grouped by session id; "
+                    "candidate source code is never sent",
+                },
+                {
+                    "setting": "graph shadow mode",
+                    "value": str(settings.graph_shadow_mode),
+                    "meaning": "runs graph propagation in analysis-only mode (no posterior changes)",
+                },
+                {
+                    "setting": "graph filtering",
+                    "value": str(settings.graph_filtering_enabled),
+                    "meaning": "filters candidate items using persisted blocked / mastered nodes",
+                },
+                {
+                    "setting": "graph utility",
+                    "value": str(settings.graph_utility_enabled),
+                    "meaning": "adds graph-based utility modifiers on top of KL / E[Fisher]",
+                },
+                {
+                    "setting": "graph master switch",
+                    "value": str(settings.competency_graph_enabled),
+                    "meaning": "off disables every graph effect below, whatever they say",
+                },
+                {
+                    "setting": "graph convergence gate",
+                    "value": str(settings.graph_convergence_gate_enabled),
+                    "meaning": "prevents finalisation while graph contradictions remain",
+                },
             ]
         ),
-        hide_index=True, **WIDE,
+        hide_index=True,
+        **WIDE,
     )
 
     st.markdown("**Bank coverage and information parity**")
@@ -1046,7 +1200,8 @@ def render_diagnostics() -> None:
                     for entry in parity
                 ]
             ),
-            hide_index=True, **WIDE,
+            hide_index=True,
+            **WIDE,
         )
 
     with st.expander("Graph-augmented CAT state"):
@@ -1117,9 +1272,13 @@ def record(state, item, candidate, response) -> None:
             modality=item.modality,
             variable=candidate.variable if candidate else None,
             # The submission itself is never sent — see observability.redact_code.
-            submission=observability.redact_code(response) if isinstance(response, str) else None,
+            submission=observability.redact_code(response)
+            if isinstance(response, str)
+            else None,
         ):
-            new_state, graded = engine(active_bank_id()).record_response(state, item, response)
+            new_state, graded = engine(active_bank_id()).record_response(
+                state, item, response
+            )
     except Exception as exc:  # noqa: BLE001
         session_log.note_ui_error(
             "streamlit.record",
@@ -1129,7 +1288,9 @@ def record(state, item, candidate, response) -> None:
         st.error(f"Grading failed — see Tracebook. `{type(exc).__name__}: {exc}`")
         return
 
-    step = len(st.session_state["steps"]) and max(r["step"] for r in st.session_state["steps"])
+    step = len(st.session_state["steps"]) and max(
+        r["step"] for r in st.session_state["steps"]
+    )
     step = step + 1
 
     detail = graded.detail or {}
@@ -1152,10 +1313,7 @@ def record(state, item, candidate, response) -> None:
     # Direct evidence only. Inference shapes selection and the report; it does not enter
     # a posterior, so the tester shows exactly the update the engine performed.
     rolled = rollup_outcomes(graded.outcomes, session_variables)
-    outcome_by_variable = {
-        o.variable: o.__dict__
-        for o in rolled
-    }
+    outcome_by_variable = {o.variable: o.__dict__ for o in rolled}
 
     for variable, after in sorted(new_state.variables.items()):
         outcome = outcome_by_variable.get(variable)
@@ -1201,8 +1359,10 @@ def record(state, item, candidate, response) -> None:
         "outcomes": list(graded.outcomes),
     }
 
-    seed = st.session_state["rng_seed"]
-    st.session_state["rng_seed"] = seed + 1
+    rng = st.session_state.get("selection_rng")
+    if rng is None:
+        rng = np.random.default_rng()
+        st.session_state["selection_rng"] = rng
     with observability.session(
         new_state.session_id,
         track=st.session_state.get("competencies"),
@@ -1211,7 +1371,7 @@ def record(state, item, candidate, response) -> None:
     ):
         new_state = run_async(
             engine(active_bank_id()).after_response(
-                new_state, item, use_llm=use_llm(), rng=np.random.default_rng(seed)
+                new_state, item, use_llm=use_llm(), rng=rng
             )
         )
     st.session_state["run"] = new_state
@@ -1219,7 +1379,7 @@ def record(state, item, candidate, response) -> None:
 
 def live_server_ok() -> bool:
     try:
-        r = httpx.get(f"{voice_settings.live_server_base}/health", timeout=2.0, verify=False)
+        r = httpx.get(f"{voice_settings.live_server_base}/health", timeout=2.0)
         return r.status_code == 200
     except Exception:  # noqa: BLE001
         return False
@@ -1234,7 +1394,9 @@ def native_live_bridge() -> StreamlitLiteLLMLiveBridge:
     """One turn-based LiteLLM Live session per Streamlit browser session."""
     bridge = st.session_state.get("native_live_bridge")
     required_methods = ("start_interview", "send_candidate_audio", "finish", "abort")
-    if bridge is None or any(not callable(getattr(bridge, name, None)) for name in required_methods):
+    if bridge is None or any(
+        not callable(getattr(bridge, name, None)) for name in required_methods
+    ):
         bridge = StreamlitLiteLLMLiveBridge()
         st.session_state["native_live_bridge"] = bridge
     return bridge  # type: ignore[no-any-return]
@@ -1260,7 +1422,9 @@ def render_open_text_fallback(state, item, candidate, *, reason: str) -> None:
         st.rerun()
 
 
-def create_live_room(item_id: str, question: str, *, assessment_session_id: str = "") -> str:
+def create_live_room(
+    item_id: str, question: str, *, assessment_session_id: str = ""
+) -> str:
     r = httpx.post(
         f"{voice_settings.live_server_base}/api/live/rooms",
         json={
@@ -1271,7 +1435,6 @@ def create_live_room(item_id: str, question: str, *, assessment_session_id: str 
             "assessment_session_id": assessment_session_id,
         },
         timeout=30.0,
-        verify=False,
     )
     r.raise_for_status()
     return r.json()["room_id"]
@@ -1281,7 +1444,6 @@ def fetch_live_room(room_id: str) -> dict:
     r = httpx.get(
         f"{voice_settings.live_server_base}/api/live/rooms/{room_id}",
         timeout=10.0,
-        verify=False,
     )
     r.raise_for_status()
     return r.json()
@@ -1289,17 +1451,19 @@ def fetch_live_room(room_id: str) -> dict:
 
 def record_live_package(state, item, candidate, package: VoiceResponsePackage) -> None:
     """Evaluate a finished Live interview (LiteLLM rubric), then update CAT state."""
-    with st.spinner("Grading live interview via LiteLLM…"):
-        with observability.session(
+    with (
+        st.spinner("Grading live interview via LiteLLM…"),
+        observability.session(
             state.session_id,
             track=st.session_state.get("competencies"),
             stage="grade",
             item_id=item.item_id,
             modality="open",
             variable=candidate.variable if candidate else None,
-        ):
-            graded_voice = run_async(evaluate_voice(item, package, use_llm=use_llm()))
-            observability.flush()
+        ),
+    ):
+        graded_voice = run_async(evaluate_voice(item, package, use_llm=use_llm()))
+        observability.flush()
     record(state, item, candidate, graded_voice)
     st.session_state.pop("live_room_id", None)
     st.session_state.pop("live_active_item", None)
@@ -1311,8 +1475,8 @@ def record_live_package(state, item, candidate, package: VoiceResponsePackage) -
     if callable(getattr(bridge, "abort", None)):
         try:
             bridge.abort()
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception:
+            logger.debug("could not abort completed native Live bridge", exc_info=True)
 
 
 def render_native_live_interview(state, item, candidate) -> None:
@@ -1330,8 +1494,8 @@ def render_native_live_interview(state, item, candidate) -> None:
         if callable(getattr(old, "abort", None)):
             try:
                 old.abort()
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception:
+                logger.debug("could not abort stale native Live bridge", exc_info=True)
         st.session_state["native_live_item"] = item.item_id
         st.session_state["native_live_turns"] = []
         st.session_state.pop("native_live_result", None)
@@ -1347,7 +1511,9 @@ def render_native_live_interview(state, item, candidate) -> None:
             try:
                 st.session_state.pop("native_live_result", None)
                 st.session_state.pop("last_audio_error", None)
-                with st.spinner("Connecting to LiteLLM Live and speaking the question…"):
+                with st.spinner(
+                    "Connecting to LiteLLM Live and speaking the question…"
+                ):
                     audio = native_live_bridge().start_interview(
                         item.item_id,
                         question,
@@ -1363,15 +1529,19 @@ def render_native_live_interview(state, item, candidate) -> None:
                         }
                     )
                 elif audio.transcript:
-                    turns.append({"role": "interviewer", "text": audio.transcript, "wav": b""})
+                    turns.append(
+                        {"role": "interviewer", "text": audio.transcript, "wav": b""}
+                    )
                 st.session_state["native_live_turns"] = turns
                 st.session_state["native_live_started"] = True
                 st.rerun()
             except Exception as exc:  # noqa: BLE001
                 try:
                     native_live_bridge().abort()
-                except Exception:  # noqa: BLE001
-                    pass
+                except Exception:
+                    logger.debug(
+                        "could not abort failed native Live start", exc_info=True
+                    )
                 st.session_state["last_audio_error"] = (
                     f"{exc}\n{traceback.format_exc(limit=4)}"
                 )
@@ -1403,8 +1573,8 @@ def render_native_live_interview(state, item, candidate) -> None:
         if st.button("Abort interview", disabled=not started):
             try:
                 native_live_bridge().abort()
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception:
+                logger.debug("could not abort native Live interview", exc_info=True)
             st.session_state["native_live_started"] = False
             st.session_state["native_live_turns"] = []
             st.session_state.pop("native_live_result", None)
@@ -1414,7 +1584,9 @@ def render_native_live_interview(state, item, candidate) -> None:
         st.caption(f"Last Live error: {st.session_state['last_audio_error']}")
 
     if not started:
-        st.caption("Click **Start live interview** — the interviewer will speak the question.")
+        st.caption(
+            "Click **Start live interview** — the interviewer will speak the question."
+        )
         if open_text_fallback_allowed():
             with st.expander("Typed fallback (ALLOW_TEXT_FALLBACK=true)"):
                 render_open_text_fallback(
@@ -1433,17 +1605,23 @@ def render_native_live_interview(state, item, candidate) -> None:
             st.audio(wav, format="audio/wav")
 
     st.markdown("#### Your spoken answer")
-    st.caption("Record a full turn, then submit it. You can record again after a probe.")
+    st.caption(
+        "Record a full turn, then submit it. You can record again after a probe."
+    )
     audio_file = st.audio_input(
         "Microphone",
         key=f"native_mic_{item.item_id}_{len(turns)}",
     )
-    if audio_file is not None and st.button("Send recording to interviewer", type="primary"):
+    if audio_file is not None and st.button(
+        "Send recording to interviewer", type="primary"
+    ):
         try:
             wav_bytes = audio_file.getvalue()
             with st.spinner("Sending audio and waiting for the interviewer…"):
                 reply = native_live_bridge().send_candidate_audio(wav_bytes)
-            turns.append({"role": "candidate", "text": "(spoken answer)", "wav": wav_bytes})
+            turns.append(
+                {"role": "candidate", "text": "(spoken answer)", "wav": wav_bytes}
+            )
             if reply.wav_bytes or reply.transcript:
                 turns.append(
                     {
@@ -1472,8 +1650,8 @@ def render_native_live_interview(state, item, candidate) -> None:
             # into the dead session.
             try:
                 native_live_bridge().abort()
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception:
+                logger.debug("could not reset failed native Live bridge", exc_info=True)
             st.session_state["native_live_started"] = False
             st.error(
                 f"Could not send audio: {exc}. The closed Live session was reset; "
@@ -1507,7 +1685,9 @@ def render_iframe_live_interview(state, item, candidate) -> None:
     with cols[0]:
         if st.button("Open realtime interview", type="primary"):
             try:
-                question = item.payload.get("prompt") or item.payload.get("question", "")
+                question = item.payload.get("prompt") or item.payload.get(
+                    "question", ""
+                )
                 room_id = create_live_room(
                     item.item_id,
                     question,
@@ -1639,8 +1819,13 @@ def render_question(state) -> None:
 
     # code
     st.markdown(payload.get("prompt", ""))
-    starter = payload.get("starter_code") or f"def {payload.get('function_name', 'solve')}():\n    ...\n"
-    code = st.text_area("Your solution", value=starter, height=260, key=f"code_{item.item_id}")
+    starter = (
+        payload.get("starter_code")
+        or f"def {payload.get('function_name', 'solve')}():\n    ...\n"
+    )
+    code = st.text_area(
+        "Your solution", value=starter, height=260, key=f"code_{item.item_id}"
+    )
     st.caption(
         "Run in a sandbox against the question's tests. Test results own functional "
         "correctness; the model only judges quality (code rubrics in backend/app/data/rubrics)."
@@ -1684,7 +1869,8 @@ def render_trial_runs(item, code: str) -> None:
         f"{len(examples)} example case(s), and only these — the rest are hidden, which is "
         "what stops a solution being tuned to the examples. Running them changes no "
         "estimate and is not recorded as an answer."
-        if examples else "This question publishes no example cases."
+        if examples
+        else "This question publishes no example cases."
     )
 
     result = st.session_state.get(f"trial_result_{item.item_id}")
@@ -1710,7 +1896,8 @@ def render_trial_runs(item, code: str) -> None:
                 for case in result.cases
             ]
         ),
-        hide_index=True, **WIDE,
+        hide_index=True,
+        **WIDE,
     )
     st.caption(f"{result.passed} of {result.total} example cases pass.")
 
@@ -1719,6 +1906,9 @@ def render_last_result() -> None:
     last = st.session_state.get("last_graded")
     if not last:
         return
+    if not tester_mode():
+        st.success("Response recorded.")
+        return
     with st.expander(f"Result of the previous answer — {last['item']}", expanded=True):
         score = last["score"]
         st.metric("Score", "—" if score is None else f"{float(score):.3f}")
@@ -1726,7 +1916,8 @@ def render_last_result() -> None:
             detail = last["detail"]
             columns = st.columns(4)
             columns[0].metric(
-                "Tests", f"{detail.get('passed_tests', 0)}/{detail.get('total_tests', 0)}"
+                "Tests",
+                f"{detail.get('passed_tests', 0)}/{detail.get('total_tests', 0)}",
             )
             columns[1].metric("Compiled", str(detail.get("compiled")))
             columns[2].metric("Model used", str(detail.get("llm_used")))
@@ -1734,19 +1925,27 @@ def render_last_result() -> None:
             if detail.get("criterion_scores"):
                 st.dataframe(
                     pd.DataFrame(
-                        [{"criterion": k, "score": v}
-                         for k, v in detail["criterion_scores"].items()]
+                        [
+                            {"criterion": k, "score": v}
+                            for k, v in detail["criterion_scores"].items()
+                        ]
                     ),
-                    hide_index=True, **WIDE,
+                    hide_index=True,
+                    **WIDE,
                 )
             if detail.get("misconception_codes"):
-                st.warning("Misconceptions: " + ", ".join(detail["misconception_codes"]))
+                st.warning(
+                    "Misconceptions: " + ", ".join(detail["misconception_codes"])
+                )
             if detail.get("diagnostic"):
                 st.caption(detail["diagnostic"])
         elif last["modality"] in ("open", "voice"):
             detail = last.get("detail") or {}
             columns = st.columns(3)
-            columns[0].metric("Eval confidence", f"{float(detail.get('evaluation_confidence') or 0):.2f}")
+            columns[0].metric(
+                "Eval confidence",
+                f"{float(detail.get('evaluation_confidence') or 0):.2f}",
+            )
             columns[1].metric("Degraded", str(detail.get("degraded")))
             columns[2].metric("Status", str(detail.get("outcome_status") or "—"))
             if detail.get("rationale"):
@@ -1771,8 +1970,10 @@ def render_assessment() -> None:
     state = st.session_state["run"]
 
     if not st.session_state["finished"]:
-        seed = st.session_state["rng_seed"]
-        st.session_state["rng_seed"] = seed + 1
+        rng = st.session_state.get("selection_rng")
+        if rng is None:
+            rng = np.random.default_rng()
+            st.session_state["selection_rng"] = rng
         with observability.session(
             state.session_id,
             track=st.session_state.get("competencies"),
@@ -1780,9 +1981,7 @@ def render_assessment() -> None:
             items_administered=state.items_administered,
         ):
             state = run_async(
-                engine(active_bank_id()).fill_queue(
-                    state, use_llm=use_llm(), rng=np.random.default_rng(seed)
-                )
+                engine(active_bank_id()).fill_queue(state, use_llm=use_llm(), rng=rng)
             )
         state = engine(active_bank_id()).ensure_presenting(state)
         st.session_state["run"] = state
@@ -1816,14 +2015,15 @@ def render_assessment() -> None:
         st.sidebar.progress(
             min(certainty / 100.0, 1.0),
             text=f"{variable} — precision {certainty:.0f}"
-                 + (" ✓" if variable_state.finalised else ""),
+            + (" ✓" if variable_state.finalised else ""),
         )
     st.sidebar.markdown("---")
-    with st.sidebar.expander("Tester options — locked for this run"):
-        render_tester_options(st.sidebar, locked=True)
-    if st.sidebar.button("End session"):
-        st.session_state.update(finished=True, stop_reason="ended_by_tester")
-        st.rerun()
+    if tester_mode():
+        with st.sidebar.expander("Tester options — locked for this run"):
+            render_tester_options(st.sidebar, locked=True)
+        if st.sidebar.button("End session"):
+            st.session_state.update(finished=True, stop_reason="ended_by_tester")
+            st.rerun()
     if st.sidebar.button("Start over"):
         for key in (
             "run",
@@ -1842,12 +2042,17 @@ def render_assessment() -> None:
 
     # --- main
     if finished:
-        report = engine(active_bank_id()).summarise(state, st.session_state["stop_reason"])
+        report = engine(active_bank_id()).summarise(
+            state, st.session_state["stop_reason"]
+        )
         st.title("Assessment complete")
         st.success(
             f"Stopped: **{report.stop_reason}** after {report.items_administered} questions. "
-            + ("Every competency finalised." if report.all_finalised
-               else "Some competencies did not reach the precision target.")
+            + (
+                "Every competency finalised."
+                if report.all_finalised
+                else "Some competencies did not reach the precision target."
+            )
         )
         st.dataframe(
             pd.DataFrame(
@@ -1855,8 +2060,12 @@ def render_assessment() -> None:
                     {
                         "competency": v.variable,
                         "level": str(v.level) if v.observations else "—",
-                        "band": v.band + ("" if v.converged or not v.observations
-                                          else "  (provisional)"),
+                        "band": v.band
+                        + (
+                            ""
+                            if v.decision_status in {"certified", "not_assessed"}
+                            else "  (provisional)"
+                        ),
                         "ability": v.theta_hat,
                         "std error": v.standard_error,
                         "precision index": f"{v.certainty_pct:.1f}",
@@ -1864,50 +2073,52 @@ def render_assessment() -> None:
                         "modalities": ", ".join(v.modalities_used) or "—",
                         "finalised": v.finalised,
                         "converged": v.converged,
+                        "decision status": v.decision_status,
                         "why it stopped": v.stop_reason or "—",
                     }
                     for v in report.variables
                 ]
             ),
-            hide_index=True, **WIDE,
+            hide_index=True,
+            **WIDE,
         )
         st.caption(
-            "`converged` separates a measurement from a budget outcome: it is true only "
-            "when precision or band stability was reached. A band marked *provisional* "
-            "comes from a competency that ran out of questions before reaching the "
-            "precision target — the level is the best estimate available, not a measured "
-            "result, and the precision-index column says how far short the SE fell."
+            "`converged` records the model's stopping outcome; `decision status` records "
+            "whether that outcome is approved for operational use. Bands remain "
+            "*provisional* until independent exact-band calibration passes, including "
+            "when the model itself converged."
         )
     else:
         render_last_result()
         render_question(state)
 
-    st.markdown("---")
-    tabs = st.tabs(
-        [
-            "Queue",
-            "Mathematics",
-            "DAG",
-            "Trajectory",
-            "Engine log",
-            "Tracebook",
-            "Diagnostics",
-        ]
-    )
-    with tabs[0]:
-        render_queue(state)
-    with tabs[1]:
-        render_mathematics()
-    with tabs[2]:
-        render_graph_dag(state)
-    with tabs[3]:
-        render_trajectory(state)
-    with tabs[4]:
-        render_logs()
-    with tabs[5]:
-        render_tracebook()
-    with tabs[6]:
-        render_diagnostics()
+    if tester_mode():
+        st.markdown("---")
+        tabs = st.tabs(
+            [
+                "Queue",
+                "Mathematics",
+                "DAG",
+                "Trajectory",
+                "Engine log",
+                "Tracebook",
+                "Diagnostics",
+            ]
+        )
+        with tabs[0]:
+            render_queue(state)
+        with tabs[1]:
+            render_mathematics()
+        with tabs[2]:
+            render_graph_dag(state)
+        with tabs[3]:
+            render_trajectory(state)
+        with tabs[4]:
+            render_logs()
+        with tabs[5]:
+            render_tracebook()
+        with tabs[6]:
+            render_diagnostics()
 
 
 # --- entry ------------------------------------------------------------------

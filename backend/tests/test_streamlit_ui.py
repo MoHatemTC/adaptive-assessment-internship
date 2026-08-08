@@ -38,6 +38,8 @@ async def _stub_open_evaluation(item, package, *, use_llm: bool = True):
         ),
         rubric=rubric,
     )
+
+
 from app.services.code_adaptive.execution import ExecutionEvidence, TestOutcome
 from app.services.code_adaptive.llm_evaluator import LLMEvaluation
 
@@ -78,6 +80,7 @@ def app(stub_boundaries, monkeypatch):
     from streamlit.testing.v1 import AppTest
 
     monkeypatch.setattr(settings, "active_bank", "DA")
+    monkeypatch.setattr(settings, "streamlit_tester_mode", True)
     # The DA bank contains open items. Live voice needs a gateway and a microphone, so the
     # typed fallback — the same grading path, a different way of collecting the words — is
     # what makes an offline end-to-end run possible at all.
@@ -107,7 +110,7 @@ def _pin_stale_widgets(app) -> None:
         if not key:
             continue
         try:
-            widget.value
+            _ = widget.value
             continue
         except (KeyError, ValueError):
             pass
@@ -221,6 +224,45 @@ class TestAssessmentScreen:
         assert APP.name == "main.py"
         assert not (APP.parent / "app.py").exists()
         assert not app.exception
+
+
+class TestCandidateSafeMode:
+    def test_answer_keys_scores_and_instrumentation_are_hidden_by_default(
+        self, stub_boundaries, monkeypatch
+    ):
+        from streamlit.testing.v1 import AppTest
+
+        monkeypatch.setattr(settings, "active_bank", "DA")
+        monkeypatch.setattr(settings, "streamlit_tester_mode", False)
+        monkeypatch.setattr(settings, "litellm_api_key", "")
+        monkeypatch.setattr(voice_settings, "allow_text_fallback", True)
+        monkeypatch.setattr(
+            voice_evaluator, "evaluate", _stub_open_evaluation, raising=True
+        )
+        candidate_app = AppTest.from_file(str(APP), default_timeout=180).run()
+        assert not any(
+            "Full CAT tester" in str(caption.value)
+            for caption in candidate_app.caption
+        )
+        begin(candidate_app)
+
+        assert not candidate_app.tabs
+        assert not any("Tester options" in e.label for e in candidate_app.expander)
+
+        answer_everything(candidate_app, limit=1)
+        assert not candidate_app.exception
+        assert any("Response recorded" in s.value for s in candidate_app.success)
+        visible = "\n".join(
+            str(element.value)
+            for collection in (
+                candidate_app.caption,
+                candidate_app.markdown,
+                candidate_app.success,
+            )
+            for element in collection
+        )
+        assert "correct was" not in visible
+        assert "criterion_scores" not in visible
 
 
 class TestTrialRuns:
@@ -342,11 +384,17 @@ class TestMultiCompetencyBank:
     says nothing about the UI (see the `app` fixture).
     """
 
-    def test_setup_offers_every_main_and_begins_without_raising(self, stub_boundaries):
+    def test_setup_offers_every_main_and_begins_without_raising(
+        self, stub_boundaries, monkeypatch
+    ):
         from streamlit.testing.v1 import AppTest
 
         from app.services.orchestrator import registry
 
+        monkeypatch.setattr(settings, "streamlit_tester_mode", True)
+        # This is an offline UI test. A configured placeholder or developer key must not
+        # turn Begin into a network call to the optional picking agent.
+        monkeypatch.setattr(settings, "litellm_api_key", "")
         app = AppTest.from_file(str(APP), default_timeout=180).run()
         assert not app.exception
 
@@ -358,3 +406,54 @@ class TestMultiCompetencyBank:
         assert not app.exception
         # The session screen, with a question presented against a three-main bank.
         assert [tab.label for tab in app.tabs][:3] == ["Queue", "Mathematics", "DAG"]
+
+
+class TestImportedBankSetup:
+    @pytest.mark.parametrize("bank_id", ["AIE-JR-V3", "JAI-600"])
+    def test_each_new_bank_loads_and_starts_offline(
+        self, bank_id, stub_boundaries, monkeypatch
+    ):
+        from streamlit.testing.v1 import AppTest
+
+        from app.services.orchestrator import registry
+
+        monkeypatch.setattr(settings, "active_bank", bank_id)
+        monkeypatch.setattr(settings, "litellm_api_key", "")
+        monkeypatch.setattr(settings, "streamlit_tester_mode", False)
+        monkeypatch.setattr(voice_settings, "allow_text_fallback", True)
+
+        app = AppTest.from_file(str(APP), default_timeout=180).run()
+        assert not app.exception
+        bank_picker = next(select for select in app.selectbox if select.label == "Bank")
+        assert bank_picker.value == bank_id
+        offered = "".join(app.multiselect[0].options)
+        assert all(code in offered for code in registry.get_bank(bank_id).variables())
+
+        next(b for b in app.button if b.label == "Begin assessment").click().run()
+        assert not app.exception
+        assert any(r.label == "Your answer" for r in app.radio) or any(
+            area.label in {"Your solution", "Written answer (fallback)"}
+            for area in app.text_area
+        )
+
+
+def test_cloud_secrets_are_allowlisted_and_do_not_override_the_environment() -> None:
+    import importlib.util
+
+    module_path = APP.parent / "cloud_config.py"
+    spec = importlib.util.spec_from_file_location("cloud_config_under_test", module_path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    environ = {"ACTIVE_BANK": "DA"}
+    module.apply_root_secrets(
+        {
+            "ACTIVE_BANK": "JAI-600",
+            "ALLOW_TEXT_FALLBACK": True,
+            "UNRELATED_SECRET": "must-not-leak",
+            "LITELLM_API_KEY": {"nested": "ignored"},
+        },
+        environ,
+    )
+    assert environ == {"ACTIVE_BANK": "DA", "ALLOW_TEXT_FALLBACK": "true"}

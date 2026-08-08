@@ -1,23 +1,47 @@
-# Tester harness
+# Human-testing app
 
-A Streamlit UI for **checking** the orchestrated engine, not for candidates. Every number a
-decision rested on is on screen.
+The same Streamlit entry point supports candidate-safe human testing and an instrumented
+assessment-author mode. Candidate-safe mode is the default. Set
+`STREAMLIT_TESTER_MODE=true` only for trusted testers; it exposes selection diagnostics,
+posterior state, grader detail, and other protected assessment information.
+
+Available banks include all previous banks plus:
+
+- `AIE-JR-V3` — 60 items, C1, 39 MCQ / 12 code / 9 voice.
+- `JAI-600` — 600 items, C1–C6, 300 MCQ / 150 code / 150 voice.
+
+Both new banks use clearly marked, donor-based CAT synthesis: every item records the exact
+prior `DA`, `PY`, or `AIE` item supplying its parameter triple, selected within an explicit
+semantic-main, modality, and authored-difficulty stratum. This makes the pools
+information-reachable under the configured 12-item cap, but the new wording is still not
+empirically calibrated. They remain unsuitable for high-stakes score interpretation until
+validated on response data.
+
+The 600-item source includes 64 coding items with public-only test suites. They remain in
+the checked-in bank for author review but are marked inactive, because a visible one-test
+suite cannot provide independent grading evidence. The active pool still contains 86
+coding items across all six competencies.
+
+## Localhost
 
 ```bash
-pip install -r streamlit/requirements.txt
+# Optional: copy the minimal example and add LiteLLM/E2B keys for full grading.
+cp backend/.env.human-test.example backend/.env
 
-# Terminal 1 — Live helper (WebSocket rooms for open/voice iframes only)
-cd backend && python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8765
+# Terminal 1 — app (creates .venv and installs dependencies on first run)
+./scripts/run_streamlit.sh
 
-# Terminal 2 — full adaptive engine UI (MCQ + code + Live voice)
-cd .. && streamlit run streamlit/main.py
+# Optional Terminal 2 — duplex Live helper for voice interviews
+./scripts/run_live_helper.sh
 ```
 
 Open **Streamlit** (usually http://localhost:8501), not http://127.0.0.1:8765/.
 Port 8765 is only the Live interviewer helper that Streamlit embeds for open items.
 
-Set `LITELLM_MODEL=openai/gpt-5.6-sol`, `LITELLM_LIVE_PREVIEW_MODEL=gemini/gemini-3.1-flash-live-preview`,
-`LITELLM_SSL_VERIFY=false` (if needed) in `backend/.env`.
+Without LiteLLM, deterministic selection still works and typed voice responses use the
+documented low-confidence heuristic. Without E2B, coding items are displayed but sandbox
+failures correctly generate no candidate evidence. A fully functional mixed-modality test
+therefore needs `LITELLM_API_KEY`, a reachable `LITELLM_BASE_URL`, and `E2B_API_KEY`.
 
 Open items prefer a Live interview. On Streamlit Cloud (no second port) the UI runs
 **in-app spoken Live** via LiteLLM realtime: start → listen → `st.audio_input` → finish &
@@ -38,14 +62,17 @@ in-app Live is enough. For duplex iframe Live:
      (must be the public `https://…` host; WebSockets use the same origin).
 
 Ensure `LITELLM_BASE_URL` / `LITELLM_API_KEY` / `LITELLM_LIVE_PREVIEW_MODEL` are set in
-Streamlit secrets (the Live proxy must be reachable from Cloud, not `localhost`).
+Streamlit secrets (the Live proxy must be reachable from Cloud, not `localhost`). Root
+TOML secrets are bridged into the same settings path as `backend/.env`. Start from
+`.streamlit/secrets.toml.example`.
 
 `streamlit/requirements.txt` is **self-contained** — it carries the engine's dependencies as
 well as the UI's, because Streamlit Cloud installs exactly one requirements file: the one
 beside the entry point. It never reads `backend/requirements.txt`. A test asserts the two
 agree, so drift fails the suite rather than the next deployment.
 
-**Deploying to Streamlit Cloud:** set the main file to `streamlit/main.py`, and pin the
+**Deploying to Streamlit Cloud:** set the main file to `streamlit/main.py`, paste the
+needed values from `.streamlit/secrets.toml.example` into App settings → Secrets, and pin the
 Python version in *Advanced settings*. Cloud currently defaults to 3.14, where an unbounded
 resolve pulls pandas 3.x and crashes on import; the upper bounds here prevent that, but
 pinning the interpreter removes the whole class of surprise. Open/voice needs either a

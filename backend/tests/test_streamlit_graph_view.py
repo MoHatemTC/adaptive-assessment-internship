@@ -6,13 +6,12 @@ import sys
 from pathlib import Path
 from xml.etree import ElementTree
 
-
 ROOT = Path(__file__).resolve().parents[2]
 for path in (ROOT / "backend", ROOT / "streamlit"):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-import graph_view  # noqa: E402
+import graph_view
 
 
 def test_focused_dag_is_valid_self_contained_svg() -> None:

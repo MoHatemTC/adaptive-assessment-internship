@@ -6,8 +6,8 @@ and CDN dependencies. A Mermaid renderer remains available for diagnostics.
 
 from __future__ import annotations
 
-from html import escape
 import re
+from html import escape
 
 import streamlit as st
 
@@ -142,7 +142,9 @@ def mermaid_for_subgraph(
 
 
 def _prerequisite_order(
-    service: CompetencyGraphService, members: list[str], edges: list[tuple[str, str, str]]
+    service: CompetencyGraphService,
+    members: list[str],
+    edges: list[tuple[str, str, str]],
 ) -> list[str]:
     """Members sorted by longest prerequisite depth, then by id.
 
@@ -180,7 +182,9 @@ def _bands(
     one node each, nearly five thousand pixels wide and unreadable. Competencies are what
     a reader is looking for; depth is a detail within one.
     """
-    mains = [nid for nid in sorted(nodes) if service.graph.nodes[nid].node_type == "main"]
+    mains = [
+        nid for nid in sorted(nodes) if service.graph.nodes[nid].node_type == "main"
+    ]
     by_main: dict[str | None, list[str]] = {main: [] for main in mains}
     orphans: list[str] = []
 
@@ -250,7 +254,9 @@ def svg_for_subgraph(
     band_gap = 30
     main_column_w = box_w + 56
 
-    columns = max(1, min(max_columns, max((len(members) for _main, members in bands), default=1)))
+    columns = max(
+        1, min(max_columns, max((len(members) for _main, members in bands), default=1))
+    )
     width = margin_x * 2 + main_column_w + columns * box_w + (columns - 1) * x_gap
     # The legend is a fixed-width row. A graph narrower than it would clip its own key.
     width = max(width, LEGEND_WIDTH)
@@ -361,7 +367,12 @@ def svg_for_subgraph(
         # Same row: edge along the row. Different row (a wrap, or a contribution to the
         # main on the left): centre to centre, which stays readable without a router.
         if abs(y1 - y2) < 1 and x2 > x1:
-            start_x, start_y, end_x, end_y = x1 + box_w, y1 + box_h / 2, x2, y2 + box_h / 2
+            start_x, start_y, end_x, end_y = (
+                x1 + box_w,
+                y1 + box_h / 2,
+                x2,
+                y2 + box_h / 2,
+            )
         else:
             start_x, start_y = x1 + box_w / 2, y1 + box_h / 2
             end_x, end_y = x2 + box_w / 2, y2 + box_h / 2
@@ -383,7 +394,7 @@ def svg_for_subgraph(
             title = title[:24].rstrip() + "…"
         parts.extend(
             [
-                f'<g><title>{escape(nid)}: {escape(node.title)}</title>',
+                f"<g><title>{escape(nid)}: {escape(node.title)}</title>",
                 f'<rect x="{x}" y="{y_pos}" width="{box_w}" height="{box_h}" rx="10" '
                 f'fill="{fill}" stroke="{stroke}" stroke-width="{stroke_width}"'
                 f"{dash_attr}/>",
