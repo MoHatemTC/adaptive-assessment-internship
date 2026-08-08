@@ -21,7 +21,6 @@ Appendix B's result schema, plus four additions the validation document asks for
 
 from __future__ import annotations
 
-import time as _time_module
 from dataclasses import dataclass
 
 import numpy as np
@@ -30,7 +29,8 @@ from app.schemas.orchestration import BankItem
 from app.services.adaptive.irt import THETA_GRID, ability_band, probability_correct
 
 from . import responder
-from .bands import COMMON, band_probabilities as common_band_probabilities
+from .bands import COMMON
+from .bands import band_probabilities as common_band_probabilities
 from .clock import VirtualClock
 from .dgp import Simulee, _seed_of
 
@@ -277,6 +277,10 @@ async def _run(*, orchestrator, bank, simulee, mains, arm, max_steps, keep_trace
         true_theta = float(simulee.theta.get(main, 0.0))
         theta_hat = float(vstate.theta_hat)
         posterior = np.asarray(vstate.posterior, dtype=float)
+        reported_se = float(getattr(variable_report, "standard_error", vstate.standard_error))
+        reported_interval = getattr(variable_report, "credible_interval_95", None)
+        if reported_interval is None:
+            reported_interval = credible_interval(posterior)
 
         native_level, _label = ability_band(theta_hat)
         common_level = COMMON.band(theta_hat)
@@ -287,7 +291,11 @@ async def _run(*, orchestrator, bank, simulee, mains, arm, max_steps, keep_trace
                 "variable": main,
                 "true_theta": round(true_theta, 5),
                 "estimated_theta": round(theta_hat, 5),
-                "standard_error": round(float(vstate.standard_error), 5),
+                # Evaluate the uncertainty the product actually reports. Approach C may
+                # apply its configured, auditable multidimensionality correction at the
+                # reporting boundary; legacy branches fall back to the raw posterior SE.
+                "standard_error": round(reported_se, 5),
+                "standard_error_raw": round(float(vstate.standard_error), 5),
                 "observations": int(vstate.observations),
                 "questions_for_main": len(items_by_main.get(main, [])),
                 "modalities_used": sorted(modalities_by_main.get(main, set())),
@@ -305,9 +313,12 @@ async def _run(*, orchestrator, bank, simulee, mains, arm, max_steps, keep_trace
                 "common_band_probabilities": {
                     str(k): round(float(v), 6) for k, v in sorted(common_probs.items())
                 },
-                "credible_interval_95": list(credible_interval(posterior)),
+                "credible_interval_95": list(reported_interval),
                 "finalised": bool(vstate.finalised),
                 "converged": bool(vstate.converged),
+                "decision_status": str(
+                    getattr(variable_report, "decision_status", "provisional")
+                ),
                 "stop_reason": vstate.stop_reason,
                 # Fields Approach C's report added. Read defensively so one runner serves
                 # both branches — but TRI-STATE, not boolean.
@@ -389,7 +400,7 @@ async def _run(*, orchestrator, bank, simulee, mains, arm, max_steps, keep_trace
         # every node's state per session made the result file 25x larger and carried
         # nothing else the analysis reads.
         "direct_evidence_id_count": sum(
-            len((s.get("direct_evidence_ids") or []))
+            len(s.get("direct_evidence_ids") or [])
             for s in (getattr(state, "graph_node_states", {}) or {}).values()
         ),
         "unique_direct_evidence_ids": len(

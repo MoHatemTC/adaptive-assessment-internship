@@ -143,15 +143,20 @@ def verdict(gate: Gate, value: float | None) -> str:
     """PASS / FAIL / NOT MEASURED for one gate. Never invents a verdict from a missing value."""
     if value is None or value != value:  # None or NaN
         return "NOT MEASURED"
-    if gate.op == "<":
-        return "PASS" if value < float(gate.threshold) else "FAIL"
-    if gate.op == "<=":
-        return "PASS" if value <= float(gate.threshold) else "FAIL"
-    if gate.op == ">=":
-        return "PASS" if value >= float(gate.threshold) else "FAIL"
+    threshold = gate.threshold
     if gate.op == "in":
-        low, high = gate.threshold  # type: ignore[misc]
+        if not isinstance(threshold, tuple):
+            raise TypeError(f"gate {gate.gate_id} requires a range threshold")
+        low, high = threshold
         return "PASS" if low <= value <= high else "FAIL"
+    if isinstance(threshold, tuple):
+        raise TypeError(f"gate {gate.gate_id} requires a scalar threshold")
+    if gate.op == "<":
+        return "PASS" if value < float(threshold) else "FAIL"
+    if gate.op == "<=":
+        return "PASS" if value <= float(threshold) else "FAIL"
+    if gate.op == ">=":
+        return "PASS" if value >= float(threshold) else "FAIL"
     raise ValueError(f"unknown gate operator {gate.op!r}")
 
 

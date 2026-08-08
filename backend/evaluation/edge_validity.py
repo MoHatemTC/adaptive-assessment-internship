@@ -45,11 +45,11 @@ for key, value in {
 }.items():
     os.environ.setdefault(key, value)
 
-import numpy as np  # noqa: E402
+import numpy as np
 
-from evaluation import responder  # noqa: E402
-from evaluation.dgp import Cohort  # noqa: E402
-from evaluation.stats import clopper_pearson  # noqa: E402
+from evaluation import responder
+from evaluation.dgp import Cohort
+from evaluation.stats import clopper_pearson
 
 # The engine's own propagation thresholds. Read as constants rather than from settings so
 # the offline check states the bar it applied, whatever an operator has since moved.
@@ -100,7 +100,9 @@ def node_scores(cohort: Cohort, bank) -> dict[str, dict[str, float]]:
             values = []
             for item in items:
                 plan = responder.plan_for(simulee, item, main)
-                values.append(float(plan.correct) if item.modality == "mcq" else plan.score)
+                values.append(
+                    float(plan.correct) if item.modality == "mcq" else plan.score
+                )
             if values:
                 row[node] = float(np.mean(values))
         scores[simulee.simulee_id] = row
@@ -108,7 +110,12 @@ def node_scores(cohort: Cohort, bank) -> dict[str, dict[str, float]]:
 
 
 def _stratified_contrast(
-    theta: np.ndarray, failed_parent: np.ndarray, child_score: np.ndarray, *, bins: int = 8, minimum_cell: int = 15
+    theta: np.ndarray,
+    failed_parent: np.ndarray,
+    child_score: np.ndarray,
+    *,
+    bins: int = 8,
+    minimum_cell: int = 15,
 ) -> dict:
     """Mean within-stratum difference in child score, over strata that HAVE both groups.
 
@@ -136,7 +143,9 @@ def _stratified_contrast(
         passing = inside & (failed_parent <= 0.5)
         if failing.sum() < minimum_cell or passing.sum() < minimum_cell:
             continue
-        differences.append(float(child_score[failing].mean() - child_score[passing].mean()))
+        differences.append(
+            float(child_score[failing].mean() - child_score[passing].mean())
+        )
         weights.append(int(inside.sum()))
 
     if not differences:
@@ -148,7 +157,9 @@ def _stratified_contrast(
     }
 
 
-def _ridge_logistic(X: np.ndarray, y: np.ndarray, penalty: float = 1e-3, iterations: int = 60):
+def _ridge_logistic(
+    X: np.ndarray, y: np.ndarray, penalty: float = 1e-3, iterations: int = 60
+):
     """Ridge-penalised logistic regression by IRLS. Returns (coefficients, standard errors).
 
     Penalised because separation is the normal case here, not the exception: a candidate
@@ -328,7 +339,8 @@ def edge_report(cohort: Cohort, scores: dict[str, dict[str, float]]) -> list[dic
         # The upper bound, not the point estimate: an edge is enabled on what the data
         # can rule out, not on what it happens to have shown.
         may_block = bool(
-            informative and block_interval.upper < ENABLE_BAR_P_PASS_CHILD_GIVEN_FAIL_PARENT
+            informative
+            and block_interval.upper < ENABLE_BAR_P_PASS_CHILD_GIVEN_FAIL_PARENT
         )
         rows.append(
             {
@@ -342,7 +354,9 @@ def edge_report(cohort: Cohort, scores: dict[str, dict[str, float]]) -> list[dic
                 "upper_95": round(block_interval.upper, 5) if failed_parent else None,
                 "n_child_passes": passed_child,
                 "p_pass_parent_given_pass_child": (
-                    round(passed_parent_given_pass_child / passed_child, 5) if passed_child else None
+                    round(passed_parent_given_pass_child / passed_child, 5)
+                    if passed_child
+                    else None
                 ),
                 "informative": informative,
                 "ability_conditioned_coefficient": effect["coefficient"],
@@ -355,7 +369,11 @@ def edge_report(cohort: Cohort, scores: dict[str, dict[str, float]]) -> list[dic
                 "verdict": (
                     "ENABLE BLOCKING"
                     if may_block
-                    else ("KEEP INERT — not measured" if not informative else "KEEP INERT — bar not met")
+                    else (
+                        "KEEP INERT — not measured"
+                        if not informative
+                        else "KEEP INERT — bar not met"
+                    )
                 ),
                 # The verdict the unconditioned rate cannot reach. An edge earns blocking
                 # only if failing the parent suppresses the child WITHIN an ability
@@ -384,7 +402,7 @@ def on_matrix_rate(runs_dir: Path, bank) -> dict:
     Answers A3 numerically: the replay is only interpretable above an 80% on-matrix rate,
     and this says how large a form that costs on the observed selection distribution.
     """
-    served = Counter()
+    served: Counter[str] = Counter()
     sessions = 0
     for path in sorted(runs_dir.glob("*.jsonl")):
         for line in path.open(encoding="utf-8"):
@@ -400,7 +418,7 @@ def on_matrix_rate(runs_dir: Path, bank) -> dict:
     bank_size = len([i for i in bank.all_items() if i.status == "active"])
 
     def form_size_for(target: float) -> int:
-        hit = np.searchsorted(cumulative, target) + 1
+        hit = int(np.searchsorted(cumulative, target)) + 1
         return int(min(hit, len(ordered)))
 
     return {
@@ -415,14 +433,18 @@ def on_matrix_rate(runs_dir: Path, bank) -> dict:
         },
         "form_size_for_80pct_on_matrix": form_size_for(0.80),
         "form_size_for_90pct_on_matrix": form_size_for(0.90),
-        "form_size_as_share_of_bank_at_80pct": round(form_size_for(0.80) / bank_size, 4),
+        "form_size_as_share_of_bank_at_80pct": round(
+            form_size_for(0.80) / bank_size, 4
+        ),
     }
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cohort", required=True, help="a DGP-1 or DGP-2 cohort")
-    parser.add_argument("--runs", default="", help="run directory, for the on-matrix rate")
+    parser.add_argument(
+        "--runs", default="", help="run directory, for the on-matrix rate"
+    )
     parser.add_argument("--out", default="eval-results/edge-validity")
     parser.add_argument("--bank", default="AIE")
     parser.add_argument("--limit", type=int, default=2000)
@@ -456,19 +478,31 @@ def main() -> None:
     )
 
     enable = [r for r in rows if r["verdict"] == "ENABLE BLOCKING"]
-    enable_conditioned = [r for r in rows if r["verdict_ability_conditioned"] == "ENABLE BLOCKING"]
+    enable_conditioned = [
+        r for r in rows if r["verdict_ability_conditioned"] == "ENABLE BLOCKING"
+    ]
     unmeasured = [r for r in rows if not r["informative"]]
     real = [r for r in rows if r["in_true_structure"]]
     spurious = [r for r in rows if not r["in_true_structure"]]
 
-    print(f"Phase 0b — offline edge validity on {cohort.dgp}, {len(cohort.simulees)} simulees")
-    print(f"  edges asserted by the graph          : {len(rows)}  ({len(real)} real, {len(spurious)} absent from the world)")
-    print(f"  edges with >= {MINIMUM_INFORMATIVE_PAIRS} informative pairs     : {len(rows) - len(unmeasured)}")
+    print(
+        f"Phase 0b — offline edge validity on {cohort.dgp}, {len(cohort.simulees)} simulees"
+    )
+    print(
+        f"  edges asserted by the graph          : {len(rows)}  ({len(real)} real, {len(spurious)} absent from the world)"
+    )
+    print(
+        f"  edges with >= {MINIMUM_INFORMATIVE_PAIRS} informative pairs     : {len(rows) - len(unmeasured)}"
+    )
     print(f"  enabled by P(pass child | fail parent): {len(enable)}")
     print(f"  enabled by ability-conditioned effect : {len(enable_conditioned)}")
     print()
-    print(f"  {'parent':>8} {'child':>8} {'real?':>6} {'fails':>7} {'P(pass|fail)':>13} {'UCB':>8} {'effect UB':>10} {'r':>6}  unconditioned -> conditioned")
-    for row in sorted(rows, key=lambda r: (r["in_true_structure"], r.get("stratified_effect") or 0)):
+    print(
+        f"  {'parent':>8} {'child':>8} {'real?':>6} {'fails':>7} {'P(pass|fail)':>13} {'UCB':>8} {'effect UB':>10} {'r':>6}  unconditioned -> conditioned"
+    )
+    for row in sorted(
+        rows, key=lambda r: (r["in_true_structure"], r.get("stratified_effect") or 0)
+    ):
         p = row["p_pass_child_given_fail_parent"]
         u = row["upper_95"]
         effect_bound = row.get("stratified_effect")
@@ -479,7 +513,7 @@ def main() -> None:
         }.get(row["verdict_ability_conditioned"], "not measured")
         conditioned = f"{conditioned} ({row.get('stratified_strata_used', 0)} strata)"
         print(
-            f"  {row['parent']:>8} {row['child']:>8} {str(row['in_true_structure']):>6} "
+            f"  {row['parent']:>8} {row['child']:>8} {row['in_true_structure']!s:>6} "
             f"{row['n_parent_failures']:>7} {('—' if p is None else f'{p:.4f}'):>13} "
             f"{('—' if u is None else f'{u:.4f}'):>8} "
             f"{('—' if effect_bound is None else f'{effect_bound:+.3f}'):>10} "
@@ -490,30 +524,42 @@ def main() -> None:
     if spurious:
         caught_raw = sum(1 for r in spurious if r["verdict"] != "ENABLE BLOCKING")
         kept_raw = sum(1 for r in real if r["verdict"] == "ENABLE BLOCKING")
-        not_identified = sum(1 for r in rows if r.get("ability_conditioned_identified") is False)
+        not_identified = sum(
+            1 for r in rows if r.get("ability_conditioned_identified") is False
+        )
         print()
-        print("  Discrimination — can either check tell a real edge from a spurious one?")
-        print(f"    unconditioned: {caught_raw}/{len(spurious)} spurious refused, "
-              f"{kept_raw}/{len(real)} real retained")
+        print(
+            "  Discrimination — can either check tell a real edge from a spurious one?"
+        )
+        print(
+            f"    unconditioned: {caught_raw}/{len(spurious)} spurious refused, "
+            f"{kept_raw}/{len(real)} real retained"
+        )
         caught_strat = sum(
             1 for r in spurious if r["verdict_ability_conditioned"] != "ENABLE BLOCKING"
         )
         kept_strat = sum(
             1 for r in real if r["verdict_ability_conditioned"] == "ENABLE BLOCKING"
         )
-        unmeasured_strat = sum(
-            1 for r in rows if r.get("stratified_effect") is None
+        unmeasured_strat = sum(1 for r in rows if r.get("stratified_effect") is None)
+        print(
+            f"    ability-stratified : {caught_strat}/{len(spurious)} spurious refused, "
+            f"{kept_strat}/{len(real)} real retained "
+            f"({unmeasured_strat}/{len(rows)} not measured in any stratum)"
         )
-        print(f"    ability-stratified : {caught_strat}/{len(spurious)} spurious refused, "
-              f"{kept_strat}/{len(real)} real retained "
-              f"({unmeasured_strat}/{len(rows)} not measured in any stratum)")
     if matrix:
         print()
         print("  Layer 4 replay precondition (A3):")
-        print(f"    distinct items ever served : {matrix['distinct_items_ever_served']} of {matrix['bank_size']}")
-        print(f"    linear form for 80% on-matrix : {matrix['form_size_for_80pct_on_matrix']} items "
-              f"({100 * matrix['form_size_as_share_of_bank_at_80pct']:.1f}% of the bank)")
-        print(f"    linear form for 90% on-matrix : {matrix['form_size_for_90pct_on_matrix']} items")
+        print(
+            f"    distinct items ever served : {matrix['distinct_items_ever_served']} of {matrix['bank_size']}"
+        )
+        print(
+            f"    linear form for 80% on-matrix : {matrix['form_size_for_80pct_on_matrix']} items "
+            f"({100 * matrix['form_size_as_share_of_bank_at_80pct']:.1f}% of the bank)"
+        )
+        print(
+            f"    linear form for 90% on-matrix : {matrix['form_size_for_90pct_on_matrix']} items"
+        )
     print(f"\nwrote {out / 'edge_validity.json'}")
 
 

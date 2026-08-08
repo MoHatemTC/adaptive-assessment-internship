@@ -49,9 +49,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from evaluation import personas as personas_module  # noqa: E402
-from evaluation import stats  # noqa: E402
-from evaluation.design import FACTORS  # noqa: E402
+from evaluation import personas as personas_module
+from evaluation import stats
+from evaluation.design import FACTORS
 
 #: The four D x K corners. Cost varies with traversal depth and with how much work the
 #: corroboration bookkeeping does, so a single-corner probe would size the sweep from

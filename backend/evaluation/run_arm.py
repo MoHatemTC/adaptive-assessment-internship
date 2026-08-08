@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import os
 import sys
@@ -26,7 +27,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from evaluation.arms import ARMS, FROZEN_ENV  # noqa: E402
+from evaluation.arms import ARMS, FROZEN_ENV
 
 
 def _apply_env(arm_name: str, factors: dict[str, str] | None = None) -> dict[str, str]:
@@ -104,14 +105,14 @@ def _force_enable_edges(graph_service):
 
 async def _run_all(
     *, arm_name, cohort, out_dir, limit, max_steps, trace_every, run_name="", resume=False,
-    sample_seed=0,
+    sample_seed=0, cohort_source: Path | None = None,
 ):
-    from evaluation import HAS_GRAPH, responder
-    from evaluation.session_runner import run_session
     from app.config.settings import settings
     from app.services.code_adaptive import CodeAdaptiveSession, JsonQuestionRepository
     from app.services.orchestrator.grader import GraderAgent
     from app.services.orchestrator.orchestrator import Orchestrator
+    from evaluation import HAS_GRAPH, responder
+    from evaluation.session_runner import run_session
 
     responder.install_stubs()
 
@@ -192,6 +193,13 @@ async def _run_all(
             simulees = [simulees[int(i * step)] for i in range(limit)]
     order = _np.random.default_rng(rng_seed).permutation(len(simulees))
     simulees = [simulees[int(i)] for i in order]
+    planned = len(simulees)
+
+    cohort_sha256 = None
+    if cohort_source is not None:
+        cohort_sha256 = hashlib.sha256(cohort_source.read_bytes()).hexdigest()
+    cohort_personas = sorted({str(s.persona) for s in cohort.simulees})
+
     def _resolved_policy_summary(bank_id: str | None) -> dict | None:
         """The permission lattice actually in force, for R1.
 
@@ -213,6 +221,21 @@ async def _run_all(
     basename = run_name or f"{arm_name}__{cohort.dgp}"
     results_path = out_dir / f"{basename}.jsonl"
     manifest_path = out_dir / f"{basename}.manifest.json"
+
+    # A persona is part of the data-generating process even though `cohort.dgp` retains
+    # the broad DGP-2/DGP-3 label. The default basename therefore collides across persona
+    # cohorts. Refuse to overwrite or resume a result under a different cohort instead of
+    # silently relabelling P01 evidence as P02/P09 (or vice versa).
+    previous_manifest = None
+    if manifest_path.exists():
+        previous_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        previous_hash = previous_manifest.get("cohort_sha256")
+        if results_path.exists() and cohort_sha256 and previous_hash != cohort_sha256:
+            known = previous_hash or "<missing from legacy manifest>"
+            raise SystemExit(
+                f"{basename}: output already belongs to cohort sha256 {known}; requested "
+                f"{cohort_sha256}. Use a separate --out or --run-name."
+            )
 
     # RESUME. The simulee order above is already deterministic — a stride, then a shuffle
     # seeded on the cohort — so the first N of it are the same N on every invocation.
@@ -240,18 +263,20 @@ async def _run_all(
         if len("".join(complete)) != len(raw):
             results_path.write_text("".join(complete), encoding="utf-8")
             print(f"{basename}: dropped a truncated trailing record before resuming")
-        if done >= len(simulees):
+        if done >= planned:
             print(f"{basename}: already complete ({done} sessions)")
             return
         # A resume that changed the configuration would silently splice two cells into
         # one file, and nothing downstream could separate them again.
-        if manifest_path.exists():
-            previous = json.loads(manifest_path.read_text(encoding="utf-8"))
-            if previous.get("factors") and previous["factors"] != current_factors():
-                raise SystemExit(
-                    f"{basename}: refusing to resume — the factor levels on disk differ "
-                    f"from the ones requested. Delete the cell to re-run it."
-                )
+        if (
+            previous_manifest is not None
+            and "factors" in previous_manifest
+            and previous_manifest["factors"] != current_factors()
+        ):
+            raise SystemExit(
+                f"{basename}: refusing to resume — the factor levels on disk differ "
+                f"from the ones requested. Delete the cell to re-run it."
+            )
         simulees = simulees[done:]
         print(f"{basename}: resuming after {done} sessions")
 
@@ -274,9 +299,12 @@ async def _run_all(
                     "arm_description": ARMS[arm_name].description,
                     "dgp": cohort.dgp,
                     "status": status,
-                    "n_planned": len(simulees),
+                    "n_planned": planned,
                     "n_written": n_written,
                     "cohort_seed": cohort.seed,
+                    "cohort_file": cohort_source.name if cohort_source is not None else None,
+                    "cohort_sha256": cohort_sha256,
+                    "cohort_personas": cohort_personas,
                     # 0 = the cohort's own seed, i.e. the shared paired sample. Non-zero
                     # marks a cell that drew its own subsample; centre points do.
                     "sample_seed": int(sample_seed),
@@ -331,7 +359,7 @@ async def _run_all(
             handle.write(json.dumps(record) + "\n")
             written += 1
             if written % 100 == 0:
-                print(f"  {arm_name} {cohort.dgp}: {written}/{len(simulees)}", flush=True)
+                print(f"  {arm_name} {cohort.dgp}: {written}/{planned}", flush=True)
 
     write_manifest(status="complete", n_written=written)
     print(f"{arm_name} {cohort.dgp}: {written} sessions -> {results_path}")
@@ -395,7 +423,8 @@ def main() -> None:
 
         responder.set_expected_session_length(args.expected_session_length)
 
-    cohort = Cohort.load(args.cohort)
+    cohort_source = Path(args.cohort).resolve()
+    cohort = Cohort.load(cohort_source)
     asyncio.run(
         _run_all(
             arm_name=args.arm,
@@ -407,6 +436,7 @@ def main() -> None:
             run_name=args.run_name,
             resume=args.resume,
             sample_seed=args.sample_seed,
+            cohort_source=cohort_source,
         )
     )
 

@@ -47,8 +47,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    from evaluation.dgp import DGP_ARMS, build_cohort, read_graph_prerequisites
     from app.services.orchestrator import registry
+    from evaluation.dgp import DGP_ARMS, build_cohort, read_graph_prerequisites
 
     bank_id = registry.resolve_bank_id(args.bank)
     bank = registry.get_bank(bank_id)

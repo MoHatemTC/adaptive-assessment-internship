@@ -44,6 +44,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -55,11 +56,11 @@ for key, value in {
 }.items():
     os.environ.setdefault(key, value)
 
-import numpy as np  # noqa: E402
+import numpy as np
 
-from evaluation import responder, stats  # noqa: E402
-from evaluation.bands import band_of, cuts_for  # noqa: E402
-from evaluation.dgp import Cohort  # noqa: E402
+from evaluation import responder, stats
+from evaluation.bands import band_of, cuts_for
+from evaluation.dgp import Cohort
 
 SE_TARGET = 0.55
 BAND_PROBABILITY_TARGET = 0.80
@@ -70,10 +71,15 @@ BAND_COUNTS = (4, 5, 8)
 STOP_RULES = ("se", "band_probability")
 
 
-def _band_probabilities(posterior: np.ndarray, grid: np.ndarray, cuts) -> dict[int, float]:
+def _band_probabilities(
+    posterior: np.ndarray, grid: np.ndarray, cuts
+) -> dict[int, float]:
     levels = np.digitize(grid, cuts) + 1
     normalised = posterior / posterior.sum()
-    return {int(v): float(normalised[levels == v].sum()) for v in sorted(set(levels.tolist()))}
+    return {
+        int(v): float(normalised[levels == v].sum())
+        for v in sorted(set(levels.tolist()))
+    }
 
 
 def information_matrix(pool) -> np.ndarray:
@@ -88,7 +94,10 @@ def information_matrix(pool) -> np.ndarray:
 
     return np.array(
         [
-            [fisher_information(float(t), i.cat.a, i.cat.b, i.cat.c) for t in THETA_GRID]
+            [
+                fisher_information(float(t), i.cat.a, i.cat.b, i.cat.c)
+                for t in THETA_GRID
+            ]
             for i in pool
         ]
     )
@@ -189,7 +198,9 @@ def spread_theta(simulees, seed: int = 20260804):
         clone = copy.deepcopy(simulee)
         offset = float(rng.uniform(-3.2, 3.2))
         base = float(np.mean(list(simulee.theta.values())))
-        clone.theta = {main: value - base + offset for main, value in simulee.theta.items()}
+        clone.theta = {
+            main: value - base + offset for main, value in simulee.theta.items()
+        }
         clone.nodes = {}
         spread.append(clone)
     return spread
@@ -248,7 +259,7 @@ def main() -> None:
     # simulee: the bank does not change between them.
     informations = {m: information_matrix(pools[m]) for m in mains}
 
-    rows = []
+    rows: list[dict[str, Any]] = []
     for n_bands in BAND_COUNTS:
         cuts = cuts_for(n_bands)
         for stop_rule in STOP_RULES:
@@ -291,13 +302,17 @@ def main() -> None:
                     "marginal_reliability": round(
                         stats.marginal_reliability(np.array(thetas), np.array(ses)), 5
                     ),
-                    "decision_consistency": round(stats.decision_consistency(band_rows), 5),
+                    "decision_consistency": round(
+                        stats.decision_consistency(band_rows), 5
+                    ),
                     "median_se": round(float(np.median(ses)), 5),
                     "n": len(correct),
                     # (true band, reported band) counts. Mass on a SHIFTED diagonal is an
                     # alignment bug; mass spread symmetrically is a measurement result.
                     # This is the diagnostic that found the strata confound.
-                    "confusion": {f"{t}->{e}": n for (t, e), n in sorted(confusion.items())},
+                    "confusion": {
+                        f"{t}->{e}": n for (t, e), n in sorted(confusion.items())
+                    },
                 }
             )
 
@@ -306,7 +321,9 @@ def main() -> None:
         row["accuracy_vs_5band_se_pp"] = round(
             100.0 * (row["exact_level_accuracy"] - baseline["exact_level_accuracy"]), 3
         )
-        row["questions_vs_5band_se"] = round(row["mean_questions"] - baseline["mean_questions"], 3)
+        row["questions_vs_5band_se"] = round(
+            row["mean_questions"] - baseline["mean_questions"], 3
+        )
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -315,7 +332,9 @@ def main() -> None:
             {
                 "cohort": cohort.dgp,
                 "n_simulees": len(simulees),
-                "ability_distribution": "eight fixed strata" if args.strata else "uniform [-3.2, 3.2]",
+                "ability_distribution": "eight fixed strata"
+                if args.strata
+                else "uniform [-3.2, 3.2]",
                 "node_heterogeneity": nodes_mode == "consistent",
                 "rows": rows,
             },

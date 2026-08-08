@@ -44,9 +44,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from evaluation import stats  # noqa: E402
-from evaluation.analyse import dag_safety  # noqa: E402
-from evaluation.dgp import Cohort  # noqa: E402
+from evaluation.analyse import dag_safety
+from evaluation.dgp import Cohort
 
 #: Thresholds to trace. Below 0.80 is pointless — the shipped value already rejects nearly
 #: nothing — and 1.00 is included as the limit case: accept only evidence graded with

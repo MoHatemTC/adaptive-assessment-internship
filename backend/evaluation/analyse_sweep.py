@@ -31,10 +31,10 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from evaluation import stats  # noqa: E402
-from evaluation.analyse import dag_safety  # noqa: E402
-from evaluation.design import FACTORS  # noqa: E402
-from evaluation.dgp import Cohort  # noqa: E402
+from evaluation import stats
+from evaluation.analyse import dag_safety
+from evaluation.design import FACTORS
+from evaluation.dgp import Cohort
 
 #: §4.3. A cell firing below this share of the best cell's volume cannot be measured.
 UNMEASURABLE_FRACTION = 0.02
@@ -249,7 +249,7 @@ def analyse(sweep_dir: Path, cohorts_dir: Path) -> dict:
         }
 
     # Main effects, per persona, on the two responses the screening question is about.
-    effects = {}
+    effects: dict[str, dict[str, dict]] = {}
     for persona in sorted({c["persona"] for c in per_cell}):
         rows = [c for c in per_cell if c["persona"] == persona]
         factorial = [c for c in rows if c["kind"] == "factorial"]

@@ -1,0 +1,89 @@
+{
+  "git_commit": "0f86002f15378daef6dab7a233f5ccec0d0e4810",
+  "git_state": "remediation working-tree patch over git_commit",
+  "remediation_patch_hash": "fcd775691db071dc19f72ebfeff7714841b73a3feae760047853183e3c42b017",
+  "evaluated_at": "2026-08-08",
+  "python_version": "3.12.3",
+  "active_bank": "AIE",
+  "bank_hash": "09e2714e499a6b335fdc86cf19c0463be29433d15482cea8856a6d9087386c34",
+  "graph_hash": "df8fab9cc7ac7f38a0271bf40d00b0d5870b3975bdb5f11295bad27f1a242bf9",
+  "cohort_seed": 42,
+  "sample_seed": 0,
+  "model_ids": {},
+  "prompt_hashes": {
+    "picker": "7864dbd9ec5c25c37f855cabb9d00d1acf3f651877194954088390042aff928b",
+    "voice": "250a39beb3c4d340c8e098a1a393d67122acb40e42a200d88c6eaefa1c350eff",
+    "code": "f8a9cfa033c4a440dac394b32ef16bcfda5e03e9477f97476fcae2eec1d8b36e"
+  },
+  "baseline_simulation": {
+    "dgp": "DGP-2",
+    "persona": "P01",
+    "sessions": 100,
+    "candidate_main_units": 300,
+    "paired_selector_comparison": false,
+    "trajectory": "runs/codex_baseline/C-shipped__DGP-2.jsonl",
+    "metrics": "runs/codex_baseline/report/results.json"
+  },
+  "postfix_simulation": {
+    "dgp": "DGP-2",
+    "persona": "P01",
+    "sessions": 100,
+    "candidate_main_units": 300,
+    "paired_selector_comparison": false,
+    "trajectory": "runs/codex_postfix/C-shipped__DGP-2.jsonl",
+    "metrics": "runs/codex_postfix/report/results.json",
+    "configuration": {
+      "band_probability_stop_enabled": true,
+      "band_probability_stop_conjunctive": true,
+      "interval_widening_enabled": true,
+      "interval_widening_factor": 1.0,
+      "interval_widening_by_variable": "AIE C1-C10: 1.33"
+    }
+  },
+  "expanded_cycle": {
+    "sessions": 400,
+    "candidate_main_units": 1200,
+    "root": "runs/codex_cycle4_fixed",
+    "cohorts": [
+      {
+        "dgp": "DGP-2",
+        "persona": "P01",
+        "sha256": "7a84b690156154933436604050ca250645dc1fd542b248df2f8c7bbdb5dc8c89",
+        "metrics": "runs/codex_cycle4_fixed/dgp2_p01/report/results.json"
+      },
+      {
+        "dgp": "DGP-2",
+        "persona": "P02",
+        "sha256": "aabbde797c934b0b8616293baef87717d4f5c708bdcb5f935efd0af10f33b9ba",
+        "metrics": "runs/codex_cycle4_fixed/dgp2_p02/report/results.json"
+      },
+      {
+        "dgp": "DGP-3",
+        "persona": "P01",
+        "sha256": "0d79c89f4f6f66ea2749da688f57cb10d7ad59a159a4537009095e8ae3ac9c0a",
+        "metrics": "runs/codex_cycle4_fixed/dgp3_p01/report/results.json"
+      },
+      {
+        "dgp": "DGP-3",
+        "persona": "P09",
+        "sha256": "fb966d0379fd6c211be5f8f57dbe4ef9974711837ee367879e06bc2e60ce1793",
+        "metrics": "runs/codex_cycle4_fixed/dgp3_p09/report/results.json"
+      }
+    ],
+    "configuration": {
+      "band_decisions_certified": false,
+      "interval_widening_by_variable": {
+        "C1": 1.55,
+        "C3": 1.5,
+        "C6": 1.36
+      }
+    }
+  },
+  "notes": [
+    "No billed LLM evaluation was run in this audit.",
+    "The baseline run kept the band-probability stop disabled; the paired post-fix run enables the full conjunctive stop and reporting-only interval correction.",
+    "Expanded-cycle band decisions are provisional: model convergence is not operational certification.",
+    "The remediation patch hash covers tracked git diff content and excludes this manifest itself; run artifacts carry their own cohort hashes.",
+    "The final boundary-only retest added candidate-safe UI/API receipts, CAT concurrency/resource guards, and realtime failure cleanup; it did not change the frozen psychometric cohorts or their metrics."
+  ]
+}

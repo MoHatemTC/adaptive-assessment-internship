@@ -42,7 +42,7 @@ for key, value in {
 }.items():
     os.environ.setdefault(key, value)
 
-import numpy as np  # noqa: E402
+import numpy as np
 
 SE_TARGET = 0.55
 MAX_QUESTIONS = 12
@@ -58,7 +58,8 @@ def reachable_se(pool, theta: float, budget: int) -> float:
     from app.services.adaptive.irt import fisher_information
 
     infos = sorted(
-        (fisher_information(theta, i.cat.a, i.cat.b, i.cat.c) for i in pool), reverse=True
+        (fisher_information(theta, i.cat.a, i.cat.b, i.cat.c) for i in pool),
+        reverse=True,
     )
     total = sum(infos[:budget])
     return float(1.0 / np.sqrt(total)) if total > 0 else float("inf")
@@ -74,7 +75,11 @@ def main() -> None:
 
     bank_id = registry.resolve_bank_id(args.bank)
     bank = registry.get_bank(bank_id)
-    graph = registry.get_graph_service(bank_id) if hasattr(registry, "get_graph_service") else None
+    graph = (
+        registry.get_graph_service(bank_id)
+        if hasattr(registry, "get_graph_service")
+        else None
+    )
     critical_only = registry.coverage_policy(bank_id)
 
     items = [i for i in bank.all_items() if i.status == "active"]
@@ -90,8 +95,15 @@ def main() -> None:
 
     for main in mains:
         pool = bank.shortlist(main, exclude=set())
-        by_modality = Counter(i.modality for i in pool)
-        sub_nodes = sorted({m.variable for i in pool for m in i.measures if m.variable.startswith(f"{main}.")})
+        by_modality: Counter[str] = Counter(i.modality for i in pool)
+        sub_nodes = sorted(
+            {
+                m.variable
+                for i in pool
+                for m in i.measures
+                if m.variable.startswith(f"{main}.")
+            }
+        )
 
         required: list[str] = []
         if graph is not None:
@@ -105,9 +117,7 @@ def main() -> None:
                 )
 
         # Which required nodes the bank can actually measure at all.
-        measurable = {
-            m.variable for i in pool for m in i.measures
-        }
+        measurable = {m.variable for i in pool for m in i.measures}
         unmeasurable = [node for node in required if node not in measurable]
 
         # Per-modality sub-pools, after the graph filter would have removed nothing yet.
@@ -154,7 +164,9 @@ def main() -> None:
     (out / "bank_check.json").write_text(json.dumps(report, indent=1), encoding="utf-8")
 
     print(f"Bank reality check — {bank_id}: {len(items)} active items, mains {mains}")
-    print(f"  coverage policy: {'critical sub-competencies only' if critical_only else 'every sub-competency'}")
+    print(
+        f"  coverage policy: {'critical sub-competencies only' if critical_only else 'every sub-competency'}"
+    )
     print()
     header = f"  {'main':>5} {'items':>6} {'mcq':>5} {'code':>5} {'voice':>6} {'required':>9} {'>cap?':>6} {'worst SE@12':>12} {'target met':>11}"
     print(header)
@@ -165,11 +177,13 @@ def main() -> None:
         print(
             f"  {main:>5} {block['items']:>6} {modality.get('mcq', 0):>5} "
             f"{modality.get('code', 0):>5} {modality.get('voice', 0):>6} "
-            f"{block['required_count']:>9} {str(block['required_exceeds_question_cap']):>6} "
-            f"{worst:>12.4f} {str(block['se_target_reachable_everywhere']):>11}"
+            f"{block['required_count']:>9} {block['required_exceeds_question_cap']!s:>6} "
+            f"{worst:>12.4f} {block['se_target_reachable_everywhere']!s:>11}"
         )
         if block["unmeasurable_required_nodes"]:
-            print(f"        required but unmeasurable by this bank: {block['unmeasurable_required_nodes']}")
+            print(
+                f"        required but unmeasurable by this bank: {block['unmeasurable_required_nodes']}"
+            )
     print(f"\nwrote {out / 'bank_check.json'}")
 
 

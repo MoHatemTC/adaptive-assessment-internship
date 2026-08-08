@@ -52,8 +52,27 @@ def load_runs(runs_dir: Path) -> dict[tuple[str, str], list[dict]]:
     return out
 
 
-def load_cohorts(cohorts_dir: Path) -> dict[str, Cohort]:
-    return {c.dgp: c for c in (Cohort.load(p) for p in sorted(cohorts_dir.glob("cohort_*.json")))}
+def load_cohorts(cohorts_path: Path) -> dict[str, Cohort]:
+    """Load one unambiguous cohort per DGP.
+
+    Persona cohorts intentionally share the broad `DGP-2`/`DGP-3` label. The old dict
+    comprehension silently kept the lexicographically last one, so a P01 run was scored
+    against P09 node truth whenever both files existed. Accept an exact cohort file for a
+    single-persona analysis and reject ambiguous directories.
+    """
+    paths = [cohorts_path] if cohorts_path.is_file() else sorted(cohorts_path.glob("cohort_*.json"))
+    out: dict[str, Cohort] = {}
+    sources: dict[str, Path] = {}
+    for path in paths:
+        cohort = Cohort.load(path)
+        if cohort.dgp in out:
+            raise ValueError(
+                f"multiple cohort files declare {cohort.dgp}: {sources[cohort.dgp].name} "
+                f"and {path.name}. Pass the exact cohort JSON to --cohorts."
+            )
+        out[cohort.dgp] = cohort
+        sources[cohort.dgp] = path
+    return out
 
 
 # --- per-arm frames -------------------------------------------------------------------
@@ -76,6 +95,7 @@ class Frame:
         self.native_true: list[int] = []
         self.band_probabilities: list[dict[str, float]] = []
         self.converged: list[bool] = []
+        self.decision_status: list[str] = []
         self.stop_reason: list[str] = []
         self.observations: list[int] = []
         self.credible: list[list[float]] = []
@@ -97,6 +117,7 @@ class Frame:
                 self.native_true.append(variable["native_true_level"])
                 self.band_probabilities.append(variable.get("common_band_probabilities", {}))
                 self.converged.append(variable["converged"])
+                self.decision_status.append(variable.get("decision_status", "provisional"))
                 self.stop_reason.append(variable["stop_reason"])
                 self.observations.append(variable["observations"])
                 self.credible.append(variable.get("credible_interval_95") or [])
@@ -217,6 +238,9 @@ def absolute_metrics(frame: Frame) -> dict:
         "p90_duration_minutes": round(float(np.percentile(durations, 90)), 3),
         "duration_over_90min_rate": round(float(np.mean(durations > 90.0)), 5),
         "converged_rate": round(float(np.mean(frame.converged)), 5),
+        "certified_decision_rate": round(
+            float(np.mean(np.array(frame.decision_status) == "certified")), 5
+        ),
         "coverage_satisfied_rate": _rate_over_gated(frame.coverage_ok),
         "coverage_gate_applicable_n": sum(v is not None for v in frame.coverage_ok),
         "modality_blueprint_compliance": round(blueprint, 5),
@@ -544,9 +568,7 @@ def dag_safety(records: list[dict], cohort: Cohort) -> dict:
             if coverage is None:
                 continue
             over_convergence_denominator += 1
-            if not coverage:
-                over_converged += 1
-            elif (record.get("graph") or {}).get("waived", {}).get(variable["variable"]):
+            if not coverage or (record.get("graph") or {}).get("waived", {}).get(variable["variable"]):
                 over_converged += 1
 
     return {
@@ -854,7 +876,11 @@ def markdown_report(result: dict) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--runs", default="eval-results/runs")
-    parser.add_argument("--cohorts", default="eval-results/cohorts")
+    parser.add_argument(
+        "--cohorts",
+        default="eval-results/cohorts",
+        help="directory with one cohort per DGP, or one exact cohort JSON",
+    )
     parser.add_argument("--out", default="eval-results/report")
     parser.add_argument(
         "--contrasts",

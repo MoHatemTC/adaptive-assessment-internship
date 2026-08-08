@@ -47,8 +47,8 @@ rate that depended on how long THIS session ran would be order-dependent again.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Callable
+from collections.abc import Callable
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -74,7 +74,7 @@ class Persona:
     #: Added to theta before the 3PL. Signature: (simulee, item, main, rng) -> float
     theta_shift: Callable[..., float] | None = None
     #: Replaces the item's pseudo-guessing parameter. (item) -> float | None
-    guess_floor: Callable[..., float | None] = None
+    guess_floor: Callable[..., float | None] | None = None
     #: Multiplies P(correct) after the 3PL. (simulee, item, rng) -> float
     probability_multiplier: Callable[..., float] | None = None
     #: Added to a rubric criterion's normalised score. (rng) -> float

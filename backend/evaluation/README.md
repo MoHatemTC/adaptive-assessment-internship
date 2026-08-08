@@ -107,3 +107,31 @@ the repository's own test suite uses.
   faked. `edge_validity.py` reports the Layer 4 precondition rather than the replay.
 - C-DAG-13 (cross-main leakage) is not computed: it needs the shared-node list carried
   through to the cohort, which the current cohort schema does not hold.
+
+## C-shipped release audit and remediation
+
+This directory contains the release audit of commit
+`0f86002f15378daef6dab7a233f5ccec0d0e4810` and its production-code remediation. Evaluation-only
+release-spec tests live in `invariants/test_c_shipped_invariants.py`; paired pre-fix and
+post-fix DGP-2 artifacts live in `runs/codex_baseline/` and `runs/codex_postfix/`. Decision
+artifacts are under `reports/`.
+
+```bash
+cd backend
+python -m pytest evaluation/invariants/test_c_shipped_invariants.py -q
+python -m evaluation.run_arm --arm C-shipped \
+  --cohort eval-results/cohorts/cohort_DGP-2_P01_n2000_seed42.json \
+  --out evaluation/runs/codex_postfix --limit 100 --max-steps 60 --trace-every 10
+python -m evaluation.analyse --runs evaluation/runs/codex_postfix \
+  --cohorts eval-results/cohorts/cohort_DGP-2_P01_n2000_seed42.json \
+  --out evaluation/runs/codex_postfix/report
+```
+
+Pass an exact cohort file whenever the cohort directory contains more than one persona for
+the same DGP. The analyzer now rejects that ambiguity instead of silently choosing the
+lexicographically last cohort.
+
+The baseline's immediate deterministic/security `BLOCK` is resolved. A final production
+classification remains withheld because missing human-gold, fairness, full adversarial,
+report, and release-scale evidence is recorded as `NOT_RUN` or `NOT_ESTIMABLE`; it is never
+imputed.

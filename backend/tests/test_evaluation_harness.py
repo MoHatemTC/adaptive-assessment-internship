@@ -214,6 +214,46 @@ class TestTruncatedRunsAreRecoverable:
         assert _read_jsonl(path) == [{"a": 1}, {"b": 2}]
 
 
+class TestCohortIdentityIsNeverChosenByFilenameOrder:
+    """Persona cohorts share a DGP label and must not overwrite each other in analysis."""
+
+    @staticmethod
+    def _write_cohort(path, *, persona: str) -> None:
+        payload = {
+            "dgp": "DGP-2",
+            "seed": 42,
+            "bank_id": "AIE",
+            "mains": ["C1"],
+            "simulees": [
+                {
+                    "simulee_id": "sim-1",
+                    "family": "monotonic",
+                    "stratum": 0,
+                    "theta": {"C1": 0.0},
+                    "persona": persona,
+                }
+            ],
+        }
+        path.write_text(json.dumps(payload), encoding="utf-8")
+
+    def test_an_exact_cohort_file_is_supported(self, tmp_path):
+        from evaluation.analyse import load_cohorts
+
+        path = tmp_path / "cohort_DGP-2_P01.json"
+        self._write_cohort(path, persona="P01")
+
+        assert load_cohorts(path)["DGP-2"].simulees[0].persona == "P01"
+
+    def test_a_directory_with_two_personas_is_rejected(self, tmp_path):
+        from evaluation.analyse import load_cohorts
+
+        self._write_cohort(tmp_path / "cohort_DGP-2_P01.json", persona="P01")
+        self._write_cohort(tmp_path / "cohort_DGP-2_P09.json", persona="P09")
+
+        with pytest.raises(ValueError, match="exact cohort JSON"):
+            load_cohorts(tmp_path)
+
+
 class TestSeededSubsamplesDifferInMembership:
     """A seeded cell must draw DIFFERENT candidates, not the same ones reordered.
 
@@ -304,10 +344,9 @@ class TestTheConfidenceGateHasNothingToDiscriminate:
         assert {s.grader_error_sd for s in cohort.simulees} == {0.0}
 
     def test_voice_confidence_is_a_point_mass_without_grader_error(self):
-        from evaluation import personas, responder
-        from evaluation.dgp import Simulee
-
         from app.services.orchestrator import registry
+        from evaluation import responder
+        from evaluation.dgp import Simulee
 
         voice = next(
             i for i in registry.get_bank("AIE").all_items() if i.modality in ("voice", "open")

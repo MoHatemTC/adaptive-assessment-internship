@@ -166,11 +166,11 @@ FROZEN_ENV = {
     # propagation input.
     "CAT_EXPOSURE_TOP_K": "3",
     "CAT_CONTENT_BALANCE_FLOOR": "0.80",
-    "CAT_BAND_PROBABILITY_STOP_ENABLED": "false",
+    "CAT_BAND_PROBABILITY_STOP_ENABLED": "true",
     # PRE-5. The P(band) rule, when an arm turns it on, must be a refinement of the
     # precision stop rather than an alternative to it. Every propagation configuration is
     # judged by its effect on a posterior, so a rule that can finalise at an arbitrary SE
-    # would confound the sweep with a second defect. Off in production, on here.
+    # would confound the sweep with a second defect.
     "CAT_BAND_PROBABILITY_STOP_CONJUNCTIVE": "true",
     # R3. Blocking now requires two consistent failures; the prior 4.8-5.1% false-blocking
     # figures were measured at one. Frozen so that a factor sweep moves it deliberately or

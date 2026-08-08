@@ -25,8 +25,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-from scipy.stats import beta as beta_dist
-from scipy.stats import norm
+from scipy.stats import beta as beta_dist  # type: ignore[import-untyped]
+from scipy.stats import norm  # type: ignore[import-untyped]
 
 Z95 = float(norm.ppf(0.95))
 Z80 = float(norm.ppf(0.80))
@@ -705,7 +705,7 @@ def main_effects(
         2.0 * pure_error_sd / np.sqrt(n_factorial) if n_factorial and np.isfinite(pure_error_sd) else float("nan")
     )
 
-    rows = {}
+    rows: dict[str, dict[str, object]] = {}
     for factor in factors:
         high = [responses[c] for c in usable if levels[c].get(factor) == "high"]
         low = [responses[c] for c in usable if levels[c].get(factor) == "low"]

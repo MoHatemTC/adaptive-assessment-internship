@@ -96,7 +96,9 @@ def adv5_structural_graph_probe(graph_service, *, max_depth: int = 4) -> dict:
         sizes = {p: len(reach(p, depth)) for p in children}
         by_depth[str(depth)] = {
             "ancestors": len(sizes),
-            "supporting_k": {str(k): sum(1 for v in sizes.values() if v >= k) for k in (1, 2, 3)},
+            "supporting_k": {
+                str(k): sum(1 for v in sizes.values() if v >= k) for k in (1, 2, 3)
+            },
         }
 
     direct = {p: len(c) for p, c in children.items()}
@@ -106,7 +108,7 @@ def adv5_structural_graph_probe(graph_service, *, max_depth: int = 4) -> dict:
         "max_direct_children": max(direct.values(), default=0),
         "by_depth": by_depth,
         "k_satisfiable_at_depth_1": {
-            str(k): by_depth["1"]["supporting_k"][str(k)] > 0 for k in (1, 2, 3)
+            str(k): any(size >= k for size in direct.values()) for k in (1, 2, 3)
         },
     }
 
@@ -121,7 +123,9 @@ def adv5_session_metric(records: list[dict]) -> dict:
     corroborated = 0
     distinct_sources: list[int] = []
     for record in records:
-        for node, provenance in ((record.get("graph") or {}).get("inferred_records") or {}).items():
+        for node, provenance in (
+            (record.get("graph") or {}).get("inferred_records") or {}
+        ).items():
             corroborated += 1
             # One record per node carries the winning path only, so the count of distinct
             # sources is recoverable per session rather than per inference.
@@ -141,9 +145,10 @@ def adv3_self_report_cannot_infer() -> dict:
     transcript text to an evidence event, and `InferredNodeSignal` carries no score or
     weight so it cannot become one either.
     """
+    from dataclasses import fields
+
     from app.services.competency_graph.evidence import EvidenceEvent
     from app.services.competency_graph.inference import InferredNodeSignal
-    from dataclasses import fields
 
     signal_fields = {f.name for f in fields(InferredNodeSignal)}
     event_fields = {f.name for f in fields(EvidenceEvent)}
@@ -189,10 +194,9 @@ def adv1_injection_is_inert(records: list[dict], clean_records: list[dict]) -> d
     handling of a payload-bearing transcript, not a real grader's susceptibility — stated
     plainly because it is the limit of what a simulated harness can say about security.
     """
+
     def mean_score(rows: list[dict]) -> float:
-        values = [
-            v["estimated_theta"] for r in rows for v in r["variables"]
-        ]
+        values = [v["estimated_theta"] for r in rows for v in r["variables"]]
         return sum(values) / len(values) if values else float("nan")
 
     injected, clean = mean_score(records), mean_score(clean_records)
@@ -212,7 +216,9 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--bank", default="AIE")
     parser.add_argument("--out", default="eval-results/adversarial.json")
-    parser.add_argument("--records", default="", help="a run's .jsonl, for the session checks")
+    parser.add_argument(
+        "--records", default="", help="a run's .jsonl, for the session checks"
+    )
     parser.add_argument("--clean-records", default="", help="the P01 twin, for ADV-1")
     args = parser.parse_args()
 

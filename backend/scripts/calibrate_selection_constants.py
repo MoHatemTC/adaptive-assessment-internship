@@ -38,6 +38,7 @@ from collections import defaultdict
 from datetime import date
 from pathlib import Path
 
+from app.schemas.orchestration import DEFAULT_SECONDS_BY_MODALITY
 from app.services.orchestrator import registry
 from app.services.orchestrator.selection_calibration import (
     CALIBRATION_PATH,
@@ -45,7 +46,6 @@ from app.services.orchestrator.selection_calibration import (
     MINIMUM_OBSERVATIONS,
 )
 from app.services.orchestrator.session_dump import SOURCE_LIVE, read_sessions
-from app.schemas.orchestration import DEFAULT_SECONDS_BY_MODALITY
 
 # A response nobody was present for. Above this, the record describes an interruption
 # rather than an item, and it is excluded from the timing sample rather than trusted.

@@ -151,7 +151,7 @@ class Cohort:
         return path
 
     @classmethod
-    def load(cls, path: Path | str) -> "Cohort":
+    def load(cls, path: Path | str) -> Cohort:
         raw = json.loads(Path(path).read_text(encoding="utf-8"))
         simulees = [Simulee(**s) for s in raw.pop("simulees")]
         for key in ("true_prerequisites", "graph_prerequisites", "wrong_edges", "missing_edges"):

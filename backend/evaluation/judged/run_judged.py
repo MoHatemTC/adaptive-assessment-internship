@@ -19,8 +19,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from evaluation.judged import goldens, reliability  # noqa: E402
-from evaluation.judged.metrics import DEEPEVAL_PIN, g01_prefilter  # noqa: E402
+from evaluation.judged import goldens, reliability
+from evaluation.judged.metrics import DEEPEVAL_PIN, g01_prefilter
 
 RUNS_PER_CASE = 5
 

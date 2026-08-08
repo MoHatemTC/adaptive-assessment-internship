@@ -39,8 +39,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from evaluation.design import build_design, design_document  # noqa: E402
-from evaluation import personas as personas_module  # noqa: E402
+from evaluation import personas as personas_module
+from evaluation.design import build_design, design_document
 
 #: Leave headroom. Each child is single-threaded once BLAS is pinned, but the parent, the
 #: filesystem and the machine's other work all need room, and a pool sized to every core
