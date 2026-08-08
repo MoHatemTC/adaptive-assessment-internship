@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from app.services.code_adaptive import scoring
 from app.services.code_adaptive.bank import JsonQuestionRepository
 from app.services.code_adaptive.competency import LearnerModel
 from app.services.code_adaptive.selection import (
@@ -14,7 +15,6 @@ from app.services.code_adaptive.selection import (
     rank_candidates,
 )
 from app.services.code_adaptive.weights import WeightProfile
-from app.services.code_adaptive import scoring
 
 
 @pytest.fixture(scope="module")

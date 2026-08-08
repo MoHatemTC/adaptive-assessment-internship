@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Protocol
 
@@ -23,17 +24,19 @@ from app.services.orchestrator.competency import main_competency
 
 logger = logging.getLogger(__name__)
 
-BANK_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "question_bank.json"
+BANK_PATH = (
+    Path(__file__).resolve().parent.parent.parent / "data" / "question_bank.json"
+)
 
 
-def _main_code_sort_key(code: str) -> tuple[int, str]:
+def _main_code_sort_key(code: str) -> tuple[int, int | str]:
     """C1..C10 in numeric order, not lexicographic (C10 before C2)."""
     if code.startswith("C") and code[1:].isdigit():
         return (0, int(code[1:]))
     return (1, code)
 
 
-def _sorted_main_codes(codes: set[str] | list[str]) -> list[str]:
+def _sorted_main_codes(codes: Iterable[str]) -> list[str]:
     return sorted(codes, key=_main_code_sort_key)
 
 
@@ -88,14 +91,21 @@ class JsonUnifiedBank:
             try:
                 items.append(BankItem.model_validate(entry))
             except ValidationError as exc:
-                identifier = entry.get("item_id", "<no id>") if isinstance(entry, dict) else "?"
+                identifier = (
+                    entry.get("item_id", "<no id>") if isinstance(entry, dict) else "?"
+                )
                 rejected.append(identifier)
                 logger.error("bank item %s rejected: %s", identifier, exc)
 
         if rejected:
             # Named and skipped rather than raised: one malformed item should not deny
             # every candidate an assessment, but it must not pass silently either.
-            logger.error("%d of %d bank items rejected: %s", len(rejected), len(entries), rejected)
+            logger.error(
+                "%d of %d bank items rejected: %s",
+                len(rejected),
+                len(entries),
+                rejected,
+            )
         if not items:
             raise ValueError(f"no valid items in {self._path}")
         return tuple(items)
@@ -222,7 +232,9 @@ class JsonUnifiedBank:
             )
             loading = item.loading(variable)
             intrinsic[item.modality] = max(intrinsic.get(item.modality, 0.0), peak)
-            effective[item.modality] = max(effective.get(item.modality, 0.0), peak * loading)
+            effective[item.modality] = max(
+                effective.get(item.modality, 0.0), peak * loading
+            )
 
         def relative(values: dict[str, float]) -> dict[str, float]:
             best = max(values.values(), default=0.0)
@@ -238,10 +250,14 @@ class JsonUnifiedBank:
             "relative_effective": relative_effective,
             "relative_intrinsic": relative_intrinsic,
             # Rarely administered here, for whichever reason. Expected when loading is low.
-            "rarely_selected": sorted(m for m, v in relative_effective.items() if v < 0.5),
+            "rarely_selected": sorted(
+                m for m, v in relative_effective.items() if v < 0.5
+            ),
             # Weak even at full loading: the item parameters themselves are the problem.
             # This is what `calibration.py` warns about and the only entry worth acting on.
-            "miscalibrated": sorted(m for m, v in relative_intrinsic.items() if v < 0.5),
+            "miscalibrated": sorted(
+                m for m, v in relative_intrinsic.items() if v < 0.5
+            ),
         }
 
     def parity_report(self) -> list[dict]:

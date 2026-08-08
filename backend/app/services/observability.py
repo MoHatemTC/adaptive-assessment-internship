@@ -49,9 +49,10 @@ from __future__ import annotations
 import logging
 import sys
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
-from typing import Any, Iterator
+from typing import Any
 
 from app.config.settings import settings
 
@@ -148,7 +149,9 @@ def session(session_id: str, **attributes: Any) -> Iterator[None]:
         context = _propagate(session_id=session_id, metadata=_clean(attributes))
         context.__enter__()
     except Exception as exc:  # noqa: BLE001
-        logger.warning("langfuse session could not start (%s) — continuing untraced", exc)
+        logger.warning(
+            "langfuse session could not start (%s) — continuing untraced", exc
+        )
         yield
         return
 
@@ -205,8 +208,8 @@ def _live_usage_and_cost(
     input_s = max(float(speech_seconds), 0.0)
     output_s = max(duration_s - input_s, 0.0)
     usage = {
-        "input": int(round(input_s * _LIVE_AUDIO_TOKENS_PER_SEC)),
-        "output": int(round(output_s * _LIVE_AUDIO_TOKENS_PER_SEC)),
+        "input": round(input_s * _LIVE_AUDIO_TOKENS_PER_SEC),
+        "output": round(output_s * _LIVE_AUDIO_TOKENS_PER_SEC),
     }
     cost = {
         "input": round((input_s / 60.0) * _LIVE_AUDIO_INPUT_USD_PER_MIN, 6),
@@ -318,7 +321,9 @@ def end_live(
             ),
             usage_details=usage,
             cost_details=cost,
-            level=status if status in {"DEBUG", "DEFAULT", "WARNING", "ERROR"} else "DEFAULT",
+            level=status
+            if status in {"DEBUG", "DEFAULT", "WARNING", "ERROR"}
+            else "DEFAULT",
             status_message=(error[:300] if error else None),
         )
         observation.end()

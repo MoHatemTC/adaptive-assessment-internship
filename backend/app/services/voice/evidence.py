@@ -20,20 +20,26 @@ _DEPENDENCY_MULT = {
 }
 
 
-def evidence_strength(package: VoiceResponsePackage, evaluation: VoiceEvaluation) -> float:
+def evidence_strength(
+    package: VoiceResponsePackage, evaluation: VoiceEvaluation
+) -> float:
     """Voice analogues of the code path's evidence-strength rungs."""
     if package.outcome_status == "infrastructure_error":
         return 0.0
     if package.outcome_status == "unscorable":
         return 0.0
-    if package.total_speech_seconds < voice_settings.min_speech_seconds_scorable:
-        # typed/text fallback may report 0 speech — treat long transcripts as spoken
-        if package.word_count < 12 and len(package.transcript.split()) < 12:
-            return 0.0
+    # Typed/text fallback may report 0 speech — treat long transcripts as spoken.
+    if (
+        package.total_speech_seconds < voice_settings.min_speech_seconds_scorable
+        and package.word_count < 12
+        and len(package.transcript.split()) < 12
+    ):
+        return 0.0
 
     if (
         package.mean_transcript_confidence is not None
-        and package.mean_transcript_confidence < voice_settings.transcript_confidence_floor
+        and package.mean_transcript_confidence
+        < voice_settings.transcript_confidence_floor
     ):
         strength = 0.25
     elif package.cut_off or package.outcome_status == "truncated":
@@ -63,9 +69,9 @@ def project_competency_evidence(
     projection = criterion_to_competency_weights(rubric)
     rubric_weights: dict[str, float] = {}
     for crit in rubric.get("criteria", []):
-        rubric_weights[crit["competency_id"]] = (
-            rubric_weights.get(crit["competency_id"], 0.0) + float(crit.get("weight", 0.0))
-        )
+        rubric_weights[crit["competency_id"]] = rubric_weights.get(
+            crit["competency_id"], 0.0
+        ) + float(crit.get("weight", 0.0))
 
     # accumulators per competency
     num: dict[str, float] = {}

@@ -18,9 +18,9 @@ import logging
 from dataclasses import dataclass, field
 
 from app.config.settings import CodeRubric as Rubric
-from app.services.code_adaptive.llm import LLMUnavailable, chat_json
 from app.services.code_adaptive import prompts as rubric_module
 from app.services.code_adaptive.execution import ExecutionEvidence
+from app.services.code_adaptive.llm import LLMUnavailable, chat_json
 from app.services.code_adaptive.static_analysis import StaticSignals
 
 logger = logging.getLogger(__name__)
@@ -118,12 +118,18 @@ def build_payload(
     """
     rubric = rubric or rubric_module.load()
     return {
-        "rubric": rubric_module.render(rubric, [c["criterion_id"] for c in question["rubric_criteria"]]),
+        "rubric": rubric_module.render(
+            rubric, [c["criterion_id"] for c in question["rubric_criteria"]]
+        ),
         "question": {
             "title": question["title"],
             "prompt": question["prompt"],
-            "allowed_competency_ids": [c["competency_id"] for c in question["competencies"]],
-            "allowed_criterion_ids": [c["criterion_id"] for c in question["rubric_criteria"]],
+            "allowed_competency_ids": [
+                c["competency_id"] for c in question["competencies"]
+            ],
+            "allowed_criterion_ids": [
+                c["criterion_id"] for c in question["rubric_criteria"]
+            ],
         },
         "learner_code": code,
         "objective_evidence": {
@@ -134,7 +140,11 @@ def build_payload(
             "passed_test_ratio": round(evidence.passed_test_ratio, 3),
             "timeout": evidence.timeout,
             "failed_tests": [
-                {"test_id": o.test_id, "failure_type": o.failure_type, "detail": o.detail}
+                {
+                    "test_id": o.test_id,
+                    "failure_type": o.failure_type,
+                    "detail": o.detail,
+                }
                 for o in evidence.test_results
                 if not o.passed
             ],
@@ -173,7 +183,10 @@ def validate(reply: dict, question: dict, evidence: ExecutionEvidence) -> LLMEva
             continue
 
         try:
-            score = float(raw.get("score"))
+            score_raw = raw.get("score")
+            if score_raw is None:
+                raise ValueError("missing score")
+            score = float(score_raw)
             confidence = float(raw.get("confidence", 0.0))
         except (TypeError, ValueError):
             flags.append(f"UNPARSEABLE_SCORE: {criterion}")
@@ -197,7 +210,11 @@ def validate(reply: dict, question: dict, evidence: ExecutionEvidence) -> LLMEva
             if entry.get("type") != "failed_test":
                 return False
             raw_reference = str(entry.get("reference", ""))
-            parts = {p.strip() for p in raw_reference.replace(";", ",").split(",") if p.strip()}
+            parts = {
+                p.strip()
+                for p in raw_reference.replace(";", ",").split(",")
+                if p.strip()
+            }
             return not parts or not parts <= real_test_ids
 
         invented = [e.get("reference") for e in cited if cites_unknown_test(e)]
@@ -225,7 +242,9 @@ def validate(reply: dict, question: dict, evidence: ExecutionEvidence) -> LLMEva
             misconception = None
 
         kept.append(
-            LLMCriterionEvidence(criterion, competency, score, confidence, misconception, cited)
+            LLMCriterionEvidence(
+                criterion, competency, score, confidence, misconception, cited
+            )
         )
 
     try:
@@ -257,7 +276,9 @@ def evaluate(
     try:
         reply = chat_json(
             EVALUATION_SYSTEM,
-            json.dumps(build_payload(question, code, evidence, signals, rubric), indent=2),
+            json.dumps(
+                build_payload(question, code, evidence, signals, rubric), indent=2
+            ),
             require=("criterion_evidence",),
         )
     except LLMUnavailable as exc:

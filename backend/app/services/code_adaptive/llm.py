@@ -33,7 +33,12 @@ from app.services.litellm_http import sync_http
 
 logger = logging.getLogger(__name__)
 
-TRANSPORT_ERRORS = (APITimeoutError, APIConnectionError, InternalServerError, RateLimitError)
+TRANSPORT_ERRORS = (
+    APITimeoutError,
+    APIConnectionError,
+    InternalServerError,
+    RateLimitError,
+)
 REPLY_ATTEMPTS = 3
 TRANSPORT_ATTEMPTS = 2
 
@@ -79,7 +84,9 @@ def extract_json(raw: str, require: tuple[str, ...] = ()) -> dict[str, Any]:
     """
 
     def acceptable(value: Any) -> bool:
-        return isinstance(value, dict) and bool(value) and all(k in value for k in require)
+        return (
+            isinstance(value, dict) and bool(value) and all(k in value for k in require)
+        )
 
     try:
         parsed = json.loads(raw)
@@ -123,7 +130,10 @@ def _one_call(
     request_kwargs: dict[str, Any] = {
         "model": settings.litellm_model,
         "response_format": {"type": "json_object"},
-        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
     }
     # gpt-5.6-sol (via the current LiteLLM route) rejects temperature=0 and requires
     # provider default behavior; omit the field completely in that case.
@@ -173,7 +183,9 @@ def chat_json(
         except TRANSPORT_ERRORS as exc:
             last = exc
             if attempt < TRANSPORT_ATTEMPTS - 1:
-                logger.warning("llm transport failure (%s), retrying", type(exc).__name__)
+                logger.warning(
+                    "llm transport failure (%s), retrying", type(exc).__name__
+                )
                 reset_client()
                 from app.services.litellm_http import reset_http
 

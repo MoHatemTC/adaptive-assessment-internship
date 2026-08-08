@@ -15,8 +15,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from app.services.code_adaptive.llm_evaluator import LLMEvaluation
 from app.services.code_adaptive.execution import ExecutionEvidence
+from app.services.code_adaptive.llm_evaluator import LLMEvaluation
 from app.services.code_adaptive.scoring import CriterionScore
 from app.services.code_adaptive.static_analysis import StaticSignals
 
@@ -42,10 +42,16 @@ def _criterion_to_competency_weights(question: dict) -> dict[str, dict[str, floa
     """
     mapping: dict[str, dict[str, float]] = {}
     for test in question.get("tests", []):
-        for criterion, criterion_weight in (test.get("criterion_weights") or {}).items():
+        for criterion, criterion_weight in (
+            test.get("criterion_weights") or {}
+        ).items():
             bucket = mapping.setdefault(criterion, {})
-            for competency, competency_weight in (test.get("competency_weights") or {}).items():
-                bucket[competency] = bucket.get(competency, 0.0) + criterion_weight * competency_weight
+            for competency, competency_weight in (
+                test.get("competency_weights") or {}
+            ).items():
+                bucket[competency] = (
+                    bucket.get(competency, 0.0) + criterion_weight * competency_weight
+                )
 
     # Any criterion with no test mapping falls back to the question's own competency
     # weights, so a criterion scored only by static analysis or the model still lands
@@ -176,7 +182,9 @@ def normalize(
                 competency_id=competency,
                 score=round(score, 4),
                 confidence=round(confidence, 3),
-                evidence_strength=round(strength * total_weight / max(total_weight, 1.0), 3),
+                evidence_strength=round(
+                    strength * total_weight / max(total_weight, 1.0), 3
+                ),
                 source="hybrid" if used_llm else "objective",
                 misconception_codes=misconceptions_by_competency.get(competency, []),
             )

@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import json
 import logging
-import math
 from dataclasses import dataclass, field
 
+from app.config.settings import settings
 from app.services.code_adaptive.competency import LearnerModel
 from app.services.code_adaptive.irt import (
     beta_posterior_grid,
@@ -20,9 +20,8 @@ from app.services.code_adaptive.irt import (
     kl_information,
     selection_criterion,
 )
-from app.services.code_adaptive.prompts import SELECTION_SYSTEM
-from app.config.settings import settings
 from app.services.code_adaptive.llm import LLMUnavailable, chat_json
+from app.services.code_adaptive.prompts import SELECTION_SYSTEM
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +34,6 @@ ALLOWED_REASON_CODES = {
     "REDUCE_REPETITION",
     "BALANCE_EXPOSURE",
 }
-
 
 
 @dataclass
@@ -161,7 +159,9 @@ def _parameters(question: dict) -> tuple[float, float]:
     A zero or missing discrimination would make information identically zero and the
     question unrankable, so it degrades to a blunt-but-usable item rather than vanishing.
     """
-    return max(float(question.get("discrimination", 1.0)), 0.1), float(question["difficulty"])
+    return max(float(question.get("discrimination", 1.0)), 0.1), float(
+        question["difficulty"]
+    )
 
 
 def expected_information(question: dict, mastery: float, loading: float = 1.0) -> float:
@@ -188,7 +188,9 @@ def rank_candidates(
     """
     ranked: list[RankedCandidate] = []
     scratch: list[tuple] = []
-    open_misconceptions = {c for s in model.states.values() for c in s.misconception_codes}
+    open_misconceptions = {
+        c for s in model.states.values() for c in s.misconception_codes
+    }
 
     # Which criterion this step uses, and the belief it is computed against. Both are
     # properties of the session, not of a candidate question, so they are resolved once.
@@ -217,11 +219,14 @@ def rank_candidates(
             if criterion == "KL":
                 information = kl_information(ability, a, b, delta, loading)
             else:
+                assert posterior is not None
                 information = expected_fisher_information(posterior, a, b, loading)
         else:
             loading = 0.0
             observed = [s for s in states if s.observed]
-            ability = sum(s.mastery for s in observed) / len(observed) if observed else 0.5
+            ability = (
+                sum(s.mastery for s in observed) / len(observed) if observed else 0.5
+            )
             uncertainty = sum(s.standard_error * w for s, w in zip(states, weights))
             # No target: information about the whole blueprint, each competency weighted
             # by how much the question loads on it.
@@ -236,9 +241,14 @@ def rank_candidates(
 
         # Misconception relevance: verifying a suspected misconception is the highest-value
         # evidence available — it either confirms a real gap or clears a false positive.
-        relevance = 1.0 if open_misconceptions and any(
-            not model.get(t).observed or model.get(t).mastery < 0.5 for t in targets
-        ) else 0.0
+        relevance = (
+            1.0
+            if open_misconceptions
+            and any(
+                not model.get(t).observed or model.get(t).mastery < 0.5 for t in targets
+            )
+            else 0.0
+        )
 
         signals = {
             "expected_information": round(information, 4),
@@ -250,7 +260,9 @@ def rank_candidates(
             "target_loading": round(loading, 4),
         }
 
-        scratch.append((question, information, uncertainty, relevance, coverage, signals))
+        scratch.append(
+            (question, information, uncertainty, relevance, coverage, signals)
+        )
 
     # Information is normalised against the best candidate BEFORE it is blended, because
     # KL and Fisher are not on the same scale — KL sums a divergence over a neighbourhood,
@@ -285,7 +297,7 @@ def _explain(signals: dict[str, float]) -> str:
     numeric = {k: v for k, v in signals.items() if isinstance(v, (int, float))}
     if not numeric:
         return "Best available utility."
-    top = max(numeric, key=numeric.get)
+    top = max(numeric, key=lambda key: numeric[key])
     return {
         "expected_information": "Most informative at the current ability estimate.",
         "competency_uncertainty": "The competency under test is still imprecise.",
@@ -313,9 +325,15 @@ def choose(
 
     def deterministic(flags: list[str], fallback: bool = True) -> SelectionDecision:
         return SelectionDecision(
-            question=best.question, rank=1, utility=best.utility, best_utility=best.utility,
-            chosen_by_llm=False, fallback_used=fallback, reason_code="MAX_INFORMATION",
-            reason=best.reason, shortlist_ids=[c.question["question_id"] for c in shortlist],
+            question=best.question,
+            rank=1,
+            utility=best.utility,
+            best_utility=best.utility,
+            chosen_by_llm=False,
+            fallback_used=fallback,
+            reason_code="MAX_INFORMATION",
+            reason=best.reason,
+            shortlist_ids=[c.question["question_id"] for c in shortlist],
             flags=flags,
         )
 
@@ -330,16 +348,23 @@ def choose(
         # estimate still imprecise, which is the whole reason one question beats another.
         "competency_under_test": target_competency,
         "cat_parameters": {
-            "ability_estimate": round(target_state.mastery, 4) if target_state else None,
-            "standard_error": round(target_state.standard_error, 4) if target_state else None,
+            "ability_estimate": round(target_state.mastery, 4)
+            if target_state
+            else None,
+            "standard_error": round(target_state.standard_error, 4)
+            if target_state
+            else None,
             "evidence_count": target_state.evidence_count if target_state else 0,
             "measured_yet": bool(target_state and target_state.observed),
             "precision_target": settings.code_se_target,
         },
         "learner_state_summary": {
             "weak_competencies": [
-                {"competency_id": s.competency_id, "mastery": round(s.mastery, 3),
-                 "standard_error": round(s.standard_error, 3)}
+                {
+                    "competency_id": s.competency_id,
+                    "mastery": round(s.mastery, 3),
+                    "standard_error": round(s.standard_error, 3),
+                }
                 for s in model.weakest()
             ],
             "open_misconceptions": sorted(
@@ -355,7 +380,9 @@ def choose(
                 "discrimination": c.question.get("discrimination"),
                 "expected_information": c.signals.get("expected_information"),
                 "target_loading": c.signals.get("target_loading"),
-                "target_competencies": [x["competency_id"] for x in c.question["competencies"]],
+                "target_competencies": [
+                    x["competency_id"] for x in c.question["competencies"]
+                ],
                 "selection_reason": c.reason,
             }
             for index, c in enumerate(shortlist)
@@ -368,7 +395,9 @@ def choose(
 
     try:
         reply = chat_json(
-            SELECTION_SYSTEM, json.dumps(payload, indent=2), require=("selected_question_id",)
+            SELECTION_SYSTEM,
+            json.dumps(payload, indent=2),
+            require=("selected_question_id",),
         )
     except LLMUnavailable as exc:
         logger.warning("selection: model unavailable (%s) — deterministic rank 1", exc)
@@ -416,5 +445,3 @@ def choose(
         shortlist_ids=[c.question["question_id"] for c in shortlist],
         flags=flags,
     )
-
-

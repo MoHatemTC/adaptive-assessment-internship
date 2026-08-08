@@ -19,7 +19,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from app.config.settings import CodeApproach as Approach, settings
+from app.config.settings import CodeApproach as Approach
+from app.config.settings import settings
 from app.services.code_adaptive.execution import ExecutionEvidence
 from app.services.code_adaptive.static_analysis import StaticSignals
 
@@ -153,14 +154,18 @@ def overall_score(scores: list[CriterionScore], question: dict) -> float | None:
     missing source. Returns None when nothing was assessed at all.
     """
     weights = criterion_weights(question)
-    usable = [(c, weights.get(c.criterion_id, 0.0)) for c in scores if c.score is not None]
+    usable = [
+        (float(c.score), weights.get(c.criterion_id, 0.0))
+        for c in scores
+        if c.score is not None
+    ]
     total = sum(w for _, w in usable)
     if not usable or total <= 0:
         # Weights all zero but scores exist: fall back to the plain mean rather than
         # returning None, which would report "not assessed" for work that was assessed.
-        plain = [c.score for c in scores if c.score is not None]
+        plain = [float(c.score) for c in scores if c.score is not None]
         return round(sum(plain) / len(plain), 4) if plain else None
-    return round(sum(c.score * w for c, w in usable) / total, 4)
+    return round(sum(score * w for score, w in usable) / total, 4)
 
 
 def integrity_cap(signals: StaticSignals) -> tuple[float | None, str]:
@@ -190,7 +195,10 @@ def integrity_cap(signals: StaticSignals) -> tuple[float | None, str]:
     if not signals.syntax_valid:
         return None, ""  # a syntax error is already scored by execution; not fraud
     if signals.not_implemented:
-        return 0.0, "NOT_IMPLEMENTED: the function body is empty — nothing was demonstrated"
+        return (
+            0.0,
+            "NOT_IMPLEMENTED: the function body is empty — nothing was demonstrated",
+        )
     if signals.hard_coded_output_suspected:
         return 0.25, (
             "HARDCODED_OUTPUT: returns literals and ignores its arguments — passing tests "
@@ -218,7 +226,8 @@ def apply_integrity_cap(
             score=None if s.score is None else min(s.score, cap),
             sources_used=s.sources_used,
             confidence=s.confidence,
-            conflict_flag=s.conflict_flag or ("INTEGRITY_CAP" if s.score and s.score > cap else ""),
+            conflict_flag=s.conflict_flag
+            or ("INTEGRITY_CAP" if s.score and s.score > cap else ""),
         )
         for s in scores
     ]
@@ -233,7 +242,7 @@ def combine(
     llm: float | None,
     llm_confidence: float = 1.0,
     approach: Approach | None = None,
-    profile: "WeightProfile | None" = None,
+    profile: WeightProfile | None = None,
 ) -> CriterionScore:
     """Weighted combination of whichever sources are present.
 
@@ -252,16 +261,21 @@ def combine(
     if profile is not None:
         weights = profile.for_criterion(criterion_id)
     else:
-        weights = dict(SOURCE_WEIGHTS[approach or settings.code_approach].get(criterion_id, {}))
+        weights = dict(
+            SOURCE_WEIGHTS[approach or settings.code_approach].get(criterion_id, {})
+        )
     conflict = ""
 
     if llm is not None and llm_confidence < settings.code_minimum_llm_confidence:
         weights["llm"] = weights.get("llm", 0.0) * 0.5
 
-    if criterion_id == "functional_correctness" and llm is not None and tests is not None:
-        if llm > tests + 0.15:
-            conflict = "LLM_OBJECTIVE_CONFLICT: model scored above the test result"
-            llm = tests
+    if (
+        criterion_id == "functional_correctness"
+        and llm is not None
+        and tests is not None
+    ) and llm > tests + 0.15:
+        conflict = "LLM_OBJECTIVE_CONFLICT: model scored above the test result"
+        llm = tests
 
     available = {"tests": tests, "static": static, "llm": llm}
     total_weight = 0.0

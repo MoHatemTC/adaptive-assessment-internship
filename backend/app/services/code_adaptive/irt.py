@@ -39,6 +39,7 @@ Two phases, following the MCQ engine:
 from __future__ import annotations
 
 import math
+from typing import Literal
 
 # Mastery grid for posterior-weighted quantities. 41 points over [0, 1], mirroring the MCQ
 # engine's 41 points over [-4, 4]: fine enough that discretisation error is far below any
@@ -76,7 +77,9 @@ def probability_correct(mastery: float, a: float, b: float) -> float:
     return 1.0 / (1.0 + math.exp(-SCALING * a * (mastery - b)))
 
 
-def fisher_information(mastery: float, a: float, b: float, loading: float = 1.0) -> float:
+def fisher_information(
+    mastery: float, a: float, b: float, loading: float = 1.0
+) -> float:
     """Fisher information at a point on the mastery scale.
 
         I = a^2 * P * (1 - P) * loading
@@ -129,7 +132,10 @@ def expected_fisher_information(
     is still moving and can select a question the next response invalidates. Weighting by
     where the candidate plausibly IS uses the same belief the estimate is read from.
     """
-    return sum(w * fisher_information(m, a, b, loading) for m, w in zip(MASTERY_GRID, posterior))
+    return sum(
+        w * fisher_information(m, a, b, loading)
+        for m, w in zip(MASTERY_GRID, posterior)
+    )
 
 
 def kl_information(
@@ -148,11 +154,13 @@ def kl_information(
         if abs(m - mastery_hat) > delta:
             continue
         p = min(max(probability_correct(m, a, b), 1e-9), 1.0 - 1e-9)
-        total += p_hat * math.log(p_hat / p) + (1.0 - p_hat) * math.log((1.0 - p_hat) / (1.0 - p))
+        total += p_hat * math.log(p_hat / p) + (1.0 - p_hat) * math.log(
+            (1.0 - p_hat) / (1.0 - p)
+        )
     return total * loading
 
 
-def selection_criterion(evidence_count: int) -> str:
+def selection_criterion(evidence_count: int) -> Literal["KL", "E[Fisher]"]:
     """Which information criterion applies at this point in the session."""
     return "KL" if evidence_count < KL_PHASE_ITEMS else "E[Fisher]"
 
@@ -185,7 +193,9 @@ def mastery_band(mastery: float, observed: bool) -> tuple[int | None, str]:
     return 5, "Expert"
 
 
-def stop_rule_calibration(target: float, min_questions: int, max_questions: int) -> dict:
+def stop_rule_calibration(
+    target: float, min_questions: int, max_questions: int
+) -> dict:
     """Can the precision target actually END a session, between the floor and the cap?
 
     A stopping rule is only adaptive if it can bind, and it fails silently in two
@@ -204,10 +214,11 @@ def stop_rule_calibration(target: float, min_questions: int, max_questions: int)
     strong candidate has less posterior variance and will converge sooner, possibly before
     min_questions. A BINDING verdict means the rule can fire, not that it always will.
     """
+
     def se_after(n: int, p: float = 0.5) -> float:
         return posterior_standard_error(1.0 + n * p, 1.0 + n * (1.0 - p))
 
-    reached = next((n for n in range(0, max_questions + 1) if se_after(n) <= target), None)
+    reached = next((n for n in range(max_questions + 1) if se_after(n) <= target), None)
     floor = se_after(max_questions)
 
     if reached is None:

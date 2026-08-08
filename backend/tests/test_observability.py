@@ -191,7 +191,7 @@ async def test_trace_labels_never_reach_the_gateway(monkeypatch):
     received: dict = {}
 
     class _Handler(BaseHTTPRequestHandler):
-        def do_POST(self):  # noqa: N802 — stdlib naming
+        def do_POST(self):
             length = int(self.headers.get("content-length", 0))
             received["body"] = _json.loads(self.rfile.read(length) or b"{}")
             body = _json.dumps(

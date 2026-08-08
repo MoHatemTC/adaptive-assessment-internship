@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from app.schemas.voice import CriterionEvidence, VoiceEvaluation, VoiceResponsePackage
+from app.schemas.voice import (
+    CriterionEvidence,
+    QuoteTier,
+    VoiceEvaluation,
+    VoiceResponsePackage,
+)
 from app.services.voice.quotes import match_quote
 
 _ALLOWED_DEP = {"independent", "probe_supported", "probe_dependent"}
@@ -33,7 +38,13 @@ def validate(
     turn_by_id = {t.turn_id: t for t in package.turns}
     if not turn_by_id and package.transcript:
         # text-fallback path: synthesise a single candidate turn
-        turn_by_id = {"t0": type("T", (), {"turn_id": "t0", "role": "candidate", "text": package.transcript})()}
+        turn_by_id = {
+            "t0": type(
+                "T",
+                (),
+                {"turn_id": "t0", "role": "candidate", "text": package.transcript},
+            )()
+        }
 
     seen: set[str] = set()
     evidence: list[CriterionEvidence] = []
@@ -84,7 +95,7 @@ def validate(
 
         quote = raw.get("quote", None)
         turn_id = raw.get("quote_turn_id") or raw.get("turn_id")
-        quote_tier = None
+        quote_tier: QuoteTier | None = None
         if quote is not None or turn_id:
             turn = turn_by_id.get(str(turn_id)) if turn_id else None
             if turn is None and len(turn_by_id) == 1:
@@ -107,7 +118,7 @@ def validate(
                 flags.append("QUOTE_TOO_SHORT")
                 degraded = True
                 continue
-            quote_tier = tier  # type: ignore[assignment]
+            quote_tier = tier
         else:
             flags.append("NO_EVIDENCE_CITED")
             degraded = True
@@ -128,7 +139,9 @@ def validate(
             )
         )
 
-    required = {c["criterion_id"] for c in rubric.get("criteria", []) if c.get("required")}
+    required = {
+        c["criterion_id"] for c in rubric.get("criteria", []) if c.get("required")
+    }
     missing = required - {e.criterion_id for e in evidence}
     if missing:
         flags.append("MISSING_REQUIRED_CRITERION")
@@ -146,12 +159,16 @@ def validate(
         flags=flags,
         degraded=degraded,
         evaluation_confidence=conf if coverage >= 0.5 else min(conf, 0.4),
-        overall_rationale=str(reply.get("overall_rationale", reply.get("rationale", "")))[:800],
+        overall_rationale=str(
+            reply.get("overall_rationale", reply.get("rationale", ""))
+        )[:800],
         raw_reply=reply,
     )
 
 
-def _fatal(item_id: str, rubric: dict, flags: list[str], reply: dict) -> VoiceEvaluation:
+def _fatal(
+    item_id: str, rubric: dict, flags: list[str], reply: dict
+) -> VoiceEvaluation:
     return VoiceEvaluation(
         item_id=item_id,
         rubric_id=rubric.get("rubric_id", ""),

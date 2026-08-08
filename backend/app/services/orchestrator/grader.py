@@ -7,7 +7,7 @@ happens BEFORE this sync path, so orchestrator.record_response stays untouched.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from app.schemas.orchestration import BankItem, GradedResponse
 from app.schemas.voice import GradedVoiceResponse
@@ -50,9 +50,11 @@ class GraderAgent:
 
     def _grade_mcq(self, item: BankItem, response: object) -> GradedResponse:
         try:
-            chosen = int(response)  # type: ignore[arg-type]
+            chosen = int(cast(Any, response))
         except (TypeError, ValueError):
-            raise ValueError(f"{item.item_id}: MCQ response must be an option index") from None
+            raise ValueError(
+                f"{item.item_id}: MCQ response must be an option index"
+            ) from None
 
         answer_index = int(item.payload["answer_index"])
         options = item.payload.get("options") or []
@@ -77,14 +79,18 @@ class GraderAgent:
             item_id=item.item_id,
             modality="mcq",
             outcomes=[o.__dict__ for o in outcomes],
-            detail={"chosen_index": chosen, "correct": bool(score), "answer_index": answer_index},
+            detail={
+                "chosen_index": chosen,
+                "correct": bool(score),
+                "answer_index": answer_index,
+            },
         )
 
     def _grade_code(self, item: BankItem, response: object) -> GradedResponse:
         if self._code is None:
             raise RuntimeError("no code engine configured — cannot grade a code item")
         if not isinstance(response, str):
-            raise ValueError(f"{item.item_id}: code response must be source text")
+            raise TypeError(f"{item.item_id}: code response must be source text")
 
         question = self.as_code_question(item)
         graded = self._code.evaluate(question, response)

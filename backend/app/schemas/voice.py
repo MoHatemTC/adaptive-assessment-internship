@@ -6,9 +6,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-OutcomeStatus = Literal[
-    "complete", "truncated", "unscorable", "infrastructure_error"
-]
+OutcomeStatus = Literal["complete", "truncated", "unscorable", "infrastructure_error"]
 PromptDependency = Literal["independent", "probe_supported", "probe_dependent"]
 QuoteTier = Literal["exact", "normalized", "subsequence", "fuzzy", "described"]
 

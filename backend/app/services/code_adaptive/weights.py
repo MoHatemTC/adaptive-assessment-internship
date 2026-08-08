@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 CRITERIA = (
     "functional_correctness",
@@ -109,7 +109,11 @@ class WeightProfile:
                 deterministic = {s: 1.0 for s in _plausible_sources(criterion)}
                 total = sum(deterministic.values())
 
-            weights = {s: (v / total) * (1.0 - share) for s, v in deterministic.items() if v > 0}
+            weights = {
+                s: (v / total) * (1.0 - share)
+                for s, v in deterministic.items()
+                if v > 0
+            }
             if share > 0.0:
                 weights["llm"] = share
             updated[criterion] = {s: round(v, 4) for s, v in weights.items() if v > 0}
@@ -141,7 +145,9 @@ class WeightProfile:
         """False when no criterion gives the model weight, so no call need be made."""
         return any(w.get("llm", 0.0) > 0.0 for w in self.criteria.values())
 
-    def overall_shares(self, criterion_weights: dict[str, float] | None = None) -> dict[str, float]:
+    def overall_shares(
+        self, criterion_weights: dict[str, float] | None = None
+    ) -> dict[str, float]:
         """Each source's EFFECTIVE share of the whole score.
 
         Two corrections separate this from reading the weight table off the page, and both
@@ -159,12 +165,15 @@ class WeightProfile:
         functional correctness (40%). Pass the weights to reflect that; the default is an
         equal split, which is only right for a uniform bank.
         """
-        weights = criterion_weights or {c: 1.0 / len(self.criteria) for c in self.criteria}
+        weights = criterion_weights or {
+            c: 1.0 / len(self.criteria) for c in self.criteria
+        }
         totals = {"tests": 0.0, "static": 0.0, "llm": 0.0}
 
         for criterion, sources in self.criteria.items():
             usable = {
-                s: v for s, v in sources.items()
+                s: v
+                for s, v in sources.items()
                 if v > 0 and s in SOURCES_THAT_CAN_SCORE.get(criterion, set(sources))
             }
             span = sum(usable.values())
@@ -172,7 +181,9 @@ class WeightProfile:
                 continue
             share_of_total = weights.get(criterion, 0.0)
             for source, value in usable.items():
-                totals[source] = totals.get(source, 0.0) + (value / span) * share_of_total
+                totals[source] = (
+                    totals.get(source, 0.0) + (value / span) * share_of_total
+                )
 
         return {s: round(v, 4) for s, v in totals.items()}
 
@@ -198,7 +209,10 @@ class WeightProfile:
         "was this score produced under the same rules as that one" answerable.
         """
         canonical = json.dumps(
-            {c: {s: round(v, 4) for s, v in sorted(w.items())} for c, w in sorted(self.criteria.items())},
+            {
+                c: {s: round(v, 4) for s, v in sorted(w.items())}
+                for c, w in sorted(self.criteria.items())
+            },
             sort_keys=True,
         )
         return hashlib.sha256(canonical.encode()).hexdigest()[:12]
@@ -208,7 +222,9 @@ class WeightProfile:
         problems: list[str] = []
         for criterion, weights in self.criteria.items():
             if not weights:
-                problems.append(f"{criterion}: no source has any weight — it cannot be scored")
+                problems.append(
+                    f"{criterion}: no source has any weight — it cannot be scored"
+                )
                 continue
             total = sum(weights.values())
             if abs(total - 1.0) > 0.01:

@@ -110,7 +110,9 @@ class CodeAdaptiveSession:
         }
 
     # --- lifecycle ---------------------------------------------------------
-    def begin(self, target_competency: str, self_rating: int | None = None) -> SessionState:
+    def begin(
+        self, target_competency: str, self_rating: int | None = None
+    ) -> SessionState:
         """Open a session scoped to one competency.
 
         The target scopes everything: which questions are eligible, which competency the
@@ -131,7 +133,9 @@ class CodeAdaptiveSession:
             started_at=time.time(),
         )
 
-    def next_question(self, state: SessionState, *, use_llm: bool = True) -> SelectedQuestion | None:
+    def next_question(
+        self, state: SessionState, *, use_llm: bool = True
+    ) -> SelectedQuestion | None:
         """Pick the next question, or None when nothing eligible remains."""
         model = self._to_model(state)
         bank = [q.model_dump() for q in self._repository.all_questions()]
@@ -143,7 +147,9 @@ class CodeAdaptiveSession:
             return None
 
         ranked = rank_candidates(candidates, model, state.target_competency)
-        decision = choose(ranked, model, use_llm=use_llm, target_competency=state.target_competency)
+        decision = choose(
+            ranked, model, use_llm=use_llm, target_competency=state.target_competency
+        )
         if decision is None:
             return None
 
@@ -188,10 +194,14 @@ class CodeAdaptiveSession:
         remaining = len(
             filter_candidates(
                 [q.model_dump() for q in self._repository.all_questions()],
-                set(answered), model, state.target_competency,
+                set(answered),
+                model,
+                state.target_competency,
             )
         )
-        stop = evaluate_stop(model, len(answered), elapsed, remaining, state.target_competency)
+        stop = evaluate_stop(
+            model, len(answered), elapsed, remaining, state.target_competency
+        )
 
         new_state = SessionState(
             session_id=state.session_id,
@@ -204,7 +214,9 @@ class CodeAdaptiveSession:
         return new_state, result["report"], StopDecision(**stop.__dict__)
 
     # --- evaluation --------------------------------------------------------
-    def evaluate(self, question: dict, code: str, profile: WeightProfile | None = None) -> dict:
+    def evaluate(
+        self, question: dict, code: str, profile: WeightProfile | None = None
+    ) -> dict:
         """Run one submission through execution, analysis, scoring and projection.
 
         Exposed so a submission can be graded outside a session — reviewing a past answer,
@@ -236,7 +248,9 @@ class CodeAdaptiveSession:
             ]
             integrity_reason = ""
         else:
-            objective = scoring.objective_criterion_scores(execution, signals, question["tests"])
+            objective = scoring.objective_criterion_scores(
+                execution, signals, question["tests"]
+            )
             static = scoring.static_criterion_scores(signals)
             criterion_scores = [
                 scoring.combine(
@@ -251,10 +265,18 @@ class CodeAdaptiveSession:
             ]
             # Structure can void the inference from a passing test to a demonstrated
             # competency. Applied before projection so the learner model sees the cap too.
-            criterion_scores, integrity_reason = scoring.apply_integrity_cap(criterion_scores, signals)
+            criterion_scores, integrity_reason = scoring.apply_integrity_cap(
+                criterion_scores, signals
+            )
 
-        competency_evidence = normalize(question, criterion_scores, execution, llm, signals)
-        overall = scoring.overall_score(criterion_scores, question) if execution.usable else None
+        competency_evidence = normalize(
+            question, criterion_scores, execution, llm, signals
+        )
+        overall = (
+            scoring.overall_score(criterion_scores, question)
+            if execution.usable
+            else None
+        )
 
         flags = [
             *llm.flags,
@@ -275,7 +297,9 @@ class CodeAdaptiveSession:
             total_tests=execution.total_tests,
             overall_score=overall,
             criterion_scores={c.criterion_id: c.score for c in criterion_scores},
-            misconception_codes=sorted({c for e in competency_evidence for c in e.misconception_codes}),
+            misconception_codes=sorted(
+                {c for e in competency_evidence for c in e.misconception_codes}
+            ),
             diagnostic=llm.overall_diagnostic,
             llm_used=llm.available,
             evaluation_latency_ms=int((time.time() - started) * 1000),

@@ -29,14 +29,99 @@ _ROMAJI_MARKERS = re.compile(
 )
 
 _COMMON_EN = frozenset(
-    """
-    the a an is are was were be been being to of in for on with as by at from
-    or and but if then that this these those it its i you we they he she not no
-    yes do does did have has had can could would should will just so than when
-    what which who how why where there here my your our their about into over
-    after before because while also only same other into list tuple error raise
-    first then because so result remains change assign
-    """.split()
+    [
+        "the",
+        "a",
+        "an",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "to",
+        "of",
+        "in",
+        "for",
+        "on",
+        "with",
+        "as",
+        "by",
+        "at",
+        "from",
+        "or",
+        "and",
+        "but",
+        "if",
+        "then",
+        "that",
+        "this",
+        "these",
+        "those",
+        "it",
+        "its",
+        "i",
+        "you",
+        "we",
+        "they",
+        "he",
+        "she",
+        "not",
+        "no",
+        "yes",
+        "do",
+        "does",
+        "did",
+        "have",
+        "has",
+        "had",
+        "can",
+        "could",
+        "would",
+        "should",
+        "will",
+        "just",
+        "so",
+        "than",
+        "when",
+        "what",
+        "which",
+        "who",
+        "how",
+        "why",
+        "where",
+        "there",
+        "here",
+        "my",
+        "your",
+        "our",
+        "their",
+        "about",
+        "into",
+        "over",
+        "after",
+        "before",
+        "because",
+        "while",
+        "also",
+        "only",
+        "same",
+        "other",
+        "into",
+        "list",
+        "tuple",
+        "error",
+        "raise",
+        "first",
+        "then",
+        "because",
+        "so",
+        "result",
+        "remains",
+        "change",
+        "assign",
+    ]
 )
 
 _WORD = re.compile(r"[A-Za-z']+")
@@ -65,9 +150,7 @@ def looks_non_english(text: str) -> bool:
     # Japanese ASR dumps are long but sparse in English function words.
     if ratio < 0.12 and romaji_hits >= 1:
         return True
-    if ratio < 0.08 and len(tokens) >= 40:
-        return True
-    return False
+    return bool(ratio < 0.08 and len(tokens) >= 40)
 
 
 def candidate_turns_non_english(turns: list[dict] | list) -> list[str]:

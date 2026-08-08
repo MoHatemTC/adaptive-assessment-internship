@@ -6,11 +6,16 @@ import json
 import logging
 
 from app.schemas.orchestration import BankItem
-from app.schemas.voice import GradedVoiceResponse, VoiceEvaluation, VoiceResponsePackage, VoiceTurn
+from app.schemas.voice import (
+    GradedVoiceResponse,
+    VoiceEvaluation,
+    VoiceResponsePackage,
+    VoiceTurn,
+)
 from app.services import observability
 from app.services.adaptive.llm import LLMUnavailable, chat_json
-from app.services.voice.prompts import EVALUATOR_SYSTEM
 from app.services.voice.language import candidate_turns_non_english, looks_non_english
+from app.services.voice.prompts import EVALUATOR_SYSTEM
 from app.services.voice.rubrics import load_rubric
 from app.services.voice.validation import validate
 
@@ -31,7 +36,11 @@ def package_from_text(
         item_id=item_id,
         outcome_status=outcome_status,  # type: ignore[arg-type]
         # Typed text is exact — not ASR — so confidence 1.0 is honest here.
-        turns=[VoiceTurn(turn_id="t0", role="candidate", text=text, transcript_confidence=1.0)],
+        turns=[
+            VoiceTurn(
+                turn_id="t0", role="candidate", text=text, transcript_confidence=1.0
+            )
+        ],
         total_speech_seconds=float(secs),
         mean_transcript_confidence=1.0,
         word_count=len(words),
@@ -70,17 +79,22 @@ async def evaluate(
             item.item_id, rubric, package, flags=["HEURISTIC_FALLBACK"]
         )
         evaluation = _apply_english_only_clamp(evaluation, package, rubric)
-        return GradedVoiceResponse(package=package, evaluation=evaluation, rubric=rubric)
+        return GradedVoiceResponse(
+            package=package, evaluation=evaluation, rubric=rubric
+        )
 
     payload = _build_payload(item, package, rubric)
     evaluation = await _call_grader(
         payload, item.item_id, rubric, package, modality=item.modality
     )
-    coverage = len(evaluation.criterion_evidence) / max(len(rubric.get("criteria", [])), 1)
+    coverage = len(evaluation.criterion_evidence) / max(
+        len(rubric.get("criteria", [])), 1
+    )
 
     if (
         any(
-            f in {"QUESTION_ID_MISMATCH", "RUBRIC_ID_MISMATCH", "RUBRIC_VERSION_MISMATCH"}
+            f
+            in {"QUESTION_ID_MISMATCH", "RUBRIC_ID_MISMATCH", "RUBRIC_VERSION_MISMATCH"}
             for f in evaluation.flags
         )
         or coverage < 0.5
@@ -124,7 +138,9 @@ async def _call_grader(
         )
     except (LLMUnavailable, ValueError, TypeError) as exc:
         logger.warning("voice grader unavailable (%s) — heuristic fallback", exc)
-        return _heuristic_from_rubric(item_id, rubric, package, flags=["LLM_UNAVAILABLE"])
+        return _heuristic_from_rubric(
+            item_id, rubric, package, flags=["LLM_UNAVAILABLE"]
+        )
     return validate(reply, item_id, rubric, package)
 
 
@@ -176,7 +192,9 @@ def _apply_english_only_clamp(
     if not non_en_turns and not whole:
         return evaluation
 
-    candidate_turns = [t for t in package.turns if t.role == "candidate" and t.text.strip()]
+    candidate_turns = [
+        t for t in package.turns if t.role == "candidate" and t.text.strip()
+    ]
     english_turns = [t for t in candidate_turns if not looks_non_english(t.text)]
     # Entire answer non-English, or only non-English evidence → near-zero everything.
     # Mixed: English first + non-English probe → keep modest credit from English turns only
@@ -243,9 +261,14 @@ def _rubric_from_payload(item: BankItem) -> dict:
                 "criterion_id": cid,
                 "competency_id": comp,
                 "weight": float(
-                    crit.get("weight", default_weights.get(cid, 1.0 / max(len(raw_criteria), 1)))
+                    crit.get(
+                        "weight",
+                        default_weights.get(cid, 1.0 / max(len(raw_criteria), 1)),
+                    )
                 ),
-                "required": bool(crit.get("required", cid != "clarity_and_communication")),
+                "required": bool(
+                    crit.get("required", cid != "clarity_and_communication")
+                ),
                 "maximum_score": float(crit.get("maximum_score", 5)),
                 "descriptor": crit.get("descriptor", ""),
             }
@@ -264,9 +287,7 @@ def _rubric_from_payload(item: BankItem) -> dict:
         ),
         "common_pitfalls": payload.get("common_pitfalls", []),
         "reference_answer": (
-            payload.get("reference_answer")
-            or payload.get("sample_strong_answer")
-            or ""
+            payload.get("reference_answer") or payload.get("sample_strong_answer") or ""
         ),
     }
 

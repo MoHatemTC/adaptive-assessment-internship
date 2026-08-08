@@ -87,7 +87,7 @@ class ExecutionEvidence:
 # Each test is called in a FRESH namespace re-exec'd from the submission, so a test that
 # mutates module state cannot change the outcome of the next one — otherwise test order
 # would silently affect the score.
-_HARNESS = '''
+_HARNESS = """
 import json, sys, traceback
 
 SUBMISSION = {submission!r}
@@ -130,7 +130,7 @@ if compile_ok:
 print("__RESULT__" + json.dumps({{
     "compiled": compile_ok, "compile_error": compile_err, "results": results,
 }}))
-'''
+"""
 
 
 def _create_sandbox():
@@ -143,7 +143,7 @@ def _create_sandbox():
     "type object 'Sandbox' has no attribute 'create'". The shim means a version skew
     degrades to a working sandbox instead of an outage.
     """
-    from e2b_code_interpreter import Sandbox
+    from e2b_code_interpreter import Sandbox  # type: ignore[import-untyped]
 
     kwargs = {
         "api_key": settings.e2b_api_key,
@@ -203,8 +203,12 @@ def _run_harness(sandbox, harness: str):
             f"python3 {_HARNESS_PATH}",
             timeout=EXECUTION_TIMEOUT_SECONDS,
         )
-        stdout = result.stdout if isinstance(result.stdout, list) else [result.stdout or ""]
-        stderr = result.stderr if isinstance(result.stderr, list) else [result.stderr or ""]
+        stdout = (
+            result.stdout if isinstance(result.stdout, list) else [result.stdout or ""]
+        )
+        stderr = (
+            result.stderr if isinstance(result.stderr, list) else [result.stderr or ""]
+        )
         return _Execution(logs=_Logs(stdout=stdout, stderr=stderr))
 
     # Older SDK without a filesystem API: the event-loop hazard remains, so say so rather
@@ -216,13 +220,15 @@ def _run_harness(sandbox, harness: str):
     return sandbox.run_code(harness, timeout=EXECUTION_TIMEOUT_SECONDS)
 
 
-def _blank_results(tests: list[dict], failure_type: str, detail: str) -> list[TestOutcome]:
-    return [
-        TestOutcome(t["test_id"], False, 0.0, failure_type, detail) for t in tests
-    ]
+def _blank_results(
+    tests: list[dict], failure_type: str, detail: str
+) -> list[TestOutcome]:
+    return [TestOutcome(t["test_id"], False, 0.0, failure_type, detail) for t in tests]
 
 
-def run_submission(code: str, tests: list[dict], function_name: str) -> ExecutionEvidence:
+def run_submission(
+    code: str, tests: list[dict], function_name: str
+) -> ExecutionEvidence:
     """Execute one submission against its test cases inside a fresh sandbox.
 
     Never raises for learner-caused failures — a syntax error or an exception is evidence,
@@ -241,7 +247,7 @@ def run_submission(code: str, tests: list[dict], function_name: str) -> Executio
     try:
         sandbox = _create_sandbox()
         execution = _run_harness(sandbox, harness)
-    except Exception as exc:  # sandbox creation, network, quota — not the learner's fault
+    except Exception as exc:  # noqa: BLE001 - network/quota SDK failures are unscorable
         logger.error("sandbox unavailable: %s: %s", type(exc).__name__, exc)
         return ExecutionEvidence(
             compiled=None,
@@ -255,7 +261,7 @@ def run_submission(code: str, tests: list[dict], function_name: str) -> Executio
         if sandbox is not None:
             try:
                 sandbox.kill()
-            except Exception:  # pragma: no cover — best effort cleanup
+            except Exception:  # noqa: BLE001  # pragma: no cover - best effort cleanup
                 logger.warning("sandbox cleanup failed")
 
     elapsed_ms = int((time.time() - started) * 1000)
@@ -280,7 +286,9 @@ def run_submission(code: str, tests: list[dict], function_name: str) -> Executio
             total_tests=len(tests),
             execution_time_ms=elapsed_ms,
             error_message=str(detail)[:300],
-            test_results=_blank_results(tests, "timeout" if timed_out else "exception", str(detail)[:200]),
+            test_results=_blank_results(
+                tests, "timeout" if timed_out else "exception", str(detail)[:200]
+            ),
         )
 
     if not payload["compiled"]:
@@ -301,7 +309,9 @@ def run_submission(code: str, tests: list[dict], function_name: str) -> Executio
         TestOutcome(
             test_id=r["test_id"],
             passed=r["passed"],
-            score=float(by_id.get(r["test_id"], {}).get("weight", 1.0)) if r["passed"] else 0.0,
+            score=float(by_id.get(r["test_id"], {}).get("weight", 1.0))
+            if r["passed"]
+            else 0.0,
             failure_type=r["failure_type"],
             detail=r["detail"],
         )

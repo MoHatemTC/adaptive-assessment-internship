@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 
+import pytest
+
 from app.schemas.orchestration import BankItem
 from app.services.orchestrator import registry
 from app.services.orchestrator.grader import GraderAgent
@@ -21,7 +23,7 @@ class _FakeEvidence:
 
 
 class _FakeReport:
-    flags = ["FAKE_CODE_PATH"]
+    flags = ("FAKE_CODE_PATH",)
 
     def model_dump(self):
         return {"overall_score": 0.7}
@@ -74,9 +76,21 @@ def test_open_heuristic_path_grades_without_llm():
 
 
 def test_code_grader_uses_injected_code_engine():
-    item: BankItem = next(i for i in registry.get_bank("DA").all_items() if i.modality == "code")
+    item: BankItem = next(
+        i for i in registry.get_bank("DA").all_items() if i.modality == "code"
+    )
     grader = GraderAgent(code_engine=_FakeCodeEngine())  # type: ignore[arg-type]
     graded = grader.grade(item, "def solve():\n    return 1\n")
     assert graded.modality == "code"
     assert graded.outcomes
     assert graded.flags == ["FAKE_CODE_PATH"]
+
+
+def test_code_grader_rejects_a_non_text_response_at_its_boundary():
+    item: BankItem = next(
+        i for i in registry.get_bank("DA").all_items() if i.modality == "code"
+    )
+    grader = GraderAgent(code_engine=_FakeCodeEngine())  # type: ignore[arg-type]
+
+    with pytest.raises(TypeError, match="source text"):
+        grader.grade(item, {"code": "def solve(): pass"})

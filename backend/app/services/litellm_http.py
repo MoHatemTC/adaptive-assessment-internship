@@ -12,12 +12,15 @@ than a failed generation + retry and removes misleading ERROR spans.
 
 from __future__ import annotations
 
+import logging
+
 import httpx
 
 from app.config.settings import settings
 
 _sync: httpx.Client | None = None
 _async: httpx.AsyncClient | None = None
+logger = logging.getLogger(__name__)
 
 # Fresh connections beat stale keepalives against this proxy. The gateway dominates request
 # latency anyway, so connection reuse is not worth intermittent instant failures.
@@ -64,8 +67,10 @@ def reset_http() -> None:
     if _sync is not None:
         try:
             _sync.close()
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception:
+            logger.debug(
+                "could not close cached synchronous LiteLLM client", exc_info=True
+            )
     if _async is not None:
         try:
             # AsyncClient.close is async; best-effort sync drop for restart paths.
@@ -79,7 +84,9 @@ def reset_http() -> None:
                 asyncio.run(_async.aclose())
             else:
                 loop.create_task(_async.aclose())
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception:
+            logger.debug(
+                "could not close cached asynchronous LiteLLM client", exc_info=True
+            )
     _sync = None
     _async = None

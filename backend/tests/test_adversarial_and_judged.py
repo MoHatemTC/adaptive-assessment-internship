@@ -7,7 +7,6 @@ invoked by an ordinary `pytest` run.
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
 
 from evaluation.adversarial import (
@@ -86,7 +85,7 @@ class TestJudgedLayerCannotRunByAccident:
     def test_the_judged_package_is_outside_testpaths(self):
         from pathlib import Path
 
-        import evaluation.judged as judged
+        from evaluation import judged
 
         root = Path(judged.__file__).resolve().parents[2]
         assert (root / "pytest.ini").exists()
@@ -97,7 +96,7 @@ class TestJudgedLayerCannotRunByAccident:
     def test_deepeval_is_not_a_runtime_dependency(self):
         from pathlib import Path
 
-        import evaluation.judged as judged
+        from evaluation import judged
 
         root = Path(judged.__file__).resolve().parents[2]
         assert "deepeval" not in (root / "requirements.txt").read_text(encoding="utf-8")
@@ -113,7 +112,7 @@ class TestJudgedLayerCannotRunByAccident:
     def test_pytest_ini_excludes_the_deepeval_marker(self):
         from pathlib import Path
 
-        import evaluation.judged as judged
+        from evaluation import judged
 
         root = Path(judged.__file__).resolve().parents[2]
         assert 'not deepeval' in (root / "pytest.ini").read_text(encoding="utf-8")

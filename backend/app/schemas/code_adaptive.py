@@ -99,7 +99,9 @@ class SelectedQuestion(BaseModel):
     fallback_used: bool
     reason_code: str
     reason: str
-    criterion: str  # "KL" or "E[Fisher]" — which information criterion drove the ranking
+    criterion: (
+        str  # "KL" or "E[Fisher]" — which information criterion drove the ranking
+    )
     shortlist_ids: list[str] = Field(default_factory=list)
     flags: list[str] = Field(default_factory=list)
 

@@ -6,8 +6,6 @@ rather than sampled. Several of them encode a defect that reached a live session
 
 from __future__ import annotations
 
-import math
-
 import pytest
 
 from app.services.code_adaptive.irt import (

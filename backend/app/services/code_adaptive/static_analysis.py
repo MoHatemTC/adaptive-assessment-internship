@@ -70,7 +70,9 @@ class _Visitor(ast.NodeVisitor):
     def _enter_loop(self, node: ast.AST) -> None:
         self.signals.uses_loop = True
         self._loop_depth += 1
-        self.signals.nested_loop_depth = max(self.signals.nested_loop_depth, self._loop_depth)
+        self.signals.nested_loop_depth = max(
+            self.signals.nested_loop_depth, self._loop_depth
+        )
         self._branch_count += 1
         self.generic_visit(node)
         self._loop_depth -= 1
@@ -106,13 +108,16 @@ class _Visitor(ast.NodeVisitor):
             # full marks for algorithm choice and code quality — a stub scored 0.51
             # overall on the objective-only approach.
             body = [
-                n for n in node.body
+                n
+                for n in node.body
                 if not (isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant))
                 and not isinstance(n, ast.Pass)
             ]
             self.signals.not_implemented = not body
             self._returns_in_target = [
-                n for n in ast.walk(node) if isinstance(n, ast.Return) and n.value is not None
+                n
+                for n in ast.walk(node)
+                if isinstance(n, ast.Return) and n.value is not None
             ]
             if any(
                 isinstance(n, ast.Call)
@@ -128,7 +133,14 @@ class _Visitor(ast.NodeVisitor):
         # Mutating a caller's argument is a contract violation that tests comparing only
         # return values will never catch.
         if isinstance(node.func, ast.Attribute) and node.func.attr in {
-            "append", "extend", "insert", "pop", "remove", "sort", "clear", "update"
+            "append",
+            "extend",
+            "insert",
+            "pop",
+            "remove",
+            "sort",
+            "clear",
+            "update",
         }:
             target = node.func.value
             if isinstance(target, ast.Name) and target.id in self._target_args:
@@ -139,7 +151,11 @@ class _Visitor(ast.NodeVisitor):
 def _looks_like_boundary_guard(test: ast.expr) -> bool:
     """True when a condition tests emptiness, length, or a zero/None boundary."""
     for node in ast.walk(test):
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "len":
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "len"
+        ):
             return True
         if isinstance(node, ast.Constant) and node.value in (0, None, "", [], ()):
             return True
@@ -148,7 +164,7 @@ def _looks_like_boundary_guard(test: ast.expr) -> bool:
     return False
 
 
-def _is_constant_expression(node: ast.expr) -> bool:
+def _is_constant_expression(node: ast.expr | None) -> bool:
     """True only when a returned expression computes NOTHING — no names, no calls.
 
     Deliberately conservative, because of what this signal now does: it caps the
@@ -163,6 +179,8 @@ def _is_constant_expression(node: ast.expr) -> bool:
     return to be free of every Name and Call means only a genuinely fixed value trips it,
     so `return [1, 2, 3]` is caught and anything assembled from a variable is not.
     """
+    if node is None:
+        return True
     for child in ast.walk(node):
         if isinstance(child, (ast.Name, ast.Call, ast.Attribute, ast.Await)):
             return False
@@ -193,18 +211,23 @@ def analyse(code: str, function_name: str) -> StaticSignals:
         # rather than a substitute for working. Without this every correct
         # `is_something()` in the bank is flagged — `is_clean_palindrome` was, twice.
         # Branching is what separates a predicate from `return True` as a stub.
-        predicate = (
-            visitor._branch_count > 0
-            and all(isinstance(r.value, ast.Constant) and isinstance(r.value.value, bool)
-                    for r in returns)
+        predicate = visitor._branch_count > 0 and all(
+            isinstance(r.value, ast.Constant) and isinstance(r.value.value, bool)
+            for r in returns
         )
-        all_literal = not predicate and all(_is_constant_expression(r.value) for r in returns)
+        all_literal = not predicate and all(
+            _is_constant_expression(r.value) for r in returns
+        )
         if all_literal:
             signals.hard_coded_output_suspected = True
-            signals.warnings.append("HARDCODED_OUTPUT: returns literals, ignores arguments")
+            signals.warnings.append(
+                "HARDCODED_OUTPUT: returns literals, ignores arguments"
+            )
 
     if not signals.has_boundary_guard and signals.uses_loop:
-        signals.warnings.append("MISSING_EMPTY_INPUT_GUARD: no length or emptiness check")
+        signals.warnings.append(
+            "MISSING_EMPTY_INPUT_GUARD: no length or emptiness check"
+        )
     if signals.nested_loop_depth >= 2:
         signals.warnings.append(
             f"NESTED_LOOPS: depth {signals.nested_loop_depth} suggests super-linear cost"

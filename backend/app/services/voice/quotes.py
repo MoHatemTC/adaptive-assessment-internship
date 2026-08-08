@@ -7,8 +7,11 @@ import unicodedata
 from difflib import SequenceMatcher
 
 from app.config.voice_settings import voice_settings
+from app.schemas.voice import QuoteTier
 
-_DISFLUENCY = re.compile(r"\b(um|uh|er|ah|hmm+|\[inaudible\]|\[unclear\])\b", re.I)
+_DISFLUENCY = re.compile(
+    r"\b(um|uh|er|ah|hmm+|\[inaudible\]|\[unclear\])\b", re.IGNORECASE
+)
 _PUNCT = re.compile(r"[^\w\s]", re.UNICODE)
 
 
@@ -20,7 +23,7 @@ def _normalize(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def match_quote(quote: str | None, turn_text: str) -> tuple[str | None, float]:
+def match_quote(quote: str | None, turn_text: str) -> tuple[QuoteTier | None, float]:
     """Return (tier, ratio). tier None means rejected."""
     if quote is None:
         return "described", 1.0

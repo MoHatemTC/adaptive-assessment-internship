@@ -114,8 +114,12 @@ def trial_run(question: dict, code: str, limit: int | None = None) -> TrialResul
             test_id=test["test_id"],
             arguments=list(test.get("input", [])),
             expected=test.get("expected"),
-            passed=bool(by_id[test["test_id"]].passed) if test["test_id"] in by_id else False,
-            detail=by_id[test["test_id"]].detail if test["test_id"] in by_id else "not run",
+            passed=bool(by_id[test["test_id"]].passed)
+            if test["test_id"] in by_id
+            else False,
+            detail=by_id[test["test_id"]].detail
+            if test["test_id"] in by_id
+            else "not run",
         )
         for test in tests
     ]

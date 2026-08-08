@@ -34,8 +34,7 @@ class QuestionRepository(Protocol):
         """Every question, including inactive ones — filtering is selection's job."""
         ...
 
-    def get(self, question_id: str) -> Question | None:
-        ...
+    def get(self, question_id: str) -> Question | None: ...
 
     def competencies(self) -> list[str]:
         """Every competency any question assesses, sorted."""
@@ -61,12 +60,20 @@ class JsonQuestionRepository:
             except ValidationError as exc:
                 # Named and skipped rather than raised: one malformed question should not
                 # deny every candidate an assessment, but it must not pass silently either.
-                identifier = entry.get("question_id", "<no id>") if isinstance(entry, dict) else "<not an object>"
+                identifier = (
+                    entry.get("question_id", "<no id>")
+                    if isinstance(entry, dict)
+                    else "<not an object>"
+                )
                 rejected.append(identifier)
-                logger.error("question %s failed validation and was dropped: %s", identifier, exc)
+                logger.error(
+                    "question %s failed validation and was dropped: %s", identifier, exc
+                )
 
         if rejected:
-            logger.error("%d of %d questions rejected: %s", len(rejected), len(entries), rejected)
+            logger.error(
+                "%d of %d questions rejected: %s", len(rejected), len(entries), rejected
+            )
         if not questions:
             raise ValueError(f"no valid questions in {self._path}")
         return tuple(questions)
