@@ -8,7 +8,7 @@ if TYPE_CHECKING:  # pragma: no cover - import cycle: policy imports models
     from .policy import GraphPolicy
 
 
-def _default_policy() -> "GraphPolicy":
+def _default_policy() -> GraphPolicy:
     """A policy with no opinion. Imported lazily because `policy` imports this module."""
     from .policy import GraphPolicy
 
@@ -84,5 +84,4 @@ class CompetencyGraph:
     # The `policy` block of the graph file: what THIS bank permits, independently of what
     # the deployment permits. Defaults to "no opinion", which is what every graph authored
     # before the block existed means. See `policy.py` for how the three levels combine.
-    policy: "GraphPolicy" = field(default_factory=lambda: _default_policy())
-
+    policy: GraphPolicy = field(default_factory=lambda: _default_policy())

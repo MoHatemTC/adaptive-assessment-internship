@@ -51,6 +51,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
+from typing import Literal
 
 import numpy as np
 
@@ -58,7 +59,6 @@ from app.config.settings import settings
 from app.schemas.orchestration import BankItem, QueuedCandidate, VariableState
 from app.services import observability
 from app.services.adaptive.irt import (
-    THETA_GRID,
     expected_fisher_information,
     kullback_leibler_information,
 )
@@ -84,7 +84,7 @@ ALLOWED_REASON_CODES = {
 }
 
 
-def criterion_for(observations: int) -> str:
+def criterion_for(observations: int) -> Literal["KL", "E[Fisher]"]:
     return "KL" if observations < KL_PHASE_OBSERVATIONS else "E[Fisher]"
 
 
@@ -143,7 +143,7 @@ def rank(
     rng: np.random.Generator | None = None,
     top_k: int | None = None,
     utility_modifiers_by_item_id: dict[str, float] | None = None,
-) -> tuple[list[tuple[BankItem, RankScore]], str]:
+) -> tuple[list[tuple[BankItem, RankScore]], Literal["KL", "E[Fisher]"]]:
     """Rank a variable's shortlist best-first, and say which criterion produced it.
 
     Exposure control is applied to the WINDOW, not to the final pick: the shortlist starts
@@ -172,7 +172,9 @@ def rank(
         # INVERTS, so the least informative item wins.
         adjustment = max(GRAPH_UTILITY_FLOOR, 1.0 + modifier)
 
-        seconds = item.authored_seconds or selection_calibration.seconds_for(item.modality)
+        seconds = item.authored_seconds or selection_calibration.seconds_for(
+            item.modality
+        )
         weight = expected_weight_for(item.modality)
         if time_aware:
             rank_key = info * weight * adjustment / max(seconds / 60.0, 1e-9)
@@ -206,7 +208,9 @@ def rank(
 
 
 def _deterministic(
-    shortlist: list[tuple[BankItem, RankScore]], variable: str, criterion: str
+    shortlist: list[tuple[BankItem, RankScore]],
+    variable: str,
+    criterion: Literal["KL", "E[Fisher]"],
 ) -> QueuedCandidate:
     """The engine's own choice, and the yardstick the model's is measured against."""
     item, score = shortlist[0]
@@ -317,14 +321,17 @@ async def pick(
             ),
         )
     except (LLMUnavailable, ValueError, TypeError) as exc:
-        logger.warning("picker unavailable for %s (%s) — using the engine's choice", variable, exc)
+        logger.warning(
+            "picker unavailable for %s (%s) — using the engine's choice", variable, exc
+        )
         return engine_choice
 
     selected_id = str(reply.get("selected_item_id", ""))
     if selected_id not in by_id:
         logger.warning(
             "picker returned %r which is not in the shortlist for %s — using the engine's choice",
-            selected_id, variable,
+            selected_id,
+            variable,
         )
         return engine_choice
 
@@ -346,7 +353,9 @@ async def pick(
     if best > 0 and utility / best < settings.orchestrator_minimum_relative_utility:
         logger.info(
             "picker chose %s at %.2f of best information for %s — overriding",
-            selected_id, utility / best, variable,
+            selected_id,
+            utility / best,
+            variable,
         )
         return engine_choice
 
@@ -359,7 +368,9 @@ async def pick(
         utility=round(utility, 6),
         best_information=round(engine_choice.best_information, 6),
         best_utility=round(best, 6),
-        normalized_regret=round(max(0.0, (best - utility) / best), 6) if best > 0 else 0.0,
+        normalized_regret=round(max(0.0, (best - utility) / best), 6)
+        if best > 0
+        else 0.0,
         expected_weight=round(score.expected_weight, 4),
         estimated_seconds=round(score.estimated_seconds, 1),
         information_per_minute=round(score.information_per_minute, 6),

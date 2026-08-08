@@ -19,13 +19,13 @@ from __future__ import annotations
 
 import json
 import logging
+from typing import Literal
 
 import numpy as np
 
 from app.config.settings import settings
 from app.schemas.adaptive import AbilityState, Item, SelectedItem
 from app.services.adaptive.irt import (
-    THETA_GRID,
     expected_fisher_information,
     fisher_information,
     kullback_leibler_information,
@@ -50,7 +50,7 @@ SHORTLIST_SIZE = 5
 KL_PHASE_QUESTIONS = 3
 
 
-def _criterion_for(questions_answered: int) -> str:
+def _criterion_for(questions_answered: int) -> Literal["KL", "E[Fisher]"]:
     return "KL" if questions_answered < KL_PHASE_QUESTIONS else "E[Fisher]"
 
 
@@ -60,7 +60,9 @@ def _information(item: Item, state: AbilityState, posterior: np.ndarray) -> floa
         # Neighbourhood shrinks as the estimate sharpens: early on, ask which item
         # separates a wide region; later, a narrow one.
         delta = 3.0 / np.sqrt(state.questions_answered + 1)
-        return kullback_leibler_information(state.theta_hat, item.a, item.b, item.c, delta)
+        return kullback_leibler_information(
+            state.theta_hat, item.a, item.b, item.c, delta
+        )
     return expected_fisher_information(posterior, item.a, item.b, item.c)
 
 
@@ -78,7 +80,7 @@ def rank_candidates(
     *,
     rng: np.random.Generator | None = None,
     top_k: int | None = None,
-) -> tuple[list[tuple[Item, float]], str]:
+) -> tuple[list[tuple[Item, float]], Literal["KL", "E[Fisher]"]]:
     """Rank unserved items best-first and return the shortlist plus the criterion used.
 
     Exposure control is applied HERE, to the window, not to the final pick. The shortlist
@@ -95,7 +97,9 @@ def rank_candidates(
 
     posterior = np.asarray(state.posterior, dtype=float)
     scored = [(item, _information(item, state, posterior)) for item in candidates]
-    scored.sort(key=lambda pair: (pair[1], -abs(pair[0].b - state.theta_hat)), reverse=True)
+    scored.sort(
+        key=lambda pair: (pair[1], -abs(pair[0].b - state.theta_hat)), reverse=True
+    )
 
     k = settings.cat_exposure_top_k if top_k is None else top_k
     offset = 0
@@ -141,7 +145,8 @@ def choose_deterministically(
     item, information = ranked[0]
     rule = (
         "content balancing: least-served sub-competency"
-        if counts and any(
+        if counts
+        and any(
             i.sub_competency != item.sub_competency
             for i, s in shortlist
             if s / max(best_information, 1e-9) >= settings.cat_content_balance_floor
@@ -225,7 +230,9 @@ async def choose_next_item(
             SELECTION_SYSTEM, json.dumps(payload, indent=2), require=("selected_id",)
         )
     except (LLMUnavailable, ValueError) as exc:
-        logger.warning("adaptive selection: model unusable (%s) — using engine choice", exc)
+        logger.warning(
+            "adaptive selection: model unusable (%s) — using engine choice", exc
+        )
         return fallback
 
     by_id = {item.id: (item, score) for item, score in shortlist}

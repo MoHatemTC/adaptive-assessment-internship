@@ -37,7 +37,9 @@ from app.schemas.orchestration import DEFAULT_SECONDS_BY_MODALITY
 
 logger = logging.getLogger(__name__)
 
-CALIBRATION_PATH = Path(__file__).resolve().parents[2] / "data" / "selection_calibration.json"
+CALIBRATION_PATH = (
+    Path(__file__).resolve().parents[2] / "data" / "selection_calibration.json"
+)
 
 # Below this many observations of a modality, a measured mean is noise wearing a decimal
 # point. Sessions accumulate slowly, so this deliberately errs toward the documented
@@ -82,7 +84,9 @@ def load(path: Path | None = None) -> Calibration:
     try:
         raw = json.loads(source.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        logger.error("selection calibration at %s is unreadable — using defaults", source)
+        logger.error(
+            "selection calibration at %s is unreadable — using defaults", source
+        )
         return Calibration()
 
     calibration = Calibration(
@@ -90,7 +94,8 @@ def load(path: Path | None = None) -> Calibration:
             str(k): float(v) for k, v in (raw.get("seconds_by_modality") or {}).items()
         },
         weight_by_modality={
-            str(k): float(v) for k, v in (raw.get("expected_weight_by_modality") or {}).items()
+            str(k): float(v)
+            for k, v in (raw.get("expected_weight_by_modality") or {}).items()
         },
         counts={str(k): int(v) for k, v in (raw.get("observations") or {}).items()},
         sessions=int(raw.get("sessions", 0)),
@@ -147,7 +152,9 @@ def provenance() -> dict[str, str]:
     """Where each constant currently comes from. For the diagnostics panel."""
     calibration = load()
     report: dict[str, str] = {}
-    for modality in sorted(set(DEFAULT_SECONDS_BY_MODALITY) | set(DEFAULT_EXPECTED_WEIGHT)):
+    for modality in sorted(
+        set(DEFAULT_SECONDS_BY_MODALITY) | set(DEFAULT_EXPECTED_WEIGHT)
+    ):
         if settings.item_seconds_by_modality().get(modality) is not None:
             seconds = "override"
         elif calibration.measured_seconds(modality) is not None:

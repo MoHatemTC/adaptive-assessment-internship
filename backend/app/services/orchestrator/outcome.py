@@ -75,7 +75,9 @@ class GradedOutcome:
         return self.weight > 0.0
 
 
-def graded_likelihood(a: float, b: float, c: float, score: float, weight: float) -> np.ndarray:
+def graded_likelihood(
+    a: float, b: float, c: float, score: float, weight: float
+) -> np.ndarray:
     """L(theta) over THETA_GRID for one graded outcome.
 
     Clipped away from 0 and 1 before exponentiation: P = 0 with a non-zero score would
@@ -89,7 +91,12 @@ def graded_likelihood(a: float, b: float, c: float, score: float, weight: float)
 
 
 def graded_posterior_update(
-    posterior: np.ndarray, a: float, b: float, c: float, score: float, weight: float = 1.0
+    posterior: np.ndarray,
+    a: float,
+    b: float,
+    c: float,
+    score: float,
+    weight: float = 1.0,
 ) -> tuple[np.ndarray, float, float]:
     """Bayes update on one graded outcome.
 

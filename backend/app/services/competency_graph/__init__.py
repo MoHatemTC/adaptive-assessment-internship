@@ -37,11 +37,10 @@ def load_default_competency_graph() -> CompetencyGraph:
 
 
 __all__ = [
+    "DEFAULT_GRAPH_PATH",
     "CompetencyGraph",
     "CompetencyGraphService",
     "load_and_validate_graph",
     "load_competency_graph",
     "load_default_competency_graph",
-    "DEFAULT_GRAPH_PATH",
 ]
-

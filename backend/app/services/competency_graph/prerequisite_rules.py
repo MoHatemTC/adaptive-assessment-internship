@@ -46,8 +46,9 @@ def is_strong_success(
     item_minimum_confidence: float | None = None,
 ) -> bool:
     """Strong enough to support prerequisite ancestors."""
-    return score >= config.strong_success_threshold and confidence >= success_confidence_floor(
-        config, item_minimum_confidence
+    return (
+        score >= config.strong_success_threshold
+        and confidence >= success_confidence_floor(config, item_minimum_confidence)
     )
 
 
@@ -59,8 +60,9 @@ def is_strong_failure(
     item_minimum_confidence: float | None = None,
 ) -> bool:
     """Strong enough to block dependent descendants."""
-    return score <= config.strong_failure_threshold and confidence >= failure_confidence_floor(
-        config, item_minimum_confidence
+    return (
+        score <= config.strong_failure_threshold
+        and confidence >= failure_confidence_floor(config, item_minimum_confidence)
     )
 
 

@@ -31,7 +31,12 @@ logger = logging.getLogger(__name__)
 
 # The gateway never produced an answer. Retryable, and — the reason this is a distinct
 # category — never evidence about the model.
-TRANSPORT_ERRORS = (APITimeoutError, APIConnectionError, InternalServerError, RateLimitError)
+TRANSPORT_ERRORS = (
+    APITimeoutError,
+    APIConnectionError,
+    InternalServerError,
+    RateLimitError,
+)
 
 # A malformed reply comes back fast, so retrying it is cheap. A timeout costs the entire
 # timeout, so three of those is a multi-minute stall with a candidate waiting.
@@ -87,7 +92,9 @@ def extract_json(raw: str, require: tuple[str, ...] = ()) -> dict[str, Any]:
     """
 
     def acceptable(value: Any) -> bool:
-        return isinstance(value, dict) and bool(value) and all(k in value for k in require)
+        return (
+            isinstance(value, dict) and bool(value) and all(k in value for k in require)
+        )
 
     try:
         parsed = json.loads(raw)
@@ -212,7 +219,9 @@ async def chat_json(
         except TRANSPORT_ERRORS as exc:
             last = exc
             if attempt < TRANSPORT_ATTEMPTS - 1:
-                logger.warning("llm transport failure (%s), retrying", type(exc).__name__)
+                logger.warning(
+                    "llm transport failure (%s), retrying", type(exc).__name__
+                )
                 # Drop pooled clients: instantaneous Connection errors are usually a
                 # dead keepalive to the LiteLLM proxy; retrying on the same socket
                 # just records another Langfuse ERROR span.
@@ -229,12 +238,18 @@ async def chat_json(
             # payload the proxy would not parse are all configuration faults, and the
             # engine has a correct next question regardless of what the model thinks.
             logger.error(
-                "llm rejected the request (HTTP %s): %s", exc.status_code, str(exc)[:300]
+                "llm rejected the request (HTTP %s): %s",
+                exc.status_code,
+                str(exc)[:300],
             )
-            raise LLMUnavailable(f"gateway rejected the request: HTTP {exc.status_code}") from exc
+            raise LLMUnavailable(
+                f"gateway rejected the request: HTTP {exc.status_code}"
+            ) from exc
         except OpenAIError as exc:
             # Anything else the SDK raises — a malformed response it could not parse, an
             # argument it would not accept. Same reasoning: degrade, do not escape.
-            logger.error("llm client error (%s): %s", type(exc).__name__, str(exc)[:300])
+            logger.error(
+                "llm client error (%s): %s", type(exc).__name__, str(exc)[:300]
+            )
             raise LLMUnavailable(f"llm client error: {type(exc).__name__}") from exc
     raise LLMUnavailable(f"no usable reply after {REPLY_ATTEMPTS} attempts: {last}")

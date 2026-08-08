@@ -139,9 +139,10 @@ def test_precision_stop_requires_observation_floor():
         band_history=[2] * settings.cat_precision_min_questions,
         questions_answered=settings.cat_precision_min_questions,
         items_remaining=20,
+        band_probability=0.99,
     )
     assert ready.should_stop is True
-    assert ready.reason == "precision"
+    assert ready.reason == "band_probability"
     assert ready.converged is True
 
 
@@ -251,7 +252,7 @@ class TestTheBankFloorArithmeticIsSound:
     """
 
     def test_adding_the_prescribed_items_reaches_the_target(self):
-        from evaluation.bank_floor import PRIOR_SD, analyse_bank
+        from evaluation.bank_floor import analyse_bank
 
         report = analyse_bank("AIE", theta=0.0)
         required = report["rows"][0]["required_precision"]

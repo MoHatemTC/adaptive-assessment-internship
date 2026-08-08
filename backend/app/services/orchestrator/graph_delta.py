@@ -68,7 +68,7 @@ class GraphDelta:
     selection_affected_mains: set[str] = field(default_factory=set)
 
     @classmethod
-    def restore(cls, state: AssessmentState) -> "GraphDelta":
+    def restore(cls, state: AssessmentState) -> GraphDelta:
         """The delta a response starts from: whatever the session already knew."""
         return cls(
             node_states=dict(state.graph_node_states),
@@ -153,7 +153,10 @@ class GraphDelta:
                 if signal.node not in result.corroborated_nodes:
                     continue
                 known = self.inferred_records.get(signal.node)
-                if known is not None and float(known.get("strength", 0.0)) >= signal.strength:
+                if (
+                    known is not None
+                    and float(known.get("strength", 0.0)) >= signal.strength
+                ):
                     continue
                 # Provenance for the depth- and edge-stratified safety analysis. Kept per
                 # node at its winning strength, which is the path the conclusion actually
@@ -193,7 +196,10 @@ class GraphDelta:
             # inferred split exists to prevent.
             for signal in result.preview_inferred_signals:
                 known = self.preview_inferred.get(signal.node)
-                if known is not None and float(known.get("strength", 0.0)) >= signal.strength:
+                if (
+                    known is not None
+                    and float(known.get("strength", 0.0)) >= signal.strength
+                ):
                     continue
                 self.preview_inferred[signal.node] = {
                     "source_node": signal.source_node,
@@ -249,13 +255,17 @@ class GraphDelta:
             "graph_direct_mastered_nodes": sorted(self.mastered),
             "graph_direct_not_mastered_nodes": sorted(self.not_mastered),
             "graph_inferred_mastered_nodes": sorted(self.inferred_mastered),
-            "graph_inferred_mastery_records": dict(sorted(self.inferred_records.items())),
+            "graph_inferred_mastery_records": dict(
+                sorted(self.inferred_records.items())
+            ),
             "graph_blocked_nodes": sorted(self.blocked),
             "graph_contradicted_nodes": sorted(self.contradicted),
             "graph_contradictions": self.contradictions,
             # The audit mirror. Same computation; recorded, never enforced.
             "graph_shadow_direct_mastered_nodes": sorted(self.mastered),
-            "graph_shadow_inferred_mastered_nodes": sorted(self.shadow_inferred_mastered),
+            "graph_shadow_inferred_mastered_nodes": sorted(
+                self.shadow_inferred_mastered
+            ),
             "graph_shadow_direct_not_mastered_nodes": sorted(self.not_mastered),
             "graph_shadow_blocked_nodes": sorted(self.shadow_blocked),
             "graph_shadow_contradicted_nodes": sorted(self.contradicted),

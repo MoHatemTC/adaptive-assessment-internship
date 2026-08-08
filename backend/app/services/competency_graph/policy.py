@@ -37,8 +37,8 @@ to be told which of the other two is still holding.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
-from typing import Iterable
+from collections.abc import Iterable
+from dataclasses import dataclass, replace
 
 from .models import CompetencyEdge, CompetencyGraph
 
@@ -68,7 +68,7 @@ class GraphPolicy:
     notes: str = ""
 
     @classmethod
-    def from_dict(cls, raw: dict | None) -> "GraphPolicy":
+    def from_dict(cls, raw: dict | None) -> GraphPolicy:
         raw = raw or {}
         statuses = raw.get("accepted_validation_statuses")
         if statuses is None:
@@ -277,7 +277,10 @@ def resolve_policy(
         )
 
         inference_blocked_by = _first_veto(
-            (not deployment_inference, "deployment: GRAPH_UPWARD_INFERENCE_ENABLED=false"),
+            (
+                not deployment_inference,
+                "deployment: GRAPH_UPWARD_INFERENCE_ENABLED=false",
+            ),
             (bank.upward_inference is False, "bank policy: upward_inference=false"),
             (not edge.allow_upward_inference, "edge: allow_upward_inference=false"),
             (
@@ -286,8 +289,14 @@ def resolve_policy(
             ),
         )
         blocking_blocked_by = _first_veto(
-            (not deployment_blocking, "deployment: GRAPH_DESCENDANT_BLOCKING_ENABLED=false"),
-            (bank.descendant_blocking is False, "bank policy: descendant_blocking=false"),
+            (
+                not deployment_blocking,
+                "deployment: GRAPH_DESCENDANT_BLOCKING_ENABLED=false",
+            ),
+            (
+                bank.descendant_blocking is False,
+                "bank policy: descendant_blocking=false",
+            ),
             (not edge.allow_downward_blocking, "edge: allow_downward_blocking=false"),
             (
                 _status_vetoes(status, accepted),
@@ -354,8 +363,12 @@ def apply_policy(graph: CompetencyGraph, resolved: ResolvedPolicy) -> Competency
     edges = tuple(
         replace(
             edge,
-            allow_upward_inference=decisions[(edge.from_id, edge.to_id)].inference_authorised,
-            allow_downward_blocking=decisions[(edge.from_id, edge.to_id)].blocking_authorised,
+            allow_upward_inference=decisions[
+                (edge.from_id, edge.to_id)
+            ].inference_authorised,
+            allow_downward_blocking=decisions[
+                (edge.from_id, edge.to_id)
+            ].blocking_authorised,
         )
         if edge.relation == "PREREQUISITE" and (edge.from_id, edge.to_id) in decisions
         else edge
@@ -374,7 +387,9 @@ def describe(resolved: ResolvedPolicy, *, only_enabled: bool = False) -> Iterabl
         f"failures required to block: {summary['minimum_failures_to_block']}"
     )
     for decision in resolved.decisions:
-        if only_enabled and not (decision.inference_allowed or decision.blocking_allowed):
+        if only_enabled and not (
+            decision.inference_allowed or decision.blocking_allowed
+        ):
             continue
         infer = "infer" if decision.inference_allowed else "-"
         block = "block" if decision.blocking_allowed else "-"

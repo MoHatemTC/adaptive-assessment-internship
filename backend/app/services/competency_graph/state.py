@@ -108,7 +108,9 @@ class CompetencyNodeState:
             "status_confidence": self.status_confidence,
             "direct_evidence_ids": sorted(self.direct_evidence_ids),
             "inferred_evidence_ids": sorted(self.inferred_evidence_ids),
-            "inferred_support": {k: dict(v) for k, v in sorted(self.inferred_support.items())},
+            "inferred_support": {
+                k: dict(v) for k, v in sorted(self.inferred_support.items())
+            },
             "blocked_by": sorted(self.blocked_by),
             "contradictions": list(self.contradictions),
             "last_direct_update_at": self.last_direct_update_at,
@@ -116,7 +118,7 @@ class CompetencyNodeState:
         }
 
     @classmethod
-    def from_dict(cls, competency_id: str, raw: dict) -> "CompetencyNodeState":
+    def from_dict(cls, competency_id: str, raw: dict) -> CompetencyNodeState:
         return cls(
             competency_id=competency_id,
             mastery=float(raw.get("mastery", 0.0)),
@@ -158,7 +160,7 @@ class CompetencyGraphState:
         return {nid: node.to_dict() for nid, node in sorted(self.nodes.items())}
 
     @classmethod
-    def from_dict(cls, raw: dict[str, dict] | None) -> "CompetencyGraphState":
+    def from_dict(cls, raw: dict[str, dict] | None) -> CompetencyGraphState:
         state = cls()
         for nid, node in (raw or {}).items():
             state.nodes[nid] = CompetencyNodeState.from_dict(nid, node)
@@ -167,4 +169,3 @@ class CompetencyGraphState:
     def nodes_with_status(self, *statuses: CompetencyStatus) -> set[str]:
         wanted = set(statuses)
         return {nid for nid, node in self.nodes.items() if node.status in wanted}
-

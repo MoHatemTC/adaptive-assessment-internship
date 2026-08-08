@@ -12,10 +12,11 @@ will happen.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field, fields
 from enum import StrEnum
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Mapping
+from typing import TYPE_CHECKING
 
 from app.config.settings import settings
 
@@ -60,6 +61,7 @@ def normalise_modality(modality: str) -> str:
     """Canonical modality name. Unknown values are returned as-is, to be refused later."""
     text = (modality or "").strip().lower()
     return "voice" if text == "audio" else text
+
 
 # How much a direct hit in one modality says about a PREREQUISITE (review C10).
 #
@@ -117,7 +119,9 @@ class PropagationConfig:
     #
     # 1 reproduces the behaviour whose wrong-inference rate was measured at 22.4%.
     minimum_corroborations: int = 1
-    corroboration_independence: CorroborationIndependence = CorroborationIndependence.SOURCE_NODE
+    corroboration_independence: CorroborationIndependence = (
+        CorroborationIndependence.SOURCE_NODE
+    )
 
     # Modalities an inference may be drawn from. None derives the set from the three
     # legacy booleans below, so a deployment configured before the allowlist existed keeps
@@ -163,7 +167,10 @@ class PropagationConfig:
         value that was asked for, so the record of what ran would be false — and the whole
         point of the manifest is that it is not.
         """
-        def _bounded(name: str, low: float, high: float, *, low_open: bool = False) -> None:
+
+        def _bounded(
+            name: str, low: float, high: float, *, low_open: bool = False
+        ) -> None:
             value = getattr(self, name)
             ok = (low < value if low_open else low <= value) and value <= high
             if not ok:
@@ -181,7 +188,11 @@ class PropagationConfig:
             _bounded(name, 0.0, 1.0)
         _bounded("upward_decay", 0.0, 1.0, low_open=True)
 
-        for name in ("maximum_propagation_depth", "maximum_inference_depth", "maximum_blocking_depth"):
+        for name in (
+            "maximum_propagation_depth",
+            "maximum_inference_depth",
+            "maximum_blocking_depth",
+        ):
             value = getattr(self, name)
             if value is not None and value < 0:
                 raise ValueError(f"{name}={value!r} must be >= 0")
@@ -243,7 +254,9 @@ class PropagationConfig:
         that has not adopted the new setting.
         """
         if self.allowed_inference_modalities is not None:
-            return frozenset(normalise_modality(m) for m in self.allowed_inference_modalities)
+            return frozenset(
+                normalise_modality(m) for m in self.allowed_inference_modalities
+            )
 
         allowed: set[str] = set()
         if self.allow_mcq_single_hit_upward_inference:
@@ -273,7 +286,7 @@ class PropagationConfig:
         """
         return normalise_modality(modality) in self.resolved_modalities
 
-    def independence_key(self, signal: "InferredNodeSignal") -> str:
+    def independence_key(self, signal: InferredNodeSignal) -> str:
         """What this signal counts AS, for the corroboration requirement.
 
         Two signals sharing a key are one observation. See `CorroborationIndependence`
@@ -283,7 +296,10 @@ class PropagationConfig:
             return f"evidence:{signal.source_evidence_id}"
         if self.corroboration_independence is CorroborationIndependence.ITEM:
             return f"item:{signal.source_item_id or signal.source_evidence_id}"
-        if self.corroboration_independence is CorroborationIndependence.SOURCE_NODE_MODALITY:
+        if (
+            self.corroboration_independence
+            is CorroborationIndependence.SOURCE_NODE_MODALITY
+        ):
             return f"node+modality:{signal.source_node}:{normalise_modality(signal.modality)}"
         return f"node:{signal.source_node}"
 
@@ -336,7 +352,9 @@ def propagation_config_from_settings(
         minimum_failures_to_block=(
             settings.graph_minimum_failures_to_block
             if minimum_failures_to_block is None
-            else max(minimum_failures_to_block, settings.graph_minimum_failures_to_block)
+            else max(
+                minimum_failures_to_block, settings.graph_minimum_failures_to_block
+            )
         ),
         maximum_propagation_depth=settings.graph_maximum_propagation_depth,
         maximum_inference_depth=settings.graph_maximum_inference_depth,

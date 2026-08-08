@@ -37,22 +37,12 @@ from app.schemas.orchestration import (
     GradedResponse,
     QueuedCandidate,
     VariableReport,
-    VariableState,
 )
 from app.services.adaptive import personfit
+from app.services.adaptive.convergence import SESSION_STOP_FOR, StopReason
 from app.services.adaptive.irt import ability_band
-from app.services.orchestrator import budget
-from app.services.orchestrator import variables as variables_module
-from app.services.orchestrator.bank import UnifiedBankRepository
-from app.services.orchestrator.competency import (
-    affected_mains,
-    main_competency,
-    rollup_outcomes,
-)
-from app.services.orchestrator.grader import GraderAgent
-from app.services.orchestrator.picker import pick
-from app.services.orchestrator.queue import CandidateQueue
 from app.services.competency_graph import config as graph_config
+from app.services.competency_graph import manifest as graph_manifest
 from app.services.competency_graph.coverage import (
     coverage_allows_convergence,
     unmeasured_required_nodes,
@@ -63,13 +53,22 @@ from app.services.competency_graph.evidence import (
     evidence_id_for,
 )
 from app.services.competency_graph.graph import CompetencyGraphService
-from app.services.adaptive.convergence import SESSION_STOP_FOR, StopReason
-from app.services.competency_graph import manifest as graph_manifest
 from app.services.competency_graph.ledger import EvidenceLedger
 from app.services.competency_graph.propagation import apply_direct_evidence
 from app.services.competency_graph.report import build_main_report, build_node_reports
 from app.services.competency_graph.state import CompetencyGraphState
+from app.services.orchestrator import budget
+from app.services.orchestrator import variables as variables_module
+from app.services.orchestrator.bank import UnifiedBankRepository
+from app.services.orchestrator.competency import (
+    affected_mains,
+    main_competency,
+    rollup_outcomes,
+)
+from app.services.orchestrator.grader import GraderAgent
 from app.services.orchestrator.graph_delta import GraphDelta
+from app.services.orchestrator.picker import pick
+from app.services.orchestrator.queue import CandidateQueue
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +125,7 @@ class Orchestrator:
             try:
                 self._graph_service = get_graph_service()
             except (KeyError, OSError, ValueError):
-                logger.error("no usable competency graph for the active bank", exc_info=True)
+                logger.exception("no usable competency graph for the active bank")
                 self._graph_service = None
 
         if self._graph_service is not None and not self._graph_checked:
@@ -223,7 +222,9 @@ class Orchestrator:
             },
             started_at=time.time(),
             propagation_manifest=manifest,
-            propagation_manifest_hash=graph_manifest.manifest_hash(manifest) if manifest else "",
+            propagation_manifest_hash=graph_manifest.manifest_hash(manifest)
+            if manifest
+            else "",
         )
 
     def _propagation_manifest(self) -> dict:
@@ -250,7 +251,9 @@ class Orchestrator:
                 bank_id=self._bank_id or "",
             )
         except ValueError:
-            logger.exception("propagation configuration is invalid — recording no manifest")
+            logger.exception(
+                "propagation configuration is invalid — recording no manifest"
+            )
             return {}
 
     @staticmethod
@@ -281,7 +284,9 @@ class Orchestrator:
                 continue
             variable_state.stop_reason = fallback
 
-    def _note_manifest_drift(self, state: AssessmentState, *, evidence_marker: str) -> None:
+    def _note_manifest_drift(
+        self, state: AssessmentState, *, evidence_marker: str
+    ) -> None:
         """Record any change to the propagation configuration since the session began.
 
         Appends rather than overwrites, and names the fields that moved: "something
@@ -306,7 +311,9 @@ class Orchestrator:
             key for key in set(before) | set(after) if before.get(key) != after.get(key)
         )
         logger.warning(
-            "propagation configuration changed mid-session at %s: %s", evidence_marker, changed
+            "propagation configuration changed mid-session at %s: %s",
+            evidence_marker,
+            changed,
         )
         state.propagation_manifest_drift.append(
             {
@@ -335,6 +342,31 @@ class Orchestrator:
         pass `only=` to refill just the competencies whose estimates moved.
         """
         queue = CandidateQueue(state.queue)
+        # Queue entries are selected ahead of presentation. Time still passes while other
+        # variables consume their entries, so a once-affordable slow item can become stale
+        # in place. Revalidate every pending promise against the CURRENT clock before the
+        # normal refill loop. `invalidated` bypasses an `only=` restriction: time affects
+        # every queued variable, not only the posterior touched by the last response.
+        invalidated: set[str] = set()
+        for queued_variable, queued_candidate in queue.pending().items():
+            queued_item = self._bank.get(queued_candidate.item_id)
+            if queued_item is None or queued_variable not in state.open_variables:
+                queue.release(queued_variable)
+                invalidated.add(queued_variable)
+                continue
+            admissible, _filtered = self._time_admissible(
+                pool=[queued_item], state=state, variable=queued_variable
+            )
+            if not admissible:
+                logger.info(
+                    "releasing stale queued item %s for %s at %.2f elapsed minutes",
+                    queued_item.item_id,
+                    queued_variable,
+                    state.elapsed_minutes,
+                )
+                queue.release(queued_variable)
+                invalidated.add(queued_variable)
+
         served = set(state.served_item_ids)
         exhausted: list[str] = []
         out_of_time: list[str] = []
@@ -343,13 +375,19 @@ class Orchestrator:
         for variable in state.open_variables:
             if presenting and variable == presenting:
                 continue
-            if only is not None and variable not in only:
+            if (
+                only is not None
+                and variable not in only
+                and variable not in invalidated
+            ):
                 continue
             if variable in queue:
                 continue
 
             all_available = self._bank.shortlist(variable, exclude=set())
-            pool = self._bank.shortlist(variable, exclude=served | queue.queued_item_ids())
+            pool = self._bank.shortlist(
+                variable, exclude=served | queue.queued_item_ids()
+            )
             bank_had_items = bool(pool)
             pool, time_filtered = self._time_admissible(
                 pool=pool, state=state, variable=variable
@@ -424,7 +462,10 @@ class Orchestrator:
             # modality slot does not.
             modality_pending = False
             deficit_pool = self._modality_deficit_pool(
-                pool=unconstrained_pool, state=state, variable=variable, available=all_available
+                pool=unconstrained_pool,
+                state=state,
+                variable=variable,
+                available=all_available,
             )
             if deficit_pool:
                 deficit_ids = {item.item_id for item in deficit_pool}
@@ -447,7 +488,12 @@ class Orchestrator:
                     modality_pending = True
 
             corroboration_pending = False
-            if not coverage_pending and not probing and not modality_pending and all_available:
+            if (
+                not coverage_pending
+                and not probing
+                and not modality_pending
+                and all_available
+            ):
                 administered_difficulties = [
                     float(served_item.cat.b)
                     for served_item_id in state.variables[variable].served_item_ids
@@ -477,7 +523,10 @@ class Orchestrator:
                         )
             challenge_b = (
                 None
-                if coverage_pending or corroboration_pending or probing or modality_pending
+                if coverage_pending
+                or corroboration_pending
+                or probing
+                or modality_pending
                 else variables_module.upper_challenge_difficulty(
                     state.variables[variable]
                 )
@@ -494,7 +543,9 @@ class Orchestrator:
                 if not challenge_pool:
                     # Sparse banks may have no item in the ideal window. Prefer any
                     # harder item over silently returning to easy local confirmation.
-                    challenge_pool = [item for item in pool if item.cat.b >= challenge_b]
+                    challenge_pool = [
+                        item for item in pool if item.cat.b >= challenge_b
+                    ]
                 if challenge_pool:
                     logger.debug(
                         "upper-band challenge for %s: %d candidates near b %.2f",
@@ -545,7 +596,10 @@ class Orchestrator:
         the BANK ran out, or the CLOCK did. Reporting a time stop as `bank_exhausted`
         names a constraint that was not the one that bound.
         """
-        if not settings.orchestrator_time_aware_selection_enabled or not state.started_at:
+        if (
+            not settings.orchestrator_time_aware_selection_enabled
+            or not state.started_at
+        ):
             return pool, False
 
         limit_seconds = settings.orchestrator_time_limit_minutes * 60.0
@@ -562,7 +616,7 @@ class Orchestrator:
                 continue
             served = {
                 item.modality
-                for item_id in state.variables[other].served_item_ids
+                for item_id in state.administered_by_variable.get(other, [])
                 if (item := self._bank.get(item_id)) is not None
             }
             for modality, required in minimums.items():
@@ -601,40 +655,11 @@ class Orchestrator:
         that is the last two picks: four free information-per-minute choices, then the
         code item, then the voice item.
         """
-        minimums = settings.modality_minimums()
-        if not minimums:
-            return []
-
-        # What this main has been ASKED, not what moved its estimate. Counting only
-        # scoring responses creates a feedback loop: an unscorable modality — a sandbox
-        # that is down, a microphone that fails — never clears its deficit, so the
-        # blueprint re-serves it for the rest of the session and measures nothing.
-        served_modalities: dict[str, int] = {}
-        for item_id in state.administered_by_variable.get(variable, []):
-            served = self._bank.get(item_id)
-            if served is not None:
-                served_modalities[served.modality] = (
-                    served_modalities.get(served.modality, 0) + 1
-                )
-
-        unmet = {
-            modality: required - served_modalities.get(modality, 0)
-            for modality, required in minimums.items()
-            if served_modalities.get(modality, 0) < required
-        }
-        # A minimum the bank cannot supply is not a deficit, it is a bank fact. Enforcing
-        # one is how a single missing modality starves every other pick for the rest of
-        # the session: the constraint can never be satisfied, so it never releases.
-        if available is not None:
-            supplied = {item.modality for item in available}
-            unmeetable = sorted(set(unmet) - supplied)
-            if unmeetable:
-                logger.debug(
-                    "%s cannot supply %s — that minimum is waived for this bank",
-                    variable,
-                    unmeetable,
-                )
-            unmet = {m: n for m, n in unmet.items() if m in supplied}
+        unmet = self._unmet_modality_minimums(
+            variable=variable,
+            administered_by_variable=state.administered_by_variable,
+            available=available,
+        )
         if not unmet:
             return []
 
@@ -652,7 +677,10 @@ class Orchestrator:
         slots_to_floor = settings.cat_precision_min_questions - observations
         slots_to_cap = settings.cat_max_questions - observations
         owed = sum(unmet.values())
-        if slots_to_floor > owed and slots_to_cap > owed + settings.cat_precision_min_questions:
+        if (
+            slots_to_floor > owed
+            and slots_to_cap > owed + settings.cat_precision_min_questions
+        ):
             return []
 
         deficit_pool = [item for item in pool if item.modality in unmet]
@@ -665,6 +693,50 @@ class Orchestrator:
                 slots_to_cap,
             )
         return deficit_pool
+
+    def _unmet_modality_minimums(
+        self,
+        *,
+        variable: str,
+        administered_by_variable: dict[str, list[str]],
+        available: list[BankItem] | None = None,
+    ) -> dict[str, int]:
+        """Required modalities not yet administered *for* this main competency.
+
+        Cross-main evidence can update several posteriors, but it was still one question
+        presented for one main. Crediting its modality to every posterior it touched lets
+        a competency converge without ever receiving its own code or voice task.
+        """
+        minimums = settings.modality_minimums()
+        if not minimums:
+            return {}
+
+        served_modalities: dict[str, int] = {}
+        for item_id in administered_by_variable.get(variable, []):
+            served = self._bank.get(item_id)
+            if served is not None:
+                served_modalities[served.modality] = (
+                    served_modalities.get(served.modality, 0) + 1
+                )
+
+        unmet = {
+            modality: required - served_modalities.get(modality, 0)
+            for modality, required in minimums.items()
+            if served_modalities.get(modality, 0) < required
+        }
+        # A minimum the bank cannot supply is a bank fact, not a permanent convergence
+        # veto. Waive only modalities absent from the complete main-specific pool.
+        if available is not None:
+            supplied = {item.modality for item in available}
+            unmeetable = sorted(set(unmet) - supplied)
+            if unmeetable:
+                logger.debug(
+                    "%s cannot supply %s — that minimum is waived for this bank",
+                    variable,
+                    unmeetable,
+                )
+            unmet = {m: n for m, n in unmet.items() if m in supplied}
+        return unmet
 
     def _graph_utility_modifiers(
         self, *, pool: list[BankItem], state: AssessmentState, variable: str
@@ -691,12 +763,18 @@ class Orchestrator:
         graph = self._graph() if graph_config.filtering_enabled() else None
         if graph is not None and (blocked or mastered):
             for item in pool:
-                measured = [m.variable for m in item.measures if m.variable in graph.graph.nodes]
+                measured = [
+                    m.variable for m in item.measures if m.variable in graph.graph.nodes
+                ]
                 if not measured:
                     continue
-                if any(blocked & graph.ancestors(nid, include_self=True) for nid in measured):
+                if any(
+                    blocked & graph.ancestors(nid, include_self=True)
+                    for nid in measured
+                ):
                     modifiers[item.item_id] = (
-                        modifiers.get(item.item_id, 0.0) + settings.graph_blocked_penalty
+                        modifiers.get(item.item_id, 0.0)
+                        + settings.graph_blocked_penalty
                     )
                     continue
                 redundant = all(
@@ -726,18 +804,15 @@ class Orchestrator:
         # It is a bonus and not a constraint because the extra evidence is genuinely
         # partial: a secondary loading of 0.5 is half a measurement, not a second one.
         if graph_config.utility_enabled() and settings.graph_shared_main_gain > 0:
-            open_mains = {
-                v for v in state.open_variables if v != variable
-            }
+            open_mains = {v for v in state.open_variables if v != variable}
             for item in pool:
                 extra = {
                     main_competency(measure.variable) for measure in item.measures
                 } & open_mains
                 if extra:
-                    modifiers[item.item_id] = (
-                        modifiers.get(item.item_id, 0.0)
-                        + settings.graph_shared_main_gain * len(extra)
-                    )
+                    modifiers[item.item_id] = modifiers.get(
+                        item.item_id, 0.0
+                    ) + settings.graph_shared_main_gain * len(extra)
 
         return modifiers or None
 
@@ -761,27 +836,60 @@ class Orchestrator:
         observations = state.variables[variable].observations
         if observations == 0 or observations % settings.graph_unblocking_probe_period:
             return []
-        return [item for item in pool if any(m.variable in blocked for m in item.measures)]
+        return [
+            item for item in pool if any(m.variable in blocked for m in item.measures)
+        ]
 
     # --- step 3: choose the variable --------------------------------------
-    def choose_variable(self, state: AssessmentState) -> str | None:
-        """The least-measured open variable that has a candidate ready.
+    def _queued_candidate_closes_coverage(
+        self, state: AssessmentState, variable: str
+    ) -> bool:
+        """Whether this variable's ready item directly measures a required gap.
 
-        Lowest certainty first, ties broken by fewest observations then by name so the
-        order is deterministic and a session can be replayed. Certainty rather than raw
-        standard error because it is the number the report is written in, and because it is
-        comparable across variables regardless of how each was primed.
+        Coverage-first selection inside ``fill_queue`` is not enough on its own. The
+        queue contains one promise per main, and the variable scheduler used to be free
+        to spend the remaining clock on a lower-certainty main whose coverage was already
+        complete. A cheap coverage item for another main could then expire in its slot.
+        Prefer the ready promise that actually closes a graph gate; certainty remains the
+        ordering rule among two coverage moves (or two ordinary moves).
+        """
+        if not graph_config.convergence_gate_enabled():
+            return False
+        graph = self._graph()
+        candidate = state.queue.get(variable)
+        if graph is None or candidate is None:
+            return False
+        item = self._bank.get(candidate.item_id)
+        if item is None:
+            return False
+        unmeasured = unmeasured_required_nodes(
+            graph,
+            variable,
+            measured=set(state.graph_direct_measured_nodes),
+            mastered=set(state.graph_direct_mastered_nodes),
+            not_mastered=set(state.graph_direct_not_mastered_nodes),
+            critical_only=self.coverage_critical_only(),
+        )
+        return any(measure.variable in unmeasured for measure in item.measures)
+
+    def choose_variable(self, state: AssessmentState) -> str | None:
+        """Choose a coverage-closing move, then the least-measured ready variable.
+
+        Required direct coverage is a hard convergence gate, so a queued item that closes
+        it takes precedence over a redundant precision probe. Within the same coverage
+        class, lowest certainty wins; ties break by observations then name so the order is
+        deterministic and replayable. Certainty rather than raw standard error is used
+        because it is comparable across variables regardless of how each was primed.
         """
         candidates = [
-            variable
-            for variable in state.open_variables
-            if variable in state.queue
+            variable for variable in state.open_variables if variable in state.queue
         ]
         if not candidates:
             return None
         return min(
             candidates,
             key=lambda v: (
+                not self._queued_candidate_closes_coverage(state, v),
                 variables_module.certainty(state.variables[v]),
                 state.variables[v].observations,
                 v,
@@ -807,7 +915,9 @@ class Orchestrator:
             }
         )
 
-    def next_item(self, state: AssessmentState) -> tuple[BankItem, QueuedCandidate] | None:
+    def next_item(
+        self, state: AssessmentState
+    ) -> tuple[BankItem, QueuedCandidate] | None:
         """The item currently being presented. Call `ensure_presenting` first."""
         if state.presenting is None:
             return None
@@ -909,7 +1019,7 @@ class Orchestrator:
                         item_minimum_confidence=item.minimum_success_confidence,
                     )
                 )
-        except Exception:  # noqa: BLE001 — the graph never fails an assessment
+        except Exception:
             logger.exception("graph evidence discarded for %s", item.item_id)
             return delta
 
@@ -943,16 +1053,14 @@ class Orchestrator:
             queue.release(variable)
 
         served = [*state.served_item_ids, item.item_id]
-        # An item is administered FOR the variable it was presented for, and it evidences
-        # every main it measures. Both are recorded: an unscorable response is still a
-        # question the candidate answered, and the blueprint must not ask again for a
-        # modality it already spent a slot on.
+        # An item is administered FOR exactly the variable it was presented for, though
+        # it may evidence several mains. Keep those concepts separate: cross-main evidence
+        # may update another posterior, but it must not satisfy that main's modality
+        # blueprint. An unscorable response still counts for the main that actually asked
+        # it, so the blueprint does not trap a candidate in repeated outage retries.
         administered = {k: list(v) for k, v in state.administered_by_variable.items()}
-        asked_for = set(touched)
         if state.presenting is not None:
-            asked_for.add(state.presenting.variable)
-        for variable in asked_for:
-            entries = administered.setdefault(variable, [])
+            entries = administered.setdefault(state.presenting.variable, [])
             if item.item_id not in entries:
                 entries.append(item.item_id)
 
@@ -974,7 +1082,9 @@ class Orchestrator:
                 fit = personfit.residual(
                     variable=outcome.variable,
                     item_id=item.item_id,
-                    posterior=np.asarray(updated[outcome.variable].posterior, dtype=float),
+                    posterior=np.asarray(
+                        updated[outcome.variable].posterior, dtype=float
+                    ),
                     a=item.cat.a,
                     b=item.cat.b,
                     c=item.cat.c,
@@ -984,7 +1094,10 @@ class Orchestrator:
                 if fit.aberrant:
                     logger.info(
                         "aberrant response on %s: scored %.2f where %.2f was expected (z=%.2f)",
-                        outcome.variable, fit.score, fit.expected, fit.z,
+                        outcome.variable,
+                        fit.score,
+                        fit.expected,
+                        fit.z,
                     )
                     aberrant.append(fit.as_dict())
             updated[outcome.variable] = variables_module.apply_outcome(
@@ -1006,7 +1119,9 @@ class Orchestrator:
                 continue
             all_variable_items = self._bank.shortlist(variable, exclude=set())
             remaining = sum(
-                1 for candidate in all_variable_items if candidate.item_id not in set(served)
+                1
+                for candidate in all_variable_items
+                if candidate.item_id not in set(served)
             )
             maximum_available_difficulty = (
                 max(float(candidate.cat.b) for candidate in all_variable_items)
@@ -1024,6 +1139,38 @@ class Orchestrator:
                 administered_difficulties=administered_difficulties,
                 maximum_available_difficulty=maximum_available_difficulty,
             )
+            unmet_modalities = self._unmet_modality_minimums(
+                variable=variable,
+                administered_by_variable=administered,
+                available=all_variable_items,
+            )
+            if candidate_state.converged and unmet_modalities:
+                # The blueprint is a convergence gate, not only a picker preference. A
+                # cross-main update can make a posterior precise before this main gets its
+                # own code/voice item, so selection alone cannot guarantee the contract.
+                if remaining <= 0:
+                    candidate_state = variable_state.model_copy(
+                        update={
+                            "finalised": True,
+                            "stop_reason": "bank_exhausted",
+                            "converged": False,
+                        }
+                    )
+                elif variable_state.observations >= settings.cat_max_questions:
+                    candidate_state = variable_state.model_copy(
+                        update={
+                            "finalised": True,
+                            "stop_reason": "question_budget",
+                            "converged": False,
+                        }
+                    )
+                else:
+                    logger.info(
+                        "modality gate held %s open — unmet=%s",
+                        variable,
+                        unmet_modalities,
+                    )
+                    candidate_state = variable_state
             gate_graph = (
                 self._graph()
                 if (
@@ -1033,66 +1180,67 @@ class Orchestrator:
                 )
                 else None
             )
-            if gate_graph is not None:
-                if not coverage_allows_convergence(
+            if gate_graph is not None and not coverage_allows_convergence(
+                gate_graph,
+                variable,
+                measured=graph_delta.measured,
+                mastered=graph_delta.mastered,
+                not_mastered=graph_delta.not_mastered,
+                critical_only=self.coverage_critical_only(),
+            ):
+                missing = unmeasured_required_nodes(
                     gate_graph,
                     variable,
                     measured=graph_delta.measured,
                     mastered=graph_delta.mastered,
                     not_mastered=graph_delta.not_mastered,
                     critical_only=self.coverage_critical_only(),
-                ):
-                    missing = unmeasured_required_nodes(
-                        gate_graph,
-                        variable,
-                        measured=graph_delta.measured,
-                        mastered=graph_delta.mastered,
-                        not_mastered=graph_delta.not_mastered,
-                        critical_only=self.coverage_critical_only(),
+                )
+                if remaining <= 0:
+                    candidate_state = variable_state.model_copy(
+                        update={
+                            "finalised": True,
+                            "stop_reason": "bank_exhausted",
+                            "converged": False,
+                        }
                     )
-                    if remaining <= 0:
-                        candidate_state = variable_state.model_copy(
-                            update={
-                                "finalised": True,
-                                "stop_reason": "bank_exhausted",
-                                "converged": False,
-                            }
-                        )
-                        waived[variable] = sorted(missing)
-                    elif variable_state.observations >= settings.cat_max_questions:
-                        # NOT `question_budget`. Measurement DID converge; the graph
-                        # refused to certify it because required nodes were never seen.
-                        # Reporting that as "ran out of questions" describes a stop the
-                        # session did not make, and makes the deadlock rate — a stated
-                        # rollout target — unmeasurable, because the two are then
-                        # indistinguishable in the record.
-                        candidate_state = variable_state.model_copy(
-                            update={
-                                "finalised": True,
-                                "stop_reason": "graph_gates_waived",
-                                "converged": False,
-                            }
-                        )
-                        waived[variable] = sorted(missing)
-                        logger.warning(
-                            "%s finalised with coverage waived — unmeasured=%s",
-                            variable,
-                            sorted(missing),
-                        )
-                    else:
-                        logger.info(
-                            "graph_coverage gate held %s open — unmeasured=%s",
-                            variable,
-                            sorted(missing),
-                        )
-                        continue
+                    waived[variable] = sorted(missing)
+                elif variable_state.observations >= settings.cat_max_questions:
+                    # NOT `question_budget`. Measurement DID converge; the graph
+                    # refused to certify it because required nodes were never seen.
+                    # Reporting that as "ran out of questions" describes a stop the
+                    # session did not make, and makes the deadlock rate — a stated
+                    # rollout target — unmeasurable, because the two are then
+                    # indistinguishable in the record.
+                    candidate_state = variable_state.model_copy(
+                        update={
+                            "finalised": True,
+                            "stop_reason": "graph_gates_waived",
+                            "converged": False,
+                        }
+                    )
+                    waived[variable] = sorted(missing)
+                    logger.warning(
+                        "%s finalised with coverage waived — unmeasured=%s",
+                        variable,
+                        sorted(missing),
+                    )
+                else:
+                    logger.info(
+                        "graph_coverage gate held %s open — unmeasured=%s",
+                        variable,
+                        sorted(missing),
+                    )
+                    continue
 
             updated[variable] = candidate_state
             if updated[variable].finalised:
                 queue.release(variable)
                 logger.info(
                     "%s finalised: %s (converged=%s)",
-                    variable, updated[variable].stop_reason, updated[variable].converged,
+                    variable,
+                    updated[variable].stop_reason,
+                    updated[variable].converged,
                 )
 
         elapsed = (time.time() - state.started_at) / 60.0 if state.started_at else 0.0
@@ -1155,7 +1303,10 @@ class Orchestrator:
         # Time first: it is the constraint that actually binds, and a session that hit the
         # clock must not be reported as having exhausted a question budget it never
         # approached.
-        if state.started_at and state.elapsed_minutes >= settings.orchestrator_time_limit_minutes:
+        if (
+            state.started_at
+            and state.elapsed_minutes >= settings.orchestrator_time_limit_minutes
+        ):
             return True, "time_limit"
         if state.items_administered >= settings.orchestrator_max_items:
             return True, "item_budget"
@@ -1164,7 +1315,9 @@ class Orchestrator:
         return False, StopReason.IN_PROGRESS
 
     # --- reporting ----------------------------------------------------------
-    def summarise(self, state: AssessmentState, stop_reason: str = "") -> AssessmentReport:
+    def summarise(
+        self, state: AssessmentState, stop_reason: str = ""
+    ) -> AssessmentReport:
         """The end-of-assessment report. Nothing here is inferred."""
         by_item = {i.item_id: i for i in self._bank.all_items()}
         self._stamp_open_variables(state, stop_reason)
@@ -1224,14 +1377,18 @@ class Orchestrator:
             raw_se = variable_state.standard_error
             reported_se = raw_se * widening
             reported_interval = (
-                variables_module.posterior_interval(variable_state) if measured else None
+                variables_module.posterior_interval(variable_state)
+                if measured
+                else None
             )
             if reported_interval is not None and widening > 1.0:
                 # Widen about the point estimate, so the interval stays centred on the
                 # ability being reported rather than drifting toward the prior.
                 centre = variable_state.theta_hat
-                reported_interval = tuple(
-                    centre + (bound - centre) * widening for bound in reported_interval
+                lower, upper = reported_interval
+                reported_interval = (
+                    centre + (lower - centre) * widening,
+                    centre + (upper - centre) * widening,
                 )
             reports.append(
                 VariableReport(
@@ -1244,11 +1401,16 @@ class Orchestrator:
                     certainty_pct=precision_index,
                     level=level if measured else None,
                     band=band if measured else "Not assessed",
-                    p_reported_band=round(bands.get(level, 0.0), 4) if measured else 0.0,
+                    p_reported_band=round(bands.get(level, 0.0), 4)
+                    if measured
+                    else 0.0,
                     band_probability=round(max(bands.values()), 4) if bands else 0.0,
                     most_probable_band=most_probable if measured else None,
                     credible_interval_95=(
-                        tuple(round(x, 3) for x in reported_interval)
+                        (
+                            round(reported_interval[0], 3),
+                            round(reported_interval[1], 3),
+                        )
                         if reported_interval is not None
                         else None
                     ),
@@ -1258,6 +1420,14 @@ class Orchestrator:
                     observations=variable_state.observations,
                     finalised=variable_state.finalised,
                     converged=variable_state.converged,
+                    decision_status=(
+                        "not_assessed"
+                        if not measured
+                        else "certified"
+                        if variable_state.converged
+                        and settings.cat_band_decisions_certified
+                        else "provisional"
+                    ),
                     stop_reason=variable_state.stop_reason,
                     modalities_used=modalities_for(variable),
                 )

@@ -22,7 +22,9 @@ from dataclasses import dataclass
 NEGATION_TOKENS = ("not", "never", "except", "false", "incorrect", "cannot", "none")
 
 # Anything that must survive verbatim: identifiers, calls, dotted paths, numbers.
-TOKEN_PATTERN = re.compile(r"[A-Za-z_][\w.]*\(\)|[A-Za-z_]\w*\.\w+|\b\d[\d_.]*\b|`[^`]+`")
+TOKEN_PATTERN = re.compile(
+    r"[A-Za-z_][\w.]*\(\)|[A-Za-z_]\w*\.\w+|\b\d[\d_.]*\b|`[^`]+`"
+)
 
 MAX_LENGTH_RATIO = 1.5
 
@@ -45,7 +47,9 @@ def _protected_tokens(text: str) -> set[str]:
     return {m.strip("`") for m in TOKEN_PATTERN.findall(text)}
 
 
-def check_rephrase(original: str, rewritten: str, options: list[str], answer_index: int) -> RephraseCheck:
+def check_rephrase(
+    original: str, rewritten: str, options: list[str], answer_index: int
+) -> RephraseCheck:
     """Validate a rewrite, falling back to the original stem whenever anything is off.
 
     Every rejection returns the ORIGINAL stem, so a bad rewrite costs nothing but the
@@ -56,7 +60,9 @@ def check_rephrase(original: str, rewritten: str, options: list[str], answer_ind
         return RephraseCheck(original, True)
 
     if len(candidate) > len(original) * MAX_LENGTH_RATIO:
-        return RephraseCheck(original, False, "rewrite is substantially longer than the original")
+        return RephraseCheck(
+            original, False, "rewrite is substantially longer than the original"
+        )
 
     # An answer leak is the failure that silently inflates a candidate's score, so the
     # correct option is checked first and most strictly.
@@ -70,7 +76,9 @@ def check_rephrase(original: str, rewritten: str, options: list[str], answer_ind
             return RephraseCheck(original, False, "rewrite restates a distractor")
 
     if _negation_count(candidate) != _negation_count(original):
-        return RephraseCheck(original, False, "rewrite changes the polarity of the question")
+        return RephraseCheck(
+            original, False, "rewrite changes the polarity of the question"
+        )
 
     missing = _protected_tokens(original) - _protected_tokens(candidate)
     if missing:

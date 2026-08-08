@@ -206,7 +206,11 @@ class TestS2BandProbabilityStopIsReachable:
 
     def test_the_probability_is_the_reported_bands_not_the_most_likely_bands(self):
         """Near a cut point those differ, and the rule asks about the level being printed."""
-        from app.services.adaptive.irt import THETA_GRID, ability_band, band_probabilities
+        from app.services.adaptive.irt import (
+            THETA_GRID,
+            ability_band,
+            band_probabilities,
+        )
 
         # Mass split across a cut, with the mean landing in the lighter band.
         posterior = np.zeros_like(THETA_GRID)
@@ -233,7 +237,9 @@ class TestS5BlockingNeedsTwoFailures:
     """
 
     def test_the_default_policy_asks_for_two(self):
-        from app.services.competency_graph.config import propagation_config_from_settings
+        from app.services.competency_graph.config import (
+            propagation_config_from_settings,
+        )
 
         assert propagation_config_from_settings().minimum_failures_to_block >= 2
 

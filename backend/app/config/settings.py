@@ -25,7 +25,6 @@ from typing import Literal
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 logger = logging.getLogger(__name__)
 
 # How much authority the model holds over a code score: A objective-only, B test-anchored,
@@ -82,6 +81,16 @@ class Settings(BaseSettings):
     # default because a dump of assessment states is candidate data.
     cat_session_dump_dir: str = ""
 
+    # The Streamlit deployment serves candidates by default. Its queue, posterior math,
+    # engine traces, grader rationale, and answer keys are useful to assessment authors,
+    # but showing them during a live run changes the construct and leaks protected item
+    # content. An operator must opt into the instrumented tester harness explicitly.
+    streamlit_tester_mode: bool = False
+    # In-process API state is intentionally a single-node deployment mode. Bound retained
+    # finished sessions so abandoned browser tabs cannot grow the worker forever.
+    cat_session_retention_seconds: int = Field(default=86_400, ge=60)
+    cat_max_retained_sessions: int = Field(default=1_000, ge=1)
+
     # --- CAT policy -------------------------------------------------------------
     # Target posterior standard error. Reaching it (after the precision floor below) is
     # the stop that counts as measured precision. Validate a bank against this before
@@ -134,24 +143,22 @@ class Settings(BaseSettings):
     # preserved. Opt in when studying the feature, not by accident.
     cat_rephrasing_enabled: bool = False
 
-    # Stop when the reported LEVEL is probably right, rather than when the estimate is
-    # precise. OFF, and additive: it can end a competency early, never hold one open.
-    #
-    # Secondary because it asks a different question from precision and, near a band cut
-    # point, demands materially more evidence for the same standard error. That is the
-    # rule working — but it changes test length, and that wants measuring before it is
-    # trusted.
-    cat_band_probability_stop_enabled: bool = False
+    # A reported level must be both precise and sufficiently probable. This is enabled as
+    # a convergence gate: near a band cut point, a narrow estimate may still leave the
+    # reported decision uncertain, so precision alone is not enough to certify it.
+    cat_band_probability_stop_enabled: bool = True
     cat_band_probability_target: float = Field(default=0.80, gt=0.0, lt=1.0)
     # Require the precision target TOO, rather than accepting P(band) instead of it.
     #
-    # Without this the rule is evaluated before the precision rule and never sees the
-    # standard error, so it can finalise a competency whose posterior is far wider than
-    # target — concentrated mass in one band is not a precise estimate, and near a cut
-    # point the two claims come apart. Off by default so no shipped report changes; the
-    # evaluation harness turns it on, because every propagation configuration there is
-    # judged by its effect on a posterior and the posterior has to mean one thing.
-    cat_band_probability_stop_conjunctive: bool = False
+    # When true, this is a veto on every measurement-convergence branch, not merely an
+    # extra condition on the band-probability branch. That prevents a later precision or
+    # stable-band branch from bypassing the decision-confidence requirement.
+    cat_band_probability_stop_conjunctive: bool = True
+    # Operational certification gate. A model stop says the posterior met its configured
+    # rule; it does not prove the reported band is externally calibrated. Keep decisions
+    # provisional until the exact-band and decision-consistency release gates pass on an
+    # independent cohort.
+    cat_band_decisions_certified: bool = False
 
     # REPORTING ONLY. Widen the reported SE and credible interval by a measured factor.
     #
@@ -166,12 +173,15 @@ class Settings(BaseSettings):
     # and so change the posterior the factor was calibrated against — a self-referential
     # correction. `VariableReport` carries the raw SE alongside the widened one so the
     # adjustment is auditable rather than invisible.
-    cat_interval_widening_enabled: bool = False
+    cat_interval_widening_enabled: bool = True
     cat_interval_widening_factor: float = Field(default=1.0, ge=1.0, le=3.0)
-    # Per-competency overrides as a JSON object, e.g. {"C1": 1.33, "C6": 1.45}. The
+    # Per-competency overrides as a JSON object, e.g. {"C1": 1.55, "C6": 1.36}. The
     # factor is a property of how multidimensional a competency is, so one global number
     # is the wrong shape wherever that differs by main.
-    cat_interval_widening_by_variable: str = ""
+    cat_interval_widening_by_variable: str = (
+        '{"C1":1.55,"C2":1.33,"C3":1.50,"C4":1.33,"C5":1.33,'
+        '"C6":1.36,"C7":1.33,"C8":1.33,"C9":1.33,"C10":1.33}'
+    )
 
     # Flag a response that the current posterior did not expect. Report-only: no branch
     # may read it and change an estimate.
@@ -441,12 +451,16 @@ class Settings(BaseSettings):
         overrides = self._parsed_float_map(
             self.cat_interval_widening_by_variable, "CAT_INTERVAL_WIDENING_BY_VARIABLE"
         )
-        factor = overrides.get((variable or "").lower(), self.cat_interval_widening_factor)
+        factor = overrides.get(
+            (variable or "").lower(), self.cat_interval_widening_factor
+        )
         return max(1.0, float(factor))
 
     @staticmethod
     def _parsed_csv(raw: str) -> tuple[str, ...]:
-        return tuple(part.strip().lower() for part in (raw or "").split(",") if part.strip())
+        return tuple(
+            part.strip().lower() for part in (raw or "").split(",") if part.strip()
+        )
 
     def inference_modalities(self) -> frozenset[str] | None:
         """The explicit modality allowlist, or None to derive it from the legacy booleans.
@@ -490,7 +504,8 @@ class Settings(BaseSettings):
             return {str(k): int(v) for k, v in parsed.items() if int(v) > 0}
         except (ValueError, TypeError, AttributeError):
             logger.warning(
-                "ORCHESTRATOR_MODALITY_MINIMUMS is not valid JSON (%r) — ignoring", raw[:80]
+                "ORCHESTRATOR_MODALITY_MINIMUMS is not valid JSON (%r) — ignoring",
+                raw[:80],
             )
             return {}
 
@@ -510,7 +525,8 @@ class Settings(BaseSettings):
         except (ValueError, TypeError, AttributeError):
             logger.warning(
                 "CODE_LLM_SHARES is not valid JSON (%r) — using the %s preset instead",
-                raw[:80], self.code_approach,
+                raw[:80],
+                self.code_approach,
             )
             return {}
 

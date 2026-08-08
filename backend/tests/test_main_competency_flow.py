@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from app.schemas.orchestration import QueuedCandidate
 from app.services.orchestrator import registry
-from tests.conftest import orchestrator_for
 from app.services.orchestrator.competency import (
     affected_mains,
     combined_weight,
@@ -16,6 +16,7 @@ from app.services.orchestrator.competency import (
 from app.services.orchestrator.grader import GraderAgent
 from app.services.orchestrator.orchestrator import Orchestrator
 from app.services.orchestrator.outcome import GradedOutcome
+from tests.conftest import orchestrator_for
 
 
 @pytest.fixture(scope="module")
@@ -42,6 +43,43 @@ def test_rollup_combines_sub_competencies_under_one_main():
     assert len(rolled) == 1
     assert rolled[0].variable == "T1"
     assert rolled[0].score == pytest.approx(0.8 / 1.4)
+
+
+def test_cross_main_evidence_does_not_claim_another_mains_modality():
+    """One question can update two posteriors but is administered for only one main."""
+    bank = registry.get_bank("AIE")
+    orchestrator = orchestrator_for("AIE")
+    item = next(
+        item
+        for item in bank.all_items()
+        if item.modality == "mcq"
+        and len({main_competency(m.variable) for m in item.measures}) > 1
+    )
+    mains = sorted({main_competency(m.variable) for m in item.measures})[:2]
+    primary, secondary = mains
+    state = orchestrator.begin(mains).model_copy(
+        update={
+            "presenting": QueuedCandidate(
+                variable=primary,
+                item_id=item.item_id,
+                modality=item.modality,
+                criterion="KL",
+                information=1.0,
+                utility=1.0,
+                best_information=1.0,
+                normalized_regret=0.0,
+                engine_top_pick=item.item_id,
+                chosen_by_llm=False,
+            )
+        }
+    )
+
+    updated, _ = orchestrator.record_response(
+        state, item, int(item.payload["answer_index"])
+    )
+
+    assert item.item_id in updated.administered_by_variable[primary]
+    assert item.item_id not in updated.administered_by_variable.get(secondary, [])
 
 
 class TestCombinedWeight:

@@ -20,7 +20,10 @@ from app.services.competency_graph.evidence import EvidenceEvent, evidence_id_fo
 from app.services.competency_graph.graph import CompetencyGraphService
 from app.services.competency_graph.ledger import DuplicateEvidenceError, EvidenceLedger
 from app.services.competency_graph.models import CompetencyStatus
-from app.services.competency_graph.propagation import apply_direct_evidence, apply_events
+from app.services.competency_graph.propagation import (
+    apply_direct_evidence,
+    apply_events,
+)
 from app.services.competency_graph.state import CompetencyGraphState
 
 

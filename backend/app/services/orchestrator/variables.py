@@ -107,7 +107,10 @@ def upper_challenge_difficulty(state: VariableState) -> float | None:
     """Difficulty needed to test whether a strong candidate belongs in the next band."""
     if len(state.score_history) < STRONG_STREAK_LENGTH:
         return None
-    if any(score < STRONG_SCORE_FLOOR for score in state.score_history[-STRONG_STREAK_LENGTH:]):
+    if any(
+        score < STRONG_SCORE_FLOOR
+        for score in state.score_history[-STRONG_STREAK_LENGTH:]
+    ):
         return None
 
     level, _ = ability_band(state.theta_hat)
@@ -176,7 +179,9 @@ def apply_outcome(
     the code engine draws when an infrastructure failure carries no evidence.
     """
     if not outcome.moves_the_estimate:
-        logger.debug("outcome for %s carries no evidence — estimate untouched", outcome.variable)
+        logger.debug(
+            "outcome for %s carries no evidence — estimate untouched", outcome.variable
+        )
         return state
 
     posterior, theta_hat, standard_error = graded_posterior_update(
@@ -244,7 +249,11 @@ def evaluate_finalisation(
         return state
 
     return state.model_copy(
-        update={"finalised": True, "stop_reason": stop.reason, "converged": stop.converged}
+        update={
+            "finalised": True,
+            "stop_reason": stop.reason,
+            "converged": stop.converged,
+        }
     )
 
 

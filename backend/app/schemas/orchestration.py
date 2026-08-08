@@ -92,10 +92,12 @@ class BankItem(BaseModel):
     voice: dict[str, Any] | None = None
 
     @model_validator(mode="after")
-    def _payload_matches_modality(self) -> "BankItem":
+    def _payload_matches_modality(self) -> BankItem:
         payload = getattr(self, self.modality, None)
         if payload is None:
-            raise ValueError(f"item {self.item_id}: modality {self.modality!r} has no payload")
+            raise ValueError(
+                f"item {self.item_id}: modality {self.modality!r} has no payload"
+            )
         return self
 
     @property
@@ -356,6 +358,10 @@ class VariableReport(BaseModel):
     observations: int
     finalised: bool
     converged: bool
+    # `converged` is an engine outcome. Certification is a separate release decision:
+    # until external exact-band calibration passes, even a model-converged estimate must
+    # be presented as provisional.
+    decision_status: Literal["not_assessed", "provisional", "certified"] = "provisional"
     stop_reason: str
     modalities_used: list[str] = Field(default_factory=list)
 

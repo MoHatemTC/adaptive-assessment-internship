@@ -58,7 +58,7 @@ def record_session(
         with path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
     except OSError:
-        logger.error("could not append session %s to %s", state.session_id, path, exc_info=True)
+        logger.exception("could not append session %s to %s", state.session_id, path)
         return None
     return path
 

@@ -24,7 +24,6 @@ from app.services.competency_graph.coverage import (
     sub_nodes_for_main,
     unmeasured_required_nodes,
 )
-from app.services.orchestrator import registry
 from app.services.orchestrator.competency import affected_mains, rollup_outcomes
 from app.services.orchestrator.outcome import GradedOutcome
 from tests.conftest import orchestrator_for

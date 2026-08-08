@@ -94,9 +94,9 @@ def detect_contradictions(
 
     # 2. The same node, directly, both ways. One of the two gradings is wrong, and the
     #    node needs verifying before either is reported as a measurement.
-    reversal = (strong_success and prior_status is CompetencyStatus.DIRECT_NOT_MASTERED) or (
-        strong_failure and prior_status is CompetencyStatus.DIRECT_MASTERED
-    )
+    reversal = (
+        strong_success and prior_status is CompetencyStatus.DIRECT_NOT_MASTERED
+    ) or (strong_failure and prior_status is CompetencyStatus.DIRECT_MASTERED)
     if reversal:
         found.append(
             Contradiction(
@@ -115,7 +115,9 @@ def detect_contradictions(
     #    way a wrong inference becomes observable in production rather than in a study.
     if strong_failure and prior_status is CompetencyStatus.INFERRED_MASTERED:
         graph_state.ensure_nodes({target})
-        sources = sorted(graph_state.nodes[target].inferred_evidence_ids) or ["<unknown>"]
+        sources = sorted(graph_state.nodes[target].inferred_evidence_ids) or [
+            "<unknown>"
+        ]
         found.append(
             Contradiction(
                 node=target,

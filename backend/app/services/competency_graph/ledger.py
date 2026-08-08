@@ -12,7 +12,7 @@ across process restarts and across workers.
 
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 
 
 class DuplicateEvidenceError(ValueError):
@@ -26,7 +26,7 @@ class EvidenceLedger:
         self._processed: set[str] = set(processed)
 
     @classmethod
-    def from_ids(cls, processed: Iterable[str]) -> "EvidenceLedger":
+    def from_ids(cls, processed: Iterable[str]) -> EvidenceLedger:
         return cls(processed)
 
     def assert_new(self, evidence_id: str) -> None:

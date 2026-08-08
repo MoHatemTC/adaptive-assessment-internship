@@ -129,7 +129,12 @@ def certainty_pct(
     if observations is None:
         return raw
 
-    floor = max(int(getattr(settings, "cat_precision_min_questions", settings.cat_min_questions)), 1)
+    floor = max(
+        int(
+            getattr(settings, "cat_precision_min_questions", settings.cat_min_questions)
+        ),
+        1,
+    )
     n = max(int(observations), 0)
     if n >= floor:
         return raw
@@ -152,7 +157,7 @@ def band_probability_stop_available(
     difficulty_corroborated: bool,
     standard_error: float | None = None,
 ) -> bool:
-    """Whether a P(band) stop may fire. Off by default; see `evaluate`.
+    """Whether a P(band) stop may fire; see `evaluate`.
 
     CONJUNCTIVE OR NOT (PRE-5). As written the rule runs BEFORE the precision rule and
     never consults the standard error, so it can end a competency at an SE far above
@@ -163,8 +168,7 @@ def band_probability_stop_available(
 
     Under `cat_band_probability_stop_conjunctive` the rule additionally requires the
     precision target, making it a genuine refinement of the precision stop rather than an
-    alternative to it. Default OFF, so no shipped report changes; ON in the evaluation
-    harness, where the posterior has to mean one thing.
+    alternative to it.
     """
     if not (
         settings.cat_band_probability_stop_enabled
@@ -191,15 +195,10 @@ def evaluate(
 ) -> StopDecision:
     """Apply the stopping rules in precedence order.
 
-    0. BAND PROBABILITY — the reported level is probably right. OFF by default, and
-       ADDITIVE: it can end a competency early, never keep one open. It asks a different
-       question from precision — "is this level right" rather than "is this estimate
-       tight" — and near a band cut point it demands materially more evidence for the
-       same standard error (0.57 against 0.85 at the SE target). That is the rule
-       working, but it changes test length in a way that wants measuring before it is
-       trusted, which is why it ships off.
-       Keeps the observation floor regardless: a prior is not a measurement, however
-       concentrated it happens to look.
+    0. BAND PROBABILITY — the reported level is probably right. In conjunctive mode this
+       gates every measurement stop, so a later precision or stable-band branch cannot
+       certify an uncertain decision. In explicitly configured additive mode it remains
+       an independent early stop. Both modes keep the observation floor.
     1. PRECISION — SE at/under target, enough observations, and item difficulty that
        corroborates the estimated level.
        A single high-discrimination hit can crush SE; the observation floor stops that
@@ -209,9 +208,15 @@ def evaluate(
        ceiling and its own min-questions floor.
     3. BUDGET — out of questions, or out of items. Not convergence.
     """
-    if band_probability_stop_available(
+    band_ready = band_probability_stop_available(
         band_probability, questions_answered, difficulty_corroborated, standard_error
-    ):
+    )
+    conjunctive = bool(
+        settings.cat_band_probability_stop_enabled
+        and settings.cat_band_probability_stop_conjunctive
+    )
+
+    if band_ready:
         return StopDecision(True, "band_probability", converged=True)
 
     if (
@@ -219,6 +224,7 @@ def evaluate(
         and questions_answered
         >= getattr(settings, "cat_precision_min_questions", settings.cat_min_questions)
         and difficulty_corroborated
+        and not conjunctive
     ):
         return StopDecision(True, "precision", converged=True)
 
@@ -227,6 +233,7 @@ def evaluate(
         and standard_error <= settings.cat_stability_se_ceiling
         and band_is_stable(band_history, settings.cat_stable_window)
         and difficulty_corroborated
+        and not conjunctive
     ):
         return StopDecision(True, "stable_band", converged=True)
 

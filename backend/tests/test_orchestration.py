@@ -10,22 +10,21 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from app.schemas.orchestration import BankItem, VariableState
+from app.schemas.orchestration import VariableState
 from app.services.adaptive.irt import posterior_update, uniform_prior
-from app.services.orchestrator import variables as variables_module
 from app.services.orchestrator import registry
-from tests.conftest import orchestrator_for
+from app.services.orchestrator import variables as variables_module
 from app.services.orchestrator.calibration import (
     code_cat_parameters,
     mastery_difficulty_to_theta,
     open_cat_parameters,
     theta_to_mastery_difficulty,
 )
-from app.services.orchestrator.grader import GraderAgent
 from app.services.orchestrator.orchestrator import Orchestrator
 from app.services.orchestrator.outcome import GradedOutcome, graded_posterior_update
 from app.services.orchestrator.picker import criterion_for, rank
 from app.services.orchestrator.queue import CandidateQueue
+from tests.conftest import orchestrator_for
 
 
 @pytest.fixture(scope="module")
@@ -200,6 +199,9 @@ class TestGraphCoverageGate:
         monkeypatch.setattr(
             settings_module.settings, "graph_convergence_gate_enabled", True
         )
+        monkeypatch.setattr(
+            settings_module.settings, "orchestrator_modality_minimums", "{}"
+        )
 
         item = next(i for i in bank.all_items() if i.modality == "mcq")
         main = item.measures[0].variable.split(".")[0]
@@ -372,7 +374,12 @@ class TestQueue:
 class TestFinalisation:
     """The explicit requirement: a finalised variable is never picked for again."""
 
-    def test_a_precise_variable_finalises_and_converges(self):
+    def test_a_precise_variable_finalises_and_converges(self, monkeypatch):
+        monkeypatch.setattr(
+            variables_module,
+            "band_probability",
+            lambda _state: {level: 0.99 for level in range(1, 6)},
+        )
         state = VariableState(
             variable="T1.1", posterior=list(uniform_prior()),
             theta_hat=0.5, standard_error=0.3, observations=8, band_history=[3] * 8,
@@ -399,7 +406,12 @@ class TestFinalisation:
         assert held.finalised is False
         assert variables_module.upper_challenge_difficulty(state) == pytest.approx(-1.05)
 
-    def test_next_band_challenge_allows_precise_finalisation(self):
+    def test_next_band_challenge_allows_precise_finalisation(self, monkeypatch):
+        monkeypatch.setattr(
+            variables_module,
+            "band_probability",
+            lambda _state: {level: 0.99 for level in range(1, 6)},
+        )
         state = VariableState(
             variable="PY",
             posterior=list(uniform_prior()),
@@ -475,7 +487,6 @@ class TestFinalisation:
 
         async def spy(items, variable_state, variable, **kwargs):
             called.append(variable)
-            return None
 
         monkeypatch.setattr(orchestrator_module, "pick", spy)
         await orchestrator.fill_queue(state, use_llm=False)

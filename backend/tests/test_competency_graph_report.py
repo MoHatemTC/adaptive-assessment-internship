@@ -169,7 +169,9 @@ class TestReportWiring:
         for _ in range(3):
             state = await orchestrator.fill_queue(state, use_llm=False, rng=rng)
             state = orchestrator.ensure_presenting(state)
-            item, _ = orchestrator.next_item(state)
+            pair = orchestrator.next_item(state)
+            assert pair is not None
+            item, _ = pair
             state, _ = orchestrator.record_response(state, item, answer_for(item))
             state = await orchestrator.after_response(state, item, use_llm=False, rng=rng)
 
@@ -179,5 +181,6 @@ class TestReportWiring:
         assert variable.band_probability >= variable.p_reported_band
         assert variable.most_probable_band is not None
         assert variable.credible_interval_95 is not None
+        assert variable.decision_status == "provisional"
         # The honest name and the deprecated alias agree.
         assert variable.precision_index_pct == variable.certainty_pct

@@ -67,7 +67,9 @@ def fisher_information(theta: float, a: float, b: float, c: float) -> float:
     return float((a**2) * (ratio**2) * ((1.0 - p) / p))
 
 
-def expected_fisher_information(posterior: np.ndarray, a: float, b: float, c: float) -> float:
+def expected_fisher_information(
+    posterior: np.ndarray, a: float, b: float, c: float
+) -> float:
     """Fisher information averaged over the posterior rather than taken at its mean.
 
     Information at a point estimate is only the right criterion if the point estimate is
@@ -153,10 +155,18 @@ def ability_percentile(theta_hat: float) -> float:
     """
     from math import erf, sqrt
 
-    return float(np.clip(100.0 * 0.5 * (1.0 + erf(float(theta_hat) / sqrt(2.0))), 0.0, 100.0))
+    return float(
+        np.clip(100.0 * 0.5 * (1.0 + erf(float(theta_hat) / sqrt(2.0))), 0.0, 100.0)
+    )
 
 
-BAND_LABELS = {1: "Novice", 2: "Developing", 3: "Competent", 4: "Proficient", 5: "Expert"}
+BAND_LABELS = {
+    1: "Novice",
+    2: "Developing",
+    3: "Competent",
+    4: "Proficient",
+    5: "Expert",
+}
 
 # Interior bands 1.6 logits wide. THE SINGLE SOURCE OF TRUTH for where a level begins —
 # anything that needs the inverse (the difficulty of the next band up, say) reads these
@@ -253,6 +263,10 @@ def credible_interval(
     cdf = np.cumsum(weights / total)
     lower_q = (1.0 - mass) / 2.0
     upper_q = 1.0 - lower_q
-    lower = float(THETA_GRID[min(int(np.searchsorted(cdf, lower_q)), THETA_GRID.size - 1)])
-    upper = float(THETA_GRID[min(int(np.searchsorted(cdf, upper_q)), THETA_GRID.size - 1)])
+    lower = float(
+        THETA_GRID[min(int(np.searchsorted(cdf, lower_q)), THETA_GRID.size - 1)]
+    )
+    upper = float(
+        THETA_GRID[min(int(np.searchsorted(cdf, upper_q)), THETA_GRID.size - 1)]
+    )
     return lower, upper

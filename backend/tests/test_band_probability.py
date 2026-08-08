@@ -71,15 +71,17 @@ class TestBandProbabilities:
 
 
 class TestBandProbabilityStop:
-    def test_it_is_off_by_default(self) -> None:
-        assert settings.cat_band_probability_stop_enabled is False
+    def test_it_is_on_and_conjunctive_by_default(self) -> None:
+        assert settings.cat_band_probability_stop_enabled is True
+        assert settings.cat_band_probability_stop_conjunctive is True
         decision = convergence.evaluate(
             0.90, [4] * 8, 8, items_remaining=10, band_probability=0.99
         )
-        assert decision.reason != "band_probability"
+        assert decision.should_stop is False
 
-    def test_enabled_it_can_end_a_competency_early(self, monkeypatch) -> None:
+    def test_explicit_additive_mode_can_end_a_competency_early(self, monkeypatch) -> None:
         monkeypatch.setattr(settings, "cat_band_probability_stop_enabled", True)
+        monkeypatch.setattr(settings, "cat_band_probability_stop_conjunctive", False)
         decision = convergence.evaluate(
             0.90, [4] * 8, 8, items_remaining=10, band_probability=0.95
         )
@@ -104,13 +106,14 @@ class TestBandProbabilityStop:
         )
         assert decision.reason != "band_probability"
 
-    def test_it_never_holds_a_competency_open(self, monkeypatch) -> None:
-        """Additive, not a veto: a precision stop still fires when P(band) is low."""
+    def test_conjunctive_mode_holds_an_uncertain_band_open(self, monkeypatch) -> None:
+        """Precision alone cannot certify a decision with low P(band)."""
         monkeypatch.setattr(settings, "cat_band_probability_stop_enabled", True)
+        monkeypatch.setattr(settings, "cat_band_probability_stop_conjunctive", True)
         decision = convergence.evaluate(
             0.30, [4] * 8, 8, items_remaining=10, band_probability=0.10
         )
-        assert decision.reason == "precision"
+        assert decision.should_stop is False
 
 
 class TestPriorDiscipline:
@@ -186,9 +189,14 @@ class TestPersonFit:
 
     def test_weaker_evidence_produces_a_smaller_residual(self) -> None:
         posterior = gaussian(0.0, 0.55)
-        kwargs = dict(variable="DA", item_id="i", posterior=posterior, a=1.2, b=0.0, c=0.0)
-        strong = personfit.residual(score=0.0, weight=1.0, **kwargs)
-        weak = personfit.residual(score=0.0, weight=0.25, **kwargs)
+        strong = personfit.residual(
+            variable="DA", item_id="i", posterior=posterior,
+            a=1.2, b=0.0, c=0.0, score=0.0, weight=1.0,
+        )
+        weak = personfit.residual(
+            variable="DA", item_id="i", posterior=posterior,
+            a=1.2, b=0.0, c=0.0, score=0.0, weight=0.25,
+        )
         assert abs(weak.z) < abs(strong.z)
 
     def test_an_unscorable_response_is_never_aberrant(self) -> None:

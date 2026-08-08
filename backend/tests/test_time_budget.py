@@ -13,7 +13,8 @@ import pytest
 
 from app.config.settings import settings
 from app.schemas.orchestration import DEFAULT_SECONDS_BY_MODALITY
-from app.services.orchestrator import budget, variables as variables_module
+from app.services.orchestrator import budget
+from app.services.orchestrator import variables as variables_module
 from app.services.orchestrator.picker import RankScore, expected_weight_for, rank
 from tests.conftest import orchestrator_for
 
@@ -159,6 +160,85 @@ class TestStopReasons:
         assert state.variables["DA"].finalised is True
         assert state.variables["DA"].stop_reason == "time_budget"
 
+    @pytest.mark.asyncio
+    async def test_a_queued_item_is_revalidated_after_other_variables_spend_time(self) -> None:
+        """A queue promise must not become permission to overrun the session clock."""
+        orchestrator = orchestrator_for("AIE")
+        state = orchestrator.begin(["C1"], intake={"C1": 3})
+        state = await orchestrator.fill_queue(
+            state, use_llm=False, rng=np.random.default_rng(4)
+        )
+        original = state.queue["C1"]
+        slow = orchestrator._bank.get("code_c1_025")
+        assert slow is not None and slow.expected_seconds == 900.0
+
+        stale = original.model_copy(
+            update={
+                "item_id": slow.item_id,
+                "modality": slow.modality,
+                "estimated_seconds": slow.expected_seconds,
+            }
+        )
+        # 11.5 usable minutes remain after the reserve, so this 15-minute promise was
+        # valid earlier in the session but is no longer admissible now.
+        state = state.model_copy(
+            update={"queue": {"C1": stale}, "elapsed_minutes": 78.0}
+        )
+
+        refreshed = await orchestrator.fill_queue(
+            state,
+            use_llm=False,
+            rng=np.random.default_rng(4),
+            only=set(),
+        )
+
+        replacement = refreshed.queue.get("C1")
+        assert replacement is not None
+        replacement_item = orchestrator._bank.get(replacement.item_id)
+        assert replacement_item is not None
+        assert replacement.item_id != slow.item_id
+        assert replacement_item.expected_seconds <= 11.5 * 60.0
+
+    @pytest.mark.asyncio
+    async def test_a_ready_coverage_item_precedes_a_redundant_precision_probe(self) -> None:
+        """The scheduler must not let a hard coverage move expire in another slot."""
+        orchestrator = orchestrator_for("AIE")
+        state = orchestrator.begin(["C1", "C6"], intake={"C1": 3, "C6": 3})
+        state = await orchestrator.fill_queue(
+            state, use_llm=False, rng=np.random.default_rng(4)
+        )
+        template = next(iter(state.queue.values()))
+        c1_item = orchestrator._bank.get("voice_c1_025")
+        c6_item = orchestrator._bank.get("C6-Q015")
+        assert c1_item is not None and c6_item is not None
+
+        graph = orchestrator._graph()
+        assert graph is not None
+        measured = [node for node in graph.graph.nodes if node != "C6.5"]
+        queue = {
+            "C1": template.model_copy(
+                update={
+                    "variable": "C1",
+                    "item_id": c1_item.item_id,
+                    "modality": c1_item.modality,
+                    "estimated_seconds": c1_item.expected_seconds,
+                }
+            ),
+            "C6": template.model_copy(
+                update={
+                    "variable": "C6",
+                    "item_id": c6_item.item_id,
+                    "modality": c6_item.modality,
+                    "estimated_seconds": c6_item.expected_seconds,
+                }
+            ),
+        }
+        state = state.model_copy(
+            update={"queue": queue, "graph_direct_measured_nodes": measured}
+        )
+
+        assert orchestrator.choose_variable(state) == "C6"
+
 
 class TestModalityBlueprint:
     @pytest.mark.asyncio
@@ -198,11 +278,11 @@ class TestModalityBlueprint:
 
         # What was ADMINISTERED, not what moved an estimate: a zero-weight response is
         # still a question the candidate answered.
-        served = {
-            orchestrator._bank.get(i).modality
-            for i in state.served_item_ids
-            if orchestrator._bank.get(i)
-        }
+        served = set()
+        for item_id in state.served_item_ids:
+            served_item = orchestrator._bank.get(item_id)
+            if served_item is not None:
+                served.add(served_item.modality)
         assert "code" in served, f"the blueprint did not deliver a code item: {served}"
 
     @pytest.mark.asyncio

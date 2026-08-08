@@ -174,7 +174,7 @@ class TestINVP2InferenceIsMonotoneInDepth:
     def test_distance_never_exceeds_the_configured_depth(self, graph):
         """INV-P2 as the plan words it: no inference recorded at distance > D."""
         child = _deepest_child(graph)
-        for depth in range(0, 5):
+        for depth in range(5):
             results, _state, _ = apply_events(
                 graph,
                 [_success(child)],
@@ -568,7 +568,10 @@ class TestINVP5DuplicateEvidenceIsRefused:
     """
 
     def test_replaying_one_event_raises(self, graph):
-        from app.services.competency_graph.ledger import DuplicateEvidenceError, EvidenceLedger
+        from app.services.competency_graph.ledger import (
+            DuplicateEvidenceError,
+            EvidenceLedger,
+        )
         from app.services.competency_graph.state import CompetencyGraphState
 
         child = _deepest_child(graph)
@@ -585,7 +588,10 @@ class TestINVP5DuplicateEvidenceIsRefused:
 
     def test_a_duplicate_cannot_manufacture_corroboration(self, graph):
         """The reason this invariant is load-bearing now and was cosmetic before."""
-        from app.services.competency_graph.ledger import DuplicateEvidenceError, EvidenceLedger
+        from app.services.competency_graph.ledger import (
+            DuplicateEvidenceError,
+            EvidenceLedger,
+        )
         from app.services.competency_graph.state import CompetencyGraphState
 
         child = _deepest_child(graph)
@@ -648,7 +654,10 @@ class TestINVP8ManifestRecordsEveryFactor:
         json.dumps(PropagationConfig().as_manifest())
 
     def test_different_configurations_hash_differently(self):
-        from app.services.competency_graph.manifest import manifest_hash, propagation_manifest
+        from app.services.competency_graph.manifest import (
+            manifest_hash,
+            propagation_manifest,
+        )
 
         one = propagation_manifest(PropagationConfig(minimum_corroborations=1), bank_id="X")
         two = propagation_manifest(PropagationConfig(minimum_corroborations=2), bank_id="X")

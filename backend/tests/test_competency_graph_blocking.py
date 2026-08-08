@@ -20,9 +20,8 @@ The DA graph, for reference:
 
 from __future__ import annotations
 
-import pytest
-
 from app.services.competency_graph import load_default_competency_graph
+from app.services.competency_graph.config import PropagationConfig
 from app.services.competency_graph.evidence import EvidenceEvent
 from app.services.competency_graph.graph import CompetencyGraphService
 from app.services.competency_graph.models import (
@@ -30,7 +29,6 @@ from app.services.competency_graph.models import (
     CompetencyGraph,
     CompetencyNode,
 )
-from app.services.competency_graph.config import PropagationConfig
 from app.services.competency_graph.propagation import shadow_apply_events
 
 

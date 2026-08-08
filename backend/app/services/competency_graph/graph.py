@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from collections import defaultdict, deque
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 from .models import CompetencyEdge, CompetencyGraph
 
@@ -137,7 +137,9 @@ class CompetencyGraphService:
         bound still applies, so the preview is what enabling those edges would do.
         """
         step = (
-            self.prerequisites_children if ignore_edge_validation else self.blockable_children
+            self.prerequisites_children
+            if ignore_edge_validation
+            else self.blockable_children
         )
         found: set[str] = set()
         seen_depth: dict[str, int] = {node_id: 0}

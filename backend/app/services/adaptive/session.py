@@ -93,7 +93,9 @@ class AdaptiveSession:
     ) -> SelectedItem | None:
         """Choose and prepare the next item, or None when the pool is exhausted."""
         pool = await self._repository.items_for_competency(state.competency)
-        selected = await choose_next_item(state, pool, use_llm=use_llm, rng=rng, top_k=top_k)
+        selected = await choose_next_item(
+            state, pool, use_llm=use_llm, rng=rng, top_k=top_k
+        )
         if selected is None:
             return None
         if use_llm and settings.cat_rephrasing_enabled:
@@ -111,11 +113,16 @@ class AdaptiveSession:
                 require=("rephrased_stem",),
             )
         except (LLMUnavailable, ValueError) as exc:
-            logger.warning("rephrase unavailable (%s) — administering calibrated stem", exc)
+            logger.warning(
+                "rephrase unavailable (%s) — administering calibrated stem", exc
+            )
             return selected
 
         checked = check_rephrase(
-            item.stem, str(reply.get("rephrased_stem", "")), item.options, item.answer_index
+            item.stem,
+            str(reply.get("rephrased_stem", "")),
+            item.options,
+            item.answer_index,
         )
         if not checked.ok:
             logger.warning("rephrase rejected for %s: %s", item.id, checked.reason)

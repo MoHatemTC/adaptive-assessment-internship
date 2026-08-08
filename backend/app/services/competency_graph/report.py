@@ -156,7 +156,9 @@ def build_main_report(
     critical = set(graph.critical_nodes_for_main(main_id))
 
     directly_measured = {
-        nid for nid in subs if graph_state.nodes.get(nid) and graph_state.nodes[nid].status in _DIRECT
+        nid
+        for nid in subs
+        if graph_state.nodes.get(nid) and graph_state.nodes[nid].status in _DIRECT
     }
     inferred = {
         nid
@@ -171,7 +173,9 @@ def build_main_report(
         and graph_state.nodes[nid].status is CompetencyStatus.BLOCKED
     }
     contradictions = sum(
-        len(graph_state.nodes[nid].contradictions) for nid in subs if nid in graph_state.nodes
+        len(graph_state.nodes[nid].contradictions)
+        for nid in subs
+        if nid in graph_state.nodes
     )
 
     forecast = set(preview_inferred or {})
@@ -190,7 +194,9 @@ def build_main_report(
         unresolved_contradictions=contradictions,
         # Critical nodes must be measured DIRECTLY. An inference standing in for one is
         # precisely the substitution the coverage gate exists to prevent.
-        critical_nodes_resolved=critical.issubset(directly_measured) if critical else True,
+        critical_nodes_resolved=critical.issubset(directly_measured)
+        if critical
+        else True,
         coverage_satisfied=not unmeasured_nodes,
         unmeasured_nodes=sorted(unmeasured_nodes),
         nodes_preview_inferred=len(forecast & set(subs)),

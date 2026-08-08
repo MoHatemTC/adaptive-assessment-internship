@@ -73,4 +73,3 @@ class EvidenceEvent:
     rubric_criterion_id: str | None = None
     evaluator_version: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
-

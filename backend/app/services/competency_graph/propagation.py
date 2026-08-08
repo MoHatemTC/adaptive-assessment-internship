@@ -126,10 +126,16 @@ def apply_direct_evidence(
 
     direct_effective = weight * confidence
     strong_success = is_strong_success(
-        score, confidence, config=config, item_minimum_confidence=item_minimum_confidence
+        score,
+        confidence,
+        config=config,
+        item_minimum_confidence=item_minimum_confidence,
     )
     strong_failure = is_strong_failure(
-        score, confidence, config=config, item_minimum_confidence=item_minimum_confidence
+        score,
+        confidence,
+        config=config,
+        item_minimum_confidence=item_minimum_confidence,
     )
 
     inferred: list[InferredNodeSignal] = []
@@ -320,7 +326,9 @@ def apply_direct_evidence(
     contradicted = frozenset(c.node for c in contradictions)
     for contradiction in contradictions:
         graph_state.ensure_nodes({contradiction.node})
-        graph_state.nodes[contradiction.node].contradictions.append(contradiction.as_dict())
+        graph_state.nodes[contradiction.node].contradictions.append(
+            contradiction.as_dict()
+        )
 
     changed = frozenset({event.target_node})
     status_changed = frozenset(blocked | reopened | contradicted) - changed

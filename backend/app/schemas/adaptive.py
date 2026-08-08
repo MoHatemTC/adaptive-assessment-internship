@@ -33,7 +33,7 @@ class Item(BaseModel):
     c: float = Field(ge=0.0, lt=1.0, description="guessing floor")
 
     @model_validator(mode="after")
-    def _answer_index_in_range(self) -> "Item":
+    def _answer_index_in_range(self) -> Item:
         if self.answer_index >= len(self.options):
             raise ValueError(
                 f"item {self.id}: answer_index {self.answer_index} is out of range for "

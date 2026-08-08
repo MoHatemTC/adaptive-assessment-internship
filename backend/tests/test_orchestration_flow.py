@@ -10,16 +10,15 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from app.services.code_adaptive import session as code_session_module
 from app.services.code_adaptive.bank import JsonQuestionRepository
 from app.services.code_adaptive.execution import ExecutionEvidence, TestOutcome
 from app.services.code_adaptive.llm_evaluator import LLMEvaluation
 from app.services.code_adaptive.session import CodeAdaptiveSession
-from app.services.orchestrator import orchestrator as orchestrator_module
 from app.services.orchestrator import registry
-from tests.conftest import orchestrator_for
 from app.services.orchestrator.grader import GraderAgent
 from app.services.orchestrator.orchestrator import Orchestrator
-from app.services.code_adaptive import session as code_session_module
+from tests.conftest import orchestrator_for
 
 
 @pytest.fixture(scope="module")

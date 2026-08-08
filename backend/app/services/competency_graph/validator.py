@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -11,8 +10,6 @@ from .models import (
     CompetencyNode,
 )
 from .policy import GraphPolicy
-
-
 
 VALID_RELATIONS: set[str] = {
     "PREREQUISITE",
@@ -36,7 +33,9 @@ def _require(condition: bool, message: str) -> None:
 def _parse_node(raw: dict[str, Any]) -> CompetencyNode:
     node_type = raw.get("node_type", "sub_competency")
     if node_type not in ("main", "sub_competency"):
-        raise CompetencyGraphValidationError(f"invalid node_type={node_type!r} for {raw.get('competency_id')!r}")
+        raise CompetencyGraphValidationError(
+            f"invalid node_type={node_type!r} for {raw.get('competency_id')!r}"
+        )
     main_competencies = raw.get("main_competencies") or []
     if isinstance(main_competencies, str):
         main_competencies = [main_competencies]
@@ -81,7 +80,9 @@ def _detect_prerequisite_cycles(graph: CompetencyGraph) -> None:
 
     def dfs(n: str) -> None:
         if n in visiting:
-            raise CompetencyGraphValidationError(f"prerequisite cycle detected at {n!r}")
+            raise CompetencyGraphValidationError(
+                f"prerequisite cycle detected at {n!r}"
+            )
         if n in visited:
             return
         visiting.add(n)
@@ -97,16 +98,28 @@ def _detect_prerequisite_cycles(graph: CompetencyGraph) -> None:
 
 def validate_graph(graph: CompetencyGraph) -> None:
     # Unique node IDs: dict already enforces, but validate from raw structures too.
-    _require(len(graph.nodes) == len(set(graph.nodes.keys())), "duplicate node IDs detected")
+    _require(
+        len(graph.nodes) == len(set(graph.nodes.keys())), "duplicate node IDs detected"
+    )
     _require(all(n.competency_id for n in graph.nodes.values()), "empty competency_id")
 
     for edge in graph.edges:
-        _require(edge.from_id in graph.nodes, f"edge.from {edge.from_id!r} missing from nodes")
-        _require(edge.to_id in graph.nodes, f"edge.to {edge.to_id!r} missing from nodes")
-        _require(edge.relation in VALID_RELATIONS, f"edge relation {edge.relation!r} invalid")
+        _require(
+            edge.from_id in graph.nodes,
+            f"edge.from {edge.from_id!r} missing from nodes",
+        )
+        _require(
+            edge.to_id in graph.nodes, f"edge.to {edge.to_id!r} missing from nodes"
+        )
+        _require(
+            edge.relation in VALID_RELATIONS, f"edge relation {edge.relation!r} invalid"
+        )
         if edge.relation == "PREREQUISITE":
             # Strength and allow flags must be sane.
-            _require(edge.strength > 0.0, f"PREREQUISITE strength must be >0 for {edge.from_id}->{edge.to_id}")
+            _require(
+                edge.strength > 0.0,
+                f"PREREQUISITE strength must be >0 for {edge.from_id}->{edge.to_id}",
+            )
 
     _detect_prerequisite_cycles(graph)
 
@@ -119,7 +132,9 @@ def load_and_validate_graph(path: str | Path) -> CompetencyGraph:
     raw_nodes = raw.get("nodes") or []
     if isinstance(raw_nodes, dict):
         raw_nodes = raw_nodes.values()
-    nodes: dict[str, CompetencyNode] = {str(n["competency_id"]): _parse_node(n) for n in raw_nodes}
+    nodes: dict[str, CompetencyNode] = {
+        str(n["competency_id"]): _parse_node(n) for n in raw_nodes
+    }
 
     raw_edges = raw.get("edges") or []
     if isinstance(raw_edges, dict):
@@ -132,11 +147,12 @@ def load_and_validate_graph(path: str | Path) -> CompetencyGraph:
     try:
         policy = GraphPolicy.from_dict(raw.get("policy"))
     except ValueError as exc:
-        raise CompetencyGraphValidationError(f"{p.name}: invalid policy block — {exc}") from exc
+        raise CompetencyGraphValidationError(
+            f"{p.name}: invalid policy block — {exc}"
+        ) from exc
 
     graph = CompetencyGraph(
         schema_version=schema_version, nodes=nodes, edges=edges, policy=policy
     )
     validate_graph(graph)
     return graph
-

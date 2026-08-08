@@ -2,12 +2,15 @@
 .env
 .env.local
 **/.env
+.streamlit/secrets.toml
 
 # Python
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.coverage
 .venv/
+.venv-streamlit/
 venv/
 
 # Graphify local knowledge-graph outputs

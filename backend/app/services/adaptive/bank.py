@@ -96,7 +96,9 @@ class JsonItemRepository:
 
 def information_profile(items: list[Item], theta: float) -> list[float]:
     """Information each item carries at one ability, best first."""
-    return sorted((fisher_information(theta, i.a, i.b, i.c) for i in items), reverse=True)
+    return sorted(
+        (fisher_information(theta, i.a, i.b, i.c) for i in items), reverse=True
+    )
 
 
 def questions_needed(items: list[Item], theta: float, prior_sd: float) -> int | None:
