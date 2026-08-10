@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import json
 from functools import lru_cache
-from pathlib import Path
 
-RUBRIC_DIR = Path(__file__).resolve().parents[2] / "data" / "voice_rubrics"
+from app.config.paths import DATA_DIR
+
+RUBRIC_DIR = DATA_DIR / "voice_rubrics"
 
 
 @lru_cache(maxsize=256)

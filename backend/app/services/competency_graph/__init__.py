@@ -9,12 +9,13 @@ In Phase A it provides:
 
 from pathlib import Path
 
+from app.config.paths import DATA_DIR
+
 from .graph import CompetencyGraphService
 from .models import CompetencyGraph
 from .validator import load_and_validate_graph
 
-_PACKAGE_ROOT = Path(__file__).resolve().parents[2]  # backend/app
-DEFAULT_GRAPH_PATH = _PACKAGE_ROOT / "data" / "competency_graph.json"
+DEFAULT_GRAPH_PATH = DATA_DIR / "competency_graph.json"
 
 
 def load_competency_graph(path: str | Path) -> CompetencyGraph:

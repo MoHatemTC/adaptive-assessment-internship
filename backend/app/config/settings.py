@@ -409,6 +409,20 @@ class Settings(BaseSettings):
         """Both keys, or nothing. A public key alone cannot authenticate."""
         return bool(self.langfuse_public_key and self.langfuse_secret_key)
 
+    @property
+    def engine_data_dir(self) -> str:
+        """Where banks, graphs and rubrics are read from. Set by `ENGINE_DATA_DIR`.
+
+        A property delegating to `app.config.paths` rather than a field, so there is one
+        answer rather than two. It is deployment topology, not engine policy, and it has
+        to resolve before anything that opens a file — see that module's docstring. It is
+        surfaced here so `/config` can report it, which is the first thing an operator
+        looking at an empty bank list needs to know.
+        """
+        from app.config.paths import DATA_DIR
+
+        return str(DATA_DIR)
+
     def _parsed_float_map(self, raw: str, name: str) -> dict[str, float]:
         """A JSON object of modality -> float. Never raises.
 

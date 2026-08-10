@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 
+from app.config.paths import DATA_DIR
 from app.config.settings import settings
 from app.services.competency_graph import load_competency_graph
 from app.services.competency_graph.graph import CompetencyGraphService
@@ -33,7 +34,7 @@ from app.services.orchestrator.bank import BankReporting, JsonUnifiedBank
 
 logger = logging.getLogger(__name__)
 
-DATA = Path(__file__).resolve().parents[2] / "data"
+DATA = DATA_DIR
 
 
 class UnknownBankError(KeyError):

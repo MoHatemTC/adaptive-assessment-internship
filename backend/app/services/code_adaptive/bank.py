@@ -20,11 +20,12 @@ from typing import Protocol
 
 from pydantic import ValidationError
 
+from app.config.paths import DATA_DIR
 from app.schemas.code_adaptive import Question
 
 logger = logging.getLogger(__name__)
 
-BANK_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "code_bank.json"
+BANK_PATH = DATA_DIR / "code_bank.json"
 
 
 class QuestionRepository(Protocol):

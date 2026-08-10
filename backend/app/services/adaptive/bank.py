@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Protocol
 
 from app.config.settings import settings
+from app.config.paths import DATA_DIR
 from app.schemas.adaptive import Item
 from app.services.adaptive.irt import (
     DIFFICULTY_TO_B,
@@ -19,7 +20,7 @@ from app.services.adaptive.irt import (
     fisher_information,
 )
 
-DEFAULT_BANK_PATH = Path(__file__).resolve().parents[2] / "data" / "item_bank.json"
+DEFAULT_BANK_PATH = DATA_DIR / "item_bank.json"
 
 
 class ItemRepository(Protocol):

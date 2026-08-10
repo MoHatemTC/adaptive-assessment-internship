@@ -32,14 +32,13 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
+from app.config.paths import DATA_DIR
 from app.config.settings import settings
 from app.schemas.orchestration import DEFAULT_SECONDS_BY_MODALITY
 
 logger = logging.getLogger(__name__)
 
-CALIBRATION_PATH = (
-    Path(__file__).resolve().parents[2] / "data" / "selection_calibration.json"
-)
+CALIBRATION_PATH = DATA_DIR / "selection_calibration.json"
 
 # Below this many observations of a modality, a measured mean is noise wearing a decimal
 # point. Sessions accumulate slowly, so this deliberately errs toward the documented

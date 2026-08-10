@@ -18,15 +18,14 @@ from typing import Protocol
 
 from pydantic import ValidationError
 
+from app.config.paths import DATA_DIR
 from app.schemas.orchestration import BankItem
 from app.services.adaptive.irt import THETA_GRID, fisher_information
 from app.services.orchestrator.competency import main_competency
 
 logger = logging.getLogger(__name__)
 
-BANK_PATH = (
-    Path(__file__).resolve().parent.parent.parent / "data" / "question_bank.json"
-)
+BANK_PATH = DATA_DIR / "question_bank.json"
 
 
 def _main_code_sort_key(code: str) -> tuple[int, int | str]:

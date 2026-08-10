@@ -24,12 +24,12 @@ from __future__ import annotations
 
 import json
 from functools import lru_cache
-from pathlib import Path
 
+from app.config.paths import DATA_DIR
 from app.config.settings import CodeRubric as Rubric
 from app.config.settings import settings
 
-RUBRIC_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "rubrics"
+RUBRIC_DIR = DATA_DIR / "rubrics"
 
 
 EVALUATION_SYSTEM = """You diagnose a learner's programming competencies from their code

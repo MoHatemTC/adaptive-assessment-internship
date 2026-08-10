@@ -13,6 +13,11 @@ __pycache__/
 .venv-streamlit/
 venv/
 
+# Build artefacts from `pip install -e backend` / `python -m build backend`
+*.egg-info/
+build/
+dist/
+
 # Graphify local knowledge-graph outputs
 graphify-out/
 **/graphify-out/
