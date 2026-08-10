@@ -81,11 +81,6 @@ class Settings(BaseSettings):
     # default because a dump of assessment states is candidate data.
     cat_session_dump_dir: str = ""
 
-    # The Streamlit deployment serves candidates by default. Its queue, posterior math,
-    # engine traces, grader rationale, and answer keys are useful to assessment authors,
-    # but showing them during a live run changes the construct and leaks protected item
-    # content. An operator must opt into the instrumented tester harness explicitly.
-    streamlit_tester_mode: bool = False
     # In-process API state is intentionally a single-node deployment mode. Bound retained
     # finished sessions so abandoned browser tabs cannot grow the worker forever.
     cat_session_retention_seconds: int = Field(default=86_400, ge=60)
