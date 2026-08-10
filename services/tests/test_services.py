@@ -14,14 +14,13 @@ do anything yet.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
 
 from adaptive_contracts import SCHEMA_VERSION
 
-from conftest import EXPECTED_PORTS, IMPLEMENTED, SERVICES, load_service
+from conftest import EXPECTED_PORTS, IMPLEMENTED, SERVICES
 
 SERVICE_IDS = sorted(SERVICES)
 #: Services still answering 501. The stub-honesty tests are about THEM; a migrated service

@@ -26,7 +26,7 @@ def stack():
     with load_services("bank-registry", "competency-graph") as modules:
         registry_main = modules["bank-registry"]
         graph_main = modules["competency-graph"]
-        graph_main._graphs = graph_main.GraphSource(
+        graph_main._graphs = graph_main.HttpGraphSource(
             BankRegistryClient(http=asgi_client(registry_main.app))
         )
         with TestClient(graph_main.app) as http:

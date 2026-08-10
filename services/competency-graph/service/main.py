@@ -31,6 +31,7 @@ from __future__ import annotations
 import logging
 
 from adaptive_clients import BankRegistryClient, ServiceRefused, ServiceUnavailable
+from adaptive_clients.engine import HttpGraphSource
 from adaptive_contracts import (
     CoverageRequest,
     CoverageResponse,
@@ -49,7 +50,6 @@ from app.services.orchestrator.propagation_port import build_manifest, propagate
 from fastapi import FastAPI
 
 from .config import settings
-from .graphs import GraphSource
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ app = FastAPI(
 )
 install_error_handlers(app)
 
-_graphs = GraphSource(
+_graphs = HttpGraphSource(
     BankRegistryClient(settings.bank_registry_url, timeout=settings.bank_timeout_seconds)
 )
 
