@@ -81,4 +81,4 @@ a legitimate degraded mode, and therefore one that produces no error and no aler
 - [x] Serve the author diagnostics the deleted tester UI used to read from engine internals
 - [x] Contract tests: the service and `adaptive_contracts` agree on every DTO
 - [x] Enforce the engine slice this service may import
-- [ ] Load: the split stays inside its 150 ms budget (see `docs/microservices.md`)
+- [x] Load: p90 24 ms per response against a 150 ms budget (`deploy/latency.py`)

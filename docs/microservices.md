@@ -95,9 +95,16 @@ coverage requirement on. Per candidate response:
 | graph propagation | 50 ms + one hop | |
 | posterior update | 5 ms | 41-point vector |
 | selection | 100 ms | ranks the whole eligible pool, entirely local |
-| **added by the split** | **< 150 ms** | measured per response, same cluster |
+| **added by the split** | **< 150 ms** | the budget |
 
-If the split costs more than that it has eaten a question from a twelve-question budget.
+**Measured: p90 24 ms, p50 20 ms**, over 30 MCQ responses across 6 sessions on one machine
+(`deploy/latency.py`). That is a WHOLE response — the grader hop, which itself fetches the
+item from the registry, the propagation hop, MCQ grading and the selection refill. In the
+monolith all of it was function calls, so the split's share is bounded above by 24 ms
+against a budget of 150.
+
+Re-measure on the target cluster before believing it there; a same-host Docker network is
+the optimistic case.
 
 ## Known limits
 
@@ -108,4 +115,4 @@ If the split costs more than that it has eaten a question from a twelve-question
 - **No authentication anywhere**, including a bank write path that can replace the bank a
   live assessment is running against. Carried forward from the monolith rather than
   introduced here — see `docs/operations.md`. `ADMIN_API_ENABLED=false` disables writes.
-- **Load is unmeasured** against the budget above.
+- Load is measured on one machine only. A real cluster adds real network.

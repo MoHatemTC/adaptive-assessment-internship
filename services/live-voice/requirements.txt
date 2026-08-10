@@ -2,3 +2,7 @@ fastapi>=0.115
 uvicorn[standard]>=0.30
 pydantic>=2.7
 pydantic-settings>=2.3
+
+# The realtime bridge. `uvicorn[standard]` brings `websockets` for the server side; this is
+# the client side, which the room uses to reach the model gateway.
+websockets>=13

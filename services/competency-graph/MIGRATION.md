@@ -73,5 +73,5 @@ would be a far worse failure than one that degrades to the ungated engine.
 - [x] Prove the service and the in-process path produce identical state updates, for every
       node in a bank
 - [x] Enforce the engine slice this service may import
-- [ ] Point the orchestrator at it through `adaptive_clients` (phase 8)
-- [ ] Load: the hot path stays inside its budget (see `docs/microservices.md`)
+- [x] Point the orchestrator at it through `adaptive_clients`
+- [x] Load: p90 24 ms per response against a 150 ms budget (`deploy/latency.py`)

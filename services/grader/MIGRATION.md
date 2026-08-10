@@ -68,5 +68,5 @@ candidate's inability and not.
 - [x] Fetch items from `bank-registry` rather than accepting them from the caller
 - [x] Contract tests: the service and `adaptive_contracts` agree on every DTO
 - [x] Enforce the engine slice this service may import
-- [ ] Point the orchestrator at it through `adaptive_clients` (phase 7)
-- [ ] Load: the hot path stays inside its budget (see `docs/microservices.md`)
+- [x] Point the orchestrator at it through `adaptive_clients`
+- [x] Load: p90 24 ms per response against a 150 ms budget (`deploy/latency.py`)

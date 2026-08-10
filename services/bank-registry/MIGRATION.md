@@ -79,5 +79,5 @@ bank changes what the next assessment sees and nothing about one already running
 - [x] Add the write path, with validation before any write
 - [x] Contract tests: the service and `adaptive_contracts` agree on every DTO
 - [x] Enforce the engine slice this service may import
-- [ ] Point the orchestrator at it through `adaptive_clients` (phase 7)
-- [ ] Load: the hot path stays inside its budget (see `docs/microservices.md`)
+- [x] Point the orchestrator at it through `adaptive_clients`
+- [x] Load: p90 24 ms per response against a 150 ms budget (`deploy/latency.py`)

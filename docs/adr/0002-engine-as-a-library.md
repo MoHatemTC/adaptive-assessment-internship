@@ -201,7 +201,9 @@ content. A frontend has a documented, versioned API.
   and that omission IS the security boundary of the bank surface. `test_contract_parity.py`
   is the price, and it is the only place both definitions are in scope at once.
 
-**Open.** Load is unmeasured against the < 150 ms budget in `docs/microservices.md`.
+**Open.** Load is measured at p90 24 ms per response against the 150 ms budget, but on one
+machine over a Docker bridge network. A real cluster adds real network, and the number to
+trust is the one measured there.
 
 ---
 

@@ -2,3 +2,9 @@ fastapi>=0.115
 uvicorn[standard]>=0.30
 pydantic>=2.7
 pydantic-settings>=2.3
+
+# Multipart form parsing. NOT optional: `POST /assessments/{id}/responses` accepts a
+# spoken answer as an uploaded audio file, and FastAPI raises at IMPORT time when a route
+# declares a Form or File parameter without it — so the absence is a container that will
+# not start rather than a request that fails.
+python-multipart>=0.0.9
