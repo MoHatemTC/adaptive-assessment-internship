@@ -1,101 +1,111 @@
-# Microservice migration
+# The services
 
-**Status: boilerplate.** Nothing has moved. `services/` contains four running FastAPI apps
-that answer `/health` and `/config`, a shared contracts package, and a per-service
-`MIGRATION.md`. The monolith in `backend/` is the working system.
+**Status: migrated.** Five services, three shared packages, and an engine that is a library
+rather than a monolith. `backend/app/main.py` and the Streamlit UI are gone.
 
-The point of writing the seams down before moving code is that a seam chosen during a move
-is chosen under pressure.
+Read [ADR-0001](adr/0001-service-boundaries.md) for why these are the seams, then
+[ADR-0002](adr/0002-engine-as-a-library.md) for what changed when the code actually moved.
+[api.md](api.md) is the contract a frontend builds against.
 
-## Boundaries
+## What runs
 
-Each follows a seam the engine already has — a `Protocol` or a single package — rather than
-a decomposition invented for the diagram.
+| service | port | owns | egress |
+|---|---|---|---|
+| `assessment-orchestrator` | 8080 | the loop, the posterior, selection, stopping, sessions | model |
+| `bank-registry` | 8081 | banks, items, graphs, propagation policy, the write path | none |
+| `grader` | 8082 | one response → `GradedOutcome[]`, per modality | model, sandbox |
+| `competency-graph` | 8083 | propagation, coverage, the manifest | **none** |
+| `live-voice` | 8765 | realtime rooms, the interview page | model |
 
-| Service | Owns | Port |
-|---|---|---|
-| `bank-registry` | items, banks, graphs, propagation policy | 8081 |
-| `grader` | one response → `GradedOutcome[]`, per modality | 8082 |
-| `competency-graph` | node state, propagation, coverage | 8083 |
-| `assessment-orchestrator` | the loop, the posterior, selection, stopping | 8080 |
+```bash
+cd deploy && cp .env.example .env && docker compose up --build
+curl localhost:8080/health
+```
 
-`contracts/` is a package, not a service.
+Or, without Docker, `./scripts/run_services.sh`.
+
+## The engine is a library
+
+One implementation of the psychometrics, installed into every image as `adaptive-engine`,
+imported under the name `app`. Services are adapters over the slice they own, and which
+slice that is is enforced by `services/tests/test_services.py`, which parses every import
+against a declared list.
+
+That matters more than it sounds. The 3PL core, the fractional likelihood and the stopping
+rule are where two implementations drifting apart is a measurement problem rather than a
+maintenance one — two candidates scored by different arithmetic, with nothing comparing
+them.
+
+`backend/evaluation/` imports the same library in-process. It is a test instrument, not a
+component, and driving 36,000 simulated sessions through HTTP is not affordable.
 
 ## Why this decomposes at all
 
 **Only a directly observed response may move a posterior.** `InferredSignalDTO` has no
 `score` and no `weight` field, so `competency-graph` cannot hand the orchestrator something
-it could mistake for evidence. The boundary is enforced by the contract rather than by a
-reviewer noticing.
+it could mistake for evidence. Enforced by the contract, and asserted against both the wire
+type and the engine type — the failure mode is not somebody adding a score to the DTO, it
+is somebody adding one to the engine type and widening the DTO to match.
 
 The worst a compromised or buggy graph service can do is change which question is asked
-next. That is what makes it safe to run it with its own store, its own release cadence, and
-a lower trust level than the service that computes the estimate.
+next.
 
-Two more properties carry over from the monolith:
+Two more properties carry over:
 
-- **The orchestrator is stateless between calls.** It takes a state and returns one. So it
-  scales horizontally and an assessment can resume on a different worker.
-- **The grader is the only component needing egress** — sandbox and model. Splitting it out
-  is most of the security argument: everything else can run with no network policy at all.
+- **The orchestrator is stateless between calls.** It takes a state and returns one. The
+  service holds the states in memory; see the caveat below.
+- **The grader is the only component that executes anything.** Untrusted candidate code
+  runs in E2B, not in any container here.
 
-## What is deliberately not split
+## What crosses the wire, and what does not
 
-- **Posterior update and stopping rule stay together.** They read the same state on every
-  response; splitting them buys a network hop per question and no isolation.
-- **Item parameters stay with the bank, cached in the orchestrator.** Selection needs `a`,
-  `b`, `c` for every candidate item on every step. A fetch per decision puts the network in
-  the hot loop. The orchestrator holds a read-through cache keyed by bank version.
-- **Voice live sessions stay in the orchestrator's process for now.** They are stateful
-  websocket bridges; moving them is a second project.
+| | where | why |
+|---|---|---|
+| item parameters | cached in the orchestrator, per bank version | selection ranks the whole pool on every step; a fetch per decision puts the network in a 100 ms loop |
+| item payloads | fetched per presented item | large, and selection is not allowed to read them |
+| grading | grader, which fetches its own item | the answer key never transits the orchestrator |
+| graph traversal | local, per bank version | read on every candidate on every step |
+| graph propagation | competency-graph | once per answered question, beside a 500 ms-30 s grading call |
 
-## Order of migration
+## Configuration must agree, and the fingerprint says whether it does
 
-Least-coupled first, so each step is revertible.
+Engine settings decide what a candidate is SCORED by. Split across services nothing makes
+them agree: a grader running `CODE_APPROACH=C` beside an orchestrator that believes it is
+`B` produces a session whose scores were computed one way and whose stopping rule assumed
+another — internally consistent, entirely wrong, no request failing.
 
-1. **`bank-registry`.** Read-only, no session state, already behind `UnifiedBankRepository`.
-   Serves items and the resolved propagation policy. The orchestrator's cache means an
-   outage degrades to stale parameters rather than to no assessment.
-2. **`grader`.** Already a router over three independent graders and the only component
-   with external dependencies. The contract is `GradedResponseDTO`, which the monolith
-   already produces.
-3. **`competency-graph`.** Owns session-scoped state, so it needs a store and idempotency
-   on the evidence ledger — the ledger already exists and is already keyed on a
-   deterministic evidence id, so replay is safe by construction.
-4. **`assessment-orchestrator`.** What is left.
-
-At each step the monolith path stays behind a flag until the client has run in shadow.
+`deploy/docker-compose.yml` declares them once, and every service reports
+`engine_config_fingerprint` on `/health`. Two services with different fingerprints are not
+running the same assessment.
 
 ## Contract versioning
 
 `adaptive_contracts.SCHEMA_VERSION` is reported by every service on `/health`. Bump it when
-a field is **removed** or its meaning changes; additive fields do not bump it. A mismatched
-pair is then visible in a dashboard rather than in a decoding error three hops away.
+a field is **removed** or its meaning changes; additive fields do not. The suite asserts all
+five report the same one — a version nobody compares is decoration.
 
 ## The budgets a split has to respect
 
-The 90-minute cap is the binding constraint, and P90 already sits at 83 minutes with the
+The 90-minute cap is the binding constraint and P90 already sits at 83 minutes with the
 coverage requirement on. Per candidate response:
 
 | step | budget | note |
 |---|---|---|
-| grade | 500 ms (MCQ) / 30 s (code) | code is sandbox-bound; the cap already accounts for it |
-| graph update | 50 ms | in-memory today |
+| grade | 500 ms (MCQ) / 30 s (code) | sandbox-bound; the cap already accounts for it |
+| graph propagation | 50 ms + one hop | |
 | posterior update | 5 ms | 41-point vector |
-| selection | 100 ms | ranks the whole eligible pool |
-| **added by the split** | **< 150 ms** | four hops, same cluster |
+| selection | 100 ms | ranks the whole eligible pool, entirely local |
+| **added by the split** | **< 150 ms** | measured per response, same cluster |
 
-If the split costs more than ~150 ms per response it has eaten a question from a
-twelve-question budget. Measure it before step 4, not after.
+If the split costs more than that it has eaten a question from a twelve-question budget.
 
-## Running the boilerplate
+## Known limits
 
-```bash
-cd deploy
-cp .env.example .env
-docker compose up --build
-curl localhost:8080/health
-```
-
-Every route other than `/health` and `/config` returns **501** with a pointer to its
-`MIGRATION.md`.
+- **Sessions are bound to one replica.** The orchestrator holds them in memory, exactly as
+  the monolith did. Run one, or use sticky sessions. `AssessmentState` is serialisable by
+  construction, so the seam for a store exists; what does not exist is a decision about
+  where candidate response data lives and under whose retention policy.
+- **No authentication anywhere**, including a bank write path that can replace the bank a
+  live assessment is running against. Carried forward from the monolith rather than
+  introduced here — see `docs/operations.md`. `ADMIN_API_ENABLED=false` disables writes.
+- **Load is unmeasured** against the budget above.

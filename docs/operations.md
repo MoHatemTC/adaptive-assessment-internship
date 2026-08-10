@@ -3,28 +3,41 @@
 ## Running it
 
 ```bash
-cd backend
-cp .env.example .env          # fill LITELLM_* and E2B_API_KEY
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-pytest                        # 424 pass; see "known failures" below
+cd deploy && cp .env.example .env    # fill LITELLM_* and E2B_API_KEY
+docker compose up --build
+curl localhost:8080/health
+```
+
+Without Docker: `./scripts/run_services.sh` brings up all five against a local venv.
+
+```bash
+cd backend  && PYTHONPATH=. pytest   # the engine and the study harness
+cd services && python -m pytest      # the services, the seams and the contracts
 ```
 
 ## First checks when something looks wrong
 
 ```bash
-python -m scripts.show_propagation_policy --bank AIE   # why is this edge inert?
-python -c "from app.services.orchestrator import registry; print(registry.describe())"
-pytest tests/test_bank_registry.py                     # bank/graph pairing
+# Do the services agree about what they are measuring? Two different fingerprints means
+# two services are not running the same assessment — scores computed one way, stopping
+# rule assuming another, and nothing failing.
+for p in 8080 8081 8082 8083 8765; do curl -s localhost:$p/health | jq -c \
+  '{service, engine_config_fingerprint, contract_schema_version}'; done
+
+curl -s localhost:8081/banks | jq                      # which banks, which versions
+curl -s localhost:8081/banks/AIE/policy | jq           # why is this edge inert?
+curl -s localhost:8080/health | jq .detail             # sessions, dependencies, propagation mode
 ```
+
+`GET /config` on any service prints its effective configuration with credentials removed.
+It is the first thing to read when a bank list comes back empty — `engine_data_dir` and
+`bank_store_dir` are in it.
 
 ## Known failures
 
-`tests/test_session.py::test_bank_can_support_the_configured_precision_target` fails for
-"Agentic AI & Orchestration" in the legacy `item_bank.json`: that competency's pool cannot
-reach `CAT_SE_TARGET` at any test length. It is a property of that bank, it is pre-existing,
-and it does not affect the AI Engineer bank (worst reachable SE at 12 items is 0.36 against
-a 0.55 target).
+None. `docs/operations.md` previously listed
+`test_session.py::test_bank_can_support_the_configured_precision_target` as a known failure
+for "Agentic AI & Orchestration"; it does not fail on this branch, and the note was stale.
 
 ## Enabling inference or blocking
 

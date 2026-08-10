@@ -1,60 +1,58 @@
-# Adaptive Competency Assessment — orchestrated engine
+# Adaptive Competency Assessment
 
 An agent-driven CAT engine that measures a candidate across many competencies using
-**multiple-choice, coding, and open/voice items in the same session**, choosing whichever item — of
-whichever modality — will narrow the weakest estimate fastest, and finishing each
+**multiple-choice, coding, and open/voice items in the same session**, choosing whichever
+item — of whichever modality — will narrow the weakest estimate fastest, and finishing each
 competency as soon as it is measured.
 
-Open/voice answers prefer **Gemini Live** through LiteLLM. A deployment may explicitly
-enable typed fallback with `ALLOW_TEXT_FALLBACK=true`, which keeps remote and accessibility
-testing possible when realtime audio is unavailable. Picker and open rubric grading also
-go through LiteLLM.
+It runs as five services over one engine library. There is no UI in this repository: the
+API is documented in [docs/api.md](docs/api.md) and a frontend is built separately.
 
-Banks and rubrics live under `backend/app/data/` and are paired through the bank registry.
-The original `DA`, `PY`, and `AIE` banks remain available; `AIE-JR-V3` and `JAI-600` are
-additional human-test banks. See `streamlit/README.md` for their calibration limitations
-and local/hosted setup.
+```bash
+cd deploy && cp .env.example .env    # fill LITELLM_* and E2B_API_KEY
+docker compose up --build
+curl localhost:8080/health
+```
+
+| service | port | owns |
+|---|---|---|
+| `assessment-orchestrator` | 8080 | the loop, the posterior, selection, stopping, sessions |
+| `bank-registry` | 8081 | banks, items, graphs, propagation policy — and a write path |
+| `grader` | 8082 | one response → `GradedOutcome[]`, per modality |
+| `competency-graph` | 8083 | propagation, coverage. No egress, no state |
+| `live-voice` | 8765 | realtime interview rooms |
 
 ```text
-backend/
-  app/
-    config/settings.py               cat_* (MCQ), code_* (code), orchestrator_*
-    schemas/
-      orchestration.py               BankItem, VariableState, AssessmentState, reports
-      adaptive.py · code_adaptive.py the two engines' own boundaries
-    services/
-      adaptive/                      MCQ engine — 3PL, EAP, KL/Fisher, convergence
-      code_adaptive/                 code engine — sandbox, static analysis, scoring
-      orchestrator/
-        outcome.py                   GradedOutcome + the fractional theta update
-        calibration.py               modality parameters -> theta  (PROVISIONAL)
-        bank.py                      unified bank + information-parity diagnostic
-        variables.py                 Examinee Variables, one latent ability each
-        picker.py                    Picking Agent — KL->E[Fisher], mixed modality
-        queue.py                     one pending candidate per open variable
-        grader.py                    Grader Agent — routes by modality
-        orchestrator.py              the loop
-        prompts.py                   the single delegated decision
-    data/question_bank*.json         registered assessment banks (old and new)
-  scripts/build_unified_bank.py      fuses both source banks; --check verifies
-  tests/                             deterministic, API, and Streamlit regressions
+backend/                             THE ENGINE, as a library (`adaptive-engine`)
+  app/config/settings.py             cat_* (MCQ), code_* (code), orchestrator_*, graph_*
+  app/schemas/orchestration.py       BankItem, VariableState, AssessmentState, reports
+  app/services/adaptive/             MCQ engine — 3PL, EAP, KL/Fisher, convergence
+  app/services/code_adaptive/        code engine — sandbox, static analysis, scoring
+  app/services/voice/                open/voice — rubric evaluation and projection
+  app/services/competency_graph/     graph, propagation, policy, coverage
+  app/services/orchestrator/         the loop, selection, the bank store, reporting
+  app/data/                          registered banks and their competency graphs
+  evaluation/                        the simulation harness — in-process, never a service
+  tests/                             700 deterministic tests, no billed calls
+services/                            the five adapters, plus three shared packages
+docs/api.md, docs/api/               the contract a frontend builds against
 ```
 
 ## The loop
 
 ```text
-seed → fill queue → choose variable → present → grade → update → finalise → repeat
+seed → fill queue → choose competency → present → grade → update → finalise → repeat
 ```
 
-1. **Seed** — one θ posterior per variable, from intake or flat.
-2. **Fill queue** — for each **open** variable, the Picking Agent chooses one candidate.
-   Finalised variables are skipped entirely: no pick, no model call.
-3. **Choose variable** — the lowest-certainty open variable with a candidate ready.
-4. **Present → Grade** — the Grader Agent routes by modality and returns `GradedOutcome`s.
+1. **Seed** — one θ posterior per competency, from intake or flat.
+2. **Fill queue** — for each **open** competency, the Picking Agent chooses one candidate.
+   Finalised ones are skipped entirely: no pick, no model call.
+3. **Choose** — the lowest-certainty open competency with a candidate ready.
+4. **Present → Grade** — the grader routes by modality and returns `GradedOutcome`s.
 5. **Update** — one fractional θ update per outcome. A code submission updates *several*
-   variables, because it genuinely evidences several.
-6. **Finalise** — per variable, independently. On finalisation the queue slot is released.
-7. **Repeat** until every variable is finalised, or the budget runs out.
+   competencies, because it genuinely evidences several.
+6. **Finalise** — per competency, independently. The queue slot is released.
+7. **Repeat** until every competency is finalised, or the budget runs out.
 
 ## The one idea that makes it work
 
@@ -72,16 +70,14 @@ L(θ) = [ P(θ)^s · (1 − P(θ))^(1−s) ] ^ w
 
 Two properties earn this its place:
 
-**It reduces exactly.** At `s ∈ {0,1}, w = 1` it *is* the MCQ engine's Bernoulli
-likelihood, term for term. The MCQ path is unchanged by construction, and
-`test_orchestration.py` asserts **float equality** against `irt.posterior_update` to keep
-it that way. If that test ever fails, unifying the scale has silently altered a shipped,
-measured engine.
+**It reduces exactly.** At `s ∈ {0,1}, w = 1` it *is* the MCQ engine's Bernoulli likelihood,
+term for term. The MCQ path is unchanged by construction, and `test_orchestration.py`
+asserts **float equality** against `irt.posterior_update` to keep it that way.
 
 **Zero weight means zero update.** `w = 0` makes `L` identically 1. The rule that an
-infrastructure failure must never move a candidate's estimate now falls out of the
-arithmetic instead of being special-cased — it cannot be forgotten at a call site, because
-there is nothing to forget.
+infrastructure failure must never move a candidate's estimate falls out of the arithmetic
+instead of being special-cased — it cannot be forgotten at a call site, because there is
+nothing to forget.
 
 ## Who decides what
 
@@ -90,118 +86,85 @@ there is nothing to forget.
 | MCQ grading | **code** — exact index comparison |
 | Code grading | **code + LLM** — tests 60%, static 15%, model 25% (the measured split) |
 | Ability estimate | **code** — Bayes on a θ grid |
-| Which variable to probe | **code** — lowest certainty |
-| When a variable is finished | **code** — precision, band stability, or budget |
+| Which competency to probe | **code** — lowest certainty |
+| When a competency is finished | **code** — precision, band stability, or budget |
 | Which items are viable, and their rank | **code** — KL early, E[Fisher] later |
 | **Which viable item to administer** | **LLM** — from a code-ranked shortlist |
 | Interpreting a wrong answer | **LLM** — misconception diagnosis |
 
 The model picks from a shortlist the engine ranked and interprets code. It does not grade
-multiple choice, write an estimate, choose a variable, or stop an assessment. A pick below
+multiple choice, write an estimate, choose a competency, or stop an assessment. A pick below
 75% of the best available information is overridden; any model failure falls back to the
 engine's own choice.
 
-## Calibration — the one provisional part
+## Banks are content
 
-MCQ items carry `a, b, c` calibrated against real responses. **Code questions do not.**
-They carry an authored mastery-scale difficulty, mapped onto θ in `calibration.py`:
+`POST /banks` registers one. Items and graph go together — a bank without its graph pairs
+with nothing, and the coverage gate then asks a graph authored for a different bank what a
+competency requires, marking every required node unmeasured and vetoing convergence for the
+whole session.
 
-- `b_θ = logit(difficulty)` — the θ at which P = 0.5 under a logistic link. The bank's
-  authored [0.15, 0.70] maps to [−1.73, +0.85], inside the MCQ items' band.
-- `a_θ = discrimination` passes through; `c = 0` — nobody guesses their way to a passing
-  test suite.
+Everything a posted bank must satisfy is checked before it is written: parameter bounds,
+duplicate ids, bank/graph pairing, measured variables having nodes, required nodes having
+items, and coverage being reachable within the question budget. Those are the same
+invariants the engine suite asserts of the five checked-in banks.
 
-This is a **modelling decision, not a derivation**, confined to one module so real
-calibration later touches one file.
-
-`UnifiedBank.information_parity()` guards it, and separates the two reasons a modality can
-lose a ranking:
-
-| | meaning | action |
-|---|---|---|
-| `rarely_selected` | loses *with* loading applied | expected — a question loading 0.2 on a variable genuinely tells you less |
-| `miscalibrated` | loses even at full loading | the item parameters are wrong |
-
-On the shipped bank: **9 of 15** mixed variables rarely select code (correct — those code
-questions only lightly load), and **1** is miscalibrated — `T1.4`, where the *MCQ* items
-are intrinsically weaker than the code ones. A test pins that count so a regression shows
-up as a change.
-
-## The bank
-
-One file, one envelope, modality payload nested. `cat` is **always on θ** — the invariant
-that makes cross-modality ranking valid.
+The checked-in banks (`DA`, `PY`, `AIE`, `AIE-JR-V3`, `JAI-600`) are read-only seeds; a
+posted bank of the same id shadows one, and deleting the shadow restores it. Each carries a
+content hash, and an assessment pins the version it began under.
 
 ```json
 {"item_id": "code_q_003", "modality": "code", "status": "active",
- "competency": "Python & Software Engineering",
- "sub_competency": "T1.4 · Error handling & robustness",
  "measures": [{"variable": "T1.4", "weight": 0.6}, {"variable": "T1.1", "weight": 0.4}],
  "cat": {"a": 1.35, "b": -0.2007, "c": 0.0},
- "code": {"function_name": "...", "tests": [...], "rubric_criteria": [...]}}
+ "payload": {"function_name": "...", "tests": [...], "rubric_criteria": [...]}}
 ```
 
-`measures` is the architecture's *required variables*. Both source banks already used the
-same `competency` and `sub_competency` strings, so the taxonomy needed no migration —
-`sub_competency` was already the join key. Open-ended adds `"modality": "open"` and needs
-no envelope change.
+`cat` is **always on θ** — the invariant that makes cross-modality ranking valid.
 
-Rebuild and verify:
+## Calibration — the one provisional part
 
-```bash
-cd backend && PYTHONPATH=. python scripts/build_unified_bank.py         # rebuild
-cd backend && PYTHONPATH=. python scripts/build_unified_bank.py --check # verify
-```
+MCQ items carry `a, b, c` calibrated against real responses. **Code questions do not.** They
+carry an authored mastery-scale difficulty mapped onto θ in `orchestrator/calibration.py`:
+`b_θ = logit(difficulty)`, `a_θ = discrimination`, `c = 0` — nobody guesses their way to a
+passing test suite. This is a **modelling decision, not a derivation**, confined to one
+module so real calibration later touches one file.
 
-## Usage
-
-```python
-from app.services.orchestrator import Orchestrator, GraderAgent, JsonUnifiedBank
-from app.services.code_adaptive import CodeAdaptiveSession, JsonQuestionRepository
-
-engine = Orchestrator(JsonUnifiedBank(),
-                      GraderAgent(CodeAdaptiveSession(JsonQuestionRepository())))
-state = engine.begin(["T1.1", "T1.4", "T2.1"], intake={"T1.1": 3})
-
-while True:
-    state = await engine.fill_queue(state)
-    stop, reason = engine.should_stop(state)
-    if stop:
-        break
-    item, candidate = engine.next_item(state)
-    # present item.payload; collect an option index (mcq) or source text (code)
-    state, graded = engine.record_response(state, item, response)
-
-report = engine.summarise(state, reason)
-```
-
-`AssessmentState` is serialisable and the orchestrator holds nothing between calls, so an
-assessment can span HTTP requests and resume on a different worker.
-
-## Tester harness
-
-A Streamlit UI supports candidate-safe human testing by default and a trusted, instrumented
-tester mode. See `streamlit/README.md`.
-
-```bash
-./scripts/run_streamlit.sh
-```
+`GET /banks/{id}/parity` guards it, and separates the two reasons a modality can lose a
+ranking: `rarely_selected` (loses *with* loading applied — expected) from `miscalibrated`
+(loses even at full loading — the parameters are wrong).
 
 ## Tests
 
 ```bash
-cd backend && PYTHONPATH=. pytest
+cd backend  && PYTHONPATH=. pytest   # 700: the engine and the study harness
+cd services && python -m pytest      # 190: the services, the seams and the contracts
 ```
 
-The default suite makes no billed model or sandbox calls. It covers binary-update identity,
-fractional updates, calibration mapping, parity diagnostics, queue/finalisation invariants,
-mixed-modality sessions, API boundaries, and Streamlit flows. Sandbox infrastructure
-failures are explicitly tested to ensure they move no candidate estimate.
+Neither makes a billed model call or a sandbox call. Between them they cover the
+binary-update identity, fractional updates, calibration mapping, parity diagnostics,
+queue/finalisation invariants, mixed-modality sessions, the candidate boundary, bank
+validation, and that propagation over a wire produces state identical to propagation in a
+process. Sandbox failures are explicitly tested to ensure they move no candidate estimate.
 
-## Calibration status
+## Status
 
 The engine supports MCQ, code, and open/voice items. Operational score bands remain
-provisional until independent response data passes the repository's psychometric and
-human-grader gates. The two imported human-test banks are particularly explicit about this:
-their CAT parameters are traceable syntheses from semantically related prior-bank strata,
-not empirical calibration of the new item wording.
+**provisional** until independent response data passes the repository's psychometric and
+human-grader gates — `decision_status` says so on every reported competency. The two
+imported human-test banks are particularly explicit: their CAT parameters are traceable
+syntheses from semantically related prior-bank strata, not empirical calibration of the new
+item wording.
+
+Prerequisite propagation ships **inert**. A completed screening study measured its
+wrong-inference rate at 7-17% against a 3% gate; enabling an edge is a per-edge decision
+with an experimental design behind it. See [docs/operations.md](docs/operations.md).
+
+## Where to read next
+
+- [docs/api.md](docs/api.md) — the contract a frontend builds against
+- [docs/architecture.md](docs/architecture.md) — the loop, the measurement, the graph
+- [docs/microservices.md](docs/microservices.md) — what runs, and what crosses the wire
+- [docs/adr/0001](docs/adr/0001-service-boundaries.md) · [0002](docs/adr/0002-engine-as-a-library.md) — the seams, and what changed when the code moved
+- [docs/operations.md](docs/operations.md) — running it, first checks, enabling inference
+- [docs/evidence.md](docs/evidence.md) — the measurements behind the defaults

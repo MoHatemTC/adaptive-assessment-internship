@@ -14,8 +14,10 @@ intake -> seed a posterior per competency
 
 Stateless between calls. The orchestrator takes an `AssessmentState`, returns a new one,
 and holds nothing — so an assessment can span HTTP requests, be persisted between them, and
-resume on a different worker. That property is also what makes the microservice split in
-[microservices.md](microservices.md) tractable.
+resume on a different worker. That property is what made the split in
+[microservices.md](microservices.md) tractable, and it is why `competency-graph` holds no
+session state either: a second copy of the same session's node state would disagree with
+the first the moment a request is retried.
 
 ## The three things that are never delegated
 
@@ -74,15 +76,22 @@ So the graph changes **what is asked** and **when the test may stop**. It never 
 ## Layout
 
 ```
-backend/app/
-  config/settings.py                 all configuration, one place
+backend/app/                         THE ENGINE, installed as a library (`adaptive-engine`)
+  config/settings.py                 all engine policy, one place
   schemas/                           typed boundaries
   services/adaptive/                 3PL core, convergence, MCQ engine
   services/code_adaptive/            code execution, scoring, evidence
   services/voice/                    rubric grading, evidence projection
+  services/voice_live/               realtime rooms and their transport
   services/competency_graph/         graph, propagation, policy, coverage
-  services/orchestrator/             the loop, selection, registry, reporting
-  data/                              banks and competency graphs
-services/                            microservice boilerplate (nothing has moved yet)
-docs/                                this
+  services/orchestrator/             the loop, selection, the bank store, reporting
+  data/                              the checked-in banks and their graphs
+backend/evaluation/                  the simulation harness. In-process, never a service
+services/                            five adapters over the library, plus three shared packages
+docs/api.md                          the contract a frontend builds against
 ```
+
+The engine is one library rather than a copy per service, because the 3PL core, the
+fractional likelihood and the stopping rule are where two implementations drifting apart is
+a measurement problem rather than a maintenance one. Which part of it each service may
+import is enforced by a test — see [microservices.md](microservices.md).
