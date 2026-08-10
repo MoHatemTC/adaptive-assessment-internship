@@ -124,9 +124,18 @@ def validate_graph(graph: CompetencyGraph) -> None:
     _detect_prerequisite_cycles(graph)
 
 
-def load_and_validate_graph(path: str | Path) -> CompetencyGraph:
-    p = Path(path)
-    raw = json.loads(p.read_text(encoding="utf-8"))
+def parse_and_validate_graph(raw: dict[str, Any], *, source: str) -> CompetencyGraph:
+    """Build a validated graph from the raw JSON structure.
+
+    Split out from `load_and_validate_graph` so a graph can be validated BEFORE it is
+    written anywhere. The bank registry accepts graphs over HTTP, and "write it to disk,
+    then try to load it, then delete it if that failed" is a worse answer than parsing the
+    structure it already has — it leaves a half-registered bank behind on the one path
+    where something went wrong.
+
+    `source` names the graph in error messages. A file path when there is one, the bank id
+    when the graph arrived in a request body.
+    """
     schema_version = str(raw.get("version") or raw.get("schema_version") or "1.0")
 
     raw_nodes = raw.get("nodes") or []
@@ -148,7 +157,7 @@ def load_and_validate_graph(path: str | Path) -> CompetencyGraph:
         policy = GraphPolicy.from_dict(raw.get("policy"))
     except ValueError as exc:
         raise CompetencyGraphValidationError(
-            f"{p.name}: invalid policy block — {exc}"
+            f"{source}: invalid policy block — {exc}"
         ) from exc
 
     graph = CompetencyGraph(
@@ -156,3 +165,9 @@ def load_and_validate_graph(path: str | Path) -> CompetencyGraph:
     )
     validate_graph(graph)
     return graph
+
+
+def load_and_validate_graph(path: str | Path) -> CompetencyGraph:
+    p = Path(path)
+    raw = json.loads(p.read_text(encoding="utf-8"))
+    return parse_and_validate_graph(raw, source=p.name)

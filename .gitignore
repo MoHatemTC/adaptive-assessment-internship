@@ -27,3 +27,7 @@ eval-results/
 
 # Simulation outputs. Large, regenerable, and specific to one run.
 eval-results/
+
+# Banks posted to the local bank-registry. Content, not code — a deployment mounts a
+# volume here (BANK_STORE_DIR); a checkout should not commit what it experimented with.
+backend/app/data/banks/

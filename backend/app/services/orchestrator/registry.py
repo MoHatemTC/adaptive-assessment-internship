@@ -10,16 +10,20 @@ required node unmeasured and vetoes convergence for the whole session.
 A profile is therefore the unit, not a path — bank and graph together, plus the coverage
 policy that only makes sense in the light of how many sub-competencies the graph declares.
 
-Adding a bank is adding a row here and dropping two files into `app/data`. Nothing else in
-the engine knows a bank id exists.
+WHERE THE PROFILES COME FROM
+
+They used to be a dict written into this file, and adding a bank meant editing Python and
+redeploying. `bank_store.BankStore` replaced that with two layers — the checked-in seeds,
+and a writable directory another service posts into. This module is now the process-wide
+handle on that store, and it keeps the function names every caller already uses.
+
+`REGISTRY` is still here and still behaves like a mapping. It is a live view now, so a
+posted bank appears everywhere a checked-in one does without a single caller changing.
 """
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
-from functools import cache
-from pathlib import Path
 
 from app.config.paths import DATA_DIR
 from app.config.settings import settings
@@ -30,88 +34,67 @@ from app.services.competency_graph.policy import (
     apply_policy,
     resolve_policy,
 )
-from app.services.orchestrator.bank import BankReporting, JsonUnifiedBank
+from app.services.orchestrator.bank import BankReporting
+from app.services.orchestrator.bank_store import (
+    BankProfile,
+    BankStore,
+    ProfileView,
+    Validation,
+    _seed_profiles,
+)
+from app.services.orchestrator.bank_store import (
+    UnknownBankError as _UnknownBankError,
+)
 
 logger = logging.getLogger(__name__)
 
 DATA = DATA_DIR
 
+#: The process-wide store. One per process on purpose: parsing a 1.8 MB bank per request
+#: is the difference between selection inside its 100 ms budget and outside it.
+STORE = BankStore(seeds=_seed_profiles())
 
-class UnknownBankError(KeyError):
-    """A bank id that is not in the registry. Names the valid ones — the caller is
-    usually an env var or a request field, and 'KeyError: AIE2' helps nobody."""
+#: bank id -> profile, live. Read by the test suite, the bank picker and the error below.
+REGISTRY = ProfileView(STORE)
+
+__all__ = [
+    "DATA",
+    "REGISTRY",
+    "STORE",
+    "BankProfile",
+    "UnknownBankError",
+    "Validation",
+    "coverage_policy",
+    "describe",
+    "get_bank",
+    "get_graph_service",
+    "get_propagation_policy",
+    "profile",
+    "reset_caches",
+    "resolve_bank_id",
+    "use_store",
+    "version",
+]
+
+
+def use_store(store: BankStore) -> None:
+    """Point this process at a different bank store.
+
+    For a service that resolves its store directory at startup rather than from the
+    environment, and for tests, which must never write a bank into the checked-in data
+    directory. Rebinding both names together is the whole of it — every function here
+    reads them as module globals at call time.
+    """
+    global STORE, REGISTRY
+    STORE = store
+    REGISTRY = ProfileView(store)
+
+
+class UnknownBankError(_UnknownBankError):
+    """Retained as a name in this module: callers catch `registry.UnknownBankError`."""
 
     def __init__(self, bank_id: str) -> None:
-        super().__init__(f"unknown bank {bank_id!r}; registered: {sorted(REGISTRY)}")
-
-
-@dataclass(frozen=True)
-class BankProfile:
-    """One assessable bank and everything that must travel with it."""
-
-    bank_id: str
-    title: str
-    bank_path: Path
-    graph_path: Path | None = None
-    # Declared for tests and the bank picker. Authoritative source is still the bank file;
-    # this is what the bank is *supposed* to contain, so a silent content change is caught.
-    mains: tuple[str, ...] = ()
-    # None defers to `settings.graph_coverage_critical_only`. Set per bank because the
-    # right answer depends on how many sub-competencies sit under a main versus how many
-    # questions the budget allows — see `coverage_policy` below.
-    coverage_critical_only: bool | None = None
-
-
-REGISTRY: dict[str, BankProfile] = {
-    "DA": BankProfile(
-        bank_id="DA",
-        title="Prepare and Analyze Data",
-        bank_path=DATA / "question_bank.json",
-        graph_path=DATA / "competency_graph.json",
-        mains=("DA",),
-        # Six sub-nodes against a twelve-question cap: full coverage is reachable.
-        coverage_critical_only=None,
-    ),
-    "PY": BankProfile(
-        bank_id="PY",
-        title="Python Engineering",
-        bank_path=DATA / "question_bank_PY_20260803_083616.json",
-        graph_path=DATA / "competency_graph_PY_20260803_083616.json",
-        mains=("PY",),
-        coverage_critical_only=None,
-    ),
-    "AIE": BankProfile(
-        bank_id="AIE",
-        title="AI Engineer",
-        bank_path=DATA / "question_bank_AIE.json",
-        graph_path=DATA / "competency_graph_AIE.json",
-        mains=("C1", "C3", "C6"),
-        # C6 declares sixteen sub-competencies and every AIE item measures exactly one, so
-        # full coverage would cost sixteen questions against a cap of twelve — the gate
-        # could never be satisfied and every session would end on the budget escape.
-        # Critical-only reduces the requirement to five. See `docs/competency_graph.md`.
-        coverage_critical_only=True,
-    ),
-    "AIE-JR-V3": BankProfile(
-        bank_id="AIE-JR-V3",
-        title="Junior AI Engineer v3 (60 items)",
-        bank_path=DATA / "question_bank_AIE_JR_v3.json",
-        graph_path=DATA / "competency_graph_AIE_JR_v3.json",
-        mains=("C1",),
-        # The generated coverage graph contains exactly the three measurable nodes.
-        coverage_critical_only=False,
-    ),
-    "JAI-600": BankProfile(
-        bank_id="JAI-600",
-        title="Junior AI Engineer 2026 (600 items)",
-        bank_path=DATA / "question_bank_JAI_2026_600.json",
-        graph_path=DATA / "competency_graph_JAI_2026_600.json",
-        mains=("C1", "C2", "C3", "C4", "C5", "C6"),
-        # Each main has only 3-5 nodes, so full direct coverage is reachable under the
-        # twelve-question per-main limit and is preferable to silently weakening it.
-        coverage_critical_only=False,
-    ),
-}
+        super().__init__(bank_id, list(REGISTRY))
 
 
 def resolve_bank_id(bank_id: str | None = None) -> str:
@@ -123,12 +106,21 @@ def resolve_bank_id(bank_id: str | None = None) -> str:
 
 
 def profile(bank_id: str | None = None) -> BankProfile:
-    return REGISTRY[resolve_bank_id(bank_id)]
+    return STORE.profile(resolve_bank_id(bank_id))
 
 
 def get_bank(bank_id: str | None = None) -> BankReporting:
-    """The bank for this id, parsed once per process."""
-    return _bank_cached(resolve_bank_id(bank_id))
+    """The bank for this id, parsed once per version per process."""
+    return STORE.bank(resolve_bank_id(bank_id))
+
+
+def version(bank_id: str | None = None) -> str:
+    """A content hash over this bank, its graph and its declared profile.
+
+    Pinned into an assessment at `begin`, so replacing a bank cannot change the item pool
+    underneath a candidate half way through a session.
+    """
+    return STORE.version(resolve_bank_id(bank_id))
 
 
 def get_graph_service(bank_id: str | None = None) -> CompetencyGraphService | None:
@@ -147,7 +139,7 @@ def coverage_policy(bank_id: str | None = None) -> bool:
 def describe() -> list[dict]:
     """Registered banks, for a bank picker. Item counts come from the file, not the row."""
     described: list[dict] = []
-    for bank_id, prof in REGISTRY.items():
+    for bank_id, prof in sorted(REGISTRY.items()):
         try:
             bank = get_bank(bank_id)
             coverage = bank.coverage()
@@ -155,24 +147,27 @@ def describe() -> list[dict]:
                 {
                     "bank_id": bank_id,
                     "title": prof.title,
+                    "version": STORE.version(bank_id),
+                    "source": prof.source,
                     "mains": bank.variables(),
                     "items": len(bank.all_items()),
                     "modalities": sorted({m for c in coverage.values() for m in c}),
                     "has_graph": get_graph_service(bank_id) is not None,
+                    "coverage_critical_only": coverage_policy(bank_id),
                 }
             )
         except (OSError, ValueError) as exc:
             # A broken bank must not hide the working ones from the picker.
             logger.error("bank %s could not be described: %s", bank_id, exc)
             described.append(
-                {"bank_id": bank_id, "title": prof.title, "error": str(exc)}
+                {
+                    "bank_id": bank_id,
+                    "title": prof.title,
+                    "source": prof.source,
+                    "error": str(exc),
+                }
             )
     return described
-
-
-@cache
-def _bank_cached(bank_id: str) -> JsonUnifiedBank:
-    return JsonUnifiedBank(REGISTRY[bank_id].bank_path)
 
 
 def get_propagation_policy(bank_id: str | None = None) -> ResolvedPolicy | None:
@@ -180,55 +175,60 @@ def get_propagation_policy(bank_id: str | None = None) -> ResolvedPolicy | None:
 
     Exposed so an operator can ask "why is this edge inert?" without reading three files
     and doing the AND in their head. `scripts/show_propagation_policy.py` prints it and
-    the diagnostics endpoint returns `.summary()`.
+    the bank registry serves `.summary()`.
     """
     return _policy_cached(resolve_bank_id(bank_id))
 
 
-@cache
 def _policy_cached(bank_id: str) -> ResolvedPolicy | None:
-    graph_path = REGISTRY[bank_id].graph_path
-    if graph_path is None:
-        return None
-    return resolve_policy(
-        load_competency_graph(graph_path),
-        deployment_inference=settings.graph_upward_inference_enabled,
-        deployment_blocking=settings.graph_descendant_blocking_enabled,
-        deployment_minimum_failures_to_block=settings.graph_minimum_failures_to_block,
-        deployment_accepted_validation_statuses=settings.accepted_validation_statuses(),
-    )
+    def build() -> ResolvedPolicy | None:
+        graph_path = STORE.profile(bank_id).graph_path
+        if graph_path is None:
+            return None
+        return resolve_policy(
+            load_competency_graph(graph_path),
+            deployment_inference=settings.graph_upward_inference_enabled,
+            deployment_blocking=settings.graph_descendant_blocking_enabled,
+            deployment_minimum_failures_to_block=settings.graph_minimum_failures_to_block,
+            deployment_accepted_validation_statuses=settings.accepted_validation_statuses(),
+        )
+
+    return STORE._cached(STORE._policies, bank_id, build)
 
 
-@cache
 def _graph_cached(bank_id: str) -> CompetencyGraphService | None:
     """The graph for this bank, with the propagation policy already applied.
 
-    Resolution happens HERE, once per bank per process, rather than at every traversal.
-    Everything downstream reads the edge flags, so baking the effective values in makes
-    the policy apply everywhere without a new check in a hot path and without a second
-    place that could disagree about the answer.
+    Resolution happens HERE, once per bank version per process, rather than at every
+    traversal. Everything downstream reads the edge flags, so baking the effective values
+    in makes the policy apply everywhere without a new check in a hot path and without a
+    second place that could disagree about the answer.
     """
-    graph_path = REGISTRY[bank_id].graph_path
-    if graph_path is None:
-        return None
 
-    graph = load_competency_graph(graph_path)
-    resolved = _policy_cached(bank_id)
-    if resolved is not None:
-        graph = apply_policy(graph, resolved)
-        summary = resolved.summary()
-        logger.info(
-            "bank %s propagation policy: %d prerequisite edges, %d may infer, %d may block "
-            "(deployment inference=%s blocking=%s, failures to block=%d)",
-            bank_id,
-            summary["prerequisite_edges"],
-            summary["inference_enabled"],
-            summary["blocking_enabled"],
-            summary["deployment"]["upward_inference"],
-            summary["deployment"]["descendant_blocking"],
-            summary["minimum_failures_to_block"],
-        )
-    return CompetencyGraphService(graph)
+    def build() -> CompetencyGraphService | None:
+        graph_path = STORE.profile(bank_id).graph_path
+        if graph_path is None:
+            return None
+
+        graph = load_competency_graph(graph_path)
+        resolved = _policy_cached(bank_id)
+        if resolved is not None:
+            graph = apply_policy(graph, resolved)
+            summary = resolved.summary()
+            logger.info(
+                "bank %s propagation policy: %d prerequisite edges, %d may infer, "
+                "%d may block (deployment inference=%s blocking=%s, failures to block=%d)",
+                bank_id,
+                summary["prerequisite_edges"],
+                summary["inference_enabled"],
+                summary["blocking_enabled"],
+                summary["deployment"]["upward_inference"],
+                summary["deployment"]["descendant_blocking"],
+                summary["minimum_failures_to_block"],
+            )
+        return CompetencyGraphService(graph)
+
+    return STORE._cached(STORE._graphs, bank_id, build)
 
 
 def reset_caches() -> None:
@@ -238,6 +238,4 @@ def reset_caches() -> None:
     propagation setting, since the policy is resolved once at load and would otherwise
     survive the change.
     """
-    _bank_cached.cache_clear()
-    _graph_cached.cache_clear()
-    _policy_cached.cache_clear()
+    STORE.reset()
