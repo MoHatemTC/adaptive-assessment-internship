@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from .envelopes import BankItemRef, CatParameters, MeasuredVariableRef, Modality
 
@@ -73,8 +73,18 @@ class GraphNodeDTO(BaseModel):
 
 
 class GraphEdgeDTO(BaseModel):
-    from_id: str
-    to_id: str
+    """One edge, in the same shape the graph FILE uses.
+
+    `from` and `to` are Python keywords, so the attributes are `from_id`/`to_id` and the
+    wire names are aliases. That is worth the small awkwardness: it means a bank author can
+    POST exactly the graph JSON they would otherwise check in, rather than learning a
+    second spelling of a format they already have.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    from_id: str = Field(alias="from")
+    to_id: str = Field(alias="to")
     relation: str
     strength: float = 1.0
     weight: float = 1.0

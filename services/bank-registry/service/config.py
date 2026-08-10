@@ -1,24 +1,27 @@
-"""Configuration for bank-registry. Env-only, twelve-factor.
+"""Configuration for bank-registry.
 
-Deliberately a separate `Settings` per service rather than the monolith's shared one: a
-service that can read another's configuration will eventually depend on it.
+Extends the shared `ServiceSettings` rather than redeclaring it, so `/health` and `/config`
+behave identically across every service and only what is genuinely specific to this one
+lives here.
 """
 
 from __future__ import annotations
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from adaptive_service import ServiceSettings
 
 
-class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="", extra="ignore")
-
+class Settings(ServiceSettings):
     service_name: str = "bank-registry"
     port: int = 8081
-    log_level: str = "INFO"
 
-    # Set by the platform; used for the /health envelope so a mismatched pair is visible
-    # in a dashboard rather than in a decoding error three hops away.
-    release: str = "dev"
+    #: The write path — `POST/PUT/DELETE /banks` — in one switch.
+    #:
+    #: There is no authentication anywhere in this system (see ADR-0002 and
+    #: docs/operations.md); that is the status quo carried forward from the monolith, not a
+    #: decision this migration made. But a read-only API and one that can REPLACE the bank
+    #: a live assessment is running against are different propositions, so the second is
+    #: something a deployment can turn off without turning off the service.
+    admin_api_enabled: bool = True
 
 
 settings = Settings()

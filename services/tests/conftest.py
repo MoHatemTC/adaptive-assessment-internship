@@ -31,6 +31,7 @@ import pytest
 
 SERVICES_ROOT = Path(__file__).resolve().parents[1]
 CONTRACTS = SERVICES_ROOT / "contracts"
+COMMON = SERVICES_ROOT / "common"
 CLIENTS = SERVICES_ROOT / "clients"
 
 #: Directory name -> the `service_name` it must report. Kept explicit rather than derived,
@@ -43,6 +44,15 @@ SERVICES: dict[str, str] = {
     "grader": "grader",
 }
 
+#: Services whose routes are real. The rest still answer 501 and point at their
+#: `MIGRATION.md`, and the stub-honesty tests run over those.
+#:
+#: This set grows one entry per migrated service and the stub tests disappear with the last
+#: one. Keeping it explicit rather than sniffing for a catch-all means a service that loses
+#: its routes by accident fails as "you said this was implemented" rather than passing as
+#: "ah, a stub then".
+IMPLEMENTED: set[str] = {"bank-registry"}
+
 #: Ports as declared in each service's `Settings`. Asserted against deploy/docker-compose.yml
 #: by `test_services.py` — a service and its compose entry disagreeing about a port is the
 #: kind of thing that only shows up as a failed health check in an environment nobody is
@@ -54,9 +64,29 @@ EXPECTED_PORTS: dict[str, int] = {
     "competency-graph": 8083,
 }
 
-for _extra in (CONTRACTS, CLIENTS):
+for _extra in (CONTRACTS, COMMON, CLIENTS):
     if _extra.is_dir() and str(_extra) not in sys.path:
         sys.path.insert(0, str(_extra))
+
+
+@contextmanager
+def bank_store_at(directory: Path):
+    """Point the process-wide bank store at `directory` for the duration.
+
+    Any test that POSTs a bank needs this. Without it the write lands in the checked-in
+    `app/data/banks`, and the next run of the ENGINE suite discovers a sixth registered
+    bank that no fixture created and no assertion expects — a failure in a different
+    suite, hours later, with nothing pointing back here.
+    """
+    from app.services.orchestrator import registry
+    from app.services.orchestrator.bank_store import BankStore, _seed_profiles
+
+    previous = registry.STORE
+    registry.use_store(BankStore(seeds=_seed_profiles(), store_dir=Path(directory)))
+    try:
+        yield registry.STORE
+    finally:
+        registry.use_store(previous)
 
 
 def _evict_service_modules() -> None:

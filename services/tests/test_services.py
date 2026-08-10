@@ -21,9 +21,36 @@ import pytest
 
 from adaptive_contracts import SCHEMA_VERSION
 
-from conftest import EXPECTED_PORTS, SERVICES, load_service
+from conftest import EXPECTED_PORTS, IMPLEMENTED, SERVICES, load_service
 
 SERVICE_IDS = sorted(SERVICES)
+#: Services still answering 501. The stub-honesty tests are about THEM; a migrated service
+#: that returned 501 for an unknown path would be lying in the other direction.
+STUB_IDS = sorted(set(SERVICE_IDS) - IMPLEMENTED)
+
+
+def _imports(source: Path) -> set[str]:
+    """Every module this file imports, resolved to a dotted path.
+
+    A `from X import a, b` yields `X.a` and `X.b` rather than `X`, because the slice
+    allowlist below draws its boundaries at the submodule — `from app.services.orchestrator
+    import registry` and `... import grader` are the two facts it exists to tell apart, and
+    recording both as `app.services.orchestrator` would collapse them.
+
+    AST rather than a substring search, because `import app.services.code_adaptive` and
+    `from app.services.code_adaptive import x` are the same fact spelled two ways, and
+    neither should be found in a docstring that merely mentions it.
+    """
+    import ast
+
+    found: set[str] = set()
+    tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            found |= {alias.name for alias in node.names}
+        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+            found |= {f"{node.module}.{alias.name}" for alias in node.names}
+    return found
 
 
 class TestHealth:
@@ -104,16 +131,22 @@ class TestConfigEndpoint:
         assert not any(s in name for s in ("key", "secret", "token", "password"))
 
 
+@pytest.mark.skipif(not STUB_IDS, reason="every service is implemented")
 class TestTheStubIsHonest:
-    """A 501 that says what it is and where the plan lives beats a 404 or a silent 200."""
+    """A 501 that says what it is and where the plan lives beats a 404 or a silent 200.
+
+    These run over the services that have NOT migrated yet. A migrated service returning
+    501 for an unknown path would be lying in the other direction — it does implement its
+    routes, and a path it does not serve is a 404.
+    """
 
     def test_an_unimplemented_route_returns_501(self, client_factory):
-        with client_factory("competency-graph") as client:
+        with client_factory(STUB_IDS[0]) as client:
             response = client.get("/nodes/C6.4")
         assert response.status_code == 501
 
     def test_the_body_names_the_service_and_its_migration_checklist(self, client_factory):
-        for directory in SERVICE_IDS:
+        for directory in STUB_IDS:
             with client_factory(directory) as client:
                 body = client.get("/anything").json()
             assert body["service"] == SERVICES[directory]
@@ -121,24 +154,35 @@ class TestTheStubIsHonest:
 
     @pytest.mark.parametrize("method", ["GET", "POST", "PUT", "DELETE"])
     def test_every_declared_method_is_covered(self, client_factory, method):
-        with client_factory("grader") as client:
-            assert client.request(method, "/grade").status_code == 501
+        with client_factory(STUB_IDS[0]) as client:
+            assert client.request(method, "/nothing-here").status_code == 501
 
-    def test_the_migration_checklist_it_points_at_exists(self):
-        """A 501 pointing at a missing file is worse than one pointing at nothing."""
+    def test_the_root_path_is_also_answered(self, client_factory):
+        """`/` is what a human types first. It must reach the stub, not a bare 404."""
+        with client_factory(STUB_IDS[0]) as client:
+            assert client.get("/").status_code == 501
+
+
+class TestEveryServiceKeepsItsMigrationChecklist:
+    def test_the_checklist_exists(self):
+        """Ticked or not. A 501 pointing at a missing file is worse than one pointing at
+        nothing, and a migrated service's checklist is the record of what moved."""
         root = Path(__file__).resolve().parents[1]
         for directory in SERVICE_IDS:
             assert (root / directory / "MIGRATION.md").is_file()
 
 
-class TestTheCatchAllDoesNotShadowTheRealRoutes:
-    """The one way this boilerplate can be actively wrong.
+class TestTheOperatorEndpointsAreNeverShadowed:
+    """The one way a service can be actively wrong before it does anything.
 
-    `/{path:path}` matches everything including `/health`. FastAPI resolves in registration
-    order, so health and config survive only because they are declared first. That is a
-    property of line ordering in a file — exactly the kind of thing a later edit breaks
-    silently, and the symptom is an operator getting 501 from a liveness probe during an
-    incident.
+    A catch-all `/{path:path}` matches everything including `/health`, and FastAPI resolves
+    in registration order — so the operator endpoints survive only because they are
+    declared first. That is a property of line ordering in a file: exactly the kind of
+    thing a later edit breaks silently, and the symptom is a liveness probe returning 501
+    during an incident.
+
+    It still matters for an implemented service. `adaptive_service.operator_router` is
+    included before any other route in every `main.py`, and this is what says so.
     """
 
     @pytest.mark.parametrize("route", ["/health", "/config"])
@@ -147,23 +191,50 @@ class TestTheCatchAllDoesNotShadowTheRealRoutes:
             with client_factory(directory) as client:
                 response = client.get(route)
             assert response.status_code == 200, (
-                f"{directory} returns {response.status_code} for {route} — the catch-all "
-                "has been registered ahead of it"
+                f"{directory} returns {response.status_code} for {route} — something has "
+                "been registered ahead of the operator router"
             )
 
-    def test_they_are_declared_before_the_catch_all(self, service):
-        """Asserted on the route table, not only on behaviour, so the diagnosis is in the
-        failure message rather than left to whoever reads a 501."""
-        directory, main = service
-        paths = [getattr(r, "path", "") for r in main.app.router.routes]
-        catch_all = next(i for i, p in enumerate(paths) if "{path:path}" in p)
-        for route in ("/health", "/config"):
-            assert paths.index(route) < catch_all, f"{directory}: {route} is shadowed"
+    @staticmethod
+    def _declared_paths(app) -> list[str]:
+        """Route paths in registration order, descending into included routers.
 
-    def test_the_root_path_is_also_answered(self, client_factory):
-        """`/` is what a human types first. It must reach the stub, not a bare 404."""
-        with client_factory("bank-registry") as client:
-            assert client.get("/").status_code == 501
+        This FastAPI version keeps an `include_router` call as a single `_IncludedRouter`
+        entry that defers to `original_router` rather than flattening its routes into the
+        parent — so reading `app.router.routes` directly reports that a service serving
+        `/health` does not. FastAPI's own `/openapi.json`, `/docs` and `/redoc` are
+        registered before anything in the file and are dropped, so index 0 means "the
+        first route this service declares".
+        """
+
+        def walk(routes) -> list[str]:
+            found: list[str] = []
+            for route in routes:
+                included = getattr(route, "original_router", None)
+                nested = getattr(included, "routes", None) or getattr(
+                    route, "routes", None
+                )
+                if nested:
+                    found.extend(walk(nested))
+                    continue
+                path = getattr(route, "path", "")
+                if path and not path.startswith(("/openapi", "/docs", "/redoc")):
+                    found.append(path)
+            return found
+
+        return walk(app.router.routes)
+
+    def test_they_are_declared_first(self, service):
+        """Asserted on the route table, not only on behaviour, so the diagnosis is in the
+        failure message rather than left to whoever reads the 501."""
+        directory, main = service
+        declared = self._declared_paths(main.app)
+        for route in ("/health", "/config"):
+            assert route in declared, f"{directory} does not serve {route}"
+            assert declared.index(route) < 2, (
+                f"{directory}: {route} is not among the first routes declared, so a "
+                f"later catch-all could shadow it — order is {declared[:4]}"
+            )
 
 
 class TestDeploymentDescriptorAgreesWithTheCode:
@@ -207,15 +278,21 @@ class TestTheServicesDoNotDependOnEachOther:
     """
 
     def test_no_service_imports_another_service(self):
+        """Read as IMPORTS, not as text.
+
+        The substring version of this test failed the moment a service's docstring
+        explained why the grader needs hidden test cases. Prose about another service is
+        how a boundary gets documented; an import is how it gets crossed.
+        """
         root = Path(__file__).resolve().parents[1]
-        others = set(SERVICE_IDS)
+        forbidden = {other.replace("-", "_") for other in SERVICE_IDS}
         for directory in SERVICE_IDS:
+            own = directory.replace("-", "_")
             for source in (root / directory / "service").rglob("*.py"):
-                text = source.read_text(encoding="utf-8")
-                for other in others - {directory}:
-                    module = other.replace("-", "_")
-                    assert module not in text, (
-                        f"{directory}/{source.name} references {other}"
+                for imported in _imports(source):
+                    top = imported.split(".")[0]
+                    assert top not in (forbidden - {own}), (
+                        f"{directory}/{source.name} imports {imported}"
                     )
 
     def test_each_service_declares_its_own_settings(self, service):
@@ -243,6 +320,7 @@ class TestEachServiceImportsOnlyTheEngineSliceItOwns:
             "app.config",
             "app.schemas",
             "app.services.orchestrator.bank",
+            "app.services.orchestrator.bank_store",
             "app.services.orchestrator.registry",
             "app.services.orchestrator.calibration",
             "app.services.orchestrator.competency",
@@ -274,39 +352,19 @@ class TestEachServiceImportsOnlyTheEngineSliceItOwns:
         ),
     }
 
-    @staticmethod
-    def _engine_imports(source: Path) -> set[str]:
-        """Every `app.…` module this file imports, by static parse.
-
-        AST rather than a substring search: `import app.services.code_adaptive` and
-        `from app.services.code_adaptive import x` are the same fact, and neither should be
-        missed because it was spelled differently or mentioned in a docstring.
-        """
-        import ast
-
-        found: set[str] = set()
-        tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                found |= {a.name for a in node.names if a.name.split(".")[0] == "app"}
-            elif isinstance(node, ast.ImportFrom):
-                if node.module and node.module.split(".")[0] == "app":
-                    found.add(node.module)
-        return found
-
     def test_every_engine_import_is_inside_the_declared_slice(self):
         root = Path(__file__).resolve().parents[1]
         violations: list[str] = []
         for directory, allowed in self.ALLOWED.items():
             for source in (root / directory / "service").rglob("*.py"):
-                for imported in self._engine_imports(source):
+                for imported in _imports(source):
+                    if imported.split(".")[0] != "app":
+                        continue
                     if not any(
                         imported == prefix or imported.startswith(prefix + ".")
                         for prefix in allowed
                     ):
-                        violations.append(
-                            f"{directory}/{source.name} imports {imported}"
-                        )
+                        violations.append(f"{directory}/{source.name} imports {imported}")
         assert not violations, (
             "these imports fall outside the service's declared engine slice; widen "
             f"ALLOWED deliberately if the boundary really has moved: {violations}"
