@@ -1,0 +1,23 @@
+[project]
+# HTTP adapters that satisfy the engine's own seams.
+#
+# The engine already had the right boundaries: `UnifiedBankRepository` is a Protocol,
+# `GraderAgent` has one method, propagation goes through a single call. So a service client
+# is not a new abstraction over the engine — it is a second implementation of a seam that
+# was already there, which is why the orchestrator can be pointed at services without one
+# line of the loop changing.
+name = "adaptive-clients"
+version = "1.0.0"
+description = "HTTP clients implementing the adaptive engine's repository and grading seams."
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.27",
+    "adaptive-contracts>=1.0.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["adaptive_clients*"]
