@@ -44,15 +44,6 @@ SERVICES: dict[str, str] = {
     "grader": "grader",
 }
 
-#: Services whose routes are real. The rest still answer 501 and point at their
-#: `MIGRATION.md`, and the stub-honesty tests run over those.
-#:
-#: This set grows one entry per migrated service and the stub tests disappear with the last
-#: one. Keeping it explicit rather than sniffing for a catch-all means a service that loses
-#: its routes by accident fails as "you said this was implemented" rather than passing as
-#: "ah, a stub then".
-IMPLEMENTED: set[str] = {"bank-registry", "competency-graph", "grader"}
-
 #: Ports as declared in each service's `Settings`. Asserted against deploy/docker-compose.yml
 #: by `test_services.py` — a service and its compose entry disagreeing about a port is the
 #: kind of thing that only shows up as a failed health check in an environment nobody is

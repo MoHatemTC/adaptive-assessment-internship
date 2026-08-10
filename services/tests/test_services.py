@@ -1,15 +1,22 @@
-"""The four services, as they actually are: health, config, and an honest 501.
+"""What every service must be true of, whatever it does.
 
-WHAT THIS SUITE IS FOR
+The behaviour of each service is tested beside it. What is tested HERE is the set of
+properties that only exist ACROSS services, and that no single service's own suite could
+notice:
 
-No business logic has moved out of the monolith, so there is no behaviour to test. What
-there IS to test is the thing a stub can still get wrong and that costs real time when it
-does: an operator hitting `/health` and getting 501 because a catch-all was registered
-first, four services disagreeing about the contract version they speak, a `/config`
-endpoint that prints a credential, or a port that does not match the compose file.
+    every service reports the same contract version, and the same engine configuration
+    `/config` prints no credential
+    the operator endpoints are never shadowed
+    declared ports match the compose file
+    no service imports another, and each imports only its declared slice of the engine
 
-Each of those has been a production incident somewhere. None of them needs the service to
-do anything yet.
+Most of those have been a production incident somewhere. The last one is the service
+boundary itself, written down and enforced — `bank-registry` reaching into the grader would
+put sandbox execution behind a read-only bank API, and nothing else would catch it.
+
+The stub-honesty tests that used to live here are gone: every service is implemented, and a
+test asserting that an unimplemented one returns an honest 501 has nothing left to assert.
+Each `MIGRATION.md` records what moved.
 """
 
 from __future__ import annotations
@@ -20,12 +27,9 @@ import pytest
 
 from adaptive_contracts import SCHEMA_VERSION
 
-from conftest import EXPECTED_PORTS, IMPLEMENTED, SERVICES
+from conftest import EXPECTED_PORTS, SERVICES
 
 SERVICE_IDS = sorted(SERVICES)
-#: Services still answering 501. The stub-honesty tests are about THEM; a migrated service
-#: that returned 501 for an unknown path would be lying in the other direction.
-STUB_IDS = sorted(set(SERVICE_IDS) - IMPLEMENTED)
 
 
 def _imports(source: Path) -> set[str]:
@@ -128,38 +132,6 @@ class TestConfigEndpoint:
         review, and so closing it has an obvious home.
         """
         assert not any(s in name for s in ("key", "secret", "token", "password"))
-
-
-@pytest.mark.skipif(not STUB_IDS, reason="every service is implemented")
-class TestTheStubIsHonest:
-    """A 501 that says what it is and where the plan lives beats a 404 or a silent 200.
-
-    These run over the services that have NOT migrated yet. A migrated service returning
-    501 for an unknown path would be lying in the other direction — it does implement its
-    routes, and a path it does not serve is a 404.
-    """
-
-    def test_an_unimplemented_route_returns_501(self, client_factory):
-        with client_factory(STUB_IDS[0]) as client:
-            response = client.get("/nodes/C6.4")
-        assert response.status_code == 501
-
-    def test_the_body_names_the_service_and_its_migration_checklist(self, client_factory):
-        for directory in STUB_IDS:
-            with client_factory(directory) as client:
-                body = client.get("/anything").json()
-            assert body["service"] == SERVICES[directory]
-            assert directory in body["see"] and body["see"].endswith("MIGRATION.md")
-
-    @pytest.mark.parametrize("method", ["GET", "POST", "PUT", "DELETE"])
-    def test_every_declared_method_is_covered(self, client_factory, method):
-        with client_factory(STUB_IDS[0]) as client:
-            assert client.request(method, "/nothing-here").status_code == 501
-
-    def test_the_root_path_is_also_answered(self, client_factory):
-        """`/` is what a human types first. It must reach the stub, not a bare 404."""
-        with client_factory(STUB_IDS[0]) as client:
-            assert client.get("/").status_code == 501
 
 
 class TestEveryServiceKeepsItsMigrationChecklist:

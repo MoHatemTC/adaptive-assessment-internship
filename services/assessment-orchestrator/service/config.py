@@ -1,24 +1,55 @@
-"""Configuration for assessment-orchestrator. Env-only, twelve-factor.
+"""Configuration for assessment-orchestrator.
 
-Deliberately a separate `Settings` per service rather than the monolith's shared one: a
-service that can read another's configuration will eventually depend on it.
+IT NEEDS MODEL EGRESS, AND ADR-0001 SAID IT WOULD NOT
+
+`docs/microservices.md` recorded the grader as "the only component needing egress", and
+that is wrong: the Picking Agent calls a model on every queue fill, to choose one item from
+a shortlist the engine has already ranked. A deployment that wrote its network policy from
+that sentence would find selection silently falling back to the deterministic choice on
+every question — which is a legitimate degraded mode, and therefore one that produces no
+error and no alert. Corrected here, in ADR-0002, and in the compose file.
 """
 
 from __future__ import annotations
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from adaptive_service import ServiceSettings
 
 
-class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="", extra="ignore")
-
+class Settings(ServiceSettings):
     service_name: str = "assessment-orchestrator"
     port: int = 8080
-    log_level: str = "INFO"
 
-    # Set by the platform; used for the /health envelope so a mismatched pair is visible
-    # in a dashboard rather than in a decoding error three hops away.
-    release: str = "dev"
+    bank_registry_url: str = "http://bank-registry:8081"
+    grader_url: str = "http://grader:8082"
+    #: Empty runs propagation IN THIS PROCESS instead of calling the graph service. That is
+    #: a supported single-container deployment, not a fallback: `/health` reports which one
+    #: is in force, so a misconfiguration is visible rather than merely quiet.
+    competency_graph_url: str = "http://competency-graph:8083"
+
+    #: A code submission is sandbox-bound and budgeted at 30 s; the ceiling sits above the
+    #: sandbox's own timeout rather than racing it.
+    grader_timeout_seconds: float = 120.0
+    bank_timeout_seconds: float = 10.0
+    #: Propagation is in-memory work behind one hop. If it takes longer than this something
+    #: is wrong, and the correct answer is to continue without the graph rather than to
+    #: keep a candidate waiting.
+    graph_timeout_seconds: float = 5.0
+
+    #: The instrumented author view: posteriors, per-item information, the criterion phase,
+    #: raw session state. NOT candidate-safe — it exposes what a candidate must not see
+    #: while answering. Off by default, and refused by the service rather than merely not
+    #: rendered by a client.
+    author_diagnostics_enabled: bool = False
+
+    #: A frontend runs on its own origin. Wildcard with credentials off is the monolith's
+    #: posture carried forward — there is no cookie-authenticated API here, and wildcard
+    #: plus credentials is invalid browser policy anyway. Narrow it in any deployment that
+    #: puts something behind an origin check.
+    cors_allow_origins: str = "*"
+
+    def allowed_origins(self) -> list[str]:
+        raw = (self.cors_allow_origins or "").strip()
+        return ["*"] if raw in ("", "*") else [o.strip() for o in raw.split(",") if o.strip()]
 
 
 settings = Settings()
