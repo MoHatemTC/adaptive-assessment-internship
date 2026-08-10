@@ -42,6 +42,7 @@ SERVICES: dict[str, str] = {
     "bank-registry": "bank-registry",
     "competency-graph": "competency-graph",
     "grader": "grader",
+    "live-voice": "live-voice",
 }
 
 #: Ports as declared in each service's `Settings`. Asserted against deploy/docker-compose.yml
@@ -53,6 +54,9 @@ EXPECTED_PORTS: dict[str, int] = {
     "bank-registry": 8081,
     "grader": 8082,
     "competency-graph": 8083,
+    #: 8765 rather than 808x, because that is the port the monolith's live helper used and
+    #: the `/interview` iframe is embedded by URL.
+    "live-voice": 8765,
 }
 
 for _extra in (CONTRACTS, COMMON, CLIENTS):

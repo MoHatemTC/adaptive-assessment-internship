@@ -1,29 +1,23 @@
-"""Regression coverage for blockers found by the C-shipped release audit."""
+"""Regression coverage for blockers found by the C-shipped release audit.
+
+WHAT MOVED, AND WHERE
+
+Three of these used to assert against `backend/app/main.py`, which no longer exists — the
+CAT API is `services/assessment-orchestrator`. The properties did not move with the file:
+they are asserted in `services/tests/test_assessment_orchestrator_service.py`, under
+`TestPropertiesCarriedOverFromTheReleaseAudit`, against the routes that now serve them.
+
+What is left here is what is genuinely about the ENGINE, plus one that is about the whole
+repository and was previously scoped to a single file.
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-import numpy as np
-
-from app import main
 from app.config.settings import settings
 
-
-def test_session_seed_defaults_to_entropy_and_answer_seed_is_not_reused() -> None:
-    assert main.CreateCatSessionRequest.model_fields["seed"].default is None
-    assert main.CatAnswerRequest.model_fields["seed"].default is None
-
-
-def test_http_session_owns_one_persistent_generator() -> None:
-    session_id = "release-fix-rng-test"
-    expected = np.random.default_rng(713)
-    main._cat_rngs[session_id] = expected
-    try:
-        assert main._session_rng(session_id) is expected
-        assert main._session_rng(session_id) is expected
-    finally:
-        main._cat_rngs.pop(session_id, None)
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_reporting_calibration_is_enabled_by_default() -> None:
@@ -56,8 +50,25 @@ def test_variable_report_defaults_to_provisional_decision_status() -> None:
     assert report.decision_status == "provisional"
 
 
-def test_live_helper_never_disables_tls_verification() -> None:
-    source = (Path(__file__).resolve().parents[2] / "streamlit" / "main.py").read_text(
-        encoding="utf-8"
-    )
-    assert "verify=False" not in source
+def test_nothing_in_the_repository_disables_tls_verification() -> None:
+    """Widened from one file to all of them.
+
+    The original blocker was `verify=False` in the Streamlit helper's HTTP calls. That file
+    is gone, and scoping the assertion to it would have retired a real finding by deleting
+    the thing it happened to be found in. The rule was never about that file: a client that
+    skips certificate verification talks to whatever answers, and every service in this
+    system now makes outbound calls.
+    """
+    offenders: list[str] = []
+    for source in REPOSITORY_ROOT.rglob("*.py"):
+        parts = set(source.parts)
+        if parts & {".venv", "__pycache__", "node_modules", "build", "dist"}:
+            continue
+        if source == Path(__file__):
+            continue
+        text = source.read_text(encoding="utf-8", errors="ignore")
+        for number, line in enumerate(text.splitlines(), 1):
+            stripped = line.split("#")[0]
+            if "verify=False" in stripped or "verify = False" in stripped:
+                offenders.append(f"{source.relative_to(REPOSITORY_ROOT)}:{number}")
+    assert not offenders, f"TLS verification is disabled at {offenders}"

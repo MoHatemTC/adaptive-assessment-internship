@@ -17,6 +17,8 @@ makes an identical seed produce an identical session.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -311,6 +313,91 @@ class TestConcurrency:
             ]
             == 1
         )
+
+
+class TestPropertiesCarriedOverFromTheReleaseAudit:
+    """Assertions that used to live in `backend/tests/test_main_api.py`.
+
+    The monolith app they tested is gone; the properties are not. Each of these was a
+    release-audit finding once, which is the strongest reason to move them rather than
+    let them go with the file.
+    """
+
+    def test_a_code_item_shows_the_scaffold_and_never_the_reference_solution(self, api):
+        """The scaffold is deliberately incomplete and belongs to the candidate. The
+        reference solution is the answer, and shipping it turns every code item into an
+        answer key."""
+        from app.services.orchestrator import registry
+
+        item = next(
+            i for i in registry.get_bank("DA").all_items() if i.modality == "code"
+        )
+        from service.presentation import presented_item  # noqa: PLC0415
+
+        shown = presented_item(item).model_dump()
+        assert shown["starter_code"] == item.payload.get("starter_code", "")
+        assert item.payload["reference_solution"] not in json.dumps(shown)
+
+    def test_every_measured_band_in_a_finished_report_is_provisional(self, api):
+        """`converged` is an engine outcome; certification is a release decision. Until
+        external exact-band calibration passes, even a converged estimate is provisional —
+        and a report that said otherwise would be claiming an accuracy nobody has shown."""
+        session = begin(api)
+        for _ in range(40):
+            if session["stop"]:
+                break
+            session = answer(api, session)
+        assert session["stop"] is True
+        measured = [v for v in session["report"]["variables"] if v["observations"] > 0]
+        assert measured
+        assert {v["decision_status"] for v in measured} == {"provisional"}
+
+    def test_capacity_fails_closed_rather_than_evicting_a_live_assessment(
+        self, api, monkeypatch
+    ):
+        """A candidate halfway through a test losing their session to a cache policy is
+        not a trade-off anyone chose. At capacity the service refuses a NEW session."""
+        from app.config.settings import settings as engine_settings
+
+        monkeypatch.setattr(engine_settings, "cat_max_retained_sessions", 1)
+        first = api.post(
+            "/assessments", json={"bank_id": "DA", "use_llm": False, "seed": 7}
+        )
+        assert first.status_code == 201
+        second = api.post(
+            "/assessments", json={"bank_id": "DA", "use_llm": False, "seed": 8}
+        )
+        assert second.status_code == 503
+        assert second.json()["code"] == "capacity_reached"
+
+        api.delete(f"/assessments/{first.json()['session_id']}")
+        assert (
+            api.post(
+                "/assessments", json={"bank_id": "DA", "use_llm": False, "seed": 9}
+            ).status_code
+            == 201
+        )
+
+    def test_deleting_a_session_releases_everything_held_for_it(self, stack):
+        """Not just the state: the lock and the exposure-control generator too. A leak
+        here is unbounded — one entry per assessment ever begun."""
+        http, orchestrator_main = stack
+        session = begin(http)
+        session_id = session["session_id"]
+        assert session_id in orchestrator_main.SESSIONS
+
+        http.delete(f"/assessments/{session_id}")
+        assert session_id not in orchestrator_main.SESSIONS
+        assert orchestrator_main.SESSIONS.lock_for(session_id) is None
+
+    def test_a_session_keeps_one_persistent_generator(self, stack):
+        """A fresh generator per request would make randomesque exposure control repeat
+        its first draw on every question, which is not exposure control."""
+        http, orchestrator_main = stack
+        session = begin(http)
+        held = orchestrator_main.SESSIONS.get(session["session_id"]).rng
+        answer(http, session)
+        assert orchestrator_main.SESSIONS.get(session["session_id"]).rng is held
 
 
 class TestTheCatalogue:

@@ -325,6 +325,15 @@ class TestEachServiceImportsOnlyTheEngineSliceItOwns:
             # service must not be one import from a posterior.
             "app.services.orchestrator.propagation_port",
         ),
+        "live-voice": (
+            "app.config",
+            "app.services.observability",
+            # The realtime rooms and their transport. NOT `app.services.voice`, which is
+            # the rubric grader: this service produces a transcript and never a score, and
+            # keeping the two apart is why an audio failure can be reported as an audio
+            # failure rather than as a candidate who said nothing.
+            "app.services.voice_live",
+        ),
         "assessment-orchestrator": (
             "app.config",
             "app.schemas",

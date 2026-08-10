@@ -1,7 +1,11 @@
-# Boilerplate. Every service starts, answers /health, and calls nothing.
+# The five services, and what each is allowed to reach.
 #
-# Build context is the REPOSITORY ROOT so each image can copy `services/contracts`. That is
-# the one shared dependency, and vendoring it per service would let the copies drift.
+# Build context is the REPOSITORY ROOT so every image can copy the shared packages and the
+# engine. The engine is installed as a LIBRARY rather than vendored per service: there is
+# one implementation of the psychometrics and several adapters over it, and copying it five
+# times would create five copies that drift. Which PART of it each service may import is
+# not a packaging question — `services/tests/test_services.py` parses every import against
+# a declared slice.
 name: adaptive-assessment
 
 x-common: &common
@@ -9,35 +13,73 @@ x-common: &common
   environment: &common-env
     LOG_LEVEL: ${LOG_LEVEL:-INFO}
     RELEASE: ${RELEASE:-dev}
+
+    # ENGINE POLICY, WHICH MUST BE IDENTICAL EVERYWHERE.
+    #
+    # These decide what a candidate is SCORED by. Split across services, nothing makes them
+    # agree: a grader running CODE_APPROACH=C beside an orchestrator that believes it is B
+    # produces a session whose scores were computed one way and whose stopping rule assumed
+    # another — internally consistent, entirely wrong, and no request fails.
+    #
+    # So they are declared once here and every service reports a fingerprint of them on
+    # /health. A mismatched pair is a dashboard field rather than a measurement nobody can
+    # reproduce.
+    ACTIVE_BANK: ${ACTIVE_BANK:-AIE}
+    CAT_SE_TARGET: ${CAT_SE_TARGET:-0.55}
+    CAT_MAX_QUESTIONS: ${CAT_MAX_QUESTIONS:-12}
+    CODE_APPROACH: ${CODE_APPROACH:-B}
+    CODE_RUBRIC: ${CODE_RUBRIC:-mid}
+    COMPETENCY_GRAPH_ENABLED: ${COMPETENCY_GRAPH_ENABLED:-true}
+    GRAPH_UPWARD_INFERENCE_ENABLED: ${GRAPH_UPWARD_INFERENCE_ENABLED:-false}
+    GRAPH_DESCENDANT_BLOCKING_ENABLED: ${GRAPH_DESCENDANT_BLOCKING_ENABLED:-false}
+    GRAPH_CONVERGENCE_GATE_ENABLED: ${GRAPH_CONVERGENCE_GATE_ENABLED:-true}
   networks: [assessment]
+
+x-litellm: &litellm
+  LITELLM_BASE_URL: ${LITELLM_BASE_URL:-}
+  LITELLM_API_KEY: ${LITELLM_API_KEY:-}
+  LITELLM_MODEL: ${LITELLM_MODEL:-}
 
 services:
   bank-registry:
     <<: *common
     build: {context: .., dockerfile: services/bank-registry/Dockerfile}
     ports: ["8081:8081"]
+    environment:
+      <<: *common-env
+      # Banks are data, not code. The checked-in ones are mounted read-only, so shipping a
+      # correction to one is a deploy of a file; banks posted through the admin API land in
+      # a named volume, so registering one is neither a rebuild nor lost on restart.
+      ENGINE_DATA_DIR: /srv/seed-data
+      BANK_STORE_DIR: /srv/banks
+      ADMIN_API_ENABLED: ${ADMIN_API_ENABLED:-true}
     volumes:
-      # Banks and graphs are data, not code: mounted read-only so a new bank is a deploy
-      # of a file rather than a deploy of an image.
-      - ../backend/app/data:/srv/data:ro
+      - ../backend/app/data:/srv/seed-data:ro
+      - posted-banks:/srv/banks
 
   grader:
     <<: *common
     build: {context: .., dockerfile: services/grader/Dockerfile}
     ports: ["8082:8082"]
+    depends_on: [bank-registry]
     environment:
       <<: *common-env
-      # The only service that needs egress — sandbox and model. Everything else runs with
-      # no network policy at all, which is most of the security argument for the split.
+      <<: *litellm
+      BANK_REGISTRY_URL: http://bank-registry:8081
+      # A sandbox for untrusted candidate code. Execution happens in E2B, not in this
+      # container — nothing here runs a submission.
       E2B_API_KEY: ${E2B_API_KEY:-}
-      LITELLM_BASE_URL: ${LITELLM_BASE_URL:-}
-      LITELLM_API_KEY: ${LITELLM_API_KEY:-}
 
   competency-graph:
     <<: *common
     build: {context: .., dockerfile: services/competency-graph/Dockerfile}
     ports: ["8083:8083"]
     depends_on: [bank-registry]
+    environment:
+      <<: *common-env
+      BANK_REGISTRY_URL: http://bank-registry:8081
+      # NO EGRESS AT ALL, and no store. It holds no session state, calls no model, and the
+      # only thing it reads is a graph. This is the service the security argument is about.
 
   assessment-orchestrator:
     <<: *common
@@ -46,9 +88,38 @@ services:
     depends_on: [bank-registry, grader, competency-graph]
     environment:
       <<: *common-env
+      # IT NEEDS MODEL EGRESS, AND ADR-0001 SAID IT WOULD NOT. The Picking Agent calls a
+      # model on every queue fill. A network policy written from "the grader is the only
+      # component needing egress" makes selection fall back to the deterministic choice on
+      # every question — a legitimate degraded mode, and so one that raises no error.
+      <<: *litellm
       BANK_REGISTRY_URL: http://bank-registry:8081
       GRADER_URL: http://grader:8082
       COMPETENCY_GRAPH_URL: http://competency-graph:8083
+      # The instrumented author view: posteriors, selection reasoning, raw session state.
+      # NOT candidate-safe. Off unless a deployment deliberately turns it on.
+      AUTHOR_DIAGNOSTICS_ENABLED: ${AUTHOR_DIAGNOSTICS_ENABLED:-false}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-*}
+
+  live-voice:
+    <<: *common
+    build: {context: .., dockerfile: services/live-voice/Dockerfile}
+    # 8765 because that is the port the monolith's helper used, and `/interview` is
+    # embedded by URL.
+    ports: ["8765:8765"]
+    environment:
+      <<: *common-env
+      <<: *litellm
+      LITELLM_LIVE_PREVIEW_MODEL: ${LITELLM_LIVE_PREVIEW_MODEL:-}
+      ALLOW_TEXT_FALLBACK: ${ALLOW_TEXT_FALLBACK:-false}
+      # Carries transcripts. An operator tool, off unless asked for.
+      LIVE_DEBUG_API_ENABLED: ${LIVE_DEBUG_API_ENABLED:-false}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-*}
+
+volumes:
+  # Banks registered through `POST /banks`. A volume because they are content: registering
+  # one must not be a rebuild, and must survive a restart.
+  posted-banks: {}
 
 networks:
   assessment: {}

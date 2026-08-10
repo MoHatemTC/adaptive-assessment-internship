@@ -7,18 +7,36 @@ release finding, not a request to weaken the assertion.
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import numpy as np
 import pytest
 
-from app.config.settings import settings
-from app.main import CatAnswerRequest, CreateCatSessionRequest
-from app.services.adaptive import convergence
-from app.services.adaptive.irt import posterior_update, uniform_prior
-from app.services.competency_graph.coverage import coverage_allows_convergence
-from app.services.competency_graph.inference import InferredNodeSignal
-from app.services.orchestrator.competency import rollup_outcomes
-from app.services.orchestrator.outcome import GradedOutcome, graded_posterior_update
-from app.services.orchestrator.variables import apply_outcome, seed_variable
+# The request models moved from `app.main` — which no longer exists — into the shared wire
+# contracts when the CAT API became a service. The path insert keeps these invariants
+# runnable from a checkout that has not pip-installed the packages: they are release
+# evidence, and evidence that depends on install state is weaker evidence.
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "services" / "contracts"))
+
+from adaptive_contracts import AnswerRequest, CreateAssessmentRequest  # noqa: E402
+
+from app.config.settings import settings  # noqa: E402
+from app.services.adaptive import convergence  # noqa: E402
+from app.services.adaptive.irt import posterior_update, uniform_prior  # noqa: E402
+from app.services.competency_graph.coverage import (  # noqa: E402
+    coverage_allows_convergence,
+)
+from app.services.competency_graph.inference import InferredNodeSignal  # noqa: E402
+from app.services.orchestrator.competency import rollup_outcomes  # noqa: E402
+from app.services.orchestrator.outcome import (  # noqa: E402
+    GradedOutcome,
+    graded_posterior_update,
+)
+from app.services.orchestrator.variables import (  # noqa: E402
+    apply_outcome,
+    seed_variable,
+)
 
 
 def test_inv_01_zero_weight_is_a_complete_measurement_noop() -> None:
@@ -125,9 +143,15 @@ def test_inv_09_normal_convergence_is_fully_conjunctive() -> None:
 
 
 def test_inv_10_session_rng_is_not_constant_by_default() -> None:
-    """A caller that omits a seed must not put every candidate on RNG(0)."""
-    assert CreateCatSessionRequest.model_fields["seed"].default is None
-    assert CatAnswerRequest.model_fields["seed"].default is None
+    """A caller that omits a seed must not put every candidate on RNG(0).
+
+    The answer-level seed is now GONE rather than merely defaulted. The monolith kept it
+    "for wire compatibility" and logged a warning that it was ignored — a field a client
+    can send, that does nothing, and whose name says it controls exposure. Removing it is
+    the stronger form of this invariant: it cannot be misused because it cannot be sent.
+    """
+    assert CreateAssessmentRequest.model_fields["seed"].default is None
+    assert "seed" not in AnswerRequest.model_fields
 
 
 @pytest.fixture
