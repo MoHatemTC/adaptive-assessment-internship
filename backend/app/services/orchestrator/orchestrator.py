@@ -24,7 +24,6 @@ from __future__ import annotations
 import logging
 import time
 import uuid
-from datetime import datetime, timezone
 
 import numpy as np
 
@@ -47,14 +46,7 @@ from app.services.competency_graph.coverage import (
     coverage_allows_convergence,
     unmeasured_required_nodes,
 )
-from app.services.competency_graph.evidence import (
-    DEFAULT_CONFIDENCE,
-    EvidenceEvent,
-    evidence_id_for,
-)
 from app.services.competency_graph.graph import CompetencyGraphService
-from app.services.competency_graph.ledger import EvidenceLedger
-from app.services.competency_graph.propagation import apply_direct_evidence
 from app.services.competency_graph.report import build_main_report, build_node_reports
 from app.services.competency_graph.state import CompetencyGraphState
 from app.services.orchestrator import budget
@@ -66,8 +58,12 @@ from app.services.orchestrator.competency import (
     rollup_outcomes,
 )
 from app.services.orchestrator.grader import GraderAgent
-from app.services.orchestrator.graph_delta import GraphDelta
 from app.services.orchestrator.picker import pick
+from app.services.orchestrator.propagation_port import (
+    InProcessPropagation,
+    PropagationPort,
+    PropagationResult,
+)
 from app.services.orchestrator.queue import CandidateQueue
 
 logger = logging.getLogger(__name__)
@@ -84,6 +80,7 @@ class Orchestrator:
         graph: CompetencyGraphService | None = None,
         coverage_critical_only: bool | None = None,
         bank_id: str | None = None,
+        propagation: PropagationPort | None = None,
     ) -> None:
         """`graph` is the competency graph that belongs to `bank`.
 
@@ -96,8 +93,14 @@ class Orchestrator:
         `bank_id` names which bank that is, for the resolved-policy lookups. It is separate
         from `bank` because the repository does not carry its own id. Without it those
         lookups fall through to `settings.active_bank`, which is wrong wherever more than
-        one bank is served at once — and `app.main` keeps one orchestrator per bank
+        one bank is served at once — the assessment service keeps one orchestrator per bank
         precisely so that it can be.
+
+        `propagation` is where one response's outcomes are folded into the competency
+        graph. Left None it happens in this process, which is what every current
+        deployment, the evaluation harness and the whole test suite do. A deployment that
+        runs the graph as a service passes a client instead; nothing else about the loop
+        changes, because that call was already the only place propagation happened.
         """
         self._bank = bank
         self._grader = grader
@@ -105,6 +108,11 @@ class Orchestrator:
         self._coverage_critical_only = coverage_critical_only
         self._bank_id = bank_id
         self._graph_checked = False
+        self._propagation = propagation or InProcessPropagation(
+            self._graph,
+            bank_id=bank_id,
+            minimum_failures_provider=self._minimum_failures_to_block,
+        )
 
     # --- graph and coverage policy -----------------------------------------
     def _graph(self) -> CompetencyGraphService | None:
@@ -931,106 +939,25 @@ class Orchestrator:
     # --- graph evidence ----------------------------------------------------
     def _apply_graph_evidence(
         self, state: AssessmentState, item: BankItem, graded: GradedResponse
-    ) -> GraphDelta:
-        """Apply every outcome of one response to the graph, all or nothing.
+    ) -> PropagationResult:
+        """Apply every outcome of one response to the graph, through the propagation port.
 
-        COMPUTE, THEN MERGE. Every consequence accumulates in a local delta and only
-        reaches the session state once all of them succeeded. The previous version marked
-        an evidence id as processed BEFORE doing the work, inside a broad exception
-        handler — so a failure on the second of three outcomes left the first applied, the
-        second permanently marked as done, and no way to retry it.
+        The transaction itself lives in `propagation_port`, because it is the one graph
+        call that can afford to be a network hop — it happens once per answered question,
+        next to a grading call that already costs between 500 ms and 30 s. Graph TRAVERSAL
+        stays local: selection reads it on every candidate on every step.
 
-        Returns an empty delta when the graph is off or unusable. A graph problem must
-        cost the candidate nothing.
+        Returns an unapplied result when the graph is off or unusable, and the caller keeps
+        its prior state. A graph problem must cost the candidate nothing.
         """
-        delta = GraphDelta.restore(state)
-        graph = self._graph() if graph_config.graph_enabled() else None
-        if graph is None:
-            return delta
-
-        config = graph_config.propagation_config_from_settings(
-            minimum_failures_to_block=self._minimum_failures_to_block()
-        )
-        # Distinguishes re-administrations of one item. Computed before `served` grows.
-        attempt_no = state.served_item_ids.count(item.item_id) + 1
-        now = datetime.now(timezone.utc).isoformat()
-
-        # The manifest was written at `begin`, but this config is rebuilt from settings on
-        # every response — so a setting moved mid-session makes the recorded manifest a
-        # description of a configuration that stopped applying. Detect it here rather than
-        # trusting that nobody does it: a sweep harness that fails to isolate one cell
+        # The manifest was written at `begin`, but the configuration is rebuilt on every
+        # response — so a setting moved mid-session makes the recorded manifest a
+        # description of a configuration that stopped applying. Detect it rather than
+        # trusting that nobody does it: a sweep harness failing to isolate one cell
         # produces exactly this, and produces it silently.
+        attempt_no = state.served_item_ids.count(item.item_id) + 1
         self._note_manifest_drift(state, evidence_marker=f"{item.item_id}#{attempt_no}")
-
-        seen_variables: set[str] = set()
-        events: list[EvidenceEvent] = []
-        for outcome in graded.outcomes:
-            target_node = str(outcome.get("variable") or "")
-            if not target_node:
-                continue
-            if target_node in seen_variables:
-                # Two outcomes for one variable would collide on the evidence id and the
-                # second would be silently dropped as a duplicate. Refuse instead: the
-                # grader is expected to aggregate per competency before it gets here.
-                raise ValueError(
-                    f"{item.item_id}: two outcomes for {target_node!r} in one response"
-                )
-            seen_variables.add(target_node)
-            modality = str(outcome.get("modality") or item.modality)
-            events.append(
-                EvidenceEvent(
-                    evidence_id=evidence_id_for(
-                        session_id=state.session_id,
-                        item_id=item.item_id,
-                        attempt_no=attempt_no,
-                        modality=modality,
-                        target_node=target_node,
-                    ),
-                    session_id=state.session_id,
-                    item_id=item.item_id,
-                    modality=modality,
-                    target_node=target_node,
-                    score=float(outcome.get("score", 0.0)),
-                    weight=float(outcome.get("weight", 1.0)),
-                    confidence=float(outcome.get("confidence", DEFAULT_CONFIDENCE)),
-                    source=str(outcome.get("source_item_id") or item.item_id),
-                    evidence_kind="direct",
-                    directly_tested=True,
-                )
-            )
-
-        try:
-            graph_state = CompetencyGraphState.from_dict(state.graph_node_states)
-            graph_state.ensure_nodes(set(graph.graph.nodes))
-            ledger = EvidenceLedger.from_ids(state.graph_processed_evidence_ids)
-
-            results = []
-            for event in events:
-                if ledger.contains(event.evidence_id):
-                    continue
-                results.append(
-                    apply_direct_evidence(
-                        graph,
-                        graph_state,
-                        event,
-                        ledger=ledger,
-                        config=config,
-                        now=now,
-                        item_minimum_confidence=item.minimum_success_confidence,
-                    )
-                )
-        except Exception:
-            logger.exception("graph evidence discarded for %s", item.item_id)
-            return delta
-
-        delta.absorb(
-            graph=graph,
-            graph_state=graph_state,
-            ledger=ledger,
-            results=results,
-            session_variables=set(state.variables),
-        )
-        return delta
+        return self._propagation.apply(state, item, graded)
 
     # --- steps 5-7: grade, update, finalise --------------------------------
     def record_response(
@@ -1046,10 +973,18 @@ class Orchestrator:
 
         session_variables = set(state.variables)
         touched = affected_mains(item, session_variables)
-        graph_delta = self._apply_graph_evidence(state, item, graded)
+        propagated = self._apply_graph_evidence(state, item, graded)
+        # The three sets the coverage gate reads, taken from the projection the session
+        # persists rather than from a second in-memory copy of it. One source of truth for
+        # "what has this session directly measured", whether propagation ran here or over
+        # a wire.
+        graph_update = propagated.state_update
+        measured = set(graph_update.get("graph_direct_measured_nodes", []))
+        mastered = set(graph_update.get("graph_direct_mastered_nodes", []))
+        not_mastered = set(graph_update.get("graph_direct_not_mastered_nodes", []))
 
         queue = CandidateQueue(state.queue)
-        for variable in touched | graph_delta.selection_affected_mains:
+        for variable in touched | propagated.selection_affected_mains:
             queue.release(variable)
 
         served = [*state.served_item_ids, item.item_id]
@@ -1183,17 +1118,17 @@ class Orchestrator:
             if gate_graph is not None and not coverage_allows_convergence(
                 gate_graph,
                 variable,
-                measured=graph_delta.measured,
-                mastered=graph_delta.mastered,
-                not_mastered=graph_delta.not_mastered,
+                measured=measured,
+                mastered=mastered,
+                not_mastered=not_mastered,
                 critical_only=self.coverage_critical_only(),
             ):
                 missing = unmeasured_required_nodes(
                     gate_graph,
                     variable,
-                    measured=graph_delta.measured,
-                    mastered=graph_delta.mastered,
-                    not_mastered=graph_delta.not_mastered,
+                    measured=measured,
+                    mastered=mastered,
+                    not_mastered=not_mastered,
                     critical_only=self.coverage_critical_only(),
                 )
                 if remaining <= 0:
@@ -1267,7 +1202,7 @@ class Orchestrator:
                     "presenting_since": 0.0,
                     "aberrant_responses": aberrant,
                     "graph_waived_nodes": waived,
-                    **graph_delta.as_state_update(),
+                    **graph_update,
                 }
             ),
             graded,
