@@ -1,0 +1,1099 @@
+{
+  "components": {
+    "schemas": {
+      "ErrorResponse": {
+        "description": "Every non-2xx body. One shape, so a client has one error path.",
+        "properties": {
+          "code": {
+            "default": "",
+            "title": "Code",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "ErrorResponse",
+        "type": "object"
+      },
+      "GradeCodeRequest": {
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "string"
+          },
+          "session_id": {
+            "default": "",
+            "title": "Session Id",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bank_id",
+          "item_id",
+          "source"
+        ],
+        "title": "GradeCodeRequest",
+        "type": "object"
+      },
+      "GradeMcqRequest": {
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "chosen_index": {
+            "minimum": 0.0,
+            "title": "Chosen Index",
+            "type": "integer"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "string"
+          },
+          "session_id": {
+            "default": "",
+            "title": "Session Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bank_id",
+          "item_id",
+          "chosen_index"
+        ],
+        "title": "GradeMcqRequest",
+        "type": "object"
+      },
+      "GradeOpenRequest": {
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "string"
+          },
+          "package": {
+            "$ref": "#/components/schemas/VoicePackageDTO"
+          },
+          "session_id": {
+            "default": "",
+            "title": "Session Id",
+            "type": "string"
+          },
+          "use_llm": {
+            "default": true,
+            "title": "Use Llm",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "bank_id",
+          "item_id",
+          "package"
+        ],
+        "title": "GradeOpenRequest",
+        "type": "object"
+      },
+      "GradedOutcomeDTO": {
+        "description": "One graded statement about one variable, from any modality. The narrow waist.\n\n`weight` is how much of an observation this is worth, in [0, 1], and it is separate\nfrom `score` on purpose: a submission that failed to compile scores 0 but demonstrates\nvery little, and punishing a competency at full strength for a typo measures the wrong\nthing. Weight 0 means the response carries no evidence and must move nothing.",
+        "properties": {
+          "confidence": {
+            "default": 1.0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "modality": {
+            "anyOf": [
+              {
+                "enum": [
+                  "mcq",
+                  "code",
+                  "open",
+                  "voice"
+                ],
+                "type": "string"
+              },
+              {
+                "const": "",
+                "type": "string"
+              }
+            ],
+            "default": "",
+            "title": "Modality"
+          },
+          "score": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Score",
+            "type": "number"
+          },
+          "source_item_id": {
+            "default": "",
+            "title": "Source Item Id",
+            "type": "string"
+          },
+          "variable": {
+            "title": "Variable",
+            "type": "string"
+          },
+          "weight": {
+            "default": 1.0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "variable",
+          "score"
+        ],
+        "title": "GradedOutcomeDTO",
+        "type": "object"
+      },
+      "GradedResponseDTO": {
+        "properties": {
+          "detail": {
+            "additionalProperties": true,
+            "title": "Detail",
+            "type": "object"
+          },
+          "flags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Flags",
+            "type": "array"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "string"
+          },
+          "modality": {
+            "enum": [
+              "mcq",
+              "code",
+              "open",
+              "voice"
+            ],
+            "title": "Modality",
+            "type": "string"
+          },
+          "outcomes": {
+            "items": {
+              "$ref": "#/components/schemas/GradedOutcomeDTO"
+            },
+            "title": "Outcomes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "item_id",
+          "modality"
+        ],
+        "title": "GradedResponseDTO",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "properties": {
+          "contract_schema_version": {
+            "title": "Contract Schema Version",
+            "type": "string"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "title": "Detail",
+            "type": "object"
+          },
+          "engine_config_fingerprint": {
+            "default": "",
+            "title": "Engine Config Fingerprint",
+            "type": "string"
+          },
+          "release": {
+            "title": "Release",
+            "type": "string"
+          },
+          "service": {
+            "title": "Service",
+            "type": "string"
+          },
+          "status": {
+            "default": "ok",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "service",
+          "release",
+          "contract_schema_version"
+        ],
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "PublicTestsResponse": {
+        "description": "The example cases a candidate may see, in bank order.",
+        "properties": {
+          "item_id": {
+            "title": "Item Id",
+            "type": "string"
+          },
+          "tests": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Tests",
+            "type": "array"
+          }
+        },
+        "required": [
+          "item_id"
+        ],
+        "title": "PublicTestsResponse",
+        "type": "object"
+      },
+      "TranscribeRequest": {
+        "description": "Audio in, text out. Separate from grading because the two fail differently.\n\nA transcription that fails is a retry; a grading that fails is an unscorable response\nthat must move no estimate. Folding them together would make the second look like the\nfirst.",
+        "properties": {
+          "audio_base64": {
+            "title": "Audio Base64",
+            "type": "string"
+          },
+          "filename": {
+            "default": "answer.wav",
+            "title": "Filename",
+            "type": "string"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_id",
+          "audio_base64"
+        ],
+        "title": "TranscribeRequest",
+        "type": "object"
+      },
+      "TranscribeResponse": {
+        "properties": {
+          "item_id": {
+            "title": "Item Id",
+            "type": "string"
+          },
+          "transcript": {
+            "title": "Transcript",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_id",
+          "transcript"
+        ],
+        "title": "TranscribeResponse",
+        "type": "object"
+      },
+      "TrialCaseDTO": {
+        "properties": {
+          "arguments": {
+            "items": {},
+            "title": "Arguments",
+            "type": "array"
+          },
+          "detail": {
+            "default": "",
+            "title": "Detail",
+            "type": "string"
+          },
+          "expected": {
+            "title": "Expected"
+          },
+          "passed": {
+            "default": false,
+            "title": "Passed",
+            "type": "boolean"
+          },
+          "test_id": {
+            "title": "Test Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "test_id"
+        ],
+        "title": "TrialCaseDTO",
+        "type": "object"
+      },
+      "TrialRunRequest": {
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "string"
+          },
+          "session_id": {
+            "default": "",
+            "title": "Session Id",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bank_id",
+          "item_id",
+          "source"
+        ],
+        "title": "TrialRunRequest",
+        "type": "object"
+      },
+      "TrialRunResponse": {
+        "description": "The outcome of a candidate's own trial run. Carries no score, by construction.\n\nThere is no code path from here into a learner model \u2014 not \"a path not currently\ntaken\", none at all, which is a property a reader can verify from this type. Public\ncases only: if a trial run could reach the hidden ones, a candidate could converge on a\nlookup table by trial and error and the score would mean nothing.\n\n`available` False means the SANDBOX failed. That is not a statement about the\ncandidate's code and must not be shown as one.",
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "cases": {
+            "items": {
+              "$ref": "#/components/schemas/TrialCaseDTO"
+            },
+            "title": "Cases",
+            "type": "array"
+          },
+          "compiled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compiled"
+          },
+          "error_message": {
+            "default": "",
+            "title": "Error Message",
+            "type": "string"
+          },
+          "passed": {
+            "default": 0,
+            "title": "Passed",
+            "type": "integer"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "available"
+        ],
+        "title": "TrialRunResponse",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "VoicePackageDTO": {
+        "description": "Frozen transport output before grading. Transcript only \u2014 never audio bytes.",
+        "properties": {
+          "cut_off": {
+            "default": false,
+            "title": "Cut Off",
+            "type": "boolean"
+          },
+          "explicit_decline": {
+            "default": false,
+            "title": "Explicit Decline",
+            "type": "boolean"
+          },
+          "final_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Text"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "string"
+          },
+          "live_text": {
+            "default": "",
+            "title": "Live Text",
+            "type": "string"
+          },
+          "mean_transcript_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Transcript Confidence"
+          },
+          "outcome_status": {
+            "default": "complete",
+            "enum": [
+              "complete",
+              "truncated",
+              "unscorable",
+              "infrastructure_error"
+            ],
+            "title": "Outcome Status",
+            "type": "string"
+          },
+          "reason_code": {
+            "default": "",
+            "title": "Reason Code",
+            "type": "string"
+          },
+          "total_speech_seconds": {
+            "default": 0.0,
+            "title": "Total Speech Seconds",
+            "type": "number"
+          },
+          "turns": {
+            "items": {
+              "$ref": "#/components/schemas/VoiceTurnDTO"
+            },
+            "title": "Turns",
+            "type": "array"
+          },
+          "word_count": {
+            "default": 0,
+            "title": "Word Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "item_id"
+        ],
+        "title": "VoicePackageDTO",
+        "type": "object"
+      },
+      "VoiceTurnDTO": {
+        "properties": {
+          "role": {
+            "enum": [
+              "candidate",
+              "interviewer"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "transcript_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transcript Confidence"
+          },
+          "truncated": {
+            "default": false,
+            "title": "Truncated",
+            "type": "boolean"
+          },
+          "turn_id": {
+            "title": "Turn Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "turn_id",
+          "role",
+          "text"
+        ],
+        "title": "VoiceTurnDTO",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "grader \u2014 one response becomes `GradedOutcome`s. Per modality.\n\nTHE NARROW WAIST\n\nAn MCQ answer, a code submission and a spoken response are graded by completely different\nmachinery \u2014 an index comparison, a sandbox and a static analyser, a rubric and a model \u2014\nand all three end in the same statement: *this response says this much about this\nvariable*. That is the whole of what the measurement layer knows about, and it is why this\ncan be a separate service without the orchestrator ever learning what a test case is.\n\nTHE ONLY SERVICE WITH EGRESS\n\nA sandbox for candidate code, and a model for rubric grading and code interpretation.\nEverything else in the system can run with no network policy at all, which is most of the\nsecurity argument for splitting this out. `/grade/open` evaluates as well as grades for\nexactly that reason: rubric evaluation is a model call, and in the monolith it ran in\n`app.main`, which no longer exists. Putting it anywhere else would give a second service\negress.\n\nWEIGHT ZERO IS NOT A SCORE OF ZERO\n\nA sandbox that fell over produces outcomes with weight 0, which make the likelihood\nidentically 1 and move nothing. That rule is arithmetic rather than a special case, so it\ncannot be forgotten at a call site \u2014 but it does mean an infrastructure failure and a\ncandidate who wrote nothing are only distinguishable by the flags, which is why\nINFRASTRUCTURE_* survives into the candidate's receipt.\n",
+    "summary": "One response becomes GradedOutcomes. Per modality.",
+    "title": "grader",
+    "version": "dev"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/config": {
+      "get": {
+        "operationId": "config_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Config Config Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Effective configuration, credentials excluded",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/grade/code": {
+      "post": {
+        "description": "Tests 60%, static analysis 15%, model 25% \u2014 the measured split. A sandbox failure produces outcomes of weight 0, which move no estimate: an infrastructure fault is not evidence about a candidate.",
+        "operationId": "grade_code_grade_code_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GradeCodeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GradedResponseDTO"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "no such bank or item"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the item is not of that modality"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the bank registry is unreachable"
+          }
+        },
+        "summary": "Grade a code submission in a sandbox",
+        "tags": [
+          "grading"
+        ]
+      }
+    },
+    "/grade/mcq": {
+      "post": {
+        "description": "Exact index comparison. No model is involved, and none ever will be \u2014 a model that graded multiple choice could disagree with the bank about its own answer key.",
+        "operationId": "grade_mcq_grade_mcq_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GradeMcqRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GradedResponseDTO"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "no such bank or item"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the item is not of that modality"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the bank registry is unreachable"
+          }
+        },
+        "summary": "Grade a multiple-choice answer",
+        "tags": [
+          "grading"
+        ]
+      }
+    },
+    "/grade/open": {
+      "post": {
+        "description": "Takes the transcript package and does both halves: rubric evaluation, which is a model call, then the deterministic projection onto competencies. `open` and `voice` grade identically \u2014 the modality records how the answer was collected, not how it was judged.",
+        "operationId": "grade_open_grade_open_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GradeOpenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GradedResponseDTO"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "no such bank or item"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the item is not of that modality"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the bank registry is unreachable"
+          }
+        },
+        "summary": "Evaluate and grade a spoken or typed open answer",
+        "tags": [
+          "grading"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Liveness, release, and the contract version this build speaks",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/transcribe": {
+      "post": {
+        "description": "Separate from grading because the two fail differently: a transcription failure is a retry, a grading failure is an unscorable response that must move no estimate. Folding them together would make the second look like the first.",
+        "operationId": "transcribe_transcribe_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TranscribeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranscribeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "no such bank or item"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the item is not of that modality"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the bank registry is unreachable"
+          }
+        },
+        "summary": "Turn recorded audio into a transcript",
+        "tags": [
+          "grading"
+        ]
+      }
+    },
+    "/trial/code": {
+      "post": {
+        "description": "Without this, the first time a candidate's code ever executes is the moment it is graded \u2014 which measures something other than competency: a misread signature they would have caught in five seconds becomes a permanent observation about what they know.\n\nThere is no code path from here into a learner model. Not one that is currently unused \u2014 none at all, which is a property the return type makes checkable. `available: false` means the SANDBOX failed and is not a statement about the candidate's code.",
+        "operationId": "trial_code_trial_code_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrialRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrialRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "no such bank or item"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the item is not of that modality"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the bank registry is unreachable"
+          }
+        },
+        "summary": "Run a candidate's code against the public cases. Grades nothing.",
+        "tags": [
+          "trial"
+        ]
+      }
+    },
+    "/trial/{bank_id}/{item_id}/public-tests": {
+      "get": {
+        "description": "Public cases only, and the filter lives in the engine's trial module so a client change cannot widen it. A case nobody explicitly marked public is treated as hidden: an authoring slip must cost a candidate one example rather than void the question.",
+        "operationId": "public_tests_trial__bank_id___item_id__public_tests_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicTestsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "no such bank or item"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the item is not of that modality"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the bank registry is unreachable"
+          }
+        },
+        "summary": "The example cases a candidate may run against",
+        "tags": [
+          "trial"
+        ]
+      }
+    }
+  }
+}

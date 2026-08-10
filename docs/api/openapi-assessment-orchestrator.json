@@ -1,0 +1,2074 @@
+{
+  "components": {
+    "schemas": {
+      "AssessmentReportDTO": {
+        "properties": {
+          "aberrant_responses": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Aberrant Responses",
+            "type": "array"
+          },
+          "all_finalised": {
+            "default": false,
+            "title": "All Finalised",
+            "type": "boolean"
+          },
+          "graph": {
+            "additionalProperties": true,
+            "title": "Graph",
+            "type": "object"
+          },
+          "items_administered": {
+            "default": 0,
+            "title": "Items Administered",
+            "type": "integer"
+          },
+          "seconds_by_item": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Seconds By Item",
+            "type": "object"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "stop_reason": {
+            "default": "",
+            "title": "Stop Reason",
+            "type": "string"
+          },
+          "variables": {
+            "items": {
+              "$ref": "#/components/schemas/VariableReportDTO"
+            },
+            "title": "Variables",
+            "type": "array"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "title": "AssessmentReportDTO",
+        "type": "object"
+      },
+      "AssessmentState": {
+        "description": "Everything one orchestrated assessment needs to resume on a different worker.",
+        "properties": {
+          "aberrant_responses": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Aberrant Responses",
+            "type": "array"
+          },
+          "administered_by_variable": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Administered By Variable",
+            "type": "object"
+          },
+          "elapsed_minutes": {
+            "default": 0.0,
+            "title": "Elapsed Minutes",
+            "type": "number"
+          },
+          "graph_blocked_nodes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Graph Blocked Nodes",
+            "type": "array"
+          },
+          "graph_contradicted_nodes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Graph Contradicted Nodes",
+            "type": "array"
+          },
+          "graph_contradictions": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Graph Contradictions",
+            "type": "array"
+          },
+          "graph_direct_mastered_nodes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Graph Direct Mastered Nodes",
+            "type": "array"
+          },
+          "graph_direct_measured_nodes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Graph Direct Measured Nodes",
+            "type": "array"
+          },
+          "graph_direct_not_mastered_nodes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Graph Direct Not Mastered Nodes",
+            "type": "array"
+          },
+          "graph_inferred_mastered_nodes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Graph Inferred Mastered Nodes",
+            "type": "array"
+          },
+          "graph_inferred_mastery_records": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Graph Inferred Mastery Records",
+            "type": "object"
+          },
+          "graph_last_affected_mains": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Graph Last Affected Mains",
+            "type": "array"
+          },
+          "graph_node_states": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Graph Node States",
+            "type": "object"
+          },
+          "graph_preview_blocked_nodes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Graph Preview Blocked Nodes",
+            "type": "array"
+          },
+          "graph_preview_inferred_nodes": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Graph Preview Inferred Nodes",
+            "type": "object"
+          },
+          "graph_preview_refuted_nodes": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Graph Preview Refuted Nodes",
+            "type": "array"
+          },
+          "graph_processed_evidence_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Graph Processed Evidence Ids",
+            "type": "array"
+          },
+          "graph_shadow_blocked_nodes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Graph Shadow Blocked Nodes",
+            "type": "array"
+          },
+          "graph_shadow_contradicted_nodes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Graph Shadow Contradicted Nodes",
+            "type": "array"
+          },
+          "graph_shadow_direct_mastered_nodes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Graph Shadow Direct Mastered Nodes",
+            "type": "array"
+          },
+          "graph_shadow_direct_not_mastered_nodes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Graph Shadow Direct Not Mastered Nodes",
+            "type": "array"
+          },
+          "graph_shadow_inferred_mastered_nodes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Graph Shadow Inferred Mastered Nodes",
+            "type": "array"
+          },
+          "graph_unblocking_probes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Graph Unblocking Probes",
+            "type": "array"
+          },
+          "graph_waived_nodes": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Graph Waived Nodes",
+            "type": "object"
+          },
+          "item_seconds": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Item Seconds",
+            "type": "object"
+          },
+          "items_administered": {
+            "default": 0,
+            "title": "Items Administered",
+            "type": "integer"
+          },
+          "presenting": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QueuedCandidate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "presenting_since": {
+            "default": 0.0,
+            "title": "Presenting Since",
+            "type": "number"
+          },
+          "propagation_manifest": {
+            "additionalProperties": true,
+            "title": "Propagation Manifest",
+            "type": "object"
+          },
+          "propagation_manifest_drift": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Propagation Manifest Drift",
+            "type": "array"
+          },
+          "propagation_manifest_hash": {
+            "default": "",
+            "title": "Propagation Manifest Hash",
+            "type": "string"
+          },
+          "queue": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/QueuedCandidate"
+            },
+            "title": "Queue",
+            "type": "object"
+          },
+          "realized_weight_by_item": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Realized Weight By Item",
+            "type": "object"
+          },
+          "served_item_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Served Item Ids",
+            "type": "array"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "started_at": {
+            "default": 0.0,
+            "title": "Started At",
+            "type": "number"
+          },
+          "variables": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/VariableState"
+            },
+            "title": "Variables",
+            "type": "object"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "title": "AssessmentState",
+        "type": "object"
+      },
+      "AssessmentStateResponse": {
+        "description": "The candidate-facing view of a session. Returned by every lifecycle call.\n\nOne shape for begin, poll and answer, so a client has one thing to render and one\nplace to look for \"what now\" \u2014 `presenting` when there is a question, `report` when\nthere is not.",
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "bank_version": {
+            "default": "",
+            "title": "Bank Version",
+            "type": "string"
+          },
+          "items_administered": {
+            "default": 0,
+            "title": "Items Administered",
+            "type": "integer"
+          },
+          "last_graded": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GradeReceiptDTO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "open_variables": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Open Variables",
+            "type": "array"
+          },
+          "presenting": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PresentingDTO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "report": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssessmentReportDTO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "stop": {
+            "default": false,
+            "title": "Stop",
+            "type": "boolean"
+          },
+          "stop_reason": {
+            "default": "",
+            "title": "Stop Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "bank_id"
+        ],
+        "title": "AssessmentStateResponse",
+        "type": "object"
+      },
+      "BankSummary": {
+        "description": "One row of the bank catalogue. What a picker, an operator or a frontend lists.",
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "coverage_critical_only": {
+            "default": false,
+            "title": "Coverage Critical Only",
+            "type": "boolean"
+          },
+          "error": {
+            "default": "",
+            "title": "Error",
+            "type": "string"
+          },
+          "has_graph": {
+            "default": false,
+            "title": "Has Graph",
+            "type": "boolean"
+          },
+          "items": {
+            "default": 0,
+            "title": "Items",
+            "type": "integer"
+          },
+          "mains": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Mains",
+            "type": "array"
+          },
+          "modalities": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Modalities",
+            "type": "array"
+          },
+          "source": {
+            "default": "seed",
+            "enum": [
+              "seed",
+              "stored"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "version": {
+            "default": "",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bank_id",
+          "title"
+        ],
+        "title": "BankSummary",
+        "type": "object"
+      },
+      "Body_record_response_assessments__assessment_id__responses_post": {
+        "properties": {
+          "audio": {
+            "anyOf": [
+              {
+                "contentMediaType": "application/octet-stream",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio"
+          },
+          "chosen_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chosen Index"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "transcript": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transcript"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type"
+          },
+          "use_llm": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Use Llm"
+          }
+        },
+        "title": "Body_record_response_assessments__assessment_id__responses_post",
+        "type": "object"
+      },
+      "CreateAssessmentRequest": {
+        "description": "Begin an assessment over several main competencies.",
+        "properties": {
+          "bank_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Id"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "boolean"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "intake": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intake"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          },
+          "target_variables": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Variables"
+          },
+          "use_llm": {
+            "default": true,
+            "title": "Use Llm",
+            "type": "boolean"
+          }
+        },
+        "title": "CreateAssessmentRequest",
+        "type": "object"
+      },
+      "DiagnosticsResponse": {
+        "properties": {
+          "aberrant_responses": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Aberrant Responses",
+            "type": "array"
+          },
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "elapsed_minutes": {
+            "default": 0.0,
+            "title": "Elapsed Minutes",
+            "type": "number"
+          },
+          "graph": {
+            "additionalProperties": true,
+            "title": "Graph",
+            "type": "object"
+          },
+          "presenting": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Presenting"
+          },
+          "queue": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Queue",
+            "type": "object"
+          },
+          "seconds_by_item": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Seconds By Item",
+            "type": "object"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "variables": {
+            "items": {
+              "$ref": "#/components/schemas/VariableDiagnosticsDTO"
+            },
+            "title": "Variables",
+            "type": "array"
+          }
+        },
+        "required": [
+          "session_id",
+          "bank_id"
+        ],
+        "title": "DiagnosticsResponse",
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "description": "Every non-2xx body. One shape, so a client has one error path.",
+        "properties": {
+          "code": {
+            "default": "",
+            "title": "Code",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "ErrorResponse",
+        "type": "object"
+      },
+      "GradeReceiptDTO": {
+        "description": "Minimal acknowledgement, safe to return while the assessment is still running.\n\n`flags` carries INFRASTRUCTURE_* only. A candidate is entitled to know the sandbox\nfailed \u2014 that response moved no estimate and they may be asked again \u2014 and entitled to\nnothing else until the session ends.",
+        "properties": {
+          "accepted": {
+            "default": true,
+            "title": "Accepted",
+            "type": "boolean"
+          },
+          "flags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Flags",
+            "type": "array"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "string"
+          },
+          "modality": {
+            "enum": [
+              "mcq",
+              "code",
+              "open",
+              "voice"
+            ],
+            "title": "Modality",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_id",
+          "modality"
+        ],
+        "title": "GradeReceiptDTO",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "properties": {
+          "contract_schema_version": {
+            "title": "Contract Schema Version",
+            "type": "string"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "title": "Detail",
+            "type": "object"
+          },
+          "engine_config_fingerprint": {
+            "default": "",
+            "title": "Engine Config Fingerprint",
+            "type": "string"
+          },
+          "release": {
+            "title": "Release",
+            "type": "string"
+          },
+          "service": {
+            "title": "Service",
+            "type": "string"
+          },
+          "status": {
+            "default": "ok",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "service",
+          "release",
+          "contract_schema_version"
+        ],
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "PresentedItemDTO": {
+        "description": "An item as a CANDIDATE may see it. Never the answer.\n\nOne flat model across modalities rather than a union: a client renders by `modality`\nand the absent fields are absent, which is easier to consume than four types and\nimpossible to get wrong by reading the one that does not apply.",
+        "properties": {
+          "answer_format": {
+            "default": "",
+            "title": "Answer Format",
+            "type": "string"
+          },
+          "competency": {
+            "default": "",
+            "title": "Competency",
+            "type": "string"
+          },
+          "estimated_time_seconds": {
+            "default": 0.0,
+            "title": "Estimated Time Seconds",
+            "type": "number"
+          },
+          "function_name": {
+            "default": "",
+            "title": "Function Name",
+            "type": "string"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "string"
+          },
+          "language": {
+            "default": "python",
+            "title": "Language",
+            "type": "string"
+          },
+          "modality": {
+            "enum": [
+              "mcq",
+              "code",
+              "open",
+              "voice"
+            ],
+            "title": "Modality",
+            "type": "string"
+          },
+          "options": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Options",
+            "type": "array"
+          },
+          "prompt": {
+            "default": "",
+            "title": "Prompt",
+            "type": "string"
+          },
+          "question": {
+            "default": "",
+            "title": "Question",
+            "type": "string"
+          },
+          "spoken": {
+            "default": false,
+            "title": "Spoken",
+            "type": "boolean"
+          },
+          "starter_code": {
+            "default": "",
+            "title": "Starter Code",
+            "type": "string"
+          },
+          "stem": {
+            "default": "",
+            "title": "Stem",
+            "type": "string"
+          },
+          "sub_competency": {
+            "default": "",
+            "title": "Sub Competency",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_id",
+          "modality"
+        ],
+        "title": "PresentedItemDTO",
+        "type": "object"
+      },
+      "PresentingDTO": {
+        "description": "Which variable is being probed, why this item, and the item itself.",
+        "properties": {
+          "criterion": {
+            "enum": [
+              "KL",
+              "E[Fisher]"
+            ],
+            "title": "Criterion",
+            "type": "string"
+          },
+          "item": {
+            "$ref": "#/components/schemas/PresentedItemDTO"
+          },
+          "variable": {
+            "title": "Variable",
+            "type": "string"
+          }
+        },
+        "required": [
+          "variable",
+          "criterion",
+          "item"
+        ],
+        "title": "PresentingDTO",
+        "type": "object"
+      },
+      "QueuedCandidate": {
+        "description": "One item waiting in the queue, with why it was chosen.",
+        "properties": {
+          "best_information": {
+            "title": "Best Information",
+            "type": "number"
+          },
+          "best_utility": {
+            "default": 0.0,
+            "title": "Best Utility",
+            "type": "number"
+          },
+          "chosen_by_llm": {
+            "title": "Chosen By Llm",
+            "type": "boolean"
+          },
+          "criterion": {
+            "enum": [
+              "KL",
+              "E[Fisher]"
+            ],
+            "title": "Criterion",
+            "type": "string"
+          },
+          "engine_top_pick": {
+            "title": "Engine Top Pick",
+            "type": "string"
+          },
+          "estimated_seconds": {
+            "default": 0.0,
+            "title": "Estimated Seconds",
+            "type": "number"
+          },
+          "expected_weight": {
+            "default": 1.0,
+            "title": "Expected Weight",
+            "type": "number"
+          },
+          "information": {
+            "title": "Information",
+            "type": "number"
+          },
+          "information_per_minute": {
+            "default": 0.0,
+            "title": "Information Per Minute",
+            "type": "number"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "string"
+          },
+          "modality": {
+            "enum": [
+              "mcq",
+              "code",
+              "open",
+              "voice"
+            ],
+            "title": "Modality",
+            "type": "string"
+          },
+          "normalized_regret": {
+            "title": "Normalized Regret",
+            "type": "number"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          },
+          "reason_code": {
+            "default": "",
+            "title": "Reason Code",
+            "type": "string"
+          },
+          "shortlist_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Shortlist Ids",
+            "type": "array"
+          },
+          "utility": {
+            "title": "Utility",
+            "type": "number"
+          },
+          "variable": {
+            "title": "Variable",
+            "type": "string"
+          }
+        },
+        "required": [
+          "variable",
+          "item_id",
+          "modality",
+          "criterion",
+          "information",
+          "utility",
+          "best_information",
+          "normalized_regret",
+          "engine_top_pick",
+          "chosen_by_llm"
+        ],
+        "title": "QueuedCandidate",
+        "type": "object"
+      },
+      "VariableDiagnosticsDTO": {
+        "description": "What an assessment author needs to see mid-session. Not candidate-safe.",
+        "properties": {
+          "band": {
+            "default": "",
+            "title": "Band",
+            "type": "string"
+          },
+          "band_history": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Band History",
+            "type": "array"
+          },
+          "converged": {
+            "title": "Converged",
+            "type": "boolean"
+          },
+          "credible_interval_95": {
+            "anyOf": [
+              {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credible Interval 95"
+          },
+          "criterion": {
+            "default": "",
+            "title": "Criterion",
+            "type": "string"
+          },
+          "finalised": {
+            "title": "Finalised",
+            "type": "boolean"
+          },
+          "graph_unmeasured_nodes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Graph Unmeasured Nodes",
+            "type": "array"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          },
+          "observations": {
+            "title": "Observations",
+            "type": "integer"
+          },
+          "precision_index_pct": {
+            "title": "Precision Index Pct",
+            "type": "number"
+          },
+          "presenting_information": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Presenting Information"
+          },
+          "score_history": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Score History",
+            "type": "array"
+          },
+          "served_item_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Served Item Ids",
+            "type": "array"
+          },
+          "standard_error": {
+            "title": "Standard Error",
+            "type": "number"
+          },
+          "stop_reason": {
+            "default": "",
+            "title": "Stop Reason",
+            "type": "string"
+          },
+          "theta_hat": {
+            "title": "Theta Hat",
+            "type": "number"
+          },
+          "variable": {
+            "title": "Variable",
+            "type": "string"
+          }
+        },
+        "required": [
+          "variable",
+          "theta_hat",
+          "standard_error",
+          "precision_index_pct",
+          "observations",
+          "finalised",
+          "converged"
+        ],
+        "title": "VariableDiagnosticsDTO",
+        "type": "object"
+      },
+      "VariableReportDTO": {
+        "description": "One competency's result.\n\n`standard_error` is the REPORTED value, widened when the deployment applies a\ncalibration correction; `standard_error_raw` is the posterior's own, which is what the\nstopping rule read. Both are present because a single widened number cannot be checked\nagainst the rule that produced the session, and a single raw number is the\noverconfident one that was measured 33-45% too narrow.\n\nReport the BAND RANGE, not the point band. At the SE target, within-one-level accuracy\nruns about 99% while exact-band accuracy runs about 65%.",
+        "properties": {
+          "aberrant_response_count": {
+            "default": 0,
+            "title": "Aberrant Response Count",
+            "type": "integer"
+          },
+          "band": {
+            "default": "",
+            "title": "Band",
+            "type": "string"
+          },
+          "band_probability": {
+            "default": 0.0,
+            "title": "Band Probability",
+            "type": "number"
+          },
+          "certainty_pct": {
+            "default": 0.0,
+            "title": "Certainty Pct",
+            "type": "number"
+          },
+          "converged": {
+            "default": false,
+            "title": "Converged",
+            "type": "boolean"
+          },
+          "credible_interval_95": {
+            "anyOf": [
+              {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credible Interval 95"
+          },
+          "decision_status": {
+            "default": "provisional",
+            "enum": [
+              "not_assessed",
+              "provisional",
+              "certified"
+            ],
+            "title": "Decision Status",
+            "type": "string"
+          },
+          "finalised": {
+            "default": false,
+            "title": "Finalised",
+            "type": "boolean"
+          },
+          "graph_coverage_satisfied": {
+            "default": true,
+            "title": "Graph Coverage Satisfied",
+            "type": "boolean"
+          },
+          "graph_unmeasured_nodes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Graph Unmeasured Nodes",
+            "type": "array"
+          },
+          "interval_widening_factor": {
+            "default": 1.0,
+            "title": "Interval Widening Factor",
+            "type": "number"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          },
+          "modalities_used": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Modalities Used",
+            "type": "array"
+          },
+          "most_probable_band": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Most Probable Band"
+          },
+          "observations": {
+            "default": 0,
+            "title": "Observations",
+            "type": "integer"
+          },
+          "p_reported_band": {
+            "default": 0.0,
+            "title": "P Reported Band",
+            "type": "number"
+          },
+          "precision_index_pct": {
+            "default": 0.0,
+            "title": "Precision Index Pct",
+            "type": "number"
+          },
+          "standard_error": {
+            "title": "Standard Error",
+            "type": "number"
+          },
+          "standard_error_raw": {
+            "default": 0.0,
+            "title": "Standard Error Raw",
+            "type": "number"
+          },
+          "stop_reason": {
+            "default": "",
+            "title": "Stop Reason",
+            "type": "string"
+          },
+          "theta_hat": {
+            "title": "Theta Hat",
+            "type": "number"
+          },
+          "variable": {
+            "title": "Variable",
+            "type": "string"
+          }
+        },
+        "required": [
+          "variable",
+          "theta_hat",
+          "standard_error"
+        ],
+        "title": "VariableReportDTO",
+        "type": "object"
+      },
+      "VariableState": {
+        "description": "The live estimate of one variable \u2014 the architecture's Examinee Variables, per entry.\n\nThe posterior is carried as a plain list so the state round-trips through JSON. A\nsession may be persisted between requests, and summarising to (mean, sd) instead would\nbe lossy: a 3PL posterior is genuinely skewed near the guessing floor and the selection\ncriterion integrates over its real shape.",
+        "properties": {
+          "band_history": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Band History",
+            "type": "array"
+          },
+          "converged": {
+            "default": false,
+            "title": "Converged",
+            "type": "boolean"
+          },
+          "finalised": {
+            "default": false,
+            "title": "Finalised",
+            "type": "boolean"
+          },
+          "observations": {
+            "default": 0,
+            "title": "Observations",
+            "type": "integer"
+          },
+          "posterior": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Posterior",
+            "type": "array"
+          },
+          "score_history": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Score History",
+            "type": "array"
+          },
+          "served_item_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Served Item Ids",
+            "type": "array"
+          },
+          "standard_error": {
+            "default": 2.0,
+            "title": "Standard Error",
+            "type": "number"
+          },
+          "stop_reason": {
+            "default": "",
+            "title": "Stop Reason",
+            "type": "string"
+          },
+          "theta_hat": {
+            "default": 0.0,
+            "title": "Theta Hat",
+            "type": "number"
+          },
+          "variable": {
+            "title": "Variable",
+            "type": "string"
+          }
+        },
+        "required": [
+          "variable",
+          "posterior"
+        ],
+        "title": "VariableState",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "assessment-orchestrator \u2014 the loop, the posterior, selection and stopping.\n\nWHAT THIS SERVICE DECIDES, AND WHAT IT DELEGATES\n\nIt owns exactly two decisions: WHICH competency to probe next, and WHEN one is finished.\nWhich item measures a competency belongs to the Picking Agent; how a response is graded\nbelongs to the grader service; what a response implies about neighbouring nodes belongs to\nthe graph service. Keeping those apart is what lets a modality be added without touching\nthe loop.\n\nA model picks an item from a shortlist the engine has already ranked, and interprets code.\nIt does not grade multiple choice, does not write an estimate, does not choose which\ncompetency to probe, and cannot stop an assessment. Every number in a report is computed by\ndeterministic code from inputs recorded beside it.\n\nSTATELESS ENGINE, STATEFUL SERVICE\n\nThe `Orchestrator` takes a state and returns one; it holds nothing. This service holds the\nstates, in memory, with the monolith's retention rules \u2014 see `sessions.py` for why that is\ndeliberate and what it costs.\n\nTHE CANDIDATE BOUNDARY IS HERE\n\nResponses on the assessment routes carry no answer key, no hidden test and no grading\ndetail. That is enforced by which types they return, not by a client choosing what to\nrender \u2014 see `presentation.py`. The instrumented view lives behind\n`AUTHOR_DIAGNOSTICS_ENABLED` and is refused, not thinned, when off.\n",
+    "summary": "The loop, the posterior, selection and stopping.",
+    "title": "assessment-orchestrator",
+    "version": "dev"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/assessments": {
+      "post": {
+        "description": "The bank id travels with the session from here on, not with each request: a client that began against one bank must not be able to answer it against another, and re-sending the id every call would make that possible by omission.\n\nThe bank VERSION is pinned too. Replacing a bank mid-session would otherwise change the item pool underneath a live candidate.",
+        "operationId": "create_assessment_assessments_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAssessmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentStateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "no such assessment"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the presented item changed"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the answer does not fit the item"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "a dependency is unreachable"
+          }
+        },
+        "summary": "Begin an assessment over several competencies",
+        "tags": [
+          "assessment"
+        ]
+      }
+    },
+    "/assessments/{assessment_id}": {
+      "delete": {
+        "operationId": "delete_assessment_assessments__assessment_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assessment_id",
+            "required": true,
+            "schema": {
+              "title": "Assessment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Delete Assessment Assessments  Assessment Id  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "no such assessment"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the presented item changed"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the answer does not fit the item"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "a dependency is unreachable"
+          }
+        },
+        "summary": "Discard an assessment",
+        "tags": [
+          "assessment"
+        ]
+      },
+      "get": {
+        "operationId": "get_assessment_assessments__assessment_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assessment_id",
+            "required": true,
+            "schema": {
+              "title": "Assessment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentStateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "no such assessment"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the presented item changed"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the answer does not fit the item"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "a dependency is unreachable"
+          }
+        },
+        "summary": "Current state, with the presented item or the report",
+        "tags": [
+          "assessment"
+        ]
+      }
+    },
+    "/assessments/{assessment_id}/diagnostics": {
+      "get": {
+        "description": "Refused unless `AUTHOR_DIAGNOSTICS_ENABLED`. It carries the posterior, the shortlist and which item the engine would have picked \u2014 enough to reverse-engineer difficulty, and enough for a candidate to tell how they are doing while they are still being measured.",
+        "operationId": "diagnostics_assessments__assessment_id__diagnostics_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assessment_id",
+            "required": true,
+            "schema": {
+              "title": "Assessment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiagnosticsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "no such assessment"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the presented item changed"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the answer does not fit the item"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "a dependency is unreachable"
+          }
+        },
+        "summary": "Posteriors, selection reasoning and graph state. NOT candidate-safe.",
+        "tags": [
+          "author"
+        ]
+      }
+    },
+    "/assessments/{assessment_id}/next": {
+      "get": {
+        "description": "A convenience over `GET /assessments/{id}`, for a client that only wants the question. 409 once the assessment has stopped \u2014 an empty 200 would read as 'nothing to do yet' rather than 'this is over'.",
+        "operationId": "next_item_assessments__assessment_id__next_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assessment_id",
+            "required": true,
+            "schema": {
+              "title": "Assessment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresentingDTO"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "no such assessment"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the assessment has stopped"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the answer does not fit the item"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "a dependency is unreachable"
+          }
+        },
+        "summary": "The next item to present",
+        "tags": [
+          "assessment"
+        ]
+      }
+    },
+    "/assessments/{assessment_id}/report": {
+      "get": {
+        "description": "Report the BAND RANGE, not the point band. At the standard-error target, within-one-level accuracy runs about 99% while exact-band accuracy runs about 65% \u2014 a single reported level is more confident than the measurement supports.",
+        "operationId": "report_assessments__assessment_id__report_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assessment_id",
+            "required": true,
+            "schema": {
+              "title": "Assessment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentReportDTO"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "no such assessment"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the assessment is still running"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the answer does not fit the item"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "a dependency is unreachable"
+          }
+        },
+        "summary": "The assessment report",
+        "tags": [
+          "assessment"
+        ]
+      }
+    },
+    "/assessments/{assessment_id}/responses": {
+      "post": {
+        "description": "JSON, or multipart with an `audio` file for a spoken answer.\n\nTwo concurrent posts to one assessment are serialised, and the second gets a 409 if the presented item changed while it waited. Serialising alone is not enough: the second request would otherwise wake up and apply its stale answer to the next item whenever the modality happened to match.",
+        "operationId": "record_response_assessments__assessment_id__responses_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assessment_id",
+            "required": true,
+            "schema": {
+              "title": "Assessment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_record_response_assessments__assessment_id__responses_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentStateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "no such assessment"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the presented item changed"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the answer does not fit the item"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "a dependency is unreachable"
+          }
+        },
+        "summary": "Record a response and advance the loop",
+        "tags": [
+          "assessment"
+        ]
+      }
+    },
+    "/assessments/{assessment_id}/state": {
+      "get": {
+        "description": "Refused unless `AUTHOR_DIAGNOSTICS_ENABLED`. The whole session object, unprojected \u2014 for replay, for an appeal, and for debugging a selection nobody can explain. It contains every posterior and every served item, so it is the single most useful thing a candidate could read about their own assessment while still taking it.\n\nUntyped on purpose: it is the engine's own schema, and a wire copy of it here would be a second definition that drifts from the one sessions are stored in.",
+        "operationId": "raw_state_assessments__assessment_id__state_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assessment_id",
+            "required": true,
+            "schema": {
+              "title": "Assessment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "no such assessment"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the presented item changed"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the answer does not fit the item"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "a dependency is unreachable"
+          }
+        },
+        "summary": "The raw AssessmentState. NOT candidate-safe.",
+        "tags": [
+          "author"
+        ]
+      }
+    },
+    "/banks": {
+      "get": {
+        "operationId": "list_banks_banks_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BankSummary"
+                  },
+                  "title": "Response List Banks Banks Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "no such assessment"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the presented item changed"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the answer does not fit the item"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "a dependency is unreachable"
+          }
+        },
+        "summary": "Registered banks, proxied so a frontend has one base URL",
+        "tags": [
+          "banks"
+        ]
+      }
+    },
+    "/config": {
+      "get": {
+        "operationId": "config_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Config Config Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Effective configuration, credentials excluded",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Liveness, release, and the contract version this build speaks",
+        "tags": [
+          "operator"
+        ]
+      }
+    }
+  }
+}

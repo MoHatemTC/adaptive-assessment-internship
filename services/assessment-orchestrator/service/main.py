@@ -537,9 +537,13 @@ def diagnostics(assessment_id: str) -> DiagnosticsResponse:
     responses=RESPONSES,
     summary="The raw AssessmentState. NOT candidate-safe.",
     description=(
-        "The whole session object, unprojected — for replay, for an appeal, and for "
-        "debugging a selection nobody can explain. Untyped on purpose: it is the engine's "
-        "own schema, and a wire copy of it here would be a second definition that drifts."
+        "Refused unless `AUTHOR_DIAGNOSTICS_ENABLED`. The whole session object, "
+        "unprojected — for replay, for an appeal, and for debugging a selection nobody "
+        "can explain. It contains every posterior and every served item, so it is the "
+        "single most useful thing a candidate could read about their own assessment "
+        "while still taking it.\n\n"
+        "Untyped on purpose: it is the engine's own schema, and a wire copy of it here "
+        "would be a second definition that drifts from the one sessions are stored in."
     ),
 )
 def raw_state(assessment_id: str) -> AssessmentState:

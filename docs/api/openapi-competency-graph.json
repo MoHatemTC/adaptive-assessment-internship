@@ -1,0 +1,677 @@
+{
+  "components": {
+    "schemas": {
+      "CoverageRequest": {
+        "description": "Which required sub-competencies of a main still have no direct evidence.",
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "critical_only": {
+            "default": false,
+            "title": "Critical Only",
+            "type": "boolean"
+          },
+          "directly_measured": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Directly Measured",
+            "type": "array"
+          },
+          "main": {
+            "title": "Main",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bank_id",
+          "main"
+        ],
+        "title": "CoverageRequest",
+        "type": "object"
+      },
+      "CoverageResponse": {
+        "properties": {
+          "main": {
+            "title": "Main",
+            "type": "string"
+          },
+          "required": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Required",
+            "type": "array"
+          },
+          "satisfied": {
+            "default": true,
+            "title": "Satisfied",
+            "type": "boolean"
+          },
+          "unmeasured": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unmeasured",
+            "type": "array"
+          }
+        },
+        "required": [
+          "main"
+        ],
+        "title": "CoverageResponse",
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "description": "Every non-2xx body. One shape, so a client has one error path.",
+        "properties": {
+          "code": {
+            "default": "",
+            "title": "Code",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "ErrorResponse",
+        "type": "object"
+      },
+      "EvidenceOutcomeDTO": {
+        "description": "One graded statement, as the graph receives it.\n\nStructurally a `GradedOutcomeDTO`; named separately because what the graph does with\n`score` and `weight` is decide a node's STATUS, never multiply a likelihood. Two names\nfor one shape is cheaper than one name for two meanings.",
+        "properties": {
+          "confidence": {
+            "default": 1.0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "modality": {
+            "anyOf": [
+              {
+                "enum": [
+                  "mcq",
+                  "code",
+                  "open",
+                  "voice"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modality"
+          },
+          "score": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Score",
+            "type": "number"
+          },
+          "source_item_id": {
+            "default": "",
+            "title": "Source Item Id",
+            "type": "string"
+          },
+          "variable": {
+            "title": "Variable",
+            "type": "string"
+          },
+          "weight": {
+            "default": 1.0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "variable",
+          "score"
+        ],
+        "title": "EvidenceOutcomeDTO",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "properties": {
+          "contract_schema_version": {
+            "title": "Contract Schema Version",
+            "type": "string"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "title": "Detail",
+            "type": "object"
+          },
+          "engine_config_fingerprint": {
+            "default": "",
+            "title": "Engine Config Fingerprint",
+            "type": "string"
+          },
+          "release": {
+            "title": "Release",
+            "type": "string"
+          },
+          "service": {
+            "title": "Service",
+            "type": "string"
+          },
+          "status": {
+            "default": "ok",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "service",
+          "release",
+          "contract_schema_version"
+        ],
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "InferredSignalDTO": {
+        "description": "What the graph concluded about a node it did not directly test.\n\nCARRIES NO SCORE AND NO WEIGHT, and that is structural rather than stylistic. A\ndeduction FROM a response is not a second response; multiplying it into a likelihood\ncounts one answer twice, and the damage lands on the standard error, which is what the\nassessment stops on. Because this type has no `score` field, a graph service cannot\nhand the orchestrator something it could mistake for evidence \u2014 the boundary is\nenforced by the contract rather than by a reviewer noticing.",
+        "properties": {
+          "distance": {
+            "title": "Distance",
+            "type": "integer"
+          },
+          "modality": {
+            "enum": [
+              "mcq",
+              "code",
+              "open",
+              "voice"
+            ],
+            "title": "Modality",
+            "type": "string"
+          },
+          "node": {
+            "title": "Node",
+            "type": "string"
+          },
+          "source_evidence_id": {
+            "title": "Source Evidence Id",
+            "type": "string"
+          },
+          "source_node": {
+            "title": "Source Node",
+            "type": "string"
+          },
+          "strength": {
+            "title": "Strength",
+            "type": "number"
+          }
+        },
+        "required": [
+          "node",
+          "source_node",
+          "distance",
+          "strength",
+          "source_evidence_id",
+          "modality"
+        ],
+        "title": "InferredSignalDTO",
+        "type": "object"
+      },
+      "ManifestResponse": {
+        "description": "The propagation configuration in force for a bank, and its hash.\n\nRead at `begin` and stamped into the session, so a result can name the configuration\nthat produced it. A number that cannot say what configuration produced it cannot be\nreproduced or believed.",
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "manifest": {
+            "additionalProperties": true,
+            "title": "Manifest",
+            "type": "object"
+          },
+          "manifest_hash": {
+            "default": "",
+            "title": "Manifest Hash",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bank_id"
+        ],
+        "title": "ManifestResponse",
+        "type": "object"
+      },
+      "PropagateRequest": {
+        "description": "Everything one response did, plus everything the session already knew.\n\n`graph_state` is the session's own graph slice \u2014 every `graph_*` field of\n`AssessmentState`, sent back on every call. Two of them carry the idempotency:\n`graph_processed_evidence_ids` records what has already been absorbed, and evidence ids\nare deterministic, so replaying a response the graph has already seen changes nothing.",
+        "properties": {
+          "attempt_no": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Attempt No",
+            "type": "integer"
+          },
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "graph_state": {
+            "additionalProperties": true,
+            "title": "Graph State",
+            "type": "object"
+          },
+          "item": {
+            "$ref": "#/components/schemas/PropagationItemDTO"
+          },
+          "outcomes": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceOutcomeDTO"
+            },
+            "title": "Outcomes",
+            "type": "array"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "session_variables": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Session Variables",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bank_id",
+          "session_id",
+          "item"
+        ],
+        "title": "PropagateRequest",
+        "type": "object"
+      },
+      "PropagateResponse": {
+        "description": "The delta, in the shape the session persists it.",
+        "properties": {
+          "applied": {
+            "default": true,
+            "title": "Applied",
+            "type": "boolean"
+          },
+          "detail": {
+            "default": "",
+            "title": "Detail",
+            "type": "string"
+          },
+          "inferred_signals": {
+            "items": {
+              "$ref": "#/components/schemas/InferredSignalDTO"
+            },
+            "title": "Inferred Signals",
+            "type": "array"
+          },
+          "manifest": {
+            "additionalProperties": true,
+            "title": "Manifest",
+            "type": "object"
+          },
+          "manifest_hash": {
+            "default": "",
+            "title": "Manifest Hash",
+            "type": "string"
+          },
+          "selection_affected_mains": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Selection Affected Mains",
+            "type": "array"
+          },
+          "state_update": {
+            "additionalProperties": true,
+            "title": "State Update",
+            "type": "object"
+          }
+        },
+        "title": "PropagateResponse",
+        "type": "object"
+      },
+      "PropagationItemDTO": {
+        "description": "What the graph needs to know about the item a response answered.\n\nNot the item \u2014 three fields of it. The graph has no business seeing a stem, and the\nonly reason it needs `minimum_success_confidence` is that a per-item floor exists to\nTIGHTEN the global one, never to loosen it.",
+        "properties": {
+          "item_id": {
+            "title": "Item Id",
+            "type": "string"
+          },
+          "minimum_success_confidence": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum Success Confidence"
+          },
+          "modality": {
+            "enum": [
+              "mcq",
+              "code",
+              "open",
+              "voice"
+            ],
+            "title": "Modality",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_id",
+          "modality"
+        ],
+        "title": "PropagationItemDTO",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "competency-graph \u2014 node state, propagation, coverage. Never a posterior.\n\nSTATELESS, AND THAT IS A DECISION\n\n`MIGRATION.md` planned `POST /sessions/{id}/evidence`, with this service owning per-session\nnode state. It does not. The property the whole architecture rests on is that the\norchestrator holds nothing between calls, so an assessment can be persisted between\nrequests and resumed on a different worker \u2014 and that only works while `AssessmentState` is\nthe single source of truth. A graph service keeping its own copy of the same session's node\nstate creates a second one, and the two disagree the first time a request is retried.\n\nSo a caller sends what it knows and gets back what changed. Nothing is stored, the service\nscales horizontally for free, and a restart loses nothing.\n\nWHAT THIS SERVICE CANNOT DO\n\nIt cannot move a candidate's estimate. `PropagateResponse` carries a state update and a set\nof mains whose eligibility changed; `InferredSignalDTO` has no `score` and no `weight`\nfield. That is structural rather than stylistic: a deduction FROM a response is not a\nsecond response, and multiplying it back in counts one answer twice \u2014 with the damage\nlanding on the standard error, which is what the assessment stops on. It was measured at\n1.80x weight inflation on the specification's own worked example.\n\nThe worst a compromised or buggy graph service can do is change which question is asked\nnext. That is a quality-of-service problem rather than a correctness one, and it is the\nreason this decomposition is safe where a naive one would not be.\n",
+    "summary": "Node state, propagation and coverage. Never a posterior.",
+    "title": "competency-graph",
+    "version": "dev"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/config": {
+      "get": {
+        "operationId": "config_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Config Config Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Effective configuration, credentials excluded",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/coverage": {
+      "post": {
+        "description": "The gate that stops a main claiming convergence on an estimate built from a corner of itself. Only DIRECT evidence counts \u2014 inferred mastery does not, because a deduction standing in for a measurement is exactly what this gate exists to prevent. Partial credit does count: the question is whether the node was measured, not whether it was passed.",
+        "operationId": "coverage_coverage_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CoverageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoverageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "no such bank, or it declares no graph"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the bank registry is unreachable"
+          }
+        },
+        "summary": "Which required sub-competencies of a main still lack direct evidence",
+        "tags": [
+          "coverage"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Liveness, release, and the contract version this build speaks",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/manifest/{bank_id}": {
+      "get": {
+        "description": "Stamped into a session at `begin`, so a result can name the configuration that produced it. A number that cannot say what configuration produced it cannot be reproduced or believed. Reported by whoever OWNS propagation rather than recomputed by the caller: two answers to that question is the failure this exists to detect.",
+        "operationId": "manifest_manifest__bank_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManifestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "no such bank, or it declares no graph"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the bank registry is unreachable"
+          }
+        },
+        "summary": "The propagation configuration in force, and its hash",
+        "tags": [
+          "propagation"
+        ]
+      }
+    },
+    "/propagate": {
+      "post": {
+        "description": "Compute, then merge. A response can produce several evidence events, and applying them one at a time straight into session state means a failure partway through leaves the session in a state no sequence of responses could have produced \u2014 and, because the evidence id was marked processed first, one that cannot be retried.\n\nIdempotent. Evidence ids are deterministic, so replaying a response already absorbed changes nothing.",
+        "operationId": "propagate_response_propagate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PropagateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PropagateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "no such bank, or it declares no graph"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "the bank registry is unreachable"
+          }
+        },
+        "summary": "Apply one response's outcomes to the graph, all or nothing",
+        "tags": [
+          "propagation"
+        ]
+      }
+    }
+  }
+}

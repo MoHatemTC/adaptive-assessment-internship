@@ -1,0 +1,416 @@
+{
+  "components": {
+    "schemas": {
+      "CreateRoomRequest": {
+        "properties": {
+          "assessment_session_id": {
+            "default": "",
+            "title": "Assessment Session Id",
+            "type": "string"
+          },
+          "item_id": {
+            "default": "live_chat",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "mode": {
+            "default": "interview",
+            "title": "Mode",
+            "type": "string"
+          },
+          "question": {
+            "default": "Greet the human warmly in one short sentence and invite them to talk about whatever they like. Then listen.",
+            "title": "Question",
+            "type": "string"
+          },
+          "save_recording": {
+            "default": false,
+            "title": "Save Recording",
+            "type": "boolean"
+          }
+        },
+        "title": "CreateRoomRequest",
+        "type": "object"
+      },
+      "CreateRoomResponse": {
+        "properties": {
+          "mode": {
+            "default": "interview",
+            "title": "Mode",
+            "type": "string"
+          },
+          "room_id": {
+            "title": "Room Id",
+            "type": "string"
+          },
+          "ws_path": {
+            "title": "Ws Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "room_id",
+          "ws_path"
+        ],
+        "title": "CreateRoomResponse",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "properties": {
+          "contract_schema_version": {
+            "title": "Contract Schema Version",
+            "type": "string"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "title": "Detail",
+            "type": "object"
+          },
+          "engine_config_fingerprint": {
+            "default": "",
+            "title": "Engine Config Fingerprint",
+            "type": "string"
+          },
+          "release": {
+            "title": "Release",
+            "type": "string"
+          },
+          "service": {
+            "title": "Service",
+            "type": "string"
+          },
+          "status": {
+            "default": "ok",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "service",
+          "release",
+          "contract_schema_version"
+        ],
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "live-voice \u2014 realtime interview rooms, and the page that drives one.\n\nWHY THIS IS A SERVICE AND NOT PART OF THE ORCHESTRATOR\n\nADR-0001 deferred it: \"voice live sessions stay in the orchestrator's process for now \u2026\nthey are stateful websocket bridges, and moving them is a second project.\" Dissolving\n`backend/app/main.py` brought the second project forward, and it turned out to be a lift\nrather than a redesign \u2014 the room lifecycle is unchanged, because it never touched the\nassessment. A room holds audio, turns and a transcript. It holds no posterior, and it\ncannot end an assessment.\n\nThat is what makes the split safe in the direction that matters: this service can crash,\nrestart or be scaled independently and the worst a candidate loses is the interview they\nwere in the middle of, which was already true of a dropped websocket.\n\nWHAT IT DOES NOT DO\n\nIt does not grade. A finished room produces a transcript package; turning that into a score\nis the grader's job, and the orchestrator carries it there. Keeping the two apart is why an\naudio failure can be reported as an audio failure rather than as a candidate who said\nnothing.\n",
+    "summary": "Realtime interview rooms for open and spoken items.",
+    "title": "live-voice",
+    "version": "dev"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/live/config": {
+      "get": {
+        "operationId": "live_config_api_live_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Live Config Api Live Config Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Turn-taking and gating parameters",
+        "tags": [
+          "live"
+        ]
+      }
+    },
+    "/api/live/debug": {
+      "delete": {
+        "operationId": "live_debug_clear_api_live_debug_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Live Debug Clear Api Live Debug Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Clear the debug feed",
+        "tags": [
+          "operator"
+        ]
+      },
+      "get": {
+        "operationId": "live_debug_feed_api_live_debug_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Live Debug Feed Api Live Debug Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Recent room events. Off by default \u2014 it carries transcripts.",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/live/rooms": {
+      "post": {
+        "operationId": "create_room_api_live_rooms_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRoomRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateRoomResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Open an interview room",
+        "tags": [
+          "live"
+        ]
+      }
+    },
+    "/api/live/rooms/{room_id}": {
+      "get": {
+        "operationId": "get_room_api_live_rooms__room_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "room_id",
+            "required": true,
+            "schema": {
+              "title": "Room Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Room Api Live Rooms  Room Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Room status, turns and the finished transcript package",
+        "tags": [
+          "live"
+        ]
+      }
+    },
+    "/chat": {
+      "get": {
+        "operationId": "chat_page_chat_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "A free-form Live smoke page. Not an assessment.",
+        "tags": [
+          "pages"
+        ]
+      }
+    },
+    "/config": {
+      "get": {
+        "operationId": "config_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Config Config Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Effective configuration, credentials excluded",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Liveness, release, and the contract version this build speaks",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/interview": {
+      "get": {
+        "operationId": "interview_page_interview_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "The interview page, embedded in an iframe",
+        "tags": [
+          "pages"
+        ]
+      }
+    }
+  }
+}
