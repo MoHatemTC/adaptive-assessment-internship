@@ -51,7 +51,7 @@ SERVICES: dict[str, str] = {
 #: one. Keeping it explicit rather than sniffing for a catch-all means a service that loses
 #: its routes by accident fails as "you said this was implemented" rather than passing as
 #: "ah, a stub then".
-IMPLEMENTED: set[str] = {"bank-registry"}
+IMPLEMENTED: set[str] = {"bank-registry", "grader"}
 
 #: Ports as declared in each service's `Settings`. Asserted against deploy/docker-compose.yml
 #: by `test_services.py` — a service and its compose entry disagreeing about a port is the
@@ -122,6 +122,90 @@ def load_service(directory: str):
         except ValueError:
             pass
         _evict_service_modules()
+
+
+@contextmanager
+def load_services(*directories: str):
+    """Several services at once, each keeping its own `service` package.
+
+    `load_service` evicts `service*` on the way in, so the second import replaces the first
+    in `sys.modules` — but the first MODULE OBJECT is already bound here, and its globals
+    (including its `app`) stay alive. That is what lets a test hold two services and wire
+    one's client at the other's ASGI app.
+    """
+    from contextlib import ExitStack
+
+    with ExitStack() as stack:
+        yield {d: stack.enter_context(load_service(d)) for d in directories}
+
+
+def asgi_client(app):
+    """An `httpx.Client` that speaks to an ASGI app directly, synchronously.
+
+    Every client in `adaptive_clients` accepts a prepared `httpx.Client`, so a test can
+    drive a real service-to-service call with no socket open anywhere. Without it these
+    tests would need either a running server — slower, flakier, and a different thing from
+    what production does — or a hand-written fake, which tests the fake.
+
+    `TestClient` rather than `httpx.ASGITransport`: the latter implements only
+    `handle_async_request`, and these clients are synchronous because the engine seams they
+    plug into are.
+    """
+    from fastapi.testclient import TestClient
+
+    return TestClient(app, base_url="http://in-process")
+
+
+def stub_sandbox_and_model(monkeypatch) -> None:
+    """Every code submission compiles and passes; no model is ever called.
+
+    The same line `backend/tests/conftest.py` draws. Neither boundary is exercised for
+    real: the sandbox costs money and needs network, and a model is not deterministic. What
+    is under test is what the service does with whatever they return.
+    """
+    from app.services.code_adaptive import session as code_session
+    from app.services.code_adaptive.execution import ExecutionEvidence, TestOutcome
+    from app.services.code_adaptive.llm_evaluator import LLMEvaluation
+
+    monkeypatch.setattr(
+        code_session,
+        "run_submission",
+        lambda code, tests, function_name: ExecutionEvidence(
+            compiled=True,
+            execution_completed=True,
+            passed_tests=len(tests),
+            total_tests=len(tests),
+            test_results=[TestOutcome(t["test_id"], True, 1.0) for t in tests],
+        ),
+    )
+    monkeypatch.setattr(
+        code_session, "llm_evaluate", lambda *a, **k: LLMEvaluation(available=False)
+    )
+
+
+@pytest.fixture(scope="session")
+def bank_items() -> dict[str, tuple[str, int]]:
+    """One active item of each modality from the DA bank, with the MCQ's answer index.
+
+    Read from the engine rather than hardcoded: an item id pinned in a test is an item id
+    that stops existing the first time a bank is rebuilt, and the failure then looks like a
+    grading bug rather than a stale fixture.
+    """
+    from app.services.orchestrator import registry
+
+    chosen: dict[str, tuple[str, int]] = {}
+    for item in registry.get_bank("DA").all_items():
+        if item.status != "active":
+            continue
+        if item.modality == "mcq" and "mcq" not in chosen:
+            chosen["mcq"] = (item.item_id, int(item.payload["answer_index"]))
+        elif item.modality == "code" and "code" not in chosen:
+            chosen["code"] = (item.item_id, 0)
+        elif item.modality in ("open", "voice") and "open" not in chosen:
+            chosen["open"] = (item.item_id, 0)
+    missing = {"mcq", "code", "open"} - set(chosen)
+    assert not missing, f"the DA bank no longer offers {missing}"
+    return chosen
 
 
 @pytest.fixture(params=sorted(SERVICES), ids=sorted(SERVICES))

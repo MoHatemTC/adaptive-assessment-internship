@@ -334,6 +334,12 @@ class TestEachServiceImportsOnlyTheEngineSliceItOwns:
             "app.services.code_adaptive",
             "app.services.voice",
             "app.services.observability",
+            # Transcription only — NOT `voice_live` at large, which holds the realtime
+            # rooms and belongs to live-voice. Turning recorded audio into text is part of
+            # turning a spoken answer into a graded outcome, and putting it anywhere else
+            # would cost two hops for one answer. The prefix is the module, not the
+            # package, so importing a realtime room from here still fails this test.
+            "app.services.voice_live.transcribe",
         ),
         "competency-graph": (
             "app.config",
