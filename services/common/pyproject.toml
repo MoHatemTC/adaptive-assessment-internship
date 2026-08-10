@@ -1,0 +1,29 @@
+[project]
+# The shared SERVICE runtime, as distinct from the shared WIRE types.
+#
+# `adaptive_contracts` is deliberately anaemic and depends on pydantic alone, so a
+# frontend's generated client can install it without pulling in a web framework. This
+# package is the other half: the operator endpoints, the error shape and the startup checks
+# that every service in this repository must implement identically, and that were about to
+# be copy-pasted five times.
+#
+# The redaction filter is the reason it exists. ADR-0001 recorded five duplicated copies as
+# acceptable "while it is four lines", and noted it belongs somewhere shared "the moment it
+# grows a rule". It has.
+name = "adaptive-service"
+version = "1.0.0"
+description = "Operator endpoints, error shape and startup checks shared by every adaptive-assessment service."
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "adaptive-contracts>=1.0.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["adaptive_service*"]
