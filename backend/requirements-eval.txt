@@ -2,11 +2,9 @@
 # engine or of the Streamlit app, and deliberately kept out of requirements.txt so that
 # neither deployment installs it.
 #
-# Two reasons that separation is load-bearing:
-#   - streamlit/requirements.txt has to mirror every runtime backend dependency, because
-#     Streamlit Cloud installs only that one file. Anything listed as runtime is shipped.
-#   - the judged-metric layer (deepeval, added in the DeepEval stage) makes billed model
-#     calls. A package that cannot be imported cannot be invoked by accident.
+# The separation is load-bearing: the judged-metric layer (deepeval) makes BILLED model
+# calls, and a package that cannot be imported cannot be invoked by accident. Keeping it
+# out of `requirements.txt` means no service image can ever acquire it.
 #
 # Install with:  pip install -r requirements.txt -r requirements-eval.txt
 

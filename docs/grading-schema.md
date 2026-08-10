@@ -3,7 +3,7 @@
 **Audience:** testing / content authors and QA.
 
 This document describes **how responses become scores** that update CAT estimates.
-Bank authoring shapes are in [`unified_bank_schema.md`](./unified_bank_schema.md).
+Bank authoring shapes are in [`bank-schema.md`](bank-schema.md).
 
 Engine entry point: `GraderAgent.grade(item, response)`  
 → list of `GradedOutcome` objects rolled up onto session mains.

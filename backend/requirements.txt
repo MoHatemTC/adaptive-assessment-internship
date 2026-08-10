@@ -18,12 +18,14 @@ numpy>=1.26,<3
 # absence costs only the grouping, so the ceiling is the real constraint.
 langfuse>=3.0,<5
 
-# Live interviewer for open/voice (picker + open grader still use LiteLLM).
+# Realtime voice. Used by `app/services/voice_live/`, which the live-voice service owns.
+#
+# FastAPI, uvicorn and python-multipart are NOT here any more. `backend/` is a library —
+# there is no application in it since `app/main.py` became two services — and each service
+# declares its own web stack in `services/<name>/requirements.txt`. Listing them here made
+# a checkout look like it could serve traffic.
 google-genai>=1.0
 websockets>=13
-fastapi>=0.110
-uvicorn[standard]>=0.27
-python-multipart>=0.0.9
 
 # Tests. pytest-env is NOT optional: pytest.ini's `env =` block is what supplies the
 # LITELLM_*/E2B placeholders, and without the plugin pytest ignores that block silently —

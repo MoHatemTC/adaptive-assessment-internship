@@ -18,6 +18,11 @@ venv/
 build/
 dist/
 
+# DeepEval's local cache. The judged-metric layer makes billed model calls and is excluded
+# from the default suite by five separate locks; its cache should not be a sixth surprise.
+.deepeval
+.deepeval-cache/
+
 # Graphify local knowledge-graph outputs
 graphify-out/
 **/graphify-out/

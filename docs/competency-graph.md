@@ -209,7 +209,7 @@ order and nothing else. They ship with `allow_upward_inference: false`,
 `allow_downward_blocking: false` and `metadata.validation_status: "unvalidated"`.
 
 Only `scripts/validate_prerequisite_edges.py --apply`, run against a real session corpus,
-may enable one. See `app/data/AIE_competency_map.md`.
+may enable one. See [`banks/AIE.md`](banks/AIE.md).
 
 Three places where "disabled" did not actually mean disabled were fixed alongside them:
 the rollup ignored `allow_upward_inference`; descendant blocking used the unrestricted

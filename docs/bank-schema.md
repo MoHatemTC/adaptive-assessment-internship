@@ -7,7 +7,7 @@
 **Loader:** `JsonUnifiedBank` (`backend/app/services/orchestrator/bank.py`)  
 **Envelope model:** `BankItem` (`backend/app/schemas/orchestration.py`)
 
-Companion document: [`grading_schema.md`](./grading_schema.md) (how each modality is scored).
+Companion document: [`grading-schema.md`](grading-schema.md) (how each modality is scored).
 
 ---
 
@@ -262,7 +262,7 @@ A `voice` payload may use `evaluation_criteria` and `sample_strong_answer` in pl
 
 A machine-readable starter template also lives at:
 
-`backend/docs/examples/multi_competency_bank.example.json`
+`docs/examples/multi_competency_bank.example.json`
 
 ---
 
@@ -394,7 +394,7 @@ For **each main** you ship (`PY`, `BE`, …):
 4. All `item_id`s unique; all `measures[].variable` use the agreed ID scheme.
 5. Code items: public + hidden tests; public tests never leak the full key.
 6. Open items: reference answer + expected points + rubric descriptors filled in.
-7. **`sub_competency` labels must be consistent per variable id.** The same `C6.8` must mean the same thing in every modality. This is not cosmetic: the engine keys on the ID, so two authors numbering differently silently records one candidate's answer as evidence about a different skill. It happened — see `app/data/AIE_competency_map.md`.
+7. **`sub_competency` labels must be consistent per variable id.** The same `C6.8` must mean the same thing in every modality. This is not cosmetic: the engine keys on the ID, so two authors numbering differently silently records one candidate's answer as evidence about a different skill. It happened — see [`banks/AIE.md`](banks/AIE.md).
 8. `estimated_time_seconds` on every code and voice item. Selection divides information by it, so an unstated time is a guess that decides the modality mix.
 9. Optional: companion `competency_graph.json` using the same IDs (`MAIN`, `MAIN.N`). If you ship prerequisite edges, ship them with `allow_upward_inference` and `allow_downward_blocking` set to `false` until they have been validated against real response data.
 

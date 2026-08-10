@@ -46,9 +46,10 @@ include = ["app*"]
 # Banks, graphs and rubrics ship with the package so a checkout and a `pip install` see
 # the same defaults. A deployment that wants them on a volume sets `ENGINE_DATA_DIR`
 # instead of rebuilding the image — see `app/config/paths.py`.
+# JSON only. The competency maps that used to sit here are documentation, not data —
+# they were being packaged into every wheel and are now in `docs/banks/`.
 app = [
     "data/*.json",
-    "data/*.md",
     "data/rubrics/*.json",
     "data/voice_rubrics/*.json",
 ]
