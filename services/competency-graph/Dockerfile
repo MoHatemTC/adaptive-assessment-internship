@@ -9,7 +9,7 @@ RUN pip install --no-cache-dir /srv/contracts
 COPY services/competency-graph/requirements.txt /srv/requirements.txt
 RUN pip install --no-cache-dir -r /srv/requirements.txt
 
-COPY services/competency-graph/app /srv/app
+COPY services/competency-graph/service /srv/service
 
 EXPOSE 8083
 # Non-root: this image runs candidate-facing traffic.
@@ -19,4 +19,4 @@ USER svc
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
   CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8083/health').status==200 else 1)"
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8083"]
+CMD ["uvicorn", "service.main:app", "--host", "0.0.0.0", "--port", "8083"]

@@ -1,21 +1,23 @@
-"""Load four services that all name their package `app` into one test session.
+"""Load every service into one test session.
 
-THE OBSTACLE, AND WHY IT IS NOT A DEFECT
+WHAT USED TO BE HERE, AND WHY IT IS GONE
 
-Every service ships `app/main.py`. That is correct for deployment — each runs in its own
-container with its own interpreter, and `app` is the conventional name — but it means the
-four cannot be imported into one process: the second `import app.main` gets the first
-service's module out of `sys.modules` and every assertion after it silently describes the
-wrong service.
+Every service shipped `app/main.py`. That is the conventional name and it was correct
+per-container, but it meant the services could not be imported into one process: the
+second `import app.main` got the first service's module out of `sys.modules` and every
+assertion after it silently described the wrong service. This file used to evict `app*`
+from `sys.modules` around each import to work around it, and ADR-0001 recorded the
+awkwardness as an accepted cost.
 
-So each service is loaded in isolation, with `app*` evicted from `sys.modules` around the
-import. Tests that assert something about ALL four therefore load them one at a time rather
-than holding four app objects at once, and the fixture is function-scoped so no test can
-leak a half-imported package into the next.
+The cost stopped being acceptable the moment the engine became an installable library,
+because the engine's package is also called `app`. A service importing `app.services.…`
+inside a session that had just evicted `app*` would have imported half of itself.
 
-`adaptive_contracts` is a genuinely shared package and stays on the path throughout — that
-one IS meant to be importable everywhere, which is the whole point of it being a package
-rather than a service.
+So the services renamed THEIR package to `service`. There is one engine and several
+adapters over it, and the names now say which is which. Each service directory goes on
+`sys.path` in turn; `service.main` is evicted between them because the four modules
+genuinely are different modules with the same name — but `app` is left alone, since it is
+one shared library and importing it repeatedly is meant to be a no-op.
 """
 
 from __future__ import annotations
@@ -29,6 +31,7 @@ import pytest
 
 SERVICES_ROOT = Path(__file__).resolve().parents[1]
 CONTRACTS = SERVICES_ROOT / "contracts"
+CLIENTS = SERVICES_ROOT / "clients"
 
 #: Directory name -> the `service_name` it must report. Kept explicit rather than derived,
 #: so a service that renames itself without updating its config fails here instead of
@@ -41,7 +44,7 @@ SERVICES: dict[str, str] = {
 }
 
 #: Ports as declared in each service's `Settings`. Asserted against deploy/docker-compose.yml
-#: by `test_deployment.py` — a service and its compose entry disagreeing about a port is the
+#: by `test_services.py` — a service and its compose entry disagreeing about a port is the
 #: kind of thing that only shows up as a failed health check in an environment nobody is
 #: watching.
 EXPECTED_PORTS: dict[str, int] = {
@@ -51,43 +54,49 @@ EXPECTED_PORTS: dict[str, int] = {
     "competency-graph": 8083,
 }
 
-if str(CONTRACTS) not in sys.path:
-    sys.path.insert(0, str(CONTRACTS))
+for _extra in (CONTRACTS, CLIENTS):
+    if _extra.is_dir() and str(_extra) not in sys.path:
+        sys.path.insert(0, str(_extra))
 
 
-def _evict_app_modules() -> None:
-    for name in [n for n in sys.modules if n == "app" or n.startswith("app.")]:
+def _evict_service_modules() -> None:
+    """Drop `service*` only.
+
+    `app` — the engine — is deliberately left in place. It is one library shared by every
+    service, and re-importing it per test would re-read every bank from disk for no gain.
+    """
+    for name in [n for n in sys.modules if n == "service" or n.startswith("service.")]:
         del sys.modules[name]
 
 
 @contextmanager
 def load_service(directory: str):
-    """Yield a service's FastAPI app, with its own `app` package in force.
+    """Yield a service's `main` module, with its own `service` package in force.
 
     The eviction happens on the way IN as well as on the way out: a previous test that
-    failed mid-import would otherwise leave a partial `app` behind, and the failure would
-    appear in whichever test happened to run next.
+    failed mid-import would otherwise leave a partial package behind, and the failure
+    would appear in whichever test happened to run next.
     """
     service_dir = SERVICES_ROOT / directory
     if not service_dir.is_dir():
         raise AssertionError(f"no such service directory: {service_dir}")
 
-    _evict_app_modules()
+    _evict_service_modules()
     sys.path.insert(0, str(service_dir))
     try:
-        main = importlib.import_module("app.main")
+        main = importlib.import_module("service.main")
         yield main
     finally:
         try:
             sys.path.remove(str(service_dir))
         except ValueError:
             pass
-        _evict_app_modules()
+        _evict_service_modules()
 
 
 @pytest.fixture(params=sorted(SERVICES), ids=sorted(SERVICES))
 def service(request):
-    """Every test using this runs once per service. Four services, one assertion each."""
+    """Every test using this runs once per service. One assertion, every service."""
     with load_service(request.param) as main:
         yield request.param, main
 

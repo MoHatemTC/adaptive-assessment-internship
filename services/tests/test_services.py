@@ -202,26 +202,129 @@ class TestTheServicesDoNotDependOnEachOther:
     """The decomposition is only real if the seams hold.
 
     Each service has its own `Settings` precisely so that one cannot read another's
-    configuration — a service that can will eventually depend on it. The only shared import
-    is `adaptive_contracts`, which is a package rather than a service for exactly this
-    reason.
+    configuration — a service that can will eventually depend on it. Services talk to each
+    other over HTTP or not at all; they never import each other.
     """
 
-    def test_the_only_shared_import_is_the_contracts_package(self):
+    def test_no_service_imports_another_service(self):
         root = Path(__file__).resolve().parents[1]
         others = set(SERVICE_IDS)
         for directory in SERVICE_IDS:
-            for source in (root / directory / "app").glob("*.py"):
+            for source in (root / directory / "service").rglob("*.py"):
                 text = source.read_text(encoding="utf-8")
                 for other in others - {directory}:
                     module = other.replace("-", "_")
                     assert module not in text, (
                         f"{directory}/{source.name} references {other}"
                     )
-                assert "from backend" not in text and "import backend" not in text, (
-                    f"{directory}/{source.name} imports the monolith"
-                )
 
     def test_each_service_declares_its_own_settings(self, service):
         directory, main = service
         assert main.settings.service_name == SERVICES[directory]
+
+
+class TestEachServiceImportsOnlyTheEngineSliceItOwns:
+    """The assertion that replaced "no service imports the monolith".
+
+    That one stopped meaning anything once the engine became a shared library every
+    service installs — and it was always the weaker claim. What actually matters is not
+    WHETHER a service imports the engine but WHICH PART: `bank-registry` reaching into the
+    grader would put sandbox execution behind a read-only bank API, and `competency-graph`
+    reaching into `orchestrator.variables` would put it one import from a posterior.
+
+    So the allowlist below is the service boundary, written down and enforced. Widening it
+    is a deliberate act with a failing test attached — which is exactly what a boundary
+    that reviewers keep having to notice is not.
+    """
+
+    #: service directory -> engine module prefixes it is allowed to import.
+    ALLOWED: dict[str, tuple[str, ...]] = {
+        "bank-registry": (
+            "app.config",
+            "app.schemas",
+            "app.services.orchestrator.bank",
+            "app.services.orchestrator.registry",
+            "app.services.orchestrator.calibration",
+            "app.services.orchestrator.competency",
+            "app.services.competency_graph",
+        ),
+        "grader": (
+            "app.config",
+            "app.schemas",
+            "app.services.orchestrator.grader",
+            "app.services.orchestrator.outcome",
+            "app.services.code_adaptive",
+            "app.services.voice",
+            "app.services.observability",
+        ),
+        "competency-graph": (
+            "app.config",
+            "app.schemas",
+            "app.services.competency_graph",
+            "app.services.orchestrator.graph_delta",
+            "app.services.orchestrator.competency",
+        ),
+        "assessment-orchestrator": (
+            "app.config",
+            "app.schemas",
+            "app.services.adaptive",
+            "app.services.competency_graph",
+            "app.services.orchestrator",
+            "app.services.observability",
+        ),
+    }
+
+    @staticmethod
+    def _engine_imports(source: Path) -> set[str]:
+        """Every `app.…` module this file imports, by static parse.
+
+        AST rather than a substring search: `import app.services.code_adaptive` and
+        `from app.services.code_adaptive import x` are the same fact, and neither should be
+        missed because it was spelled differently or mentioned in a docstring.
+        """
+        import ast
+
+        found: set[str] = set()
+        tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                found |= {a.name for a in node.names if a.name.split(".")[0] == "app"}
+            elif isinstance(node, ast.ImportFrom):
+                if node.module and node.module.split(".")[0] == "app":
+                    found.add(node.module)
+        return found
+
+    def test_every_engine_import_is_inside_the_declared_slice(self):
+        root = Path(__file__).resolve().parents[1]
+        violations: list[str] = []
+        for directory, allowed in self.ALLOWED.items():
+            for source in (root / directory / "service").rglob("*.py"):
+                for imported in self._engine_imports(source):
+                    if not any(
+                        imported == prefix or imported.startswith(prefix + ".")
+                        for prefix in allowed
+                    ):
+                        violations.append(
+                            f"{directory}/{source.name} imports {imported}"
+                        )
+        assert not violations, (
+            "these imports fall outside the service's declared engine slice; widen "
+            f"ALLOWED deliberately if the boundary really has moved: {violations}"
+        )
+
+    def test_the_allowlist_covers_every_service(self):
+        """A service missing from the table would be unconstrained and look compliant."""
+        assert set(self.ALLOWED) == set(SERVICE_IDS)
+
+    def test_no_service_may_import_the_grader_unless_it_is_the_grader(self):
+        """Spelled out separately because it is the one that carries a sandbox.
+
+        `code_adaptive` executes untrusted candidate code. Exactly one service is meant to
+        be able to, and it is the only one with egress.
+        """
+        for directory, allowed in self.ALLOWED.items():
+            if directory == "grader":
+                continue
+            assert not any("code_adaptive" in prefix for prefix in allowed), (
+                f"{directory} is allowed to import the sandbox"
+            )
