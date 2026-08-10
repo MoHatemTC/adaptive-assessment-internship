@@ -31,7 +31,7 @@ from typing import Any
 
 from adaptive_contracts import BankItemFull, BankItemRef, BankSummary, CompetencyGraphDTO
 
-from .transport import BaseClient, ServiceUnavailable
+from .transport import BaseClient, ServiceRefused
 
 logger = logging.getLogger(__name__)
 
@@ -62,14 +62,19 @@ class BankRegistryClient(BaseClient):
         )
 
     def graph(self, bank_id: str) -> CompetencyGraphDTO | None:
+        """The graph paired with this bank, or None when it declares one.
+
+        A bank without a graph is a legitimate configuration — the coverage gate simply
+        does not run — so a 404 here is an answer rather than a failure. Any other refusal
+        still raises: "this bank does not exist" and "this bank has no graph" must not
+        collapse into the same silence.
+        """
         try:
             return CompetencyGraphDTO.model_validate(
                 self.get(f"/banks/{bank_id}/graph").json()
             )
-        except Exception as exc:  # noqa: BLE001 - a missing graph is not an error
-            from .transport import ServiceRefused
-
-            if isinstance(exc, ServiceRefused) and exc.status_code == 404:
+        except ServiceRefused as exc:
+            if exc.status_code == 404 and exc.code == "graph_absent":
                 return None
             raise
 
