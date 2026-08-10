@@ -110,6 +110,7 @@ def graph_dto(graph: CompetencyGraph) -> CompetencyGraphDTO:
                 critical=node.critical,
                 context_specific=node.context_specific,
                 main_competencies=list(node.main_competencies),
+                metadata=dict(node.metadata or {}),
             )
             for node in graph.nodes.values()
         ],
@@ -122,6 +123,7 @@ def graph_dto(graph: CompetencyGraph) -> CompetencyGraphDTO:
                 weight=edge.weight,
                 allow_upward_inference=edge.allow_upward_inference,
                 allow_downward_blocking=edge.allow_downward_blocking,
+                metadata=dict(edge.metadata or {}),
             )
             for edge in graph.edges
         ],

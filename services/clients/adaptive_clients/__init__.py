@@ -13,6 +13,7 @@ run without making the comparison itself flaky.
 """
 
 from .bank import BankRegistryClient
+from .graph import CompetencyGraphClient
 from .transport import (
     DEFAULT_TIMEOUT,
     BaseClient,
@@ -25,6 +26,7 @@ __all__ = [
     "DEFAULT_TIMEOUT",
     "BankRegistryClient",
     "BaseClient",
+    "CompetencyGraphClient",
     "ClientError",
     "ServiceRefused",
     "ServiceUnavailable",

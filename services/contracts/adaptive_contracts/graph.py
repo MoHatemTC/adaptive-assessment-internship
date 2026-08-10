@@ -9,15 +9,15 @@ requests and resumed on a different worker. That only works while `AssessmentSta
 single source of truth. A graph service holding its own copy of the same session's node
 state creates a second one, and the two disagree the first time a request is retried.
 
-So the caller sends what it knows and gets back what changed. The service holds nothing,
+So the caller sends what it knows and gets back what changed. The service holds nothing, it
 scales horizontally for free, and a restart loses nothing.
 
 WHAT COMES BACK CANNOT BE MISTAKEN FOR EVIDENCE
 
 `InferredSignalDTO` has no `score` and no `weight` field. A deduction FROM a response is
 not a second response; multiplying it into a likelihood counts one answer twice, and the
-damage lands on the standard error, which is what the assessment stops on. Because the
-type has no such field, a compromised or buggy graph service cannot hand the orchestrator
+damage lands on the standard error, which is what the assessment stops on. Because the type
+has no such field, a compromised or buggy graph service cannot hand the orchestrator
 something it could mistake for evidence — the boundary is enforced by the contract rather
 than by a reviewer noticing.
 """
@@ -35,8 +35,8 @@ class EvidenceOutcomeDTO(BaseModel):
     """One graded statement, as the graph receives it.
 
     Structurally a `GradedOutcomeDTO`; named separately because what the graph does with
-    `score` and `weight` is decide a node's STATUS, never to multiply a likelihood. Two
-    names for one shape is cheaper than one name for two meanings.
+    `score` and `weight` is decide a node's STATUS, never multiply a likelihood. Two names
+    for one shape is cheaper than one name for two meanings.
     """
 
     variable: str
@@ -47,58 +47,79 @@ class EvidenceOutcomeDTO(BaseModel):
     modality: Modality | None = None
 
 
+class PropagationItemDTO(BaseModel):
+    """What the graph needs to know about the item a response answered.
+
+    Not the item — three fields of it. The graph has no business seeing a stem, and the
+    only reason it needs `minimum_success_confidence` is that a per-item floor exists to
+    TIGHTEN the global one, never to loosen it.
+    """
+
+    item_id: str
+    modality: Modality
+    minimum_success_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+
+
 class PropagateRequest(BaseModel):
     """Everything one response did, plus everything the session already knew.
 
-    `node_states` and `processed_evidence_ids` are the session's own record, sent back on
-    every call. `processed_evidence_ids` is what makes a retry safe: evidence ids are
-    deterministic, so replaying a response the graph has already absorbed changes nothing.
+    `graph_state` is the session's own graph slice — every `graph_*` field of
+    `AssessmentState`, sent back on every call. Two of them carry the idempotency:
+    `graph_processed_evidence_ids` records what has already been absorbed, and evidence ids
+    are deterministic, so replaying a response the graph has already seen changes nothing.
     """
 
     bank_id: str
     session_id: str
-    item_id: str
-    modality: Modality
+    item: PropagationItemDTO
     outcomes: list[EvidenceOutcomeDTO] = Field(default_factory=list)
 
-    #: The session's graph state, as `AssessmentState.graph_node_states`.
-    node_states: dict[str, dict[str, Any]] = Field(default_factory=dict)
-    processed_evidence_ids: list[str] = Field(default_factory=list)
-    #: The rest of `GraphDelta.restore` — what the session already concluded. Sent so the
-    #: returned delta is cumulative and the caller can replace rather than merge.
-    prior: dict[str, Any] = Field(default_factory=dict)
+    #: The `graph_*` fields of `AssessmentState`, verbatim. A flat dict rather than a typed
+    #: model because it IS that projection field for field — typing it here would create a
+    #: second definition of a shape the engine's schema owns, and the two would drift.
+    graph_state: dict[str, Any] = Field(default_factory=dict)
 
-    #: Which mains this session is measuring. Bounds `selection_affected_mains`, so a
-    #: node shared with a competency nobody is being assessed on cannot invalidate a queue
-    #: slot that does not exist.
+    #: Which mains this session is measuring. Bounds `selection_affected_mains`, so a node
+    #: shared with a competency nobody is being assessed on cannot invalidate a queue slot
+    #: that does not exist.
     session_variables: list[str] = Field(default_factory=list)
-    #: How many times this item has been administered in this session, including now.
-    #: Part of the evidence id, so a re-administration is not read as a duplicate.
+    #: How many times this item has been administered in this session, including now. Part
+    #: of the evidence id, so a re-administration is not read as a duplicate.
     attempt_no: int = Field(default=1, ge=1)
-    #: The item's own confidence floor, when it is stricter than the global one. A per-item
-    #: floor exists to tighten, never to loosen.
-    item_minimum_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 class PropagateResponse(BaseModel):
-    """The delta, in the shape the session persists it.
+    """The delta, in the shape the session persists it."""
 
-    `state_update` is applied verbatim to `AssessmentState`. It is a flat dict rather than
-    a typed model because it is the projection the session already stores, field for
-    field — typing it here would create a second definition of a shape that the engine's
-    own schema already owns, and the two would drift.
-    """
-
+    #: Applied verbatim to `AssessmentState`. Empty when nothing was applied.
     state_update: dict[str, Any] = Field(default_factory=dict)
     #: Mains whose ELIGIBILITY changed. A blocked or reopened node makes a queued pick
     #: stale without any estimate having moved, so those slots must be refilled.
     selection_affected_mains: list[str] = Field(default_factory=list)
     #: Reporting only. Never handed to a posterior update — it structurally cannot be.
     inferred_signals: list[InferredSignalDTO] = Field(default_factory=list)
-    #: True when the graph was off, unusable, or the batch failed. The caller keeps its
+    #: The configuration this call ran under, reported by whoever OWNS propagation rather
+    #: than recomputed by the caller. Split across services, two answers to "what
+    #: configuration is in force" is exactly the failure the manifest exists to detect.
+    manifest: dict[str, Any] = Field(default_factory=dict)
+    manifest_hash: str = ""
+    #: False when the graph was off, unusable, or the batch failed. The caller keeps its
     #: prior state and the candidate pays nothing for a graph problem.
     applied: bool = True
     detail: str = ""
+
+
+class ManifestResponse(BaseModel):
+    """The propagation configuration in force for a bank, and its hash.
+
+    Read at `begin` and stamped into the session, so a result can name the configuration
+    that produced it. A number that cannot say what configuration produced it cannot be
+    reproduced or believed.
+    """
+
+    bank_id: str
+    manifest: dict[str, Any] = Field(default_factory=dict)
+    manifest_hash: str = ""
 
 
 class CoverageRequest(BaseModel):
@@ -120,25 +141,12 @@ class CoverageResponse(BaseModel):
     satisfied: bool = True
 
 
-class GraphReportRequest(BaseModel):
-    """Node-level provenance for a finished (or in-flight) session."""
-
-    bank_id: str
-    mains: list[str] = Field(default_factory=list)
-    state: dict[str, Any] = Field(default_factory=dict)
-    critical_only: bool = False
-
-
-class GraphReportResponse(BaseModel):
-    report: dict[str, Any] = Field(default_factory=dict)
-
-
 __all__ = [
     "CoverageRequest",
     "CoverageResponse",
     "EvidenceOutcomeDTO",
-    "GraphReportRequest",
-    "GraphReportResponse",
+    "ManifestResponse",
     "PropagateRequest",
     "PropagateResponse",
+    "PropagationItemDTO",
 ]

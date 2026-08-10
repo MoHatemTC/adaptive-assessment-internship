@@ -70,6 +70,7 @@ class GraphNodeDTO(BaseModel):
     critical: bool = False
     context_specific: bool = False
     main_competencies: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class GraphEdgeDTO(BaseModel):
@@ -92,6 +93,10 @@ class GraphEdgeDTO(BaseModel):
     #: `PolicyDTO.edges`, which is a different question and is answered per deployment.
     allow_upward_inference: bool = True
     allow_downward_blocking: bool = True
+    #: Carried so the graph round-trips losslessly. `validation_status` lives here, and it
+    #: is what decides whether an edge may ever infer or block — a DTO that dropped it
+    #: would let a service rebuild a graph whose edges had lost their authority to be inert.
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class CompetencyGraphDTO(BaseModel):

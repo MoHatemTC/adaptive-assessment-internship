@@ -79,10 +79,10 @@ from .graph import (
     CoverageRequest,
     CoverageResponse,
     EvidenceOutcomeDTO,
-    GraphReportRequest,
-    GraphReportResponse,
+    ManifestResponse,
     PropagateRequest,
     PropagateResponse,
+    PropagationItemDTO,
 )
 
 __all__ = [
@@ -125,10 +125,10 @@ __all__ = [
     "CoverageRequest",
     "CoverageResponse",
     "EvidenceOutcomeDTO",
-    "GraphReportRequest",
-    "GraphReportResponse",
+    "ManifestResponse",
     "PropagateRequest",
     "PropagateResponse",
+    "PropagationItemDTO",
     # assessment-orchestrator
     "AnswerRequest",
     "AssessmentReportDTO",

@@ -347,6 +347,12 @@ class TestEachServiceImportsOnlyTheEngineSliceItOwns:
             "app.services.competency_graph",
             "app.services.orchestrator.graph_delta",
             "app.services.orchestrator.competency",
+            # The transaction itself. It lives beside the orchestrator because that is the
+            # only caller, but the CODE is graph code — it opens the ledger, walks the
+            # edges and writes node state, and none of that is the orchestrator's to do.
+            # Named as a module so the rest of `orchestrator` stays out of reach: this
+            # service must not be one import from a posterior.
+            "app.services.orchestrator.propagation_port",
         ),
         "assessment-orchestrator": (
             "app.config",
