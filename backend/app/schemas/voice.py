@@ -43,6 +43,43 @@ class VoiceResponsePackage(BaseModel):
     def _join_candidate(self) -> str:
         return "\n".join(t.text for t in self.turns if t.role == "candidate")
 
+    @classmethod
+    def from_text(
+        cls,
+        item_id: str,
+        text: str,
+        *,
+        outcome_status: OutcomeStatus = "complete",
+        speech_seconds: float | None = None,
+    ) -> VoiceResponsePackage:
+        """A package from a typed or transcribed answer.
+
+        A constructor, so it lives on the type. It used to sit in `voice.evaluator` beside
+        the rubric grader, which meant a caller that only needed to BUILD a package had to
+        import the module that CALLS A MODEL — and the service boundary test caught the
+        orchestrator doing exactly that. Nothing here does any I/O.
+        """
+        words = text.split()
+        seconds = (
+            speech_seconds if speech_seconds is not None else max(len(words) / 2.5, 5.0)
+        )
+        return cls(
+            item_id=item_id,
+            outcome_status=outcome_status,
+            # Typed or transcribed text is exact — it is not an ASR confidence — so 1.0 is
+            # honest here in a way that inventing 0.9 for real audio would not be.
+            turns=[
+                VoiceTurn(
+                    turn_id="t0", role="candidate", text=text, transcript_confidence=1.0
+                )
+            ],
+            total_speech_seconds=float(seconds),
+            mean_transcript_confidence=1.0,
+            word_count=len(words),
+            live_text=text,
+            final_text=text,
+        )
+
 
 class CriterionEvidence(BaseModel):
     criterion_id: str

@@ -10,7 +10,6 @@ from app.schemas.voice import (
     GradedVoiceResponse,
     VoiceEvaluation,
     VoiceResponsePackage,
-    VoiceTurn,
 )
 from app.services import observability
 from app.services.adaptive.llm import LLMUnavailable, chat_json
@@ -29,23 +28,17 @@ def package_from_text(
     outcome_status: str = "complete",
     speech_seconds: float | None = None,
 ) -> VoiceResponsePackage:
-    """Build a VoiceResponsePackage from a typed / pasted transcript (Streamlit tester)."""
-    words = text.split()
-    secs = speech_seconds if speech_seconds is not None else max(len(words) / 2.5, 5.0)
-    return VoiceResponsePackage(
-        item_id=item_id,
+    """Retained name. The constructor moved onto `VoiceResponsePackage` itself.
+
+    Building a package needs no model and no network, so it had no business living in the
+    module that calls the rubric grader — a caller that only wanted to build one had to
+    import egress it would never use.
+    """
+    return VoiceResponsePackage.from_text(
+        item_id,
+        text,
         outcome_status=outcome_status,  # type: ignore[arg-type]
-        # Typed text is exact — not ASR — so confidence 1.0 is honest here.
-        turns=[
-            VoiceTurn(
-                turn_id="t0", role="candidate", text=text, transcript_confidence=1.0
-            )
-        ],
-        total_speech_seconds=float(secs),
-        mean_transcript_confidence=1.0,
-        word_count=len(words),
-        live_text=text,
-        final_text=text,
+        speech_seconds=speech_seconds,
     )
 
 
