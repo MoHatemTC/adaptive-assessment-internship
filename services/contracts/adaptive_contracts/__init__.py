@@ -39,8 +39,6 @@ from .assessment import (
 )
 from .bank import (
     BankItemFull,
-    BankItemSubmission,
-    BankSubmission,
     BankSummary,
     BankValidationReport,
     CompetencyGraphDTO,
@@ -84,6 +82,18 @@ from .graph import (
     PropagateResponse,
     PropagationItemDTO,
 )
+from .ingest import DerivedGraphDTO, UploadReceipt, UploadStatus
+from .scope import (
+    DanglingEdgeDTO,
+    ScopeCoverageDTO,
+    ScopeEdgeDTO,
+    ScopeMainDTO,
+    ScopeManifest,
+    ScopeNodeDTO,
+    ScopeRequest,
+    ScopeSelection,
+    ScopeSummaryDTO,
+)
 
 __all__ = [
     "SCHEMA_VERSION",
@@ -97,8 +107,6 @@ __all__ = [
     "InferredSignalDTO",
     # bank-registry
     "BankItemFull",
-    "BankItemSubmission",
-    "BankSubmission",
     "BankSummary",
     "BankValidationReport",
     "CompetencyGraphDTO",
@@ -129,6 +137,20 @@ __all__ = [
     "PropagateRequest",
     "PropagateResponse",
     "PropagationItemDTO",
+    # bank-ingest
+    "DerivedGraphDTO",
+    "UploadReceipt",
+    "UploadStatus",
+    # competency-scope
+    "DanglingEdgeDTO",
+    "ScopeCoverageDTO",
+    "ScopeEdgeDTO",
+    "ScopeMainDTO",
+    "ScopeManifest",
+    "ScopeNodeDTO",
+    "ScopeRequest",
+    "ScopeSelection",
+    "ScopeSummaryDTO",
     # assessment-orchestrator
     "AnswerRequest",
     "AssessmentReportDTO",

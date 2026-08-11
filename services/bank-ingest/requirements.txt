@@ -1,0 +1,16 @@
+# Bounded on both sides, like every other requirements file here.
+#
+# An open upper bound means `docker compose build` six months from now silently pulls a
+# major version nobody ran a test against — and the failure mode for a web framework is a
+# container that starts and serves something subtly different, not one that refuses to.
+
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30,<1
+pydantic>=2.9,<3
+pydantic-settings>=2.3,<3
+
+# Uploads arrive as multipart, and FastAPI raises at IMPORT the moment it sees a `File`
+# parameter without this. The orchestrator's first container run found exactly that: no
+# test could have caught it, because every test imports the app from a checkout where the
+# dependency happens to be installed.
+python-multipart>=0.0.9,<1

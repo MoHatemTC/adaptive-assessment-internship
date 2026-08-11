@@ -7,9 +7,15 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 # Bumped when a field is removed or its meaning changes. Additive fields do not bump it.
+#
+# 1.1.0 — `BankSubmission` and `BankItemSubmission` removed. Writing a bank moved to
+# `bank-ingest`, which takes an uploaded file rather than a JSON body, so the types that
+# described that body describe nothing. A removal, so the version moves; `scope` on
+# `CreateAssessmentRequest` and `status` on `BankItemRef` arrived in the same release and
+# are additive, so they did not.
 # Every service reports the version it was built against on `GET /health`, so a mismatch is
 # visible in a dashboard rather than in a decoding error three hops away.
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.1.0"
 
 Modality = Literal["mcq", "code", "open", "voice"]
 
@@ -46,6 +52,14 @@ class BankItemRef(BaseModel):
     cat: CatParameters
     estimated_time_seconds: float | None = Field(default=None, gt=0.0)
     minimum_success_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    #: WHETHER SELECTION MAY ADMINISTER THIS ITEM AT ALL, and therefore part of the ranking
+    #: view rather than of the payload. Omitting it was a defect: this model defaults it to
+    #: "active" exactly as `BankItem` does, so an item the bank had retired came back over
+    #: the wire indistinguishable from a live one and the orchestrator ranked it. `JAI-600`
+    #: retires 64 code items as `inactive_missing_hidden_tests` — items whose test suite is
+    #: incomplete — so the HTTP path was selecting, and grading against, questions the
+    #: in-process engine refuses to serve.
+    status: str = "active"
 
 
 class GradedOutcomeDTO(BaseModel):

@@ -16,7 +16,11 @@ COPY backend /srv/engine
 RUN pip install --no-cache-dir /srv/engine
 
 COPY services/common /srv/common
-RUN pip install --no-cache-dir /srv/common
+# The SQL bank store, and with it psycopg. Installed here and in bank-ingest only —
+# every other service has no business holding a database driver, and keeping it out
+# of the shared packages makes that a packaging fact rather than a convention.
+COPY services/store /srv/store
+RUN pip install --no-cache-dir /srv/common /srv/store
 
 COPY services/bank-registry/requirements.txt /srv/requirements.txt
 RUN pip install --no-cache-dir -r /srv/requirements.txt

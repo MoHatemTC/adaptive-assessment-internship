@@ -28,9 +28,7 @@ import logging
 from adaptive_contracts import (
     BankItemFull,
     BankItemRef,
-    BankSubmission,
     BankSummary,
-    BankValidationReport,
     CompetencyGraphDTO,
     ErrorResponse,
     ParityRowDTO,
@@ -50,11 +48,29 @@ from .mapping import (
     item_ref,
     parity_rows,
     policy_dto,
-    submission_to_bank_item,
-    validation_report,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _install_store() -> None:
+    """Point the process at Postgres when this deployment has one.
+
+    Imported lazily and only on this branch, so an image without `adaptive-store` installed
+    — every service that has no business holding a database driver — cannot fail at import
+    for a dependency it does not use.
+    """
+    dsn = settings.bank_database_url.strip()
+    if not dsn:
+        logger.info("BANK_DATABASE_URL is unset — banks are resolved from files")
+        return
+    from adaptive_store.backed import install
+
+    install(dsn)
+    logger.info("banks are resolved from Postgres")
+
+
+_install_store()
 
 RESPONSES: dict[int | str, dict] = {
     404: {"model": ErrorResponse, "description": "no such bank or item"},
@@ -77,7 +93,6 @@ app.include_router(
         health_detail=lambda: {
             "banks": len(registry.REGISTRY),
             "store_dir": str(registry.STORE.store_dir),
-            "admin_api_enabled": settings.admin_api_enabled,
         },
         config_extra=lambda: {
             "engine_data_dir": engine_settings.engine_data_dir,
@@ -93,14 +108,6 @@ def _bank_or_404(bank_id: str):
     except KeyError as exc:
         raise ServiceError(404, "bank_unknown", str(exc)) from exc
 
-
-def _require_admin() -> None:
-    if not settings.admin_api_enabled:
-        raise ServiceError(
-            503,
-            "admin_api_disabled",
-            "the bank write path is disabled on this deployment (ADMIN_API_ENABLED)",
-        )
 
 
 # --- read ------------------------------------------------------------------
@@ -225,163 +232,58 @@ def get_parity(bank_id: str) -> list[ParityRowDTO]:
     return parity_rows(registry.get_bank(_bank_or_404(bank_id)).parity_report())
 
 
-# --- write -----------------------------------------------------------------
-def _validate(submission: BankSubmission):
-    return registry.STORE.validate(
-        bank_id=submission.bank_id,
-        items=[submission_to_bank_item(i.model_dump()) for i in submission.items],
-        # `by_alias` so edges serialise as `from`/`to` — the shape the graph file uses and
-        # the parser reads. Without it every posted graph is rejected as unparseable.
-        graph=submission.graph.model_dump(by_alias=True) if submission.graph else None,
-        coverage_critical_only=submission.coverage_critical_only,
-        question_budget=engine_settings.cat_max_questions,
-        deployment_critical_only=engine_settings.graph_coverage_critical_only,
-    )
-
-
-def _write(submission: BankSubmission, validation) -> BankValidationReport:
-    registry.STORE.save(
-        bank_id=submission.bank_id,
-        title=submission.title,
-        items=[submission_to_bank_item(i.model_dump()) for i in submission.items],
-        # `by_alias` so edges serialise as `from`/`to` — the shape the graph file uses and
-        # the parser reads. Without it every posted graph is rejected as unparseable.
-        graph=submission.graph.model_dump(by_alias=True) if submission.graph else None,
-        coverage_critical_only=submission.coverage_critical_only,
-        validation=validation,
-    )
-    logger.info(
-        "registered bank %s: %d items, mains %s, version %s",
-        submission.bank_id,
-        validation.items,
-        validation.mains,
-        registry.version(submission.bank_id),
-    )
-    return validation_report(validation, version=registry.version(submission.bank_id))
-
-
-@app.post(
-    "/banks/validate",
-    response_model=BankValidationReport,
-    tags=["admin"],
-    responses=RESPONSES,
-    summary="Check a bank without registering it",
-    description=(
-        "Same checks as a registration, no write. Intended for an authoring tool: the "
-        "findings name the item, node or main at fault, so a bank can be fixed before it "
-        "is anywhere near a candidate."
-    ),
+# --- the write path, retired -----------------------------------------------
+#
+# GONE, NOT MISSING. `bank-ingest` owns writing a bank, and these four endpoints are what it
+# replaced. They return 410 rather than 404 because the difference matters to whoever is
+# looking at the response: a 404 says "you have the wrong URL", and the reader goes looking
+# for a typo. A 410 naming the replacement says "this moved, here is where", and is the only
+# thing a client integrated against the old path will actually read.
+#
+# WHY WRITING MOVED. This service serves candidate-facing reads on the hot path. It could
+# also replace the bank a live assessment was running against, and the only thing standing
+# between those two propositions was one environment variable — which is why
+# `ADMIN_API_ENABLED` had to exist at all. Authoring is a different security posture and a
+# different availability requirement, so it is a different service.
+#
+# WHAT CHANGED FOR A CALLER. The old surface took a bank AND a hand-authored competency
+# graph. The new one takes one file — the questions — and derives the graph, with the
+# optional `competencies` block in that file stating the two things questions cannot imply.
+# See `docs/bank-schema.md` and ADR-0003.
+_MOVED = (
+    "writing a bank moved to bank-ingest: PUT /banks/{bank_id} with the bank file as "
+    "multipart `file`. One endpoint, one file, and the competency graph is derived from "
+    "the questions. See docs/adr/0003-uploaded-banks-and-scoped-assessments.md"
 )
-def validate_bank(submission: BankSubmission) -> BankValidationReport:
-    _require_admin()
-    return validation_report(_validate(submission))
+
+GONE: dict[int | str, dict] = {
+    410: {"model": ErrorResponse, "description": "writing a bank moved to bank-ingest"}
+}
 
 
-@app.post(
-    "/banks",
-    response_model=BankValidationReport,
-    status_code=201,
-    tags=["admin"],
-    responses={
-        **RESPONSES,
-        409: {"model": ErrorResponse, "description": "that bank id is already registered"},
-        422: {"model": ErrorResponse, "description": "the bank failed validation"},
-    },
-    summary="Register a new bank",
-    description=(
-        "Refuses an id that already exists, INCLUDING one of the five checked-in banks. "
-        "Replacing an existing bank is a PUT, so overwriting one is never something a "
-        "retried POST can do by accident."
-    ),
-)
-def create_bank(submission: BankSubmission, response: Response) -> BankValidationReport:
-    _require_admin()
-    if submission.bank_id in registry.REGISTRY:
-        raise ServiceError(
-            409,
-            "bank_exists",
-            f"bank {submission.bank_id!r} is already registered; PUT to replace it",
-        )
-    validation = _validate(submission)
-    if not validation.accepted:
-        raise ServiceError(
-            422,
-            "bank_invalid",
-            "; ".join(f"{f.code}: {f.message}" for f in validation.errors),
-        )
-    report = _write(submission, validation)
-    response.headers["ETag"] = f'"{report.version}"'
-    return report
+def _gone() -> None:
+    raise ServiceError(410, "write_path_moved", _MOVED)
 
 
-@app.put(
-    "/banks/{bank_id}",
-    response_model=BankValidationReport,
-    tags=["admin"],
-    responses={
-        **RESPONSES,
-        409: {"model": ErrorResponse, "description": "the body names a different bank"},
-        422: {"model": ErrorResponse, "description": "the bank failed validation"},
-    },
-    summary="Replace a bank, creating a new version",
-    description=(
-        "Sessions already in flight are unaffected: each pins the bank version it began "
-        "under, so a replacement changes what the NEXT assessment sees and nothing about "
-        "one already running."
-    ),
-)
-def replace_bank(
-    bank_id: str, submission: BankSubmission, response: Response
-) -> BankValidationReport:
-    _require_admin()
-    if submission.bank_id != bank_id:
-        raise ServiceError(
-            409,
-            "bank_id_mismatch",
-            f"path says {bank_id!r} and body says {submission.bank_id!r}",
-        )
-    validation = _validate(submission)
-    if not validation.accepted:
-        raise ServiceError(
-            422,
-            "bank_invalid",
-            "; ".join(f"{f.code}: {f.message}" for f in validation.errors),
-        )
-    shadowing_a_seed = (
-        bank_id in registry.REGISTRY
-        and registry.REGISTRY[bank_id].source == "seed"
-    )
-    report = _write(submission, validation)
-    if shadowing_a_seed:
-        logger.warning(
-            "bank %s now shadows a checked-in bank of the same id; DELETE the stored "
-            "copy to restore it",
-            bank_id,
-        )
-    response.headers["ETag"] = f'"{report.version}"'
-    return report
+@app.post("/banks/validate", tags=["admin"], responses=GONE, deprecated=True,
+          summary="Gone — validate through bank-ingest")
+def validate_bank() -> None:
+    _gone()
 
 
-@app.delete(
-    "/banks/{bank_id}",
-    tags=["admin"],
-    responses=RESPONSES,
-    summary="Deregister a posted bank",
-    description=(
-        "Removes the stored copy only. If it was shadowing a checked-in bank of the same "
-        "id, that one reappears — which is what makes an accidental overwrite recoverable "
-        "without a redeploy."
-    ),
-)
-def delete_bank(bank_id: str) -> dict:
-    _require_admin()
-    if not registry.STORE.is_stored(bank_id):
-        raise ServiceError(
-            404,
-            "bank_not_stored",
-            f"bank {bank_id!r} was not posted to this registry; checked-in banks are "
-            "removed by changing the deployment, not by an API call",
-        )
-    registry.STORE.delete(bank_id)
-    restored = bank_id in registry.REGISTRY
-    return {"deleted": bank_id, "seed_restored": restored}
+@app.post("/banks", tags=["admin"], responses=GONE, deprecated=True,
+          summary="Gone — upload through bank-ingest")
+def create_bank() -> None:
+    _gone()
+
+
+@app.put("/banks/{bank_id}", tags=["admin"], responses=GONE, deprecated=True,
+         summary="Gone — upload through bank-ingest")
+def replace_bank(bank_id: str) -> None:
+    _gone()
+
+
+@app.delete("/banks/{bank_id}", tags=["admin"], responses=GONE, deprecated=True,
+            summary="Gone — deregister through bank-ingest")
+def delete_bank(bank_id: str) -> None:
+    _gone()

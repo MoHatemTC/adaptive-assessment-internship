@@ -101,7 +101,25 @@ class TestTheRankingViewCannotLeakAQuestion:
                 "cat",
                 "estimated_time_seconds",
                 "minimum_success_confidence",
+                # `status` is a SELECTION fact, not a payload: it says whether this item
+                # may be administered at all. Omitting it was a defect — `BankItemRef`
+                # defaults it to "active" exactly as `BankItem` does, so a retired item
+                # came back over the wire indistinguishable from a live one.
+                "status",
             }
+
+    def test_a_retired_item_says_so(self, registry_client):
+        """The HTTP path must refuse the same items the in-process engine refuses.
+
+        `JAI-600` retires 64 code items as `inactive_missing_hidden_tests` — their test
+        suite is incomplete, so grading against them scores a candidate on a question the
+        bank knows is broken. Before `status` travelled, the orchestrator reconstructed
+        every one of them as active and ranked them.
+        """
+        items = registry_client.get("/banks/JAI-600/items").json()
+        retired = [i for i in items if i["status"] != "active"]
+        assert retired, "this bank is supposed to carry retired items"
+        assert all(i["status"] == "inactive_missing_hidden_tests" for i in retired)
 
     def test_no_stem_option_or_answer_appears_anywhere_in_the_response(
         self, registry_client
@@ -173,154 +191,76 @@ class TestTheGraphAndPolicyViews:
         assert all(not e["inference_allowed"] for e in policy["edges"])
 
     def test_a_bank_without_a_graph_says_so_rather_than_erroring(self, registry_client):
-        registry_client.post(
-            "/banks",
-            json={**submission("NOGRAPH"), "graph": None},
+        """Built through the store rather than over HTTP, because no endpoint can produce
+        one any more: the write path is retired and `bank-ingest` always derives a graph. A
+        graphless bank is now only reachable by deploying a seed configured without one, and
+        the endpoint still has to answer for it."""
+        from app.services.orchestrator import registry
+        from app.services.orchestrator.bank_store import Validation
+
+        items = [
+            {
+                "item_id": "n1",
+                "modality": "mcq",
+                "measures": [{"variable": "N.1", "weight": 1.0}],
+                "cat": {"a": 1.0, "b": 0.0, "c": 0.25},
+                "mcq": {"stem": "?", "options": ["a", "b"], "answer_index": 1},
+            }
+        ]
+        registry.STORE.save(
+            bank_id="NOGRAPH",
+            title="no graph",
+            items=items,
+            graph=None,
+            coverage_critical_only=None,
+            validation=Validation(bank_id="NOGRAPH", items=1, mains=["N"]),
         )
+        registry.reset_caches()
+
         response = registry_client.get("/banks/NOGRAPH/graph")
         assert response.status_code == 404
         assert response.json()["code"] == "graph_absent"
 
 
-class TestRegisteringABank:
-    def test_a_valid_bank_is_accepted_and_becomes_assessable(self, registry_client):
-        response = registry_client.post("/banks", json=submission("NEW"))
-        assert response.status_code == 201, response.text
-        report = response.json()
-        assert report["accepted"] is True
-        assert report["mains"] == ["X"]
-        assert report["version"]
+class TestTheWritePathIsGone:
+    """Writing a bank moved to `bank-ingest`. These four endpoints are what it replaced.
 
-        assert registry_client.get("/banks/NEW").json()["source"] == "stored"
-        assert len(registry_client.get("/banks/NEW/items").json()) == 1
-        assert registry_client.get("/banks/NEW/graph").json()["nodes"]
+    410 rather than 404, and the routes kept rather than deleted, because the difference is
+    what a reader does next. A 404 says "wrong URL" and sends somebody hunting for a typo; a
+    410 naming the replacement is the only thing a client integrated against the old path
+    will actually read.
 
-    def test_the_posted_bank_appears_in_the_catalogue_beside_the_seeds(
-        self, registry_client
-    ):
-        registry_client.post("/banks", json=submission("NEW"))
-        banks = {b["bank_id"]: b["source"] for b in registry_client.get("/banks").json()}
-        assert banks["NEW"] == "stored"
-        assert banks["DA"] == "seed"
+    The behaviour these used to assert has not been lost — it moved to
+    `test_bank_ingest_service.py`, against the endpoint that now owns it.
+    """
 
-    def test_a_post_cannot_overwrite_an_existing_bank(self, registry_client):
-        registry_client.post("/banks", json=submission("NEW"))
-        again = registry_client.post("/banks", json=submission("NEW"))
-        assert again.status_code == 409
-        assert again.json()["code"] == "bank_exists"
+    @pytest.mark.parametrize(
+        ("method", "path"),
+        [
+            ("post", "/banks/validate"),
+            ("post", "/banks"),
+            ("put", "/banks/DA"),
+            ("delete", "/banks/DA"),
+        ],
+    )
+    def test_every_old_write_endpoint_is_gone(self, registry_client, method, path):
+        call = getattr(registry_client, method)
+        response = call(path) if method == "delete" else call(path, json={})
+        assert response.status_code == 410
+        assert response.json()["code"] == "write_path_moved"
 
-    def test_a_post_cannot_overwrite_a_checked_in_bank_either(self, registry_client):
-        response = registry_client.post("/banks", json=submission("DA"))
-        assert response.status_code == 409
+    def test_the_refusal_says_where_writing_went(self, registry_client):
+        detail = registry_client.post("/banks", json={}).json()["detail"]
+        assert "bank-ingest" in detail
+        assert "PUT /banks/{bank_id}" in detail
 
-    def test_a_put_replaces_and_moves_the_version(self, registry_client):
-        registry_client.post("/banks", json=submission("NEW"))
-        first = registry_client.get("/banks/NEW").json()["version"]
+    def test_the_read_paths_are_untouched(self, registry_client):
+        assert registry_client.get("/banks").status_code == 200
+        assert registry_client.get("/banks/DA/items").status_code == 200
+        assert registry_client.get("/banks/DA/graph").status_code == 200
 
-        bigger = submission("NEW")
-        bigger["items"].append(item("q9", "X.1"))
-        response = registry_client.put("/banks/NEW", json=bigger)
-        assert response.status_code == 200, response.text
-        assert registry_client.get("/banks/NEW").json()["version"] != first
-        assert len(registry_client.get("/banks/NEW/items").json()) == 2
-
-    def test_a_put_whose_body_names_a_different_bank_is_refused(self, registry_client):
-        response = registry_client.put("/banks/NEW", json=submission("OTHER"))
-        assert response.status_code == 409
-        assert response.json()["code"] == "bank_id_mismatch"
-
-    def test_deleting_a_shadow_restores_the_checked_in_bank(self, registry_client):
-        registry_client.put("/banks/DA", json=submission("DA"))
-        assert registry_client.get("/banks/DA").json()["source"] == "stored"
-        assert len(registry_client.get("/banks/DA/items").json()) == 1
-
-        response = registry_client.delete("/banks/DA")
-        assert response.json() == {"deleted": "DA", "seed_restored": True}
-        assert registry_client.get("/banks/DA").json()["source"] == "seed"
-        assert len(registry_client.get("/banks/DA/items").json()) > 1
-
-    def test_a_checked_in_bank_cannot_be_deleted_outright(self, registry_client):
-        response = registry_client.delete("/banks/AIE")
-        assert response.status_code == 404
-        assert response.json()["code"] == "bank_not_stored"
-
-
-class TestARefusedBankSaysWhy:
-    """A 422 with the reason beats a 500, and beats a 201 that stores something unusable."""
-
-    def test_an_out_of_range_discrimination_is_refused_by_the_schema(
-        self, registry_client
-    ):
-        body = submission("BAD")
-        body["items"][0]["cat"]["a"] = 12.0
-        response = registry_client.post("/banks", json=body)
-        assert response.status_code == 422
-        assert response.json()["code"] == "request_invalid"
-
-    def test_a_graph_that_pairs_with_a_different_bank_is_refused_with_the_reason(
-        self, registry_client
-    ):
-        body = submission("BAD")
-        body["graph"] = graph("Y.1", main="Y")
-        response = registry_client.post("/banks", json=body)
-        assert response.status_code == 422
-        assert "graph_bank_mismatch" in response.json()["detail"]
-
-    def test_a_bank_id_that_could_escape_the_store_is_refused(self, registry_client):
-        response = registry_client.post("/banks", json=submission("../escape"))
-        assert response.status_code == 422
-
-    def test_a_refused_bank_is_not_registered(self, registry_client):
-        body = submission("BAD")
-        body["graph"] = graph("Y.1", main="Y")
-        registry_client.post("/banks", json=body)
-        assert registry_client.get("/banks/BAD").status_code == 404
-
-    def test_validate_checks_without_writing(self, registry_client):
-        report = registry_client.post("/banks/validate", json=submission("DRYRUN")).json()
-        assert report["accepted"] is True
-        assert registry_client.get("/banks/DRYRUN").status_code == 404
-
-    def test_validate_reports_findings_for_a_bank_it_would_refuse(self, registry_client):
-        body = submission("DRYRUN")
-        body["graph"] = graph("X.1", "X.2")  # X.2 required, nothing measures it
-        report = registry_client.post("/banks/validate", json=body).json()
-        assert report["accepted"] is False
-        assert any(f["code"] == "required_node_unmeasured" for f in report["findings"])
-
-    def test_a_bank_with_no_graph_is_accepted_with_a_warning(self, registry_client):
-        body = {**submission("NOGRAPH2"), "graph": None}
-        report = registry_client.post("/banks", json=body).json()
-        assert report["accepted"] is True
-        assert any(f["code"] == "no_graph" for f in report["findings"])
-
-
-class TestTheWritePathCanBeTurnedOff:
-    """A read-only registry and one that can replace a live bank are different
-    propositions. There is no authentication here — see ADR-0002 — so a deployment that
-    does not need the write path should be able to not have it."""
-
-    @pytest.fixture()
-    def read_only(self, client_factory, tmp_path, monkeypatch):
-        monkeypatch.setenv("ADMIN_API_ENABLED", "false")
-        with bank_store_at(tmp_path / "banks"):
-            with client_factory("bank-registry") as client:
-                yield client
-
-    def test_writes_are_refused_with_a_reason(self, read_only):
-        for call in (
-            lambda: read_only.post("/banks", json=submission("X")),
-            lambda: read_only.put("/banks/X", json=submission("X")),
-            lambda: read_only.delete("/banks/X"),
-            lambda: read_only.post("/banks/validate", json=submission("X")),
-        ):
-            response = call()
-            assert response.status_code == 503
-            assert response.json()["code"] == "admin_api_disabled"
-
-    def test_the_read_path_still_works(self, read_only):
-        assert read_only.get("/banks").status_code == 200
-        assert read_only.get("/banks/DA/items").status_code == 200
-
-    def test_health_reports_that_it_is_off(self, read_only):
-        assert read_only.get("/health").json()["detail"]["admin_api_enabled"] is False
+    def test_a_checked_in_bank_survives_a_refused_write(self, registry_client):
+        """The endpoint refusing is not the same as the endpoint doing nothing."""
+        before = registry_client.get("/banks/DA").json()["version"]
+        registry_client.put("/banks/DA", json={"bank_id": "DA", "items": []})
+        assert registry_client.get("/banks/DA").json()["version"] == before

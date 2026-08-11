@@ -50,32 +50,20 @@ def item_ref(item: BankItem) -> BankItemRef:
         cat=CatParameters(a=item.cat.a, b=item.cat.b, c=item.cat.c),
         estimated_time_seconds=item.estimated_time_seconds,
         minimum_success_confidence=item.minimum_success_confidence,
+        status=item.status,
     )
 
 
 def item_full(item: BankItem) -> BankItemFull:
     """A ref plus the modality payload. For rendering and for grading."""
     return BankItemFull(
+        # `status` now travels on the ref itself, so it arrives through this spread. Passing
+        # it again here would be a duplicate keyword argument.
         **item_ref(item).model_dump(),
-        status=item.status,
         competency=item.competency,
         sub_competency=item.sub_competency,
         payload=dict(item.payload or {}),
     )
-
-
-def submission_to_bank_item(entry: dict[str, Any]) -> dict[str, Any]:
-    """A posted item into the shape the bank file uses.
-
-    The wire form carries one `payload` field whatever the modality; the bank file nests it
-    under the modality name. One field is easier to write a client against; the nested form
-    is what makes `BankItem`'s validator able to say "this item claims to be code and has
-    no code payload". Neither is wrong, so the translation lives here rather than either
-    side changing to suit the other.
-    """
-    converted = {k: v for k, v in entry.items() if k != "payload"}
-    converted[str(entry.get("modality"))] = dict(entry.get("payload") or {})
-    return converted
 
 
 def bank_summary(described: dict[str, Any]) -> BankSummary:
@@ -154,20 +142,3 @@ def parity_rows(report: list[dict[str, Any]]) -> list[ParityRowDTO]:
         )
         for row in report
     ]
-
-
-def validation_report(validation: Validation, *, version: str = "") -> BankValidationReport:
-    return BankValidationReport(
-        bank_id=validation.bank_id,
-        accepted=validation.accepted,
-        version=version,
-        items=validation.items,
-        mains=list(validation.mains),
-        modalities=list(validation.modalities),
-        findings=[
-            ValidationFinding(
-                severity=f.severity, code=f.code, message=f.message, subject=f.subject
-            )
-            for f in validation.findings
-        ],
-    )

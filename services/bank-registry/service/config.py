@@ -23,5 +23,11 @@ class Settings(ServiceSettings):
     #: something a deployment can turn off without turning off the service.
     admin_api_enabled: bool = True
 
+    #: Postgres, when this deployment uses it. EMPTY KEEPS THE FILE STORE, which is the
+    #: default and the tested-by-default path — `docs/architecture-proposal.md` §2.14 calls
+    #: this phase 6. Set it and the seeds are loaded on boot and every read comes from the
+    #: database instead of two directories.
+    bank_database_url: str = ""
+
 
 settings = Settings()

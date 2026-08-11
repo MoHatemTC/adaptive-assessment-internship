@@ -10,14 +10,12 @@ Collapsing them would silently give one caller's authorisation to both: the orch
 ranks the whole eligible pool on every step and must never be able to read a question, and
 the grader needs hidden tests and answer keys that must never reach a candidate's browser.
 
-THE WRITE SHAPE
+THERE IS NO WRITE SHAPE HERE ANY MORE
 
-`BankSubmission` is the whole of what another service posts to register a bank. Items and
-graph arrive together on purpose. A bank without its graph pairs with nothing, and the
-coverage gate then asks a graph that was authored for a different bank which
-sub-competencies a main requires — which marks every required node unmeasured and vetoes
-convergence for the rest of the session. Making the pair the unit of submission is what
-stops that being possible to get wrong.
+`BankSubmission` used to live in this file: a bank and a hand-authored competency graph,
+posted together. Writing a bank moved to `bank-ingest`, which takes one uploaded FILE and
+derives the graph from the questions in it — so the shape a client sends is a multipart
+file, not a model, and there is nothing left for this package to describe. See ADR-0003.
 """
 
 from __future__ import annotations
@@ -152,43 +150,6 @@ class ParityRowDTO(BaseModel):
     variable: str
     verdict: str = ""
     detail: dict[str, Any] = Field(default_factory=dict)
-
-
-class BankItemSubmission(BaseModel):
-    """One item as another service posts it.
-
-    The bounds on `cat` are enforced here rather than at first use. A bank whose
-    discrimination is 12.0 is not a bank that produces slightly odd rankings; it is one
-    that produces meaningless information scores, and the door is the cheapest place to
-    find out.
-    """
-
-    item_id: str
-    modality: Modality
-    status: str = "active"
-    competency: str = ""
-    sub_competency: str = ""
-    measures: list[MeasuredVariableRef] = Field(min_length=1)
-    cat: CatParameters
-    estimated_time_seconds: float | None = Field(default=None, gt=0.0)
-    minimum_success_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
-    #: The modality payload, keyed by modality name — exactly one key, matching `modality`.
-    payload: dict[str, Any] = Field(default_factory=dict)
-
-
-class BankSubmission(BaseModel):
-    """A whole bank, posted by another service. Items and graph together — see the module
-    docstring for why the pair is the unit."""
-
-    bank_id: str = Field(min_length=1, max_length=64)
-    title: str = ""
-    items: list[BankItemSubmission] = Field(min_length=1)
-    graph: CompetencyGraphDTO | None = None
-    #: None defers to the deployment default. Set per bank because the right answer depends
-    #: on how many sub-competencies sit under a main against how many questions the budget
-    #: allows — a main with sixteen sub-nodes and a twelve-question cap can never satisfy
-    #: full coverage, so every session would end on the budget escape.
-    coverage_critical_only: bool | None = None
 
 
 class ValidationFinding(BaseModel):
