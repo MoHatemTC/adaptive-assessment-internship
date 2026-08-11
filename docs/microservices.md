@@ -1,7 +1,11 @@
 # The services
 
-**Status: migrated.** Five services, three shared packages, and an engine that is a library
+**Status: migrated.** Seven services, three shared packages, and an engine that is a library
 rather than a monolith. `backend/app/main.py` and the Streamlit UI are gone.
+
+`bank-ingest` and `competency-scope` came later than the original five; the whole system is
+drawn in [architecture-proposal.md](architecture-proposal.md), and the decisions behind
+them recorded in [ADR-0003](adr/0003-uploaded-banks-and-scoped-assessments.md).
 
 Read [ADR-0001](adr/0001-service-boundaries.md) for why these are the seams, then
 [ADR-0002](adr/0002-engine-as-a-library.md) for what changed when the code actually moved.
@@ -12,10 +16,17 @@ Read [ADR-0001](adr/0001-service-boundaries.md) for why these are the seams, the
 | service | port | owns | egress |
 |---|---|---|---|
 | `assessment-orchestrator` | 8080 | the loop, the posterior, selection, stopping, sessions | model |
-| `bank-registry` | 8081 | banks, items, graphs, propagation policy, the write path | none |
+| `bank-registry` | 8081 | banks, items, graphs, propagation policy | none |
 | `grader` | 8082 | one response → `GradedOutcome[]`, per modality | model, sandbox |
 | `competency-graph` | 8083 | propagation, coverage, the manifest | **none** |
+| `bank-ingest` | 8084 | one uploaded file → a registered bank, graph derived. **The only writer** | none |
+| `competency-scope` | 8085 | a selection of competencies → a sub-graph and an item allowlist | none |
 | `live-voice` | 8765 | realtime rooms, the interview page | model |
+
+`bank-ingest` and `competency-scope` reach nothing but the bank store and `bank-registry`
+respectively. Neither can move a posterior: an upload produces a bank, and a scope produces a
+set of item ids, and no type in either surface has a `score`, a `weight` or an ability
+estimate on it.
 
 ```bash
 cd deploy && cp .env.example .env && docker compose up --build

@@ -17,6 +17,7 @@ Companion document: [`grading-schema.md`](grading-schema.md) (how each modality 
 {
   "schema_version": 2,
   "competency": "optional display label when the bank is single-track",
+  "competencies": [],
   "items": []
 }
 ```
@@ -25,9 +26,49 @@ Companion document: [`grading-schema.md`](grading-schema.md) (how each modality 
 |-------|----------|-------|
 | `schema_version` | **yes** | Integer; current engine expects `2` |
 | `competency` | no | Human label only; not used for selection |
+| `competencies` | no | What this bank's competencies are. Read only by `bank-ingest`; see below |
 | `items` | **yes** | Non-empty array of item envelopes |
 
 Invalid items are logged and skipped at load time. An empty valid set raises.
+
+### `competencies` — only when the bank is UPLOADED
+
+A checked-in bank pairs with an authored graph file and ignores this block entirely. It
+exists for a bank that arrives through `POST /uploads`, where **the author uploads one file
+and no graph**, so the competency graph is derived from the items.
+
+Two things cannot be derived from questions, and this is where an author states them.
+
+```json
+"competencies": [
+  {"id": "C1",   "title": "Software and AI Application Engineering"},
+  {"id": "C1.1", "title": "Core Python", "critical": true},
+  {"id": "C1.3", "title": "Code quality",  "critical": false},
+  {"id": "C1.6", "title": "AI application integration", "critical": true,
+   "mains": ["C1", "C6"]}
+]
+```
+
+| Field | Notes |
+|-------|-------|
+| `id` | The node id, matching a `measures[].variable` or its main prefix |
+| `title` | Overrides the label voted from the items' own `sub_competency` strings |
+| `critical` | Whether the coverage gate requires direct evidence here. **Default true** |
+| `mains` | Which main competencies this serves. Default: the id prefix |
+
+**`critical` is the one with teeth.** The coverage gate will not let a competency converge
+until every critical sub-competency under it has direct evidence, so a main declaring more
+critical nodes than `CAT_MAX_QUESTIONS - 2` can never satisfy it — and the upload is
+refused, naming that main. Marking everything critical is the default precisely because a
+file that says nothing should fail loudly at upload rather than quietly at convergence.
+
+**`mains` is how a shared node exists at all.** `C1.6` serving both C1 and C6 is authored
+knowledge; `"C1.6".split(".")[0]` can only ever say C1.
+
+A mapping is accepted as well as a list, keyed by id — `{"C1.1": {"critical": true}}`.
+
+This is **not a graph**: it has no edges. Edges are still derived from item co-measurement
+(`services/bank-ingest/service/derive.py`), and every derived prerequisite edge ships inert.
 
 ---
 
