@@ -86,8 +86,16 @@ class TestEveryRouteIsDocumented:
 class TestTheAssessmentApiIsUsableWithoutReadingTheSource:
     """The one an external frontend actually builds against."""
 
+    @staticmethod
     @pytest.fixture(scope="class")
-    def spec(self) -> dict:
+    def spec() -> dict:
+        """Built once for the class: loading a service is slow and the spec is immutable.
+
+        A `@staticmethod`, because a class-scoped fixture written as an instance method is
+        deprecated and removed in pytest 10 — each test gets a fresh instance while the
+        fixture runs once, so `self` there is a different object from the one every test
+        sees, and anything set on it silently vanishes.
+        """
         with load_service("assessment-orchestrator") as main:
             return main.app.openapi()
 
@@ -144,8 +152,9 @@ class TestTheAssessmentApiIsUsableWithoutReadingTheSource:
 
 
 class TestTheBankApiDocumentsItsTwoReadPaths:
+    @staticmethod
     @pytest.fixture(scope="class")
-    def spec(self) -> dict:
+    def spec() -> dict:
         with load_service("bank-registry") as main:
             return main.app.openapi()
 
