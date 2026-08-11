@@ -41,6 +41,20 @@ class Settings(ServiceSettings):
     #: rendered by a client.
     author_diagnostics_enabled: bool = False
 
+    #: WHERE LIVE ASSESSMENTS LIVE. Empty keeps them in this process — a supported
+    #: single-replica deployment, not a fallback, and `/health` reports which is in force.
+    #:
+    #: Set it and a restart resumes instead of losing every candidate mid-answer, and a
+    #: second replica can serve a session the first one started. A SEPARATE setting from
+    #: `BANK_DATABASE_URL` even when both point at one server: a bank is content that is
+    #: published and kept, a session is a record of what a person answered and has a
+    #: deletion deadline, and one URL for both makes that deadline somebody's afterthought.
+    session_database_url: str = ""
+    #: False blanks the per-response detail as soon as an assessment ends, keeping the
+    #: report. The report is what anybody reads afterwards; the responses are what make the
+    #: row personal data.
+    session_keep_responses: bool = False
+
     #: A frontend runs on its own origin. Wildcard with credentials off is the monolith's
     #: posture carried forward — there is no cookie-authenticated API here, and wildcard
     #: plus credentials is invalid browser policy anyway. Narrow it in any deployment that

@@ -55,7 +55,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from . import diagnostics as diagnostics_view
 from . import engine, presentation
 from .config import settings
-from .sessions import Session, SessionStore
+from .sessions import Session, SessionConflict, SessionStore
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +84,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-SESSIONS = SessionStore()
+def _session_persistence():
+    """The session store's backing database, when this deployment has one.
+
+    Imported lazily and only on this branch, so an orchestrator without `adaptive-store`
+    installed cannot fail at import for a dependency it is not using.
+    """
+    dsn = settings.session_database_url.strip()
+    if not dsn:
+        logger.info("SESSION_DATABASE_URL is unset — sessions live in this process only")
+        return None
+    from adaptive_store import SqlSessionStore
+
+    store = SqlSessionStore(dsn)
+    store.ensure_schema()
+    logger.info("sessions are persisted; a restart resumes rather than loses them")
+    return store
+
+
+SESSIONS = SessionStore(_session_persistence())
 
 app.include_router(
     operator_router(
@@ -96,6 +114,11 @@ app.include_router(
             "propagation": "competency-graph"
             if engine.propagation_is_remote()
             else "in-process",
+            # WHICH DEPLOYMENT THIS IS. `in-process` means a restart loses every live
+            # assessment and a second replica cannot serve one this replica started — a
+            # supported configuration, and one worth being able to read off a dashboard
+            # rather than infer from an outage.
+            "sessions_persisted": SESSIONS.persistent,
             "author_diagnostics_enabled": settings.author_diagnostics_enabled,
         },
         config_extra=lambda: {
@@ -249,6 +272,7 @@ async def create_assessment(body: CreateAssessmentRequest) -> AssessmentStateRes
         bank_id=bank_id, bank_version=version, state=state, rng=rng
     )
     SESSIONS.add(session)
+    SESSIONS.save(session)
     return _state_response(session)
 
 
@@ -460,6 +484,13 @@ async def _record_unlocked(
         new_state, item, use_llm=use_llm, rng=session.rng
     )
     session.state = orchestrator.ensure_presenting(new_state)
+    try:
+        SESSIONS.save(session)
+    except SessionConflict as exc:
+        # Another replica recorded an answer to this assessment while this one was grading.
+        # The same 409 the in-process path returns for the same reason: applying this answer
+        # would apply it to a question the candidate is no longer looking at.
+        raise ServiceError(409, "stale_answer", str(exc)) from exc
     return _state_response(session, last_graded=presentation.grade_receipt(graded))
 
 

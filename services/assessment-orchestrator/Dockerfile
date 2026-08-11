@@ -16,7 +16,10 @@ RUN pip install --no-cache-dir "/srv/engine[tracing]"
 
 COPY services/common /srv/common
 COPY services/clients /srv/clients
-RUN pip install --no-cache-dir /srv/common /srv/clients
+# Sessions, when this deployment persists them. Carries psycopg — installed here and
+# in the two bank services only; the other four persist nothing and hold no driver.
+COPY services/store /srv/store
+RUN pip install --no-cache-dir /srv/common /srv/clients /srv/store
 
 COPY services/assessment-orchestrator/requirements.txt /srv/requirements.txt
 RUN pip install --no-cache-dir -r /srv/requirements.txt
