@@ -42,6 +42,7 @@ from adaptive_contracts import (
     DiagnosticsResponse,
     ErrorResponse,
     PresentingDTO,
+    ScopeManifest,
 )
 from adaptive_service import install_error_handlers, operator_router
 from adaptive_service.errors import ServiceError
@@ -138,8 +139,84 @@ def _session(assessment_id: str) -> Session:
     return session
 
 
+def _scope_for(body: CreateAssessmentRequest, bank_id: str) -> ScopeManifest:
+    """Build the scope this session will run under, and refuse it if it cannot be assessed.
+
+    Built HERE rather than accepted as an id from the client. `scope_id` is a hash of its
+    inputs, so an id cannot be turned back into an allowlist, and accepting one would mean
+    applying a set of item ids nobody in this process derived. Because the manifest is a
+    pure function of (bank version, selection), a client that previewed the scope against
+    `competency-scope` gets the identical `scope_id` back on the session anyway.
+
+    An unassessable scope is refused BEFORE a candidate is involved. The alternative is a
+    session that opens, presents two questions, exhausts its pool and finalises every
+    competency as `bank_exhausted` — a shape indistinguishable afterwards from a candidate
+    who simply stopped answering.
+    """
+    if body.target_variables:
+        raise ServiceError(
+            400,
+            "scope_and_targets",
+            "send either `scope` or `target_variables`; `target_variables` is the same "
+            "idea restricted to main competencies, and two answers to which competencies "
+            "this assessment covers is one too many",
+        )
+
+    client = engine.scope_client()
+    if client is None:
+        raise ServiceError(
+            503,
+            "scope_unavailable",
+            "competency-scoped assessments are disabled on this deployment "
+            "(COMPETENCY_SCOPE_URL is unset)",
+        )
+
+    try:
+        scope = client.scope(bank_id, body.scope)
+    except ServiceRefused as exc:
+        raise ServiceError(
+            exc.status_code if 400 <= exc.status_code < 500 else 400,
+            exc.code or "scope_invalid",
+            exc.detail,
+        ) from exc
+    except ServiceUnavailable as exc:
+        raise ServiceError(503, "scope_unavailable", str(exc)) from exc
+
+    if not scope.assessable:
+        raise ServiceError(
+            422,
+            "scope_unassessable",
+            _why_unassessable(scope),
+        )
+    return scope
+
+
+def _why_unassessable(scope: ScopeManifest) -> str:
+    """Name the competency at fault. A refusal nobody can act on is a refusal that gets
+    retried unchanged."""
+    reasons: list[str] = []
+    if scope.rejected:
+        reasons.append(
+            f"not measurable in this bank: {', '.join(scope.rejected)}"
+        )
+    if scope.coverage.unserved:
+        reasons.append(
+            "required but measured by no active item: "
+            f"{', '.join(scope.coverage.unserved)}"
+        )
+    if scope.coverage.over_budget:
+        reasons.append(
+            f"{', '.join(scope.coverage.over_budget)} would require more "
+            f"sub-competencies than the {scope.coverage.question_budget}-question budget "
+            "can cover, so the coverage gate could never be satisfied"
+        )
+    if not scope.item_ids:
+        reasons.append("no active item measures anything in this selection")
+    return "; ".join(reasons) or "this selection cannot be assessed"
+
+
 def _orchestrator(session: Session):
-    return engine.orchestrator_for(session.bank_id, session.bank_version)
+    return engine.orchestrator_for(session.bank_id, session.bank_version, session.scope)
 
 
 def _state_response(
@@ -161,9 +238,9 @@ def _state_response(
         ranked_item, candidate = pair
         # The ranked item carries no payload — the repository behind selection cannot read
         # a question. Fetch the renderable copy for exactly the item being presented.
-        full = engine.bank_for(session.bank_id, session.bank_version).payload_for(
-            ranked_item.item_id
-        )
+        full = engine.bank_for(
+            session.bank_id, session.bank_version, session.scope
+        ).payload_for(ranked_item.item_id)
         if full is None:
             raise ServiceError(
                 503,
@@ -175,6 +252,7 @@ def _state_response(
     report = None
     if stop:
         report = presentation.report_dto(orchestrator.summarise(state, reason))
+        report.scope = presentation.scope_summary(session.scope)
         if not session.recorded:
             # Once per session: a poll of the assessment must not append it again.
             session.recorded = True
@@ -245,8 +323,25 @@ async def create_assessment(body: CreateAssessmentRequest) -> AssessmentStateRes
     except ServiceUnavailable as exc:
         raise ServiceError(503, "bank_registry_unavailable", str(exc)) from exc
 
-    orchestrator = engine.orchestrator_for(bank_id, version)
-    targets = body.target_variables or orchestrator._bank.variables()  # noqa: SLF001
+    scope = _scope_for(body, bank_id) if body.scope is not None else None
+    orchestrator = engine.orchestrator_for(bank_id, version, scope)
+
+    # THE SCOPE DECIDES THE TARGETS, AND THEY ARE ALWAYS MAINS.
+    #
+    # A sub-competency must never become a target variable. `rollup_outcomes` folds every
+    # graded outcome to `variable.split(".")[0]` and drops it when that main is not in the
+    # session, so a session begun on ["C1.1"] would compute outcomes, propagate them to the
+    # graph, and then discard every one before the posterior — running to the question cap
+    # with the standard error exactly where it started, raising nothing and logging nothing.
+    #
+    # So a selection of sub-competencies opens their MAINS and is expressed as a narrower
+    # item pool and a narrower coverage requirement, which is what `ScopedBank` and the
+    # induced graph already do. Ability is estimated per main; a target variable is by
+    # definition something that has one.
+    if scope is not None:
+        targets = [row.main for row in scope.mains]
+    else:
+        targets = body.target_variables or orchestrator._bank.variables()  # noqa: SLF001
     try:
         state = orchestrator.begin(
             targets,
@@ -269,7 +364,7 @@ async def create_assessment(body: CreateAssessmentRequest) -> AssessmentStateRes
             "assessment session capacity reached; retry after a session finishes",
         )
     session = Session(
-        bank_id=bank_id, bank_version=version, state=state, rng=rng
+        bank_id=bank_id, bank_version=version, state=state, rng=rng, scope=scope
     )
     SESSIONS.add(session)
     SESSIONS.save(session)

@@ -28,13 +28,27 @@ from conftest import asgi_client, bank_store_at, load_services, stub_sandbox_and
 @pytest.fixture()
 def stack(monkeypatch, tmp_path):
     """bank-registry, grader, competency-graph and the orchestrator, wired together."""
-    from adaptive_clients import BankRegistryClient, CompetencyGraphClient
-    from adaptive_clients.engine import HttpGrader, HttpGraphSource, HttpUnifiedBank
+    from adaptive_clients import (
+        BankRegistryClient,
+        CompetencyGraphClient,
+        CompetencyScopeClient,
+    )
+    from adaptive_clients.engine import (
+        HttpGrader,
+        HttpGraphSource,
+        HttpUnifiedBank,
+        ScopedBank,
+        scoped_graph_service,
+    )
 
     stub_sandbox_and_model(monkeypatch)
     with bank_store_at(tmp_path / "banks"):
         with load_services(
-            "bank-registry", "grader", "competency-graph", "assessment-orchestrator"
+            "bank-registry",
+            "grader",
+            "competency-graph",
+            "competency-scope",
+            "assessment-orchestrator",
         ) as modules:
             registry_main = modules["bank-registry"]
             grader_main = modules["grader"]
@@ -56,21 +70,35 @@ def stack(monkeypatch, tmp_path):
             eng._graph_source = HttpGraphSource(eng._bank_client)
             eng.reset()
 
-            def build(bank_id: str, version: str):
-                key = (bank_id, version)
+            def build(bank_id: str, version: str, scope=None):
+                # Mirrors `engine.orchestrator_for`, rewired to the in-process apps. The
+                # SCOPING is not re-implemented — it calls the same two adapters the
+                # service does, so a scope that behaved differently here would be a test
+                # passing against code nobody ships.
+                key = (bank_id, version, scope.scope_hash if scope else "")
                 if key in eng._orchestrators:
                     return eng._orchestrators[key]
                 from app.services.orchestrator.orchestrator import Orchestrator
 
                 bank = HttpUnifiedBank(eng._bank_client, bank_id)
                 bank.refresh()
+                graph = eng._graph_source.service(bank_id)
+                critical_only = eng._bank_client.bank(bank_id).coverage_critical_only
+                if scope is not None:
+                    bank = ScopedBank(
+                        bank,
+                        item_ids=set(scope.item_ids),
+                        mains={row.main for row in scope.mains},
+                    )
+                    graph = scoped_graph_service(
+                        graph, {node.node_id for node in scope.nodes}
+                    )
+                    critical_only = scope.coverage.critical_only_applied
                 built = Orchestrator(
                     bank,
                     HttpGrader(http=asgi_client(grader_main.app), bank_id=bank_id),
-                    graph=eng._graph_source.service(bank_id),
-                    coverage_critical_only=eng._bank_client.bank(
-                        bank_id
-                    ).coverage_critical_only,
+                    graph=graph,
+                    coverage_critical_only=critical_only,
                     bank_id=bank_id,
                     propagation=CompetencyGraphClient(
                         http=asgi_client(graph_main.app), bank_id=bank_id
@@ -79,8 +107,18 @@ def stack(monkeypatch, tmp_path):
                 eng._orchestrators[key] = built
                 return built
 
+            # competency-scope, wired to the same in-process registry. The orchestrator
+            # BUILDS the scope rather than being handed one, so this is the real path: a
+            # scoped test that stubbed the manifest would never exercise the induction.
+            scope_main = modules["competency-scope"]
+            scope_main._bank = BankRegistryClient(http=bank_http)
+            eng._scope_client = CompetencyScopeClient(
+                http=asgi_client(scope_main.app)
+            )
+
             monkeypatch.setattr(eng, "orchestrator_for", build)
             monkeypatch.setattr(orchestrator_main.engine, "orchestrator_for", build)
+            monkeypatch.setattr(eng, "scope_client", lambda: eng._scope_client)
 
             with TestClient(orchestrator_main.app) as http:
                 yield http, orchestrator_main
@@ -120,6 +158,41 @@ def answer(api, session: dict) -> dict:
     response = api.post(f"/assessments/{session['session_id']}/responses", json=payload)
     assert response.status_code == 200, response.text
     return response.json()
+
+
+def comparable(report: dict) -> dict:
+    """A report minus what identifies the RUN rather than the measurement.
+
+    THE SESSION ID, which is a uuid per run and is embedded in every evidence id —
+    `{session}:{item}:{attempt}:{modality}:{node}` — because that is what makes an evidence
+    id unique and a replay recognisable. Normalised rather than dropped: the SHAPE of those
+    ids is worth comparing, and one naming a different item, attempt or node should still
+    fail.
+
+    THE CLOCK, which is measured rather than computed.
+
+    THE SCOPE ANNOTATION, which is the one field the two runs are SUPPOSED to differ in.
+
+    The same three exclusions, for the same reasons, as
+    `test_parity_inprocess_vs_services.comparable`.
+    """
+    import re
+
+    stripped = {
+        k: v
+        for k, v in report.items()
+        if k not in ("session_id", "seconds_by_item", "scope")
+    }
+    text = json.dumps(stripped, sort_keys=True)
+    return json.loads(re.sub(r"asmt_[0-9a-f]{12}", "asmt_SESSION", text))
+
+
+def run_to_report(api, session: dict) -> dict:
+    """Answer until the assessment stops, and return the report it produced."""
+    while session.get("presenting"):
+        session = answer(api, session)
+    assert session["report"] is not None, session.get("stop_reason")
+    return session["report"]
 
 
 class TestTheLifecycle:
@@ -456,3 +529,96 @@ class TestDiagnosticsWhenEnabled:
         session = begin(author_api)
         raw = author_api.get(f"/assessments/{session['session_id']}/state").json()
         assert AssessmentState.model_validate(raw).session_id == session["session_id"]
+
+
+class TestAScopedAssessment:
+    """Beginning an assessment on some of a bank's competencies rather than all of it.
+
+    THE FIRST TEST IS THE ONE THAT MATTERS. A scope naming every competency has to produce
+    the same report as no scope at all. If it does not, a scoped session is not a
+    restriction of the engine's behaviour but a second, slightly different instrument — and
+    every number in `docs/evidence.md` was measured against the first one.
+    """
+
+    def test_a_scope_over_everything_reports_exactly_what_no_scope_does(self, api):
+        unscoped = run_to_report(api, begin(api))
+        scoped = run_to_report(api, begin(api, scope={"selected": ["DA"]}))
+        assert comparable(scoped) == comparable(unscoped)
+
+    def test_the_report_names_the_scope_it_was_measured_under(self, api):
+        report = run_to_report(api, begin(api, scope={"selected": ["DA"]}))
+        assert report["scope"]["scope_id"].startswith("scp_")
+        assert report["scope"]["selected"] == ["DA"]
+        # A whole main is not partial, so nothing here should claim it is.
+        assert report["scope"]["partial_mains"] == []
+
+    def test_an_unscoped_report_carries_no_scope(self, api):
+        assert run_to_report(api, begin(api))["scope"] is None
+
+    def test_only_items_inside_the_scope_are_ever_presented(self, api):
+        """The property a candidate would notice. Asserted across a whole session rather
+        than on the first item, because a narrowing that leaked later would still be a
+        candidate answering a question nobody selected."""
+        from app.services.orchestrator import registry
+
+        session = begin(api, scope={"selected": ["DA.1", "DA.2"]})
+        allowed = {
+            item.item_id
+            for item in registry.get_bank("DA").all_items()
+            if {m.variable for m in item.measures} & {"DA.1", "DA.2"}
+        }
+        seen = set()
+        while session.get("presenting"):
+            seen.add(session["presenting"]["item"]["item_id"])
+            session = answer(api, session)
+        assert seen, "the session presented nothing at all"
+        assert seen <= allowed
+
+    def test_a_partially_scoped_main_is_reported_as_partial(self, api):
+        report = run_to_report(api, begin(api, scope={"selected": ["DA.1", "DA.2"]}))
+        assert report["scope"]["partial_mains"] == ["DA"]
+        assert 0.0 < report["scope"]["retained_weight_by_main"]["DA"] < 1.0
+
+    def test_a_sub_competency_never_becomes_a_reported_variable(self, api):
+        """Ability is estimated per MAIN. `rollup_outcomes` folds every outcome to its
+        main and DROPS it when that main is not in the session, so a session opened on
+        `DA.1` would discard every outcome it computed and finish with the standard error
+        exactly where it started — raising nothing and logging nothing."""
+        report = run_to_report(api, begin(api, scope={"selected": ["DA.1", "DA.2"]}))
+        assert [row["variable"] for row in report["variables"]] == ["DA"]
+        assert report["variables"][0]["observations"] > 0
+
+    def test_scope_and_target_variables_together_are_refused(self, api):
+        response = api.post(
+            "/assessments",
+            json={
+                "bank_id": "DA",
+                "use_llm": False,
+                "scope": {"selected": ["DA"]},
+                "target_variables": ["DA"],
+            },
+        )
+        assert response.status_code == 400
+        assert response.json()["code"] == "scope_and_targets"
+
+    def test_an_unassessable_scope_is_refused_before_a_candidate_is_involved(self, api):
+        """With the competency named. A scope thin enough to exhaust immediately otherwise
+        produces a session that finalises everything as `bank_exhausted` — a shape
+        indistinguishable afterwards from a candidate who stopped answering."""
+        response = api.post(
+            "/assessments",
+            json={
+                "bank_id": "DA",
+                "use_llm": False,
+                "scope": {"selected": ["NOT-A-COMPETENCY"]},
+            },
+        )
+        assert response.status_code == 422
+        assert response.json()["code"] == "scope_unassessable"
+        assert "NOT-A-COMPETENCY" in response.json()["detail"]
+
+    def test_the_scope_pins_the_bank_version_it_was_built_against(self, api):
+        session = begin(api, scope={"selected": ["DA"]})
+        from app.services.orchestrator import registry
+
+        assert session["bank_version"] == registry.version("DA")

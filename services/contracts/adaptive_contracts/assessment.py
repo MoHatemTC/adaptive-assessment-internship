@@ -22,6 +22,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from .envelopes import Modality
+from .scope import ScopeSelection, ScopeSummaryDTO
 
 
 class CreateAssessmentRequest(BaseModel):
@@ -34,6 +35,19 @@ class CreateAssessmentRequest(BaseModel):
     bank_id: str | None = None
     #: None assesses every main the bank measures.
     target_variables: list[str] | None = None
+    #: Narrow the assessment to some of the bank's competencies, at MAIN or SUB-COMPETENCY
+    #: granularity. None assesses the whole bank, exactly as before — so every existing
+    #: caller is unaffected and this field is additive.
+    #:
+    #: The SELECTION travels rather than a scope id. `scope_id` is a hash of its inputs and
+    #: cannot be inverted, so the orchestrator rebuilds the manifest and pins what it built
+    #: — which also means it never applies an allowlist it did not derive itself. A client
+    #: that previewed the scope gets the identical `scope_id` back, because the manifest is
+    #: a pure function of the bank version and the selection.
+    #:
+    #: Mutually exclusive with `target_variables`, which is the same idea restricted to
+    #: mains and is kept for callers that already use it.
+    scope: ScopeSelection | None = None
     #: Self-rating per main, 1-5. Seeds a narrower prior than flat.
     intake: dict[str, int] | None = None
     #: Whether each self-rating is trusted. An untrusted rating seeds a wide prior, which
@@ -167,6 +181,14 @@ class AssessmentReportDTO(BaseModel):
     graph: dict[str, Any] = Field(default_factory=dict)
     aberrant_responses: list[dict[str, Any]] = Field(default_factory=list)
     seconds_by_item: dict[str, float] = Field(default_factory=dict)
+    #: The scope this assessment was measured under, when it was narrowed to one. Absent
+    #: for a whole-bank assessment.
+    #:
+    #: It carries `partial_mains` because a partially scoped main is estimated from a
+    #: corner of itself — the exact thing the coverage gate exists to prevent when it
+    #: happens by accident. Legitimate on purpose, but a number that does not say so can be
+    #: compared against a whole-bank score, and the two do not mean the same thing.
+    scope: ScopeSummaryDTO | None = None
 
 
 class AssessmentStateResponse(BaseModel):

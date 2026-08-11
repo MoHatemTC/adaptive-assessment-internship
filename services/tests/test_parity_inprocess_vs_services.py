@@ -75,11 +75,18 @@ def comparable(report: dict) -> dict:
     Normalising it rather than dropping the ids: their SHAPE is the thing worth comparing.
     An evidence id that named a different item, a different attempt number or a different
     node would still fail this, which is the failure that would matter.
+
+    THE SCOPE ANNOTATION. `scope` is a service-layer field with no engine counterpart, and
+    it is None for exactly the assessments this test runs — whole-bank ones. Dropped
+    outright rather than special-cased on None, so that a scoped session leaking into this
+    comparison fails somewhere honest instead of quietly comparing equal.
     """
     import json
     import re
 
-    stripped = {k: v for k, v in report.items() if k != "seconds_by_item"}
+    stripped = {
+        k: v for k, v in report.items() if k not in ("seconds_by_item", "scope")
+    }
     text = json.dumps(stripped, sort_keys=True)
     text = re.sub(r"asmt_[0-9a-f]{12}", "asmt_SESSION", text)
     return json.loads(text)
@@ -170,9 +177,13 @@ def services_report(monkeypatch, tmp_path):
             eng._graph_source = HttpGraphSource(eng._bank_client)
             eng.reset()
 
-            def build(bank_id: str, version: str):
+            def build(bank_id: str, version: str, scope=None):
                 from app.services.orchestrator.orchestrator import Orchestrator
 
+                # This suite runs UNSCOPED assessments — that is the point of it. The
+                # parameter exists only so the stub matches the signature the service now
+                # calls; a scope arriving here would be a test asking the wrong question.
+                assert scope is None, "the parity run is deliberately whole-bank"
                 key = (bank_id, version)
                 if key in eng._orchestrators:
                     return eng._orchestrators[key]

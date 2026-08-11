@@ -26,6 +26,8 @@ from adaptive_contracts import (
     GradeReceiptDTO,
     PresentedItemDTO,
     PresentingDTO,
+    ScopeManifest,
+    ScopeSummaryDTO,
 )
 from app.schemas.orchestration import AssessmentReport, BankItem, GradedResponse
 
@@ -98,3 +100,26 @@ def grade_receipt(graded: GradedResponse) -> GradeReceiptDTO:
 
 def report_dto(report: AssessmentReport) -> AssessmentReportDTO:
     return AssessmentReportDTO.model_validate(report.model_dump())
+
+
+def scope_summary(scope: ScopeManifest | None) -> ScopeSummaryDTO | None:
+    """What a REPORT says about the scope it was measured under.
+
+    The identity and the honesty flags, not the whole manifest: the manifest is
+    reproducible from the selection at any time, and inlining it would grow every report by
+    the size of a bank's taxonomy for no reader.
+
+    `partial_mains` is the field that matters. A partially scoped main is estimated from a
+    corner of itself, which is exactly what the coverage gate prevents when it happens by
+    accident. It is legitimate on purpose — but an estimate that does not say so can be
+    compared against a whole-bank score, and the two do not mean the same thing.
+    """
+    if scope is None:
+        return None
+    return ScopeSummaryDTO(
+        scope_id=scope.scope_id,
+        scope_hash=scope.scope_hash,
+        selected=list(scope.selected),
+        partial_mains=[row.main for row in scope.mains if row.partial],
+        retained_weight_by_main={row.main: row.retained_weight for row in scope.mains},
+    )

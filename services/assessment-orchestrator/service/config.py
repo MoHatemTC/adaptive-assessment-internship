@@ -25,6 +25,14 @@ class Settings(ServiceSettings):
     #: a supported single-container deployment, not a fallback: `/health` reports which one
     #: is in force, so a misconfiguration is visible rather than merely quiet.
     competency_graph_url: str = "http://competency-graph:8083"
+    #: Empty disables competency-scoped assessments: `POST /assessments` with a `scope`
+    #: then refuses rather than quietly assessing the whole bank, because "you asked for
+    #: three competencies and got eleven" is not a degraded mode a candidate or a report
+    #: could detect afterwards.
+    competency_scope_url: str = "http://competency-scope:8085"
+    #: A scope is induced once per session, not per response, so it is nowhere near the
+    #: 150 ms per-response budget. The ceiling is here to bound session START.
+    scope_timeout_seconds: float = 10.0
 
     #: A code submission is sandbox-bound and budgeted at 30 s; the ceiling sits above the
     #: sandbox's own timeout rather than racing it.
