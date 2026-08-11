@@ -29,8 +29,10 @@ OUT = ROOT / "docs" / "api"
 SERVICES = (
     "assessment-orchestrator",
     "bank-registry",
+    "bank-ingest",
     "grader",
     "competency-graph",
+    "competency-scope",
     "live-voice",
 )
 

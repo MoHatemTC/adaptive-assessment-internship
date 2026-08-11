@@ -53,6 +53,57 @@ POST /assessments
 session from here on — you never send them again, and a bank replaced mid-session cannot
 change the pool underneath the candidate.
 
+### Begin, narrowed to some competencies
+
+An assessment can cover part of a bank instead of all of it, at main **or**
+sub-competency granularity. Send `scope` instead of `target_variables` — the two are
+mutually exclusive, and sending both is a `400`.
+
+```http
+POST /assessments
+{
+  "bank_id": "AIE",
+  "scope": {
+    "selected": ["C1.1", "C1.4", "C6"],   // mains and sub-competencies, one list
+    "critical_only": null,                // omit to use the bank's own coverage policy
+    "include_prerequisites": false        // pull in prerequisite ancestors? see below
+  },
+  "use_llm": true
+}
+```
+
+**The selection travels, not a scope id.** The orchestrator builds the scope itself and
+pins what it built, so it never applies an item allowlist nobody in that process derived.
+If you called `POST /scopes` on `competency-scope` first — to preview the selection or draw
+it — you get back the identical `scope_id`, because the manifest is a pure function of the
+bank version and the selection.
+
+Three things to know before you offer this in a UI:
+
+**A selection widens.** Sub-competencies can be shared: `C1.6` serves both `C1` and `C6`,
+so selecting `C6` whole necessarily measures something that evidences `C1`, and `C1` is
+therefore opened too. It has to be — an outcome whose main is not in the session is
+discarded — but the report marks such a main `implied`, so you can tell it from one the
+user chose.
+
+**A partially covered main is estimated from part of itself.** Ability is estimated per
+main; sub-competencies have no estimate of their own. The report says which mains were
+partial and how much of each was retained — do not present a partial main's level beside a
+whole-bank one without saying so.
+
+**Preview it first if the selection is user-built.** `POST /scopes` returns
+`coverage.reachable: false` with the offending competencies named when a selection cannot
+be assessed within the question budget. `POST /assessments` refuses the same selection with
+`422 scope_unassessable`, but by then you have a user staring at an error instead of a
+picker telling them what to add.
+
+```http
+POST /scopes                          →  competency-scope, :8085
+{"bank_id": "AIE", "selected": ["C1.1", "C1.4", "C6"]}
+
+POST /scopes/graph                    →  the same scope, drawn as mermaid
+```
+
 Do not send `seed` in production. It exists for deterministic replay; omitting it draws OS
 entropy, and exposure control must not be predictable.
 
@@ -113,6 +164,24 @@ until external exact-band calibration passes. It is not a placeholder — do not
 a certified result.
 
 ---
+
+### The scope, on the report
+
+A scoped assessment carries a `scope` block on its report. A whole-bank one carries `null`.
+
+```json
+"scope": {
+  "scope_id": "scp_7f3a…",
+  "selected": ["C1.1", "C1.4", "C6"],
+  "partial_mains": ["C1", "C3"],
+  "retained_weight_by_main": {"C1": 0.5713, "C3": 0.1818, "C6": 1.0}
+}
+```
+
+`retained_weight_by_main` is the share of a main's declared competency mass the scope kept.
+It is a **coverage statement, not a confidence** — it does not enter any estimate. It is
+there so a report can say what a level covers, and it is the number to show beside any main
+listed in `partial_mains`.
 
 ## Errors
 

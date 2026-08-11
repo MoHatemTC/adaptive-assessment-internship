@@ -26,6 +26,16 @@
             "title": "Items Administered",
             "type": "integer"
           },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScopeSummaryDTO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "seconds_by_item": {
             "additionalProperties": {
               "type": "number"
@@ -584,6 +594,16 @@
             ],
             "title": "Intake"
           },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScopeSelection"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "seed": {
             "anyOf": [
               {
@@ -1000,6 +1020,78 @@
           "chosen_by_llm"
         ],
         "title": "QueuedCandidate",
+        "type": "object"
+      },
+      "ScopeSelection": {
+        "description": "Which competencies an assessment is about. Carried on `CreateAssessmentRequest`.\n\nTHE SELECTION TRAVELS, NOT A SCOPE ID\n\n`scope_id` is a hash, and a hash cannot be inverted, so a service holding no state\ncannot answer `GET /scopes/{id}`. The alternatives are both worse: caching manifests\nmakes a deterministic service stateful and bound to one replica, and letting a client\nhand the orchestrator an id it cannot verify means trusting an allowlist nobody\nre-derived.\n\nSo the orchestrator builds the scope itself, from the selection. A client that called\n`POST /scopes` first to preview or draw it gets the identical `scope_id` back on the\nsession, because the manifest is a pure function of (bank version, selection) \u2014 which\nis the same property that lets this service scale horizontally and lose nothing on\nrestart.",
+        "properties": {
+          "critical_only": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Critical Only"
+          },
+          "include_prerequisites": {
+            "default": false,
+            "title": "Include Prerequisites",
+            "type": "boolean"
+          },
+          "selected": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Selected",
+            "type": "array"
+          }
+        },
+        "required": [
+          "selected"
+        ],
+        "title": "ScopeSelection",
+        "type": "object"
+      },
+      "ScopeSummaryDTO": {
+        "description": "What a REPORT says about the scope it was measured under.\n\nSmall on purpose: a report carries the identity of the scope and the honesty flags, not\nthe whole manifest. The manifest is reproducible from `scope_id` at any time, and a\nreport that inlined it would grow by the size of a bank's taxonomy for no reader.",
+        "properties": {
+          "partial_mains": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Partial Mains",
+            "type": "array"
+          },
+          "retained_weight_by_main": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Retained Weight By Main",
+            "type": "object"
+          },
+          "scope_hash": {
+            "default": "",
+            "title": "Scope Hash",
+            "type": "string"
+          },
+          "scope_id": {
+            "default": "",
+            "title": "Scope Id",
+            "type": "string"
+          },
+          "selected": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Selected",
+            "type": "array"
+          }
+        },
+        "title": "ScopeSummaryDTO",
         "type": "object"
       },
       "VariableDiagnosticsDTO": {

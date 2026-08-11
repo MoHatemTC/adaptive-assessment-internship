@@ -136,6 +136,11 @@
             ],
             "title": "Modality",
             "type": "string"
+          },
+          "status": {
+            "default": "active",
+            "title": "Status",
+            "type": "string"
           }
         },
         "required": [
@@ -145,140 +150,6 @@
           "cat"
         ],
         "title": "BankItemRef",
-        "type": "object"
-      },
-      "BankItemSubmission": {
-        "description": "One item as another service posts it.\n\nThe bounds on `cat` are enforced here rather than at first use. A bank whose\ndiscrimination is 12.0 is not a bank that produces slightly odd rankings; it is one\nthat produces meaningless information scores, and the door is the cheapest place to\nfind out.",
-        "properties": {
-          "cat": {
-            "$ref": "#/components/schemas/CatParameters"
-          },
-          "competency": {
-            "default": "",
-            "title": "Competency",
-            "type": "string"
-          },
-          "estimated_time_seconds": {
-            "anyOf": [
-              {
-                "exclusiveMinimum": 0.0,
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Estimated Time Seconds"
-          },
-          "item_id": {
-            "title": "Item Id",
-            "type": "string"
-          },
-          "measures": {
-            "items": {
-              "$ref": "#/components/schemas/MeasuredVariableRef"
-            },
-            "minItems": 1,
-            "title": "Measures",
-            "type": "array"
-          },
-          "minimum_success_confidence": {
-            "anyOf": [
-              {
-                "maximum": 1.0,
-                "minimum": 0.0,
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Minimum Success Confidence"
-          },
-          "modality": {
-            "enum": [
-              "mcq",
-              "code",
-              "open",
-              "voice"
-            ],
-            "title": "Modality",
-            "type": "string"
-          },
-          "payload": {
-            "additionalProperties": true,
-            "title": "Payload",
-            "type": "object"
-          },
-          "status": {
-            "default": "active",
-            "title": "Status",
-            "type": "string"
-          },
-          "sub_competency": {
-            "default": "",
-            "title": "Sub Competency",
-            "type": "string"
-          }
-        },
-        "required": [
-          "item_id",
-          "modality",
-          "measures",
-          "cat"
-        ],
-        "title": "BankItemSubmission",
-        "type": "object"
-      },
-      "BankSubmission": {
-        "description": "A whole bank, posted by another service. Items and graph together \u2014 see the module\ndocstring for why the pair is the unit.",
-        "properties": {
-          "bank_id": {
-            "maxLength": 64,
-            "minLength": 1,
-            "title": "Bank Id",
-            "type": "string"
-          },
-          "coverage_critical_only": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Coverage Critical Only"
-          },
-          "graph": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CompetencyGraphDTO"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/BankItemSubmission"
-            },
-            "minItems": 1,
-            "title": "Items",
-            "type": "array"
-          },
-          "title": {
-            "default": "",
-            "title": "Title",
-            "type": "string"
-          }
-        },
-        "required": [
-          "bank_id",
-          "items"
-        ],
-        "title": "BankSubmission",
         "type": "object"
       },
       "BankSummary": {
@@ -346,56 +217,6 @@
           "title"
         ],
         "title": "BankSummary",
-        "type": "object"
-      },
-      "BankValidationReport": {
-        "description": "Why a bank was accepted or refused, in enough detail to fix it.\n\nWarnings never block. A bank whose code items rarely win a ranking is a bank worth\nknowing about, not a bank worth refusing \u2014 the distinction between \"loses because it\ngenuinely measures less\" and \"loses because its parameters are wrong\" is the whole\npoint of the parity diagnostic, and only the second is an error.",
-        "properties": {
-          "accepted": {
-            "title": "Accepted",
-            "type": "boolean"
-          },
-          "bank_id": {
-            "title": "Bank Id",
-            "type": "string"
-          },
-          "findings": {
-            "items": {
-              "$ref": "#/components/schemas/ValidationFinding"
-            },
-            "title": "Findings",
-            "type": "array"
-          },
-          "items": {
-            "default": 0,
-            "title": "Items",
-            "type": "integer"
-          },
-          "mains": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Mains",
-            "type": "array"
-          },
-          "modalities": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Modalities",
-            "type": "array"
-          },
-          "version": {
-            "default": "",
-            "title": "Version",
-            "type": "string"
-          }
-        },
-        "required": [
-          "bank_id",
-          "accepted"
-        ],
-        "title": "BankValidationReport",
         "type": "object"
       },
       "CatParameters": {
@@ -817,39 +638,6 @@
         ],
         "title": "ValidationError",
         "type": "object"
-      },
-      "ValidationFinding": {
-        "description": "One thing wrong, or one thing worth knowing, about a submitted bank.",
-        "properties": {
-          "code": {
-            "title": "Code",
-            "type": "string"
-          },
-          "message": {
-            "title": "Message",
-            "type": "string"
-          },
-          "severity": {
-            "enum": [
-              "error",
-              "warning"
-            ],
-            "title": "Severity",
-            "type": "string"
-          },
-          "subject": {
-            "default": "",
-            "title": "Subject",
-            "type": "string"
-          }
-        },
-        "required": [
-          "severity",
-          "code",
-          "message"
-        ],
-        "title": "ValidationFinding",
-        "type": "object"
       }
     }
   },
@@ -886,30 +674,18 @@
         ]
       },
       "post": {
-        "description": "Refuses an id that already exists, INCLUDING one of the five checked-in banks. Replacing an existing bank is a PUT, so overwriting one is never something a retried POST can do by accident.",
+        "deprecated": true,
         "operationId": "create_bank_banks_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BankSubmission"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
-          "201": {
+          "200": {
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BankValidationReport"
-                }
+                "schema": {}
               }
             },
             "description": "Successful Response"
           },
-          "404": {
+          "410": {
             "content": {
               "application/json": {
                 "schema": {
@@ -917,40 +693,10 @@
                 }
               }
             },
-            "description": "no such bank or item"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "that bank id is already registered"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "the bank failed validation"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "the write path is disabled"
+            "description": "writing a bank moved to bank-ingest"
           }
         },
-        "summary": "Register a new bank",
+        "summary": "Gone \u2014 upload through bank-ingest",
         "tags": [
           "admin"
         ]
@@ -958,30 +704,18 @@
     },
     "/banks/validate": {
       "post": {
-        "description": "Same checks as a registration, no write. Intended for an authoring tool: the findings name the item, node or main at fault, so a bank can be fixed before it is anywhere near a candidate.",
+        "deprecated": true,
         "operationId": "validate_bank_banks_validate_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BankSubmission"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "200": {
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BankValidationReport"
-                }
+                "schema": {}
               }
             },
             "description": "Successful Response"
           },
-          "404": {
+          "410": {
             "content": {
               "application/json": {
                 "schema": {
@@ -989,30 +723,10 @@
                 }
               }
             },
-            "description": "no such bank or item"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "the write path is disabled"
+            "description": "writing a bank moved to bank-ingest"
           }
         },
-        "summary": "Check a bank without registering it",
+        "summary": "Gone \u2014 validate through bank-ingest",
         "tags": [
           "admin"
         ]
@@ -1020,7 +734,7 @@
     },
     "/banks/{bank_id}": {
       "delete": {
-        "description": "Removes the stored copy only. If it was shadowing a checked-in bank of the same id, that one reappears \u2014 which is what makes an accidental overwrite recoverable without a redeploy.",
+        "deprecated": true,
         "operationId": "delete_bank_banks__bank_id__delete",
         "parameters": [
           {
@@ -1037,16 +751,12 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Delete Bank Banks  Bank Id  Delete",
-                  "type": "object"
-                }
+                "schema": {}
               }
             },
             "description": "Successful Response"
           },
-          "404": {
+          "410": {
             "content": {
               "application/json": {
                 "schema": {
@@ -1054,7 +764,7 @@
                 }
               }
             },
-            "description": "no such bank or item"
+            "description": "writing a bank moved to bank-ingest"
           },
           "422": {
             "content": {
@@ -1065,19 +775,9 @@
               }
             },
             "description": "Validation Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "the write path is disabled"
           }
         },
-        "summary": "Deregister a posted bank",
+        "summary": "Gone \u2014 deregister through bank-ingest",
         "tags": [
           "admin"
         ]
@@ -1143,7 +843,7 @@
         ]
       },
       "put": {
-        "description": "Sessions already in flight are unaffected: each pins the bank version it began under, so a replacement changes what the NEXT assessment sees and nothing about one already running.",
+        "deprecated": true,
         "operationId": "replace_bank_banks__bank_id__put",
         "parameters": [
           {
@@ -1156,28 +856,16 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BankSubmission"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "200": {
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BankValidationReport"
-                }
+                "schema": {}
               }
             },
             "description": "Successful Response"
           },
-          "404": {
+          "410": {
             "content": {
               "application/json": {
                 "schema": {
@@ -1185,40 +873,20 @@
                 }
               }
             },
-            "description": "no such bank or item"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "the body names a different bank"
+            "description": "writing a bank moved to bank-ingest"
           },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             },
-            "description": "the bank failed validation"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "the write path is disabled"
+            "description": "Validation Error"
           }
         },
-        "summary": "Replace a bank, creating a new version",
+        "summary": "Gone \u2014 upload through bank-ingest",
         "tags": [
           "admin"
         ]
