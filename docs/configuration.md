@@ -83,6 +83,35 @@ blocking a skill they have costs them the assessment.
 | `ACTIVE_BANK` | `AIE` | which registered bank a session uses when the caller names none |
 | `CAT_SESSION_DUMP_DIR` | `""` | append finished states as JSONL. **Candidate data** — off by default |
 
+## Scoping
+
+`competency-scope`, and the orchestrator's link to it.
+
+| variable | default | meaning |
+|---|---|---|
+| `COMPETENCY_SCOPE_URL` | `http://competency-scope:8085` | **Empty disables competency-scoped assessments** — `POST /assessments` with a `scope` then returns 503 rather than quietly assessing the whole bank. "You asked for three competencies and got eleven" is not a degraded mode a candidate or a report could detect |
+| `SCOPE_TIMEOUT_SECONDS` | `10.0` | a scope is induced once per SESSION, not per response, so this is nowhere near the 150 ms per-response budget |
+
+## Bank ingest
+
+`bank-ingest` only. An author uploads questions and never a graph, so one is derived from
+the items — these govern that derivation. See [bank-schema.md](bank-schema.md) for the
+optional `competencies` block a bank uses to state what a derivation cannot infer.
+
+| variable | default | meaning |
+|---|---|---|
+| `INGEST_API_ENABLED` | `true` | false stops uploads without stopping the service — "not taking banks today" rather than "the authoring API is down" |
+| `RELATION_THRESHOLD` | `0.5` | a derived sub-to-sub relation at or above this is `PREREQUISITE`, below it `CONTRIBUTES_TO`. Derived prerequisite edges ship **inert regardless** |
+| `EDGE_FLOOR` | `0.05` | below this no derived sub-to-sub edge is emitted at all |
+| `MAX_UPLOAD_BYTES` | `33554432` | the largest checked-in bank is 1.8 MB; this fails an accidental upload at the door rather than in a parser |
+| `MAX_RETAINED_UPLOADS` | `200` | raw bytes are kept so a rejection is reproducible, and an unbounded list of them is a memory leak with a nice name |
+| `BANK_DATABASE_URL` | `""` | **Empty keeps the file store**, which is the default and the tested-by-default path. Set on both bank services to resolve banks from Postgres instead; `docker compose --profile db up` does it |
+
+Both thresholds are **modelling decisions, not derivations**. The right values depend on how
+heavily a bank's items measure more than one competency, which is a property of the content
+rather than of the code — which is also why they are settings and why the derivation is
+confined to one module.
+
 ## Code and voice
 
 | variable | default | meaning |
@@ -100,3 +129,8 @@ blocking a skill they have costs them the assessment.
 **Not safe without re-measuring:** `CAT_SE_TARGET`, band cut points, any graph propagation
 flag, `ORCHESTRATOR_TIME_AWARE_SELECTION_ENABLED`. Each changes what a reported level
 *means*, and the level is used for decisions about people.
+
+**Not safe for a bank already registered:** `RELATION_THRESHOLD` and `EDGE_FLOOR`. They are
+read when a bank is ingested, so changing them does not re-derive an existing graph — it
+changes what the *next* upload produces. Two banks uploaded either side of a change have
+graphs built to different rules, and nothing in a report says so.

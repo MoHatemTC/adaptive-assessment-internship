@@ -5,7 +5,7 @@ An agent-driven CAT engine that measures a candidate across many competencies us
 item — of whichever modality — will narrow the weakest estimate fastest, and finishing each
 competency as soon as it is measured.
 
-It runs as five services over one engine library. There is no UI in this repository: the
+It runs as seven services over one engine library. There is no UI in this repository: the
 API is documented in [docs/api.md](docs/api.md) and a frontend is built separately.
 
 ```bash
@@ -17,9 +17,11 @@ curl localhost:8080/health
 | service | port | owns |
 |---|---|---|
 | `assessment-orchestrator` | 8080 | the loop, the posterior, selection, stopping, sessions |
-| `bank-registry` | 8081 | banks, items, graphs, propagation policy — and a write path |
+| `bank-registry` | 8081 | banks, items, graphs, propagation policy |
 | `grader` | 8082 | one response → `GradedOutcome[]`, per modality |
 | `competency-graph` | 8083 | propagation, coverage. No egress, no state |
+| `bank-ingest` | 8084 | one uploaded file → a registered bank. The only writer |
+| `competency-scope` | 8085 | a selection of competencies → a sub-graph and an item allowlist |
 | `live-voice` | 8765 | realtime interview rooms |
 
 ```text
@@ -163,8 +165,9 @@ with an experimental design behind it. See [docs/operations.md](docs/operations.
 ## Where to read next
 
 - [docs/api.md](docs/api.md) — the contract a frontend builds against
+- [docs/architecture-proposal.md](docs/architecture-proposal.md) — the whole system drawn, and where it is going
 - [docs/architecture.md](docs/architecture.md) — the loop, the measurement, the graph
 - [docs/microservices.md](docs/microservices.md) — what runs, and what crosses the wire
-- [docs/adr/0001](docs/adr/0001-service-boundaries.md) · [0002](docs/adr/0002-engine-as-a-library.md) — the seams, and what changed when the code moved
+- [docs/adr/0001](docs/adr/0001-service-boundaries.md) · [0002](docs/adr/0002-engine-as-a-library.md) · [0003](docs/adr/0003-uploaded-banks-and-scoped-assessments.md) — the seams, what changed when the code moved, and uploaded banks and scoped assessments
 - [docs/operations.md](docs/operations.md) — running it, first checks, enabling inference
 - [docs/evidence.md](docs/evidence.md) — the measurements behind the defaults

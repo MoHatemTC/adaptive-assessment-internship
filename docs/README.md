@@ -9,6 +9,8 @@ optional competency graph layer.
 |---|---|
 | [api.md](api.md) | **you are building a client.** The one to read first from outside this repository |
 | [architecture.md](architecture.md) | you want to know what the engine does and why it is shaped this way |
+| [adr/0003-uploaded-banks-and-scoped-assessments.md](adr/0003-uploaded-banks-and-scoped-assessments.md) | you want to know why uploaded banks derive their graph, and why a scope decorates rather than changes the engine |
+| [architecture-proposal.md](architecture-proposal.md) | you want the whole system **drawn** — every service, both flows, the schema — and where it is going |
 | [microservices.md](microservices.md) | you want to know what runs, and what crosses the wire |
 | [operations.md](operations.md) | you are running this, or something is wrong |
 | [configuration.md](configuration.md) | you are setting a flag and want to know what it does |
