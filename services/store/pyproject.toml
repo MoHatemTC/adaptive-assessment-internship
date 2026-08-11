@@ -1,0 +1,19 @@
+[project]
+name = "adaptive-store"
+version = "1.0.0"
+description = "The bank store, backed by Postgres. Installed only into the services that touch a bank."
+requires-python = ">=3.12"
+# psycopg lives HERE rather than in the engine, so the driver reaches only the two images
+# that read or write a bank. The orchestrator, the grader, competency-graph, competency-scope
+# and live-voice stay free of a database dependency they have no use for.
+dependencies = ["psycopg[binary]>=3.1,<4"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["adaptive_store*"]
+
+[tool.setuptools.package-data]
+adaptive_store = ["schema.sql", "sessions.sql"]
