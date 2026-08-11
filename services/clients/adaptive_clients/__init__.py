@@ -14,6 +14,7 @@ run without making the comparison itself flaky.
 
 from .bank import BankRegistryClient
 from .graph import CompetencyGraphClient
+from .scope import CompetencyScopeClient
 from .transport import (
     DEFAULT_TIMEOUT,
     BaseClient,
@@ -27,6 +28,7 @@ __all__ = [
     "BankRegistryClient",
     "BaseClient",
     "CompetencyGraphClient",
+    "CompetencyScopeClient",
     "ClientError",
     "ServiceRefused",
     "ServiceUnavailable",
