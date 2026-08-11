@@ -35,18 +35,22 @@ fi
 export BANK_REGISTRY_URL="${BANK_REGISTRY_URL:-http://127.0.0.1:8081}"
 export GRADER_URL="${GRADER_URL:-http://127.0.0.1:8082}"
 export COMPETENCY_GRAPH_URL="${COMPETENCY_GRAPH_URL:-http://127.0.0.1:8083}"
+export COMPETENCY_SCOPE_URL="${COMPETENCY_SCOPE_URL:-http://127.0.0.1:8085}"
 
 declare -A PORTS=(
   [assessment-orchestrator]=8080
   [bank-registry]=8081
   [grader]=8082
   [competency-graph]=8083
+  [bank-ingest]=8084
+  [competency-scope]=8085
   [live-voice]=8765
 )
 
 WANTED=("$@")
 if [[ ${#WANTED[@]} -eq 0 ]]; then
-  WANTED=(bank-registry grader competency-graph assessment-orchestrator live-voice)
+  WANTED=(bank-registry bank-ingest grader competency-graph competency-scope \
+          assessment-orchestrator live-voice)
 fi
 
 pids=()

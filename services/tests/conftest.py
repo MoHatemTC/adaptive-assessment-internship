@@ -39,8 +39,10 @@ CLIENTS = SERVICES_ROOT / "clients"
 #: reporting a name no dashboard expects.
 SERVICES: dict[str, str] = {
     "assessment-orchestrator": "assessment-orchestrator",
+    "bank-ingest": "bank-ingest",
     "bank-registry": "bank-registry",
     "competency-graph": "competency-graph",
+    "competency-scope": "competency-scope",
     "grader": "grader",
     "live-voice": "live-voice",
 }
@@ -52,8 +54,10 @@ SERVICES: dict[str, str] = {
 EXPECTED_PORTS: dict[str, int] = {
     "assessment-orchestrator": 8080,
     "bank-registry": 8081,
+    "bank-ingest": 8084,
     "grader": 8082,
     "competency-graph": 8083,
+    "competency-scope": 8085,
     #: 8765 rather than 808x, because that is the port the monolith's live helper used and
     #: the `/interview` iframe is embedded by URL.
     "live-voice": 8765,

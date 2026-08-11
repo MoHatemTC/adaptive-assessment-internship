@@ -297,6 +297,15 @@ class TestEachServiceImportsOnlyTheEngineSliceItOwns:
             "app.services.orchestrator.competency",
             "app.services.competency_graph",
         ),
+        "bank-ingest": (
+            "app.config",
+            # The store and its validation, which is the WHOLE point: a bank arriving as
+            # an upload clears exactly the bar the checked-in banks clear, because it is
+            # checked by the same function. A second implementation of those rules would
+            # mean the engine's own suite was testing the seeds rather than the system.
+            "app.services.orchestrator.bank_store",
+            "app.services.orchestrator.registry",
+        ),
         "grader": (
             "app.config",
             "app.schemas",
@@ -325,6 +334,15 @@ class TestEachServiceImportsOnlyTheEngineSliceItOwns:
             # service must not be one import from a posterior.
             "app.services.orchestrator.propagation_port",
         ),
+        "competency-scope": (
+            # `app.config` ONLY, for `cat_max_questions` — the budget the reachability
+            # check is against. Everything else this service needs about a bank arrives as
+            # a DTO, so it touches no schema, no graph module and no orchestrator module.
+            # It is the narrowest slice any service declares, and that is the point: a
+            # scope decides which questions MAY be asked and must never be one import from
+            # a posterior.
+            "app.config",
+        ),
         "live-voice": (
             "app.config",
             "app.services.observability",
@@ -343,6 +361,31 @@ class TestEachServiceImportsOnlyTheEngineSliceItOwns:
             "app.services.observability",
         ),
     }
+
+    #: The services that PERSIST something, and may therefore hold a database driver.
+    #:
+    #: `bank-registry` and `bank-ingest` read and write banks; `assessment-orchestrator`
+    #: writes live sessions. The other four hold nothing durable — the grader grades one
+    #: response, `competency-graph` and `competency-scope` are stateless by construction, and
+    #: `live-voice` keeps rooms in memory for an hour. A driver in any of them would be a
+    #: driver nobody needed, in a service that would eventually find a use for it.
+    MAY_IMPORT_THE_STORE = {"bank-registry", "bank-ingest", "assessment-orchestrator"}
+
+    def test_only_the_persisting_services_can_reach_the_store(self):
+        """`adaptive_store` carries psycopg, the bank write path and the session table. It is
+        installed into three images on purpose, and this is what stops a fourth quietly
+        acquiring it — the same argument as the engine-slice allowlist below, for a package
+        rather than a module."""
+        root = Path(__file__).resolve().parents[1]
+        offenders = []
+        for directory in sorted(SERVICES):
+            for path in (root / directory).rglob("*.py"):
+                if "adaptive_store" in path.read_text(encoding="utf-8"):
+                    if directory not in self.MAY_IMPORT_THE_STORE:
+                        offenders.append(f"{directory}/{path.name}")
+        assert not offenders, (
+            f"these services reach the bank store and must not: {offenders}"
+        )
 
     def test_every_engine_import_is_inside_the_declared_slice(self):
         root = Path(__file__).resolve().parents[1]

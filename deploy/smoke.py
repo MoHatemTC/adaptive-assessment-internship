@@ -28,11 +28,15 @@ import urllib.request
 
 ORCHESTRATOR = "http://localhost:8080"
 REGISTRY = "http://localhost:8081"
+INGEST = "http://localhost:8084"
+SCOPE = "http://localhost:8085"
 SERVICES = {
     "assessment-orchestrator": 8080,
     "bank-registry": 8081,
     "grader": 8082,
     "competency-graph": 8083,
+    "bank-ingest": 8084,
+    "competency-scope": 8085,
     "live-voice": 8765,
 }
 
@@ -52,6 +56,36 @@ def call(method: str, url: str, body: dict | None = None) -> tuple[int, dict]:
 def check(label: str, condition: bool, detail: str = "") -> bool:
     print(f"  {'ok  ' if condition else 'FAIL'}  {label}{f' — {detail}' if detail else ''}")
     return condition
+
+
+def upload_file(url: str, bank: dict) -> tuple[int, dict]:
+    """PUT one bank as multipart, without a third-party HTTP client.
+
+    Hand-rolled because `smoke.py` deliberately imports nothing that is not in the standard
+    library — a smoke test with dependencies is a smoke test that fails for its own reasons.
+    """
+    boundary = "----smoke-boundary"
+    payload = json.dumps(bank).encode()
+    body = b"".join(
+        [
+            f"--{boundary}\r\n".encode(),
+            b'Content-Disposition: form-data; name="file"; filename="bank.json"\r\n',
+            b"Content-Type: application/json\r\n\r\n",
+            payload,
+            f"\r\n--{boundary}--\r\n".encode(),
+        ]
+    )
+    request = urllib.request.Request(  # noqa: S310 - fixed localhost scheme
+        url,
+        data=body,
+        method="PUT",
+        headers={"content-type": f"multipart/form-data; boundary={boundary}"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:  # noqa: S310
+            return response.status, json.loads(response.read() or b"{}")
+    except urllib.error.HTTPError as exc:
+        return exc.code, json.loads(exc.read() or b"{}")
 
 
 def main() -> int:
@@ -75,7 +109,11 @@ def main() -> int:
 
     print("\nthe bank catalogue")
     status, banks = call("GET", f"{ORCHESTRATOR}/banks")
-    failures += not check("proxied through the orchestrator", status == 200)
+    failures += not check("proxied through the orchestrator", status == 200, str(banks)[:120])
+    # A failed check must not abort the run. The first version of this unpacked the body
+    # unconditionally and died on the error dict, so one transient 503 during startup hid
+    # every check after it — which is the opposite of what a smoke test is for.
+    banks = banks if isinstance(banks, list) else []
     seeded = {b["bank_id"] for b in banks}
     failures += not check("the checked-in banks are registered", "DA" in seeded, str(sorted(seeded)))
     failures += not check("every bank carries a version", all(b.get("version") for b in banks))
@@ -134,61 +172,100 @@ def main() -> int:
     status, _ = call("GET", f"{ORCHESTRATOR}/assessments/{assessment_id}/state")
     failures += not check("raw state", status == 404, str(status))
 
-    print("\nregistering a bank through the admin API")
-    submission = {
-        "bank_id": "SMOKE",
-        "title": "smoke test bank",
+    print("\nthe write path that moved says where it went")
+    status, moved = call("POST", f"{REGISTRY}/banks", {"bank_id": "X"})
+    failures += not check(
+        "bank-registry refuses writes with a 410 naming the replacement",
+        status == 410 and "bank-ingest" in moved.get("detail", ""),
+        f"{status} {moved.get('code', '')}",
+    )
+
+    # --- uploading a bank, which is the path an author actually uses ---------
+    #
+    # Only a container can catch what this catches. `python-multipart` is a separate
+    # dependency and FastAPI raises at IMPORT the moment it sees a `File` parameter without
+    # it — which is exactly the defect this file's first run found in the orchestrator, and
+    # which no test can find, because every test imports the app from a checkout where the
+    # dependency happens to be installed.
+    print("\nuploading a bank, with no graph — the author never writes one")
+    upload = {
+        "schema_version": 2,
+        "competency": "smoke upload",
         "items": [
             {
-                "item_id": f"s{n}",
+                "item_id": f"u{n}",
                 "modality": "mcq",
-                "measures": [{"variable": "X.1", "weight": 1.0}],
+                "competency": "Uploaded",
+                "sub_competency": "U.1 · uploaded sub-competency",
+                "measures": [{"variable": "U.1", "weight": 1.0}],
                 "cat": {"a": 1.0, "b": 0.0, "c": 0.25},
-                "payload": {"stem": "2 + 2?", "options": ["3", "4"], "answer_index": 1},
+                "mcq": {"stem": "2 + 2?", "options": ["3", "4"], "answer_index": 1},
             }
             for n in range(3)
         ],
-        "graph": {
-            "nodes": [
-                {"competency_id": "X", "title": "X", "node_type": "main"},
-                {
-                    "competency_id": "X.1",
-                    "title": "X.1",
-                    "node_type": "sub_competency",
-                    "main_competencies": ["X"],
-                    "critical": True,
-                },
-            ],
-            "edges": [{"from": "X.1", "to": "X", "relation": "CONTRIBUTES_TO", "weight": 1.0}],
-        },
-        "coverage_critical_only": False,
     }
-    call("DELETE", f"{REGISTRY}/banks/SMOKE")
-    status, report = call("POST", f"{REGISTRY}/banks", submission)
-    failures += not check("accepted", status == 201, json.dumps(report)[:200])
+    call("DELETE", f"{INGEST}/banks/SMOKE-UP")
+    status, receipt = upload_file(f"{INGEST}/banks/SMOKE-UP", upload)
+    failures += not check(
+        "one file in, a registered bank out",
+        status == 200 and receipt.get("status") == "registered",
+        json.dumps(receipt)[:200],
+    )
+    derived = (receipt or {}).get("derived_graph") or {}
+    failures += not check(
+        "a graph was derived from the questions",
+        derived.get("mains") == ["U"] and derived.get("sub_competencies") == ["U.1"],
+        json.dumps(derived)[:160],
+    )
+    failures += not check(
+        "every derived prerequisite edge ships inert",
+        derived.get("prerequisite_edges_are_inert") is True,
+    )
+
+    status, banks = call("GET", f"{REGISTRY}/banks")
+    failures += not check(
+        "the registry sees it with no restart",
+        status == 200 and any(b["bank_id"] == "SMOKE-UP" for b in banks),
+    )
+
+    # --- scoping an assessment to some of a bank's competencies --------------
+    print("\nscoping an assessment to selected competencies")
+    status, manifest = call(
+        "POST", f"{SCOPE}/scopes", {"bank_id": "DA", "selected": ["DA.1", "DA.2"]}
+    )
+    failures += not check(
+        "a selection becomes a sub-graph and an allowlist",
+        status == 200 and bool(manifest.get("item_ids")),
+        json.dumps(manifest)[:160],
+    )
+    failures += not check(
+        "a partially selected main says so",
+        any(m["main"] == "DA" and m["partial"] for m in manifest.get("mains", [])),
+    )
+    # Asserted on the serialised body rather than on the model, so a field that arrived
+    # through a nested object fails here rather than in a candidate's report.
+    forbidden = [f for f in ("theta_hat", "posterior", "standard_error")
+                 if f in json.dumps(manifest)]
+    failures += not check(
+        "the manifest carries no ability estimate", not forbidden, str(forbidden)
+    )
 
     status, session = call(
-        "POST", f"{ORCHESTRATOR}/assessments", {"bank_id": "SMOKE", "use_llm": False, "seed": 3}
+        "POST",
+        f"{ORCHESTRATOR}/assessments",
+        {"bank_id": "DA", "use_llm": False, "seed": 5, "scope": {"selected": ["DA.1", "DA.2"]}},
     )
-    failures += not check("assessable immediately, with no restart", status == 201)
+    failures += not check("a scoped assessment begins", status == 201, json.dumps(session)[:200])
     if status == 201:
+        presented = (session.get("presenting") or {}).get("item", {}).get("item_id", "")
+        failures += not check(
+            "the presented item is inside the scope",
+            presented in set(manifest.get("item_ids", [])),
+            presented,
+        )
         call("DELETE", f"{ORCHESTRATOR}/assessments/{session['session_id']}")
 
-    status, refused = call("POST", f"{REGISTRY}/banks", submission)
-    failures += not check("a second POST is refused", status == 409, refused.get("code", ""))
-
-    broken = {**submission, "bank_id": "SMOKE-BAD"}
-    broken["graph"] = {
-        "nodes": [{"competency_id": "Y", "title": "Y", "node_type": "main"}],
-        "edges": [],
-    }
-    status, refused = call("POST", f"{REGISTRY}/banks", broken)
-    failures += not check(
-        "a mismatched graph is refused with the reason",
-        status == 422 and "graph_bank_mismatch" in refused.get("detail", ""),
-        refused.get("detail", "")[:120],
-    )
-    call("DELETE", f"{REGISTRY}/banks/SMOKE")
+    call("DELETE", f"{INGEST}/banks/SMOKE-UP")
 
     print(f"\n{'FAILED' if failures else 'PASSED'} — {failures} failing check(s)")
     return 1 if failures else 0
