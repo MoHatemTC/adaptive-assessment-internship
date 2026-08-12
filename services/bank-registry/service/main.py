@@ -64,7 +64,7 @@ def _install_store() -> None:
     if not dsn:
         logger.info("BANK_DATABASE_URL is unset — banks are resolved from files")
         return
-    from adaptive_store.backed import install
+    from cat_engine.stores.sql.backed import install
 
     install(dsn)
     logger.info("banks are resolved from Postgres")

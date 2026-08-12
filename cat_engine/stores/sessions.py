@@ -1,17 +1,24 @@
-"""Live assessments, in this process's memory.
+"""Live assessments, and where they are kept.
 
-WHY MEMORY AND NOT A DATABASE
+MEMORY BY DEFAULT, POSTGRES WHEN CONFIGURED, THE HOST'S WHEN IT HAS ONE
 
-This is exactly what the monolith did, with the same retention and capacity rules, and the
-migration is not the place to change it. `AssessmentState` is serialisable by construction
-— the 41-point posterior is carried as a `list[float]` specifically so it round-trips
-through JSON — so the seam for a real store exists and nothing here has to move when one
-arrives. What does NOT exist yet is a decision about where candidate response data lives,
-how long, and under whose retention policy, and inventing one inside a refactor would be
-the wrong way to make it.
+`AssessmentState` is serialisable by construction — the 41-point posterior is carried as a
+`list[float]` specifically so it round-trips through JSON — which is what made a store
+possible at all. Three arrangements exist and the choice is the host's:
 
-The consequence is stated rather than hidden: sessions are bound to one replica. Run one,
-or put sticky sessions in front of several, until there is a store.
+    InMemorySessionStore()          one process; a restart loses every assessment mid-answer
+    InMemorySessionStore(sql_store) write-through to Postgres; a restart resumes
+    anything satisfying SessionStore the host's own, with its own retention policy
+
+The third is the one the service era could not offer. Where candidate response data lives,
+for how long, and under whose deletion deadline is a decision this module should not be
+making on a host's behalf — so it is a Protocol rather than an assumption.
+
+WHY WRITE-THROUGH AND NOT WRITE-BEHIND
+
+The thing being persisted is the record of what a candidate answered. Losing the last write
+because a process died between the answer and the flush is the exact failure it exists to
+prevent.
 
 THE TWO RULES THAT MATTER
 
@@ -31,6 +38,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
+from typing import Protocol, runtime_checkable
 
 import numpy as np
 from cat_engine.contracts import ScopeManifest
@@ -40,7 +48,7 @@ from cat_engine.engine.schemas.orchestration import AssessmentState
 logger = logging.getLogger(__name__)
 
 try:  # pragma: no cover - depends on whether this image installs the store
-    from adaptive_store import SessionConflict
+    from cat_engine.stores.sql import SessionConflict
 except ImportError:  # the in-process deployment, which cannot raise one
 
     class SessionConflict(RuntimeError):
@@ -73,7 +81,38 @@ class Session:
     recorded: bool = False
 
 
-class SessionStore:
+@runtime_checkable
+class SessionStore(Protocol):
+    """What the assessment loop needs of a place to keep sessions.
+
+    A Protocol because a host may already have somewhere sessions belong — with its own
+    retention policy, its own encryption at rest, its own deletion deadline. That seam did
+    not exist while this was a service holding its own assumption about candidate data, and
+    it is the one piece of storage a host is most likely to want to own.
+
+    `save` may raise `SessionConflict` when another writer moved the session first. An
+    implementation that cannot detect that simply never raises it, and single-writer hosts
+    are unaffected.
+    """
+
+    def get(self, session_id: str) -> Session | None: ...
+
+    def add(self, session: Session) -> None: ...
+
+    def save(self, session: Session, *, finished: bool = False) -> None: ...
+
+    def drop(self, session_id: str) -> bool: ...
+
+    def mark_finished(self, session_id: str) -> None: ...
+
+    def lock_for(self, session_id: str) -> asyncio.Lock | None: ...
+
+    def at_capacity(self) -> bool: ...
+
+    def __len__(self) -> int: ...
+
+
+class InMemorySessionStore:
     """Sessions, in this process and — when a DSN is configured — in Postgres beside it.
 
     THE DICT IS NOW A CACHE, NOT THE STORE.
@@ -124,7 +163,7 @@ class SessionStore:
         which is restored rather than recreated, so exposure control continues its stream
         instead of redrawing its first item.
         """
-        from adaptive_store import restore_rng
+        from cat_engine.stores.sql import restore_rng
 
         row = self._db.load(session_id)
         if row is None:
@@ -152,7 +191,7 @@ class SessionStore:
         """
         if self._db is None:
             return
-        from adaptive_store import PersistedSession, rng_state_of
+        from cat_engine.stores.sql import PersistedSession, rng_state_of
 
         session_id = session.state.session_id
         row = PersistedSession(

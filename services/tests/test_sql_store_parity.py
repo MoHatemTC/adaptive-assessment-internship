@@ -42,7 +42,7 @@ BANKS = ["DA", "PY", "AIE", "AIE-JR-V3", "JAI-600"]
 @pytest.fixture(scope="module")
 def stores():
     """A freshly built database beside the file store the whole system uses today."""
-    from adaptive_store import SqlBankStore, seed_from_profiles
+    from cat_engine.stores.sql import SqlBankStore, seed_from_profiles
     from cat_engine.engine.services.orchestrator import registry
 
     sql = SqlBankStore(DSN)
@@ -63,7 +63,7 @@ class TestTheVersionIsTheSameNumber:
     """If this fails, nothing else in this file matters — and neither does any cache."""
 
     def test_every_seeded_bank_keeps_its_version(self, stores):
-        from adaptive_store import assert_versions_match
+        from cat_engine.stores.sql import assert_versions_match
 
         sql, files = stores
         assert assert_versions_match(sql, files) == []
@@ -225,7 +225,7 @@ class TestWritesAreAllOrNothing:
         sql, _ = stores
         before = sql.version("DA")
 
-        from adaptive_store import StoreIntegrityError
+        from cat_engine.stores.sql import StoreIntegrityError
 
         broken = [{"item_id": "x", "modality": "mcq"}]  # no cat, no measures
         with pytest.raises(StoreIntegrityError):

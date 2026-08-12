@@ -44,6 +44,27 @@ def stub_boundaries(monkeypatch):
     )
 
 
+@pytest.fixture
+def module():
+    """A freshly built `AssessmentModule`, with the config guard reset around it.
+
+    Engine settings are a process-wide singleton, so `CatConfig.apply` remembers the
+    measurement policy it applied and refuses a second module that disagrees. That guard is
+    correct in production and would make every test after the first one fail, so it is
+    reset here — before AND after, so a test that builds its own module with different
+    policy cannot leak that policy into the next one.
+    """
+    from cat_engine import AssessmentModule
+    from cat_engine.config import _reset_for_tests
+
+    _reset_for_tests()
+    try:
+        yield AssessmentModule()
+    finally:
+        _reset_for_tests()
+        registry.reset_caches()
+
+
 @pytest.fixture(params=sorted(registry.REGISTRY), ids=sorted(registry.REGISTRY))
 def any_profile(request) -> registry.BankProfile:
     """Every registered bank in turn. For invariants, not for behaviour."""

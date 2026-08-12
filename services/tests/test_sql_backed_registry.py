@@ -84,8 +84,8 @@ def upload(writer, bank_id: str, body: dict | None = None):
 @pytest.fixture()
 def stack(tmp_path):
     """bank-registry, with Postgres underneath it instead of two directories."""
-    from adaptive_store import SqlBankStore
-    from adaptive_store.backed import install
+    from cat_engine.stores.sql import SqlBankStore
+    from cat_engine.stores.sql.backed import install
     from cat_engine.engine.services.orchestrator import registry
 
     file_store = registry.STORE

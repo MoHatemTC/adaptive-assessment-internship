@@ -95,7 +95,7 @@ def _session_persistence():
     if not dsn:
         logger.info("SESSION_DATABASE_URL is unset — sessions live in this process only")
         return None
-    from adaptive_store import SqlSessionStore
+    from cat_engine.stores.sql import SqlSessionStore
 
     store = SqlSessionStore(dsn)
     store.ensure_schema()

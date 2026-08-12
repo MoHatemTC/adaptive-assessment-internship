@@ -33,7 +33,7 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture()
 def store():
-    from adaptive_store import SqlSessionStore
+    from cat_engine.stores.sql import SqlSessionStore
 
     sql = SqlSessionStore(DSN)
     sql.ensure_schema()
@@ -151,7 +151,7 @@ class TestTwoWritersCannotBothWin:
     nobody should hold anyway."""
 
     def test_the_second_writer_is_refused(self, store, sessions):
-        from adaptive_store import SessionConflict
+        from cat_engine.stores.sql import SessionConflict
 
         from service.sessions import SessionStore
 

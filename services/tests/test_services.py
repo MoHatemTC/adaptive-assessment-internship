@@ -380,7 +380,7 @@ class TestEachServiceImportsOnlyTheEngineSliceItOwns:
         offenders = []
         for directory in sorted(SERVICES):
             for path in (root / directory).rglob("*.py"):
-                if "adaptive_store" in path.read_text(encoding="utf-8"):
+                if "cat_engine.stores.sql" in path.read_text(encoding="utf-8"):
                     if directory not in self.MAY_IMPORT_THE_STORE:
                         offenders.append(f"{directory}/{path.name}")
         assert not offenders, (
