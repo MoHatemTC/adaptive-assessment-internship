@@ -7,7 +7,11 @@ machinery behind it, and a standardised residual subsumes that table: it weights
 evidence strength automatically and has an approximate null to threshold against.
 
 Worth stating plainly: this codebase never implemented that precedence table, so this is
-NEW surface, not a replacement. It ships report-only.
+NEW surface, not a replacement. It ships report-only, and under
+`cat_aberrance_drives_verification` it additionally DELAYS a convergence claim by one
+observation — see `orchestrator._verification_pending`. Delaying a stop is not scoring: no
+branch below reads a residual and moves an estimate, which is the property the last
+paragraph of this docstring rests on.
 
     p̄ = Σ posterior(θ) · P(θ; a, b, c)          the predicted score, before the update
     z = √w · (s − p̄) / √(p̄(1 − p̄))

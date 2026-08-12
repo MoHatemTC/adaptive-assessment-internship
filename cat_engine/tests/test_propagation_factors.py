@@ -682,6 +682,11 @@ class TestINVP8ManifestRecordsEveryFactor:
         """The manifest is written once at begin, but the config is rebuilt per response.
 
         A sweep harness that fails to isolate a cell produces exactly this, silently.
+
+        CHANGED FIELDS ARE DOTTED PATHS. They used to be bare keys, because the diff only
+        ever walked `manifest["factors"]` — which is the bug `test_manifest_drift.py` covers:
+        a change under `policy` moved the hash and named nothing. Now the diff spans the same
+        object the hash digests, so a field has to say which section it came from.
         """
         from cat_engine.engine.config.settings import settings
         from cat_engine.engine.services.orchestrator import registry
@@ -699,7 +704,7 @@ class TestINVP8ManifestRecordsEveryFactor:
         entry = state.propagation_manifest_drift[0]
         assert entry["from_hash"] == before
         assert entry["at_evidence"] == "item-x#1"
-        assert "upward_decay" in entry["changed"], entry["changed"]
+        assert entry["changed"] == ["factors.upward_decay"], entry["changed"]
 
 
 # --- INV-P10 --------------------------------------------------------------------------

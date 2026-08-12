@@ -192,6 +192,7 @@ def evaluate(
     *,
     difficulty_corroborated: bool = True,
     band_probability: float | None = None,
+    verification_pending: bool = False,
 ) -> StopDecision:
     """Apply the stopping rules in precedence order.
 
@@ -207,6 +208,25 @@ def evaluate(
        A test-length optimisation, not evidence of precision: gated on a secondary SE
        ceiling and its own min-questions floor.
     3. BUDGET — out of questions, or out of items. Not convergence.
+
+    WHICH OF THESE CAN ACTUALLY FIRE DEPENDS ON ONE SETTING, AND THAT IS WORTH STATING.
+
+    `cat_band_probability_stop_conjunctive` defaults to True, and branches 1 and 2 are
+    guarded by `not conjunctive`. So in the SHIPPED configuration they are unreachable:
+    every measurement stop is `band_probability`, and the only other outcome is a budget
+    stop. Over 125 simulated competency estimates the observed distribution was exactly
+    that — 83 `band_probability`, 42 `question_budget`, and neither of the other two once.
+
+    They are kept rather than deleted because additive mode is a supported configuration
+    and the way back from the conjunction: setting the flag False restores three
+    independent stops. `test_stop_reason_reachability.py` pins both arms so this cannot be
+    mistaken for dead code and removed, and cannot silently stop being true.
+
+    VERIFICATION GATE. `verification_pending` blocks every MEASUREMENT stop and no budget
+    stop. It exists so a response the posterior could not explain costs one more
+    observation before the competency is allowed to claim it knows the answer. It never
+    touches an estimate — a held-open variable is simply asked the max-information question
+    at its current theta, which IS the verification question.
     """
     band_ready = band_probability_stop_available(
         band_probability, questions_answered, difficulty_corroborated, standard_error
@@ -216,7 +236,7 @@ def evaluate(
         and settings.cat_band_probability_stop_conjunctive
     )
 
-    if band_ready:
+    if band_ready and not verification_pending:
         return StopDecision(True, "band_probability", converged=True)
 
     if (
@@ -225,6 +245,7 @@ def evaluate(
         >= getattr(settings, "cat_precision_min_questions", settings.cat_min_questions)
         and difficulty_corroborated
         and not conjunctive
+        and not verification_pending
     ):
         return StopDecision(True, "precision", converged=True)
 
@@ -234,6 +255,7 @@ def evaluate(
         and band_is_stable(band_history, settings.cat_stable_window)
         and difficulty_corroborated
         and not conjunctive
+        and not verification_pending
     ):
         return StopDecision(True, "stable_band", converged=True)
 

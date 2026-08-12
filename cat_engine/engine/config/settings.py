@@ -58,7 +58,6 @@ class Settings(BaseSettings):
     litellm_base_url: str = "http://localhost:4000"
     litellm_api_key: str = ""
     litellm_model: str = "openai/gpt-5.6-sol"
-    litellm_embedding_model: str = "text-embedding-004"
     litellm_transcribe_model: str = "openai/whisper-1"
     # Gemini Live interviewer via LiteLLM realtime websocket (/v1/realtime).
     litellm_live_preview_model: str = "gemini/gemini-3.1-flash-live-preview"
@@ -188,9 +187,22 @@ class Settings(BaseSettings):
         '"C6":1.36,"C7":1.33,"C8":1.33,"C9":1.33,"C10":1.33}'
     )
 
-    # Flag a response that the current posterior did not expect. Report-only: no branch
-    # may read it and change an estimate.
+    # Flag a response that the current posterior did not expect. No branch may read it and
+    # change an ESTIMATE — `personfit` flags, it never scores.
     cat_aberrant_residual_threshold: float = Field(default=2.0, gt=0.0)
+    # When on, a competency whose most recent response was aberrant may not claim a
+    # measurement stop until it has taken one more observation. That is a STOPPING rule, so
+    # it stays inside the contract above: nothing is rescored, a competency is made to look
+    # at one more piece of evidence before it claims to know.
+    #
+    # Off by default, so this changes no shipped number. It is worth having because the
+    # failure it addresses is real and measured: on a simulated candidate with a 20% slip
+    # rate, 4 of 25 sessions reported a band the 95% interval did not contain WHILE
+    # carrying a recorded aberrance nothing consulted.
+    #
+    # Both of these are in `MEASUREMENT_SETTINGS`. The threshold decides what counts as
+    # surprising and the flag decides whether surprise delays convergence; two deployments
+    # that disagree about either do not mean the same thing by `converged`.
     cat_aberrance_drives_verification: bool = False
 
     # --- code engine: scoring policy ------------------------------------------

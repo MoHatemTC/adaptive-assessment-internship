@@ -73,6 +73,44 @@ def propagation_manifest(
     }
 
 
+def comparable_manifest(manifest: dict) -> dict:
+    """The part of a manifest that `manifest_hash` actually digests.
+
+    Named and shared so a DIFF cannot drift away from the HASH. They did: the hash covered
+    the whole manifest and the drift record diffed only `manifest["factors"]`, so any change
+    landing elsewhere — and replacing a bank mid-session lands it in `policy` — was recorded
+    as "something changed, and here is nothing".
+    """
+    return {k: v for k, v in manifest.items() if k != "code_revision"}
+
+
+def manifest_diff(before: dict, after: dict) -> list[str]:
+    """Which fields moved between two manifests, as dotted paths.
+
+    Walks one level into nested dicts, because that is where the interesting changes live:
+    `policy.prerequisite_edges` and `policy.bank_policy` are the fields a bank replacement
+    moves, and naming the parent alone would be no more actionable than naming nothing.
+    Deeper nesting is reported at the level that changed rather than recursed into further —
+    an operator needs the field, not a full structural delta.
+    """
+    before = comparable_manifest(before)
+    after = comparable_manifest(after)
+    changed: list[str] = []
+    for key in sorted(set(before) | set(after)):
+        left, right = before.get(key), after.get(key)
+        if left == right:
+            continue
+        if isinstance(left, dict) and isinstance(right, dict):
+            changed.extend(
+                f"{key}.{sub}"
+                for sub in sorted(set(left) | set(right))
+                if left.get(sub) != right.get(sub)
+            )
+        else:
+            changed.append(key)
+    return changed
+
+
 def manifest_hash(manifest: dict) -> str:
     """Stable digest of a manifest. Equal hashes mean equal configuration.
 
@@ -81,6 +119,6 @@ def manifest_hash(manifest: dict) -> str:
     process, so including it would only make hashes incomparable across deploys without
     detecting anything a within-session comparison can act on.
     """
-    comparable = {k: v for k, v in manifest.items() if k != "code_revision"}
+    comparable = comparable_manifest(manifest)
     encoded = json.dumps(comparable, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()

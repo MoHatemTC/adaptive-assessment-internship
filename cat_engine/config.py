@@ -100,6 +100,9 @@ class CatConfig(BaseModel):
     cat_se_target: float | None = None
     cat_max_questions: int | None = None
     cat_min_questions: int | None = None
+    #: Make a response the posterior could not explain cost one more observation before the
+    #: competency may claim it converged. Off by default; see `orchestrator._verification_pending`.
+    cat_aberrance_drives_verification: bool | None = None
     code_approach: str | None = None
     code_rubric: str | None = None
     competency_graph_enabled: bool | None = None

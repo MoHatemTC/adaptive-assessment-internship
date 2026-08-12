@@ -137,8 +137,21 @@ class AssessmentModule:
             # has a seeding step somebody has to remember to run exactly once.
             from cat_engine.stores.sql.backed import install
 
-            install(dsn)
-            logger.info("banks resolve from Postgres")
+            # A HOST MAY CONFIGURE BOTH, AND BOTH THEN MEAN SOMETHING.
+            #
+            # The DSN decides where banks LIVE; the directory is where the SQL store
+            # materialises them to read. Passing no cache dir here sent every deployment
+            # that had configured one to a hardcoded `/tmp/adaptive-bank-cache` instead —
+            # a setting accepted, logged, and silently ignored, which is the same defect
+            # class `test_no_inert_settings.py` exists to catch. It was invisible because
+            # nothing exercised the two settings together.
+            configured = self.settings.bank_store_dir.strip()
+            cache_dir = Path(configured).expanduser() if configured else None
+            install(dsn, cache_dir=cache_dir)
+            logger.info(
+                "banks resolve from Postgres, cache at %s",
+                cache_dir or "the default temporary directory",
+            )
             return
 
         # `Path`, not the raw string. `BankStore` calls `.is_dir()` on it, and a setting

@@ -207,6 +207,7 @@ def evaluate_finalisation(
     *,
     administered_difficulties: list[float] | None = None,
     maximum_available_difficulty: float | None = None,
+    verification_pending: bool = False,
 ) -> VariableState:
     """Apply the stopping rules and finalise if any fires.
 
@@ -214,6 +215,10 @@ def evaluate_finalisation(
     and budget mean exactly what they already mean elsewhere. `converged` stays False for a
     budget stop: running out of items is not the same as knowing a candidate's level, and
     a report that conflates them is claiming a measurement nobody made.
+
+    `verification_pending` is passed straight through; see `convergence.evaluate`. It is
+    False unless `cat_aberrance_drives_verification` is on, so the default path is byte
+    identical to what it was before the flag was implemented.
     """
     if state.finalised:
         return state
@@ -244,6 +249,7 @@ def evaluate_finalisation(
         items_remaining,
         difficulty_corroborated=corroborated,
         band_probability=reported_band_probability,
+        verification_pending=verification_pending,
     )
     if not stop.should_stop:
         return state

@@ -43,6 +43,10 @@ MEASUREMENT_SETTINGS: tuple[str, ...] = (
     "cat_interval_widening_enabled",
     "cat_interval_widening_factor",
     "cat_band_decisions_certified",
+    # What counts as a response the posterior could not explain, and whether one delays
+    # convergence. Both change what `converged` MEANS, which is the test for belonging here.
+    "cat_aberrant_residual_threshold",
+    "cat_aberrance_drives_verification",
     # which item is chosen
     "cat_content_balance_floor",
     "cat_exposure_top_k",

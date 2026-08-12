@@ -19,7 +19,6 @@ WHAT LIVES WHERE
     scope/        a competency selection to a sub-graph and an item allowlist
     ingest/       one uploaded file to a registered bank
     live/         realtime interview rooms, and the browser client for them
-    evaluation/   the simulation harness. In-process, never a component
 
 The public names are re-exported lazily so that importing this package does not drag in
 numpy, a sandbox client and 600 KB of question banks before a host has decided it wants

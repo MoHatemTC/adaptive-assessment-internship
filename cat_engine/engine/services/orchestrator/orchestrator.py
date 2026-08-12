@@ -36,6 +36,7 @@ from cat_engine.engine.schemas.orchestration import (
     GradedResponse,
     QueuedCandidate,
     VariableReport,
+    VariableState,
 )
 from cat_engine.engine.services.adaptive import personfit
 from cat_engine.engine.services.adaptive.convergence import SESSION_STOP_FOR, StopReason
@@ -67,6 +68,54 @@ from cat_engine.engine.services.orchestrator.propagation_port import (
 from cat_engine.engine.services.orchestrator.queue import CandidateQueue
 
 logger = logging.getLogger(__name__)
+
+
+def _verification_pending(
+    variable: str, state: VariableState, aberrant: list[dict]
+) -> bool:
+    """Whether this competency owes a verification question before it may converge.
+
+    True when `cat_aberrance_drives_verification` is on and ANY response recorded for this
+    variable was one the posterior could not explain. `personfit` has always computed that
+    residual and the report has always carried the count; until now nothing read it, so the
+    setting named here was declared, documented, and consulted by no branch — the same
+    defect class as `cat_band_probability_stop_enabled`, which was live and unreachable for
+    the same reason.
+
+    WHY "ANY" AND NOT "THE MOST RECENT ONE". This was first written anchored on the last
+    served item, reasoning that a variable surprising at item two and steady since has been
+    verified by what followed, and that holding it open regardless would spend the whole
+    remaining budget. Both halves of that turned out to be wrong when measured over 100
+    simulated sessions at four slip rates (true theta +1.8 on PY, 25 seeds each):
+
+        anchor     mean items   certified a band the 95% interval excluded
+        off             10.81                                      13/100
+        last            10.84                                      12/100
+        recent-2        10.90                                      12/100
+        any             10.96                                       8/100
+
+    The failure this gate exists for is an EARLY run of bad luck: theta crashes over the
+    first three items, the anomalous successes that follow are flagged, and the session then
+    stops several items later on a response that is no longer surprising. Anchoring on the
+    last item cannot see that, which is why it removed one bad certification in a hundred.
+    And the feared cost never materialised — most sessions record no aberrance at all, so
+    the mean price of "any" is 0.15 of an item, and at slip 0.0 it is 0.08 of an item and
+    removes nothing, because there is nothing to remove.
+
+    It is a CONSERVATIVE gate and pays for itself in the currency it should: it also
+    withdraws the `converged` claim from about ten sessions per hundred that were fine.
+    Trading ten unnecessary "provisional" results against five fewer confident, wrong bands
+    about a person is the trade this instrument should want.
+
+    It gates STOPPING, never scoring. `personfit`'s contract — flag, never score — holds:
+    no estimate changes, a competency is only made to look at one more piece of evidence
+    before it claims to know.
+    """
+    if not settings.cat_aberrance_drives_verification:
+        return False
+    if not state.served_item_ids:
+        return False
+    return any(record.get("variable") == variable for record in aberrant)
 
 
 class Orchestrator:
@@ -299,6 +348,13 @@ class Orchestrator:
 
         Appends rather than overwrites, and names the fields that moved: "something
         changed" is not actionable, "upward_decay went from 0.7 to 0.3 at item X" is.
+
+        THE DIFF AND THE HASH MUST COVER THE SAME THING. They did not: the hash digested the
+        whole manifest and this diffed only `manifest["factors"]`, so a change anywhere else
+        produced a drift entry with `changed: []` — the exact non-actionable record the
+        paragraph above rejects. Replacing a bank mid-session is not a hypothetical way to
+        hit it: a re-derived graph moves `policy.prerequisite_edges` from nine to zero and
+        `policy.bank_policy`, and none of that is under `factors`.
         """
         current = self._propagation_manifest()
         if not current:
@@ -313,10 +369,8 @@ class Orchestrator:
             state.propagation_manifest_hash = digest
             return
 
-        before = (state.propagation_manifest or {}).get("factors", {})
-        after = current.get("factors", {})
-        changed = sorted(
-            key for key in set(before) | set(after) if before.get(key) != after.get(key)
+        changed = graph_manifest.manifest_diff(
+            state.propagation_manifest or {}, current
         )
         logger.warning(
             "propagation configuration changed mid-session at %s: %s",
@@ -1073,6 +1127,9 @@ class Orchestrator:
                 remaining,
                 administered_difficulties=administered_difficulties,
                 maximum_available_difficulty=maximum_available_difficulty,
+                verification_pending=_verification_pending(
+                    variable, variable_state, aberrant
+                ),
             )
             unmet_modalities = self._unmet_modality_minimums(
                 variable=variable,
