@@ -27,11 +27,16 @@ def wav_bytes_to_pcm16(
             rate = wf.getframerate()
             nframes = wf.getnframes()
             raw = wf.readframes(nframes)
-    except wave.Error:
-        # Streamlit sometimes yields webm/ogg; fall back treating as already PCM if tiny header fails.
-        # Callers should prefer WAV from st.audio_input.
+    except (wave.Error, EOFError):
+        # A browser occasionally hands over webm/ogg instead of WAV, and a capture that
+        # failed outright hands over nothing at all.
+        #
+        # EOFError is here because `wave.open` raises THAT rather than `wave.Error` on an
+        # empty or truncated payload — so before it was caught, a candidate whose recording
+        # came back empty got a bare `EOFError` instead of "record again". Both cases are
+        # the same thing to whoever is looking at the screen: audio that cannot be read.
         raise ValueError(
-            "unsupported audio format — record again (WAV expected)"
+            "unsupported or empty audio — record again (16-bit PCM WAV expected)"
         ) from None
 
     if sw != 2:
