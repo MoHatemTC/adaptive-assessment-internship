@@ -52,7 +52,6 @@ from cat_engine.engine.config.settings import settings as engine_settings
 from cat_engine.engine.config.voice_settings import voice_settings
 from cat_engine.engine.services.voice_live.debug_log import clear as clear_debug
 from cat_engine.engine.services.voice_live.debug_log import live_debug, snapshot
-from cat_engine.engine.services.voice_live.realtime_room import RealtimeLiveRoom
 from cat_engine.errors import CatError
 
 logger = logging.getLogger(__name__)
@@ -60,7 +59,7 @@ logger = logging.getLogger(__name__)
 #: The reference browser client. Serve it from the host, same origin as the page.
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
-__all__ = ["STATIC_DIR", "Live", "RealtimeLiveRoom", "RoomUnknown"]
+__all__ = ["STATIC_DIR", "Live", "RoomUnknown", "realtime_room_class"]
 
 
 class RoomUnknown(CatError):
@@ -75,6 +74,29 @@ class LiveUnavailable(CatError):
 
     status_code = 503
     code = "live_unavailable"
+
+
+def realtime_room_class():
+    """`RealtimeLiveRoom`, imported on first use rather than at module import.
+
+    WHY THIS IS NOT A TOP-LEVEL IMPORT
+
+    The room reaches `google.genai` for its realtime transport, and that is an OPTIONAL
+    dependency — `pip install cat-engine[live]`. Importing it here would make every host
+    that never runs an interview install a realtime SDK to open an MCQ assessment, which
+    is exactly the promise the extras make and would break.
+
+    Found by installing the module into a clean host project with base dependencies only
+    and watching `from cat_engine import AssessmentModule` fail on `No module named
+    'google'` — a defect no test inside a fully-provisioned dev environment could see.
+    """
+    try:
+        from cat_engine.engine.services.voice_live.realtime_room import RealtimeLiveRoom
+    except ImportError as exc:  # pragma: no cover - depends on what the host installed
+        raise LiveUnavailable(
+            "realtime interviews need the `live` extra: pip install cat-engine[live]"
+        ) from exc
+    return RealtimeLiveRoom
 
 
 class Live:
@@ -99,11 +121,11 @@ class Live:
         assessment_session_id: str = "",
         mode: str = "interview",
         save_recording: bool = False,
-    ) -> RealtimeLiveRoom:
+    ):
         """Open a room. Pass `assessment_session_id` so the trace groups with the session."""
         mode = mode if mode in {"interview", "chat"} else "interview"
         try:
-            room = RealtimeLiveRoom.create(
+            room = realtime_room_class().create(
                 item_id=item_id,
                 question=question,
                 save_recording=save_recording,
@@ -123,8 +145,8 @@ class Live:
         return room
 
     @staticmethod
-    def get(room_id: str) -> RealtimeLiveRoom:
-        room = RealtimeLiveRoom.get(room_id)
+    def get(room_id: str):
+        room = realtime_room_class().get(room_id)
         if room is None:
             raise RoomUnknown(f"no room {room_id}")
         return room
@@ -147,11 +169,11 @@ class Live:
 
     @staticmethod
     def drop(room_id: str) -> None:
-        RealtimeLiveRoom.drop(room_id)
+        realtime_room_class().drop(room_id)
 
     @staticmethod
     def prune(*, now: float | None = None) -> int:
-        return RealtimeLiveRoom.prune(now=now)
+        return realtime_room_class().prune(now=now)
 
     @staticmethod
     def config() -> dict:

@@ -63,7 +63,6 @@ from cat_engine.errors import (
     WritesDisabled,
 )
 from cat_engine.ingest import Ingest
-from cat_engine.live import Live
 from cat_engine.stores import Session, SessionConflict, SessionStore, open_session_store
 from cat_engine.wiring import Wiring
 
@@ -99,7 +98,22 @@ class AssessmentModule:
         )
         self.wiring = Wiring()
         self.ingest = Ingest(self.settings)
-        self.live = Live(self.settings)
+        self._live = None
+
+    @property
+    def live(self):
+        """Interview rooms, built on first access.
+
+        Lazy because `cat_engine.live` reaches a realtime SDK that is an OPTIONAL
+        dependency. Constructing it eagerly made `from cat_engine import AssessmentModule`
+        fail with `No module named 'google'` on any host that installed the base package —
+        so every host that never runs an interview had to install one anyway.
+        """
+        if self._live is None:
+            from cat_engine.live import Live
+
+            self._live = Live(self.settings)
+        return self._live
 
     # --- construction helpers ----------------------------------------------
     def _open_bank_store(self) -> None:

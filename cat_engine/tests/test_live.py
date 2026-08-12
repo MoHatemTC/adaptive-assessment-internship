@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import pytest
 
-from cat_engine.live import STATIC_DIR, Live, RoomUnknown
+from cat_engine.live import STATIC_DIR, Live, RoomUnknown, realtime_room_class
 
 
 @pytest.fixture()
@@ -107,10 +107,9 @@ class TestARoomHoldsNoAssessment:
     assessment or move a posterior."""
 
     def test_the_room_type_exposes_no_scoring_surface(self):
-        from cat_engine.engine.services.voice_live.realtime_room import RealtimeLiveRoom
-
+        room_class = realtime_room_class()
         for forbidden in ("grade", "score", "theta", "posterior", "stop"):
-            assert not hasattr(RealtimeLiveRoom, forbidden), forbidden
+            assert not hasattr(room_class, forbidden), forbidden
 
     def test_a_finished_room_produces_a_transcript_and_not_an_outcome(self):
         """`finish()` returns a `LiveInterviewResult`. Turning it into a score is the
