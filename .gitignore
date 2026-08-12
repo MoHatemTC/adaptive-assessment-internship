@@ -22,9 +22,8 @@ dist/
 graphify-out/
 **/graphify-out/
 
-# Simulation outputs. The harness that wrote them is no longer on this branch; the
-# directory is left ignored so an existing checkout does not suddenly show 431 MB as
-# untracked.
+# Simulation outputs. The harness that wrote them is no longer on this branch; the pattern
+# stays so that a checkout which still has the directory does not show it as untracked.
 eval-results/
 
 # Banks posted to the local bank-registry. Content, not code — a deployment mounts a

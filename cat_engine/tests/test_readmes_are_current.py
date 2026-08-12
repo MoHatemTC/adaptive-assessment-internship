@@ -46,7 +46,7 @@ ARTEFACT_DIRS = {
     Path("live/static"),
 }
 
-SKIP_PARTS = {"__pycache__", "eval-results"}
+SKIP_PARTS = {"__pycache__"}
 
 
 def code_directories() -> list[Path]:

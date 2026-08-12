@@ -42,10 +42,15 @@ developer tests in has every extra installed, which is exactly the environment i
 missing-optional-dependency defect is invisible — this is how `from cat_engine import
 AssessmentModule` was found to require a realtime SDK.
 
-*The harness check.* Re-run one evaluation cell and compare against a stored result under
-`cat_engine/eval-results/`. Normalise the session id — it is embedded in every evidence id
-by construction — and the wall-clock timestamps, then everything else must match exactly.
-That is the only check that covers the numbers `docs/evidence.md` is built on.
+*The parity check.* `tests/test_parity_facade_vs_engine.py` runs one seeded assessment
+through `AssessmentModule` and through a raw `Orchestrator` and asserts the two reports are
+identical. It is what stops the surface drifting from the engine underneath it, and it runs
+over two banks because one of them never administers a spoken item.
+
+The harness check that used to be here — re-run an evaluation cell, diff it against a stored
+result — is no longer possible on this branch: the harness and its artefacts were removed
+when the repository was reduced to the engine. If a change could plausibly move a measured
+number, check the harness out of git history and run it there.
 
 ## First checks when something looks wrong
 
