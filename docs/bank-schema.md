@@ -3,9 +3,9 @@
 **Audience:** testing / content authors who will deliver one bank file containing
 **multiple main competencies** and **MCQ + code + open** items.
 
-**Engine path:** `backend/app/data/question_bank.json`  
-**Loader:** `JsonUnifiedBank` (`backend/app/services/orchestrator/bank.py`)  
-**Envelope model:** `BankItem` (`backend/app/schemas/orchestration.py`)
+**Engine path:** `cat_engine/engine/data/question_bank.json`  
+**Loader:** `JsonUnifiedBank` (`cat_engine/engine/services/orchestrator/bank.py`)  
+**Envelope model:** `BankItem` (`cat_engine/engine/schemas/orchestration.py`)
 
 Companion document: [`grading-schema.md`](grading-schema.md) (how each modality is scored).
 
@@ -68,7 +68,7 @@ knowledge; `"C1.6".split(".")[0]` can only ever say C1.
 A mapping is accepted as well as a list, keyed by id — `{"C1.1": {"critical": true}}`.
 
 This is **not a graph**: it has no edges. Edges are still derived from item co-measurement
-(`services/bank-ingest/service/derive.py`), and every derived prerequisite edge ships inert.
+(`cat_engine/ingest/derive.py`), and every derived prerequisite edge ships inert.
 
 ---
 
@@ -386,7 +386,7 @@ Competency loadings for code scoring are taken from the item envelope `measures`
 ## 7. Open / voice payload
 
 Prefer **inline rubrics** on the item (current PY bank style). External files under
-`backend/app/data/voice_rubrics/` are legacy/alternate and must still use matching
+`cat_engine/engine/data/voice_rubrics/` are legacy/alternate and must still use matching
 `competency_id` values.
 
 | Field | Required | Notes |
@@ -451,7 +451,7 @@ For **each main** you ship (`PY`, `BE`, …):
 | QA notes | markdown | Known weak items, calibration TODOs |
 
 Banks are registered, not replaced. Add a row to `BANK_REGISTRY` in
-`app/services/orchestrator/registry.py` naming the bank file and its competency graph, and
+`cat_engine/engine/services/orchestrator/registry.py` naming the bank file and its competency graph, and
 set `ACTIVE_BANK` to make it the default. Existing banks stay on disk and stay selectable —
 a session names its bank at creation and the choice is locked for that session.
 

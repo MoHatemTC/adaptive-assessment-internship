@@ -2,73 +2,78 @@
 
 ## Running it
 
-```bash
-cd deploy && cp .env.example .env    # fill LITELLM_* and E2B_API_KEY
-docker compose up --build
-curl localhost:8080/health
-```
-
-Without Docker: `./scripts/run_services.sh` brings up all five against a local venv.
+There is nothing to run. The module is imported by a host, and the host is what gets started
+— see [module.md](module.md) for the embedding contract.
 
 ```bash
-cd backend  && PYTHONPATH=. pytest   # the engine and the study harness
-cd services && python -m pytest      # the services, the seams and the contracts
+pip install -e .                     # or copy cat_engine/ into the host tree
+python -m pytest                     # ~900 tests, no billed calls, no infrastructure
 ```
+
+The database-backed paths skip themselves without a DSN and are run as their own session,
+because `BANK_DATABASE_URL` is read when a module is built — set globally it sends every
+file-store test through Postgres, where they fail against a store they never meant to use:
+
+```bash
+BANK_DATABASE_URL=postgresql://... SESSION_DATABASE_URL=postgresql://... \
+  python -m pytest cat_engine/tests/test_sql_backed_registry.py \
+                   cat_engine/tests/test_sql_store_parity.py \
+                   cat_engine/tests/test_session_persistence.py
+```
+
+**The suite needs its declared dependencies.** `pytest-asyncio` and `pytest-env` are in
+`requirements.txt` and are not optional — without the first the concurrency guard goes
+untested and the async tests do not run; without the second, `pytest.ini`'s `env =` block
+supplies nothing and the engine reports a config warning.
 
 ## Before a release: what has actually been run
 
 ```bash
-cd backend  && PYTHONPATH=. pytest        # 691, the engine and the study harness
-cd services && python -m pytest           # the seams, the contracts, every service
-
-cd deploy && docker compose build && docker compose up -d && python smoke.py
-cd deploy && docker compose --profile db up -d --build && python smoke.py
+python -m pytest                                    # everything, file store
+BANK_DATABASE_URL=... SESSION_DATABASE_URL=... \
+  python -m pytest cat_engine/tests/test_sql_*.py cat_engine/tests/test_session_*.py
 ```
 
-**Run the two smoke tests.** They are the only thing that exercises a container, and each
-found a defect no unit test could. The file-backed run caught endpoints that had moved; the
-database run caught `GET /banks` timing out on a cold cache, because listing a catalogue was
-materialising every bank's bytes out of Postgres.
+**Two checks are worth more than the suite, and neither is in it.**
 
-**Both suites need their declared dependencies.** `pytest-asyncio` and `pytest-env` are in
-`backend/requirements.txt` and are not optional — without the first, the concurrency guard
-goes untested and 70 tests do not run; without the second, `pytest.ini`'s `env =` block
-supplies nothing and the engine reports a config warning.
+*The embed check.* Install the module into a clean virtualenv with base dependencies only,
+in a directory that is not this repository, and run an assessment. Every environment a
+developer tests in has every extra installed, which is exactly the environment in which a
+missing-optional-dependency defect is invisible — this is how `from cat_engine import
+AssessmentModule` was found to require a realtime SDK.
+
+*The harness check.* Re-run one evaluation cell and compare against a stored result under
+`cat_engine/eval-results/`. Normalise the session id — it is embedded in every evidence id
+by construction — and the wall-clock timestamps, then everything else must match exactly.
+That is the only check that covers the numbers `docs/evidence.md` is built on.
 
 ## First checks when something looks wrong
 
-```bash
-# Do the services agree about what they are measuring? Two different fingerprints means
-# two services are not running the same assessment — scores computed one way, stopping
-# rule assuming another, and nothing failing.
-for p in 8080 8081 8082 8083 8084 8085 8765; do curl -s localhost:$p/health | jq -c \
-  '{service, engine_config_fingerprint, contract_schema_version}'; done
+```python
+from cat_engine import AssessmentModule, CatConfig
+from cat_engine.config import applied_fingerprint
 
-curl -s localhost:8081/banks | jq                      # which banks, which versions
-curl -s localhost:8081/banks/AIE/policy | jq           # why is this edge inert?
-curl -s localhost:8080/health | jq .detail             # sessions, dependencies, propagation mode
-curl -s localhost:8084/health | jq .detail             # store dir, uploads retained, ingest on?
-curl -s localhost:8085/health | jq .detail             # the question budget scopes are checked against
+cat = AssessmentModule(CatConfig())
+
+applied_fingerprint()                # what this process is measuring by
+[b.model_dump() for b in cat.banks()]  # which banks, which versions, seed or stored
+cat.policy("AIE")                    # why is this edge inert?
+cat.settings                         # store dirs, which surfaces are open
 ```
 
-Two more, when the symptom involves a bank or a scope:
+The fingerprint replaces the `/health` comparison across seven services. It cannot differ
+between components any more — there is one process — but it can differ between a run and the
+run something was measured under, which is the comparison that was always the point.
 
-```bash
-# WHERE ARE BANKS COMING FROM? `store_dir` naming a cache directory means Postgres is in
-# force; naming the volume means the file store is. Both bank services must agree — one
-# reading files while the other writes rows is a bank that never appears.
-curl -s localhost:8081/config | jq '.settings.bank_database_url, .extra'
-curl -s localhost:8084/config | jq '.settings.bank_database_url, .extra'
-
-# WHY IS THIS SELECTION REFUSED? `reachable: false` names the competency at fault — either
+```python
+# WHY IS THIS SELECTION REFUSED? `reachable: False` names the competency at fault — either
 # one no active item measures, or a main requiring more sub-competencies than the budget.
-curl -s localhost:8085/scopes -H 'content-type: application/json' \
-  -d '{"bank_id":"AIE","selected":["C1.1","C6"]}' | jq '.coverage, .rejected'
-```
+manifest = cat.scope(["C1.1", "C6"], bank_id="AIE")
+manifest.coverage, manifest.rejected
 
-`GET /config` on any service prints its effective configuration with credentials removed.
-It is the first thing to read when a bank list comes back empty — `engine_data_dir` and
-`bank_store_dir` are in it.
+# WHERE ARE BANKS COMING FROM?
+cat.settings.bank_database_url or cat.settings.bank_store_dir or "packaged data"
+```
 
 ## Known failures
 
@@ -120,9 +125,10 @@ problem costs the candidate nothing.
 
 An author uploads **one file: the questions**. The competency graph is derived from them.
 
-```bash
-curl -s -X POST 'localhost:8084/uploads/validate?bank_id=NEW' -F file=@bank.json | jq
-curl -s -X POST 'localhost:8084/uploads?bank_id=NEW'          -F file=@bank.json | jq
+```python
+receipt = cat.validate_bank("NEW", path.read_bytes())   # writes nothing
+receipt = cat.upload_bank("NEW", path.read_bytes())     # writes
+receipt.status, receipt.error, receipt.derived_graph
 ```
 
 Validate first. The receipt carries the **derived graph**, which is the part the author did
@@ -135,35 +141,35 @@ a `competencies` block naming which sub-competencies are critical. See
 [bank-schema.md](bank-schema.md) §1. Raising `CAT_MAX_QUESTIONS` also works and is almost
 always the wrong lever — it changes every session, not this bank.
 
-`INGEST_API_ENABLED=false` stops uploads without stopping the service. It does **not** stop
-`bank-registry`'s own write path, which is gated separately by `ADMIN_API_ENABLED`; there
-are two write paths today and turning off one leaves the other open.
+`INGEST_API_ENABLED=false` refuses uploads without disabling anything else — reads keep
+working. `ADMIN_API_ENABLED=false` closes `delete_bank` the same way. There is one write
+path now (`upload_bank`); the second one, `bank-registry`'s, went with the services.
 
 ## Moving banks into Postgres
 
 Off by default. `BANK_DATABASE_URL` empty keeps the file store, which is what the test suite
 runs against.
 
-```bash
-cd deploy && docker compose --profile db up --build
+```python
+cat = AssessmentModule(CatConfig(bank_database_url="postgresql://..."))
 ```
 
-The checked-in banks are loaded on boot, idempotently, and land with **the same content
+The checked-in banks are loaded at construction, idempotently, and land with **the same content
 hash the file store computes**. That is the thing to verify before believing anything else,
 because a mismatch has no other symptom — nothing errors, and every cached parameter set in
 the fleet silently belongs to a bank nobody registered:
 
-```bash
-curl -s localhost:8081/banks | jq -c '.[] | {bank_id, version, source}'
+```python
+[(b.bank_id, b.version, b.source) for b in cat.banks()]
 ```
 
-Compare against the same call with `BANK_DATABASE_URL` unset. They must be identical.
-`services/tests/test_sql_store_parity.py` asserts exactly this for all five banks and is
+Compare against the same call with no DSN configured. They must be identical.
+`cat_engine/tests/test_sql_store_parity.py` asserts exactly this for all five banks and is
 the check to run in CI.
 
-To roll back: unset `BANK_DATABASE_URL` and restart. Banks written while the database was
-in force stay in the database, and the file store's are unaffected — neither store writes
-to the other.
+To roll back: drop `bank_database_url` and rebuild the module. Banks written while the
+database was in force stay in the database, and the file store's are unaffected — neither
+store writes to the other.
 
 ## Adding a bank
 

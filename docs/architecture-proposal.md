@@ -1,10 +1,20 @@
 # The architecture, drawn — and where it should go next
 
-> **Status.** Part 1 is the baseline: the original five services. Part 2 proposed seven,
-> and most of it has since shipped — `competency-scope`, scoped assessments, `bank-ingest`,
-> and the SQL store with the parity suite that has to precede using it. What remains is
-> pointing the two bank services at the database (phase 6), and one product decision that
-> blocks retiring the old write path (phase 4). See §2.14.
+> **Status: HISTORY. Superseded by [ADR-0004](adr/0004-from-services-to-a-module.md).**
+>
+> This document describes a seven-service architecture that no longer exists. The services
+> were collapsed into one embeddable module — see [module.md](module.md) for what runs now.
+> Every path, port and container named below is stale.
+>
+> It is kept because the REASONING is not stale. The seams it argues for are the seams the
+> module still has, and they are why undoing the split cost so little: `wiring.py` builds an
+> orchestrator out of local objects where a service built one out of HTTP clients, and
+> nothing in between changed. Read it for why the boundaries are where they are, not for
+> where the code is.
+>
+> *(Original status: Part 1 was the baseline of five services; Part 2 proposed seven, and
+> most of it shipped — `competency-scope`, scoped assessments, `bank-ingest`, and the SQL
+> store with its parity suite.)*
 
 Two halves.
 
@@ -24,7 +34,7 @@ ASCII in a fenced block. Three of these are sequences across four services and o
 schema; an arrow diagram maintained by hand is an arrow diagram that goes stale.
 
 Read [architecture.md](architecture.md) for the measurement and
-[microservices.md](microservices.md) for the seams. This file assumes both and goes wider
+[microservices.md](module.md) for the seams. This file assumes both and goes wider
 rather than repeating them.
 
 ---
@@ -33,7 +43,7 @@ rather than repeating them.
 
 **Read this as the baseline, not as an inventory of what is deployed.** Two more services —
 `bank-ingest` and `competency-scope` — have shipped since, and they are documented in Part 2
-where the reasoning for them lives. Seven run today; `docs/microservices.md` is the
+where the reasoning for them lives. Seven run today; `docs/module.md` is the
 authoritative list.
 
 Part 1 describes the five that came out of the original split, because everything in Part 2
@@ -1833,7 +1843,7 @@ is the standing trap in this codebase, and none of this makes it better or worse
 ---
 
 - [architecture.md](architecture.md) — the loop, the measurement, the graph
-- [microservices.md](microservices.md) — what runs, and what crosses the wire
+- [microservices.md](module.md) — what runs, and what crosses the wire
 - [ADR-0001](adr/0001-service-boundaries.md) · [ADR-0002](adr/0002-engine-as-a-library.md) — the seams, and what changed when the code moved
 - [competency-graph.md](competency-graph.md) — the two loadings, the policy lattice, the coverage gate
 - [bank-schema.md](bank-schema.md) — the bank JSON, field by field

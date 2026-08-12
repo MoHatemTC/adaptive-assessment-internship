@@ -12,12 +12,16 @@ intake -> seed a posterior per competency
        -> repeat, or report
 ```
 
-Stateless between calls. The orchestrator takes an `AssessmentState`, returns a new one,
-and holds nothing — so an assessment can span HTTP requests, be persisted between them, and
-resume on a different worker. That property is what made the split in
-[microservices.md](microservices.md) tractable, and it is why `competency-graph` holds no
-session state either: a second copy of the same session's node state would disagree with
-the first the moment a request is retried.
+Stateless between calls. The orchestrator takes an `AssessmentState`, returns a new one, and
+holds nothing — so an assessment can span requests, be persisted between them, and resume in
+a different process. That property is what made the split in
+[ADR-0001](adr/0001-service-boundaries.md) tractable, and what made undoing it in
+[ADR-0004](adr/0004-from-services-to-a-module.md) equally cheap: both directions were a
+change of who calls whom, not of what is computed.
+
+It is also why propagation holds no session state of its own. A second copy of the same
+session's node state would disagree with the first the moment a call was retried — which was
+true when propagation was a service and is true now that it is a function.
 
 ## The three things that are never delegated
 
@@ -76,22 +80,34 @@ So the graph changes **what is asked** and **when the test may stop**. It never 
 ## Layout
 
 ```
-backend/app/                         THE ENGINE, installed as a library (`adaptive-engine`)
-  config/settings.py                 all engine policy, one place
-  schemas/                           typed boundaries
-  services/adaptive/                 3PL core, convergence, MCQ engine
-  services/code_adaptive/            code execution, scoring, evidence
-  services/voice/                    rubric grading, evidence projection
-  services/voice_live/               realtime rooms and their transport
-  services/competency_graph/         graph, propagation, policy, coverage
-  services/orchestrator/             the loop, selection, the bank store, reporting
-  data/                              the checked-in banks and their graphs
-backend/evaluation/                  the simulation harness. In-process, never a service
-services/                            five adapters over the library, plus three shared packages
-docs/api.md                          the contract a frontend builds against
+cat_engine/
+  facade.py                          AssessmentModule: the surface a host calls
+  wiring.py                          an Orchestrator built from in-process parts
+  contracts/                         the DTOs a host receives; independent of the engine
+  catalogue.py  grading.py           reading banks; grading one response
+  scope/  ingest/  stores/  live/    scoping, the write path, persistence, interviews
+  engine/                            THE ENGINE
+    config/settings.py               all engine policy, one place
+    schemas/                         typed boundaries
+    services/adaptive/               3PL core, convergence, MCQ engine
+    services/code_adaptive/          code execution, scoring, evidence
+    services/voice/                  rubric grading, evidence projection
+    services/voice_live/             realtime rooms and their transport
+    services/competency_graph/       graph, propagation, policy, coverage
+    services/orchestrator/           the loop, selection, the bank store, reporting
+    data/                            the checked-in banks and their graphs
+  evaluation/                        the simulation harness. In-process, never a component
+docs/module.md                       the embedding contract
+docs/api.md                          the surface, method by method
 ```
 
-The engine is one library rather than a copy per service, because the 3PL core, the
+The engine is one implementation rather than a copy per caller, because the 3PL core, the
 fractional likelihood and the stopping rule are where two implementations drifting apart is
-a measurement problem rather than a maintenance one. Which part of it each service may
-import is enforced by a test — see [microservices.md](microservices.md).
+a measurement problem rather than a maintenance one. That argument survived the engine being
+a library behind seven services and it survives the services being gone — see
+[ADR-0002](adr/0002-engine-as-a-library.md) and
+[ADR-0004](adr/0004-from-services-to-a-module.md).
+
+Which parts of it may reach the sandbox is enforced by `tests/test_module_boundaries.py`.
+That was a packaging fact while the grader was its own image; in one process it is a test,
+which is weaker and is recorded as the cost of the collapse rather than argued away.

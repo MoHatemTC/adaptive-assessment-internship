@@ -201,7 +201,7 @@ evidence `weight` / `confidence`.
 
 ### External rubric file (optional alternate)
 
-Path pattern: `backend/app/data/voice_rubrics/rubric_*.json`
+Path pattern: `cat_engine/engine/data/voice_rubrics/rubric_*.json`
 
 ```json
 {

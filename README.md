@@ -5,40 +5,59 @@ An agent-driven CAT engine that measures a candidate across many competencies us
 item — of whichever modality — will narrow the weakest estimate fastest, and finishing each
 competency as soon as it is measured.
 
-It runs as seven services over one engine library. There is no UI in this repository: the
-API is documented in [docs/api.md](docs/api.md) and a frontend is built separately.
+It is **one module a host project imports**. There is no web framework in it and no port:
+the host owns transport, this owns the measurement. See [docs/module.md](docs/module.md) for
+the embedding contract.
+
+```python
+from cat_engine import AssessmentModule, CatConfig
+
+cat = AssessmentModule(CatConfig(active_bank="AIE"))
+
+state = await cat.begin(intake={"C1": 3})
+while state.presenting:
+    state = await cat.answer(state.session_id, mcq=2)   # or code= / transcript= / audio=
+report = state.report
+```
 
 ```bash
-cd deploy && cp .env.example .env    # fill LITELLM_* and E2B_API_KEY
-docker compose up --build
-curl localhost:8080/health
+pip install cat-engine                 # base: mcq, open, scoping, banks
+pip install cat-engine[sandbox,live]   # grading code, and realtime interviews
 ```
 
-| service | port | owns |
-|---|---|---|
-| `assessment-orchestrator` | 8080 | the loop, the posterior, selection, stopping, sessions |
-| `bank-registry` | 8081 | banks, items, graphs, propagation policy |
-| `grader` | 8082 | one response → `GradedOutcome[]`, per modality |
-| `competency-graph` | 8083 | propagation, coverage. No egress, no state |
-| `bank-ingest` | 8084 | one uploaded file → a registered bank. The only writer |
-| `competency-scope` | 8085 | a selection of competencies → a sub-graph and an item allowlist |
-| `live-voice` | 8765 | realtime interview rooms |
+Or copy `cat_engine/` into the host tree and import it — everything it needs is inside.
 
 ```text
-backend/                             THE ENGINE, as a library (`adaptive-engine`)
-  app/config/settings.py             cat_* (MCQ), code_* (code), orchestrator_*, graph_*
-  app/schemas/orchestration.py       BankItem, VariableState, AssessmentState, reports
-  app/services/adaptive/             MCQ engine — 3PL, EAP, KL/Fisher, convergence
-  app/services/code_adaptive/        code engine — sandbox, static analysis, scoring
-  app/services/voice/                open/voice — rubric evaluation and projection
-  app/services/competency_graph/     graph, propagation, policy, coverage
-  app/services/orchestrator/         the loop, selection, the bank store, reporting
-  app/data/                          registered banks and their competency graphs
-  evaluation/                        the simulation harness — in-process, never a service
-  tests/                             700 deterministic tests, no billed calls
-services/                            the five adapters, plus three shared packages
-docs/api.md, docs/api/               the contract a frontend builds against
+cat_engine/
+  facade.py                          AssessmentModule — the surface a host calls
+  wiring.py                          builds an Orchestrator out of in-process parts
+  config.py, settings.py             CatConfig; measurement policy vs topology
+  errors.py                          CatError — every code the HTTP API used
+  contracts/                         the DTOs a host receives; independent of engine/
+  catalogue.py                       reading banks; two views, two types
+  grading.py                         one response → GradedOutcome[], per modality
+  scope/                             a competency selection → a sub-graph and an allowlist
+  ingest/                            one uploaded file → a registered bank
+  stores/                            sessions and banks, pluggable
+  live/                              interview rooms, and the browser client for them
+  engine/                            THE ENGINE
+    config/settings.py               cat_* (MCQ), code_* (code), orchestrator_*, graph_*
+    schemas/orchestration.py         BankItem, VariableState, AssessmentState, reports
+    services/adaptive/               MCQ engine — 3PL, EAP, KL/Fisher, convergence
+    services/code_adaptive/          code engine — sandbox, static analysis, scoring
+    services/voice/                  open/voice — rubric evaluation and projection
+    services/competency_graph/       graph, propagation, policy, coverage
+    services/orchestrator/           the loop, selection, the bank store, reporting
+    data/                            registered banks and their competency graphs
+  evaluation/                        the simulation harness — in-process, never a component
+  tests/                             ~900 deterministic tests, no billed calls
+docs/module.md                       what a host project needs to know
+docs/api.md                          the surface, method by method
 ```
+
+It was seven services over a shared engine library until
+[ADR-0004](docs/adr/0004-from-services-to-a-module.md); that record explains what the return
+cost as well as what it bought.
 
 ## The loop
 
@@ -167,7 +186,7 @@ with an experimental design behind it. See [docs/operations.md](docs/operations.
 - [docs/api.md](docs/api.md) — the contract a frontend builds against
 - [docs/architecture-proposal.md](docs/architecture-proposal.md) — the whole system drawn, and where it is going
 - [docs/architecture.md](docs/architecture.md) — the loop, the measurement, the graph
-- [docs/microservices.md](docs/microservices.md) — what runs, and what crosses the wire
+- [docs/module.md](docs/module.md) — what runs, and what crosses the wire
 - [docs/adr/0001](docs/adr/0001-service-boundaries.md) · [0002](docs/adr/0002-engine-as-a-library.md) · [0003](docs/adr/0003-uploaded-banks-and-scoped-assessments.md) — the seams, what changed when the code moved, and uploaded banks and scoped assessments
 - [docs/operations.md](docs/operations.md) — running it, first checks, enabling inference
 - [docs/evidence.md](docs/evidence.md) — the measurements behind the defaults

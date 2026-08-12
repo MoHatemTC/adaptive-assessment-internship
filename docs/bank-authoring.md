@@ -6,8 +6,8 @@ exists.
 ## The two files
 
 ```
-backend/app/data/question_bank_<ID>.json      items, with CAT parameters
-backend/app/data/competency_graph_<ID>.json   nodes, edges, and the propagation policy
+cat_engine/engine/data/question_bank_<ID>.json      items, with CAT parameters
+cat_engine/engine/data/competency_graph_<ID>.json   nodes, edges, and the propagation policy
 ```
 
 They are **selected together**. Pairing one bank's items with another's graph makes every
@@ -19,7 +19,7 @@ because an ungated engine is a recoverable failure and a permanent convergence v
 ## Registering it
 
 ```python
-# backend/app/services/orchestrator/registry.py
+# cat_engine/engine/services/orchestrator/registry.py
 "AIE": BankProfile(
     bank_id="AIE",
     title="AI Engineer",

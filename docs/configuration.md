@@ -1,7 +1,8 @@
 # Configuration
 
 Everything is an environment variable, read once at startup into
-`backend/app/config/settings.py`. Put them in `backend/.env`.
+`cat_engine/engine/config/settings.py`. Put them in a `.env` beside whatever runs the module — it is resolved against the
+working directory, not against the package.
 
 > **Import order is load-bearing.** `Settings` is instantiated at import time, so a flag
 > set after `app.config.settings` is first imported is read by nothing while looking
