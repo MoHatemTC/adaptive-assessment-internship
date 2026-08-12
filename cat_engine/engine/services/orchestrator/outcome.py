@@ -10,7 +10,10 @@ and it is the only thing the orchestrator's measurement layer knows about.
     MCQ    score in {0.0, 1.0} from an exact index comparison, weight 1.0
     code   one outcome per CompetencyEvidence — score as graded, weight the evidence
            strength times how much the question loads on that variable
-    open   an LLM rubric score with weight from its confidence (not yet implemented)
+    open   an LLM rubric score per criterion, projected onto competencies, with weight the
+           evidence strength times the grader's confidence
+    voice  identical to `open` — same evaluator, same rubric criteria, same projection. The
+           modality only records how the answer was collected and how a report describes it.
 
 THE FRACTIONAL LIKELIHOOD
 

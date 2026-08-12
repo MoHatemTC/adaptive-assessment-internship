@@ -48,6 +48,23 @@ file-store tests through Postgres, where they fail against a store they never me
 is ever called), `module` (a fresh `AssessmentModule` with the config guard reset around it),
 `bank_items`, `orchestrator_for`, and the per-bank profile fixtures.
 
+`process_wide_state_is_restored` is autouse and needs no opting in. It restores
+`registry.STORE` after every test and empties the shared session table when
+`SESSION_DATABASE_URL` is set. Both are process-wide by design — a deployment resolves its
+bank store once at startup, and sessions are shared across replicas — and both leaked between
+tests the moment a DSN was exported for the whole suite. It is a no-op in the default
+topology.
+
+## Running against Postgres
+
+    export BANK_DATABASE_URL=postgresql://... SESSION_DATABASE_URL=postgresql://...
+    pytest cat_engine/tests
+
+Every test runs, not just the 75 that are otherwise skipped: **1169 passed, 1 skipped**. The
+remaining skip is data-dependent (no shipped bank has an item measuring two mains). Without
+the DSNs the same suite is 1095 passed, 75 skipped — the skips are the three Postgres-gated
+files.
+
 ## Nothing here can spend money
 
 The judged-metric layer that could — five locks and a `deepeval` pin — went with the
