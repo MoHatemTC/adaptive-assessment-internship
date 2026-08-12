@@ -61,7 +61,25 @@ _EXPORTS = {
     "GraderUnavailable": ".errors",
 }
 
-__all__ = [*_EXPORTS, "__version__"]
+#: Spelled out rather than derived from `_EXPORTS`. A starred `__all__` is invisible to
+#: every tool that reads a package's surface statically — linters, type checkers, and the
+#: documentation generators a host might point at this — and a public surface nothing can
+#: read without executing the module is not much of a surface. `test_the_lazy_exports_work`
+#: asserts the two lists agree, so the duplication cannot drift.
+__all__ = [
+    "AnswerInvalid",
+    "AnswerTypeMismatch",
+    "AssessmentModule",
+    "AssessmentUnknown",
+    "CapacityReached",
+    "CatConfig",
+    "CatError",
+    "GraderUnavailable",
+    "ScopeUnassessable",
+    "StaleAnswer",
+    "SyncAssessmentModule",
+    "__version__",
+]
 
 
 def __getattr__(name: str) -> Any:

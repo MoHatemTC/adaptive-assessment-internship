@@ -170,7 +170,9 @@ class Grader:
         retry, a grading failure is an unscorable response that must move no estimate.
         Folding them together would make the second look like the first.
         """
-        from cat_engine.engine.services.voice_live.transcribe import transcribe_audio_bytes
+        from cat_engine.engine.services.voice_live.transcribe import (
+            transcribe_audio_bytes,
+        )
 
         if not audio:
             raise AnswerInvalid("empty audio payload", code="audio_empty")

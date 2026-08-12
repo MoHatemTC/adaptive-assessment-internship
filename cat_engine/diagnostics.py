@@ -26,14 +26,19 @@ from typing import Any
 from cat_engine.contracts import DiagnosticsResponse, VariableDiagnosticsDTO
 from cat_engine.engine.schemas.orchestration import AssessmentState
 from cat_engine.engine.services.adaptive.irt import ability_band
-from cat_engine.engine.services.competency_graph.coverage import unmeasured_required_nodes
+from cat_engine.engine.services.competency_graph.coverage import (
+    unmeasured_required_nodes,
+)
 from cat_engine.engine.services.orchestrator import variables as variables_module
 from cat_engine.engine.services.orchestrator.orchestrator import Orchestrator
-from cat_engine.engine.services.orchestrator.picker import criterion_for, information_for
+from cat_engine.engine.services.orchestrator.picker import (
+    criterion_for,
+    information_for,
+)
 
 
 def _unmeasured(orchestrator: Orchestrator, state: AssessmentState, variable: str) -> list[str]:
-    graph = orchestrator._graph()  # noqa: SLF001 - diagnostics reads what selection reads
+    graph = orchestrator._graph()
     if graph is None:
         return []
     return sorted(

@@ -41,6 +41,7 @@ from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
 import numpy as np
+
 from cat_engine.contracts import ScopeManifest
 from cat_engine.engine.config.settings import settings as engine_settings
 from cat_engine.engine.schemas.orchestration import AssessmentState

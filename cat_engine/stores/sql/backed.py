@@ -112,7 +112,7 @@ class SqlBackedBankStore(BankStore):
     def _sql_bytes(self, version: str, column: str) -> bytes:
         with self._sql.connect() as conn:
             row = conn.execute(
-                f"SELECT {column} AS blob FROM bank_version WHERE version = %s",  # noqa: S608
+                f"SELECT {column} AS blob FROM bank_version WHERE version = %s",
                 (version,),
             ).fetchone()
         return bytes(row["blob"]) if row and row["blob"] is not None else b""
@@ -156,7 +156,9 @@ class SqlBackedBankStore(BankStore):
             return cached
         version = self._sql.version(bank_id)
         if version is None:
-            from cat_engine.engine.services.orchestrator.bank_store import UnknownBankError
+            from cat_engine.engine.services.orchestrator.bank_store import (
+                UnknownBankError,
+            )
 
             raise UnknownBankError(bank_id, self._sql.bank_ids())
         self._versions_by_bank[bank_id] = version
@@ -174,7 +176,9 @@ class SqlBackedBankStore(BankStore):
         """
         materialised = self._materialise(bank_id)
         if materialised is None:
-            from cat_engine.engine.services.orchestrator.bank_store import UnknownBankError
+            from cat_engine.engine.services.orchestrator.bank_store import (
+                UnknownBankError,
+            )
 
             raise UnknownBankError(bank_id, self._sql.bank_ids())
         return materialised

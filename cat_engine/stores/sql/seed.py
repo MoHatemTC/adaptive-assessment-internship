@@ -85,7 +85,7 @@ def _write_verbatim(
     }
     version = content_hash(items_bytes, graph_bytes, profile)
 
-    from psycopg.types.json import Jsonb  # noqa: PLC0415 - only needed on this path
+    from psycopg.types.json import Jsonb
 
     with store.connect() as conn, conn.transaction():
         exists = conn.execute(
@@ -126,9 +126,9 @@ def _write_verbatim(
                 json.dumps(profile, sort_keys=True).encode(),
             ),
         )
-        store._write_items(conn, version, items)  # noqa: SLF001 - same package
+        store._write_items(conn, version, items)
         if graph is not None:
-            store._write_graph(conn, version, graph)  # noqa: SLF001 - same package
+            store._write_graph(conn, version, graph)
         _ = Jsonb  # imported for the writers above
     return version
 

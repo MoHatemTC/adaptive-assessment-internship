@@ -65,7 +65,6 @@ from cat_engine.engine.schemas.orchestration import (
 from cat_engine.engine.services.competency_graph.models import CompetencyGraph
 from cat_engine.engine.services.competency_graph.policy import ResolvedPolicy
 
-
 #: Flags a candidate is told about mid-session. Everything else waits for the report.
 #:
 #: The prefixes are what the ENGINE actually emits. The monolith filtered on

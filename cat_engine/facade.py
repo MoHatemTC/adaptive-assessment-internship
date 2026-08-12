@@ -29,7 +29,8 @@ import logging
 
 import numpy as np
 
-from cat_engine import catalogue, projection, scope as scoping
+from cat_engine import catalogue, projection
+from cat_engine import scope as scoping
 from cat_engine.config import CatConfig
 from cat_engine.contracts import (
     AssessmentReportDTO,
@@ -261,7 +262,7 @@ class AssessmentModule:
         if manifest is not None:
             targets = [row.main for row in manifest.mains]
         else:
-            targets = target_variables or orchestrator._bank.variables()  # noqa: SLF001
+            targets = target_variables or orchestrator._bank.variables()
 
         try:
             state = orchestrator.begin(

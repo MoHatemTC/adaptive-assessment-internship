@@ -13,7 +13,7 @@ from .sessions import (
     restore_rng,
     rng_state_of,
 )
-from .sql import SqlBankStore, StoreIntegrityError, StoredBank, content_hash
+from .sql import SqlBankStore, StoredBank, StoreIntegrityError, content_hash
 
 __all__ = [
     "PersistedSession",

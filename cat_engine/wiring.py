@@ -33,7 +33,9 @@ import logging
 from cat_engine.contracts import ScopeManifest
 from cat_engine.engine.services.orchestrator import registry
 from cat_engine.engine.services.orchestrator.orchestrator import Orchestrator
-from cat_engine.engine.services.orchestrator.propagation_port import InProcessPropagation
+from cat_engine.engine.services.orchestrator.propagation_port import (
+    InProcessPropagation,
+)
 from cat_engine.grading import Grader
 from cat_engine.scope.bank import ScopedBank, scoped_graph_service
 
@@ -131,7 +133,7 @@ class Wiring:
         scope has to travel for that to hold: without it this would build a SECOND,
         unscoped orchestrator and render out of its bank instead.
         """
-        return self.orchestrator_for(bank_id, version, scope)._bank  # noqa: SLF001
+        return self.orchestrator_for(bank_id, version, scope)._bank
 
     @staticmethod
     def _minimum_failures_to_block(bank_id: str) -> int | None:

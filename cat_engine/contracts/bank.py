@@ -24,7 +24,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .envelopes import BankItemRef, CatParameters, MeasuredVariableRef, Modality
+from .envelopes import BankItemRef
 
 
 class BankItemFull(BankItemRef):

@@ -39,6 +39,7 @@ file-store tests through Postgres, where they fail against a store they never me
 | **Banks as data** | `test_imported_human_test_banks.py` |
 | **The study apparatus** | `test_evaluation_harness.py`, `test_sweep_design.py`, `test_sweep_statistics.py`, `test_personas.py`, `test_adversarial_and_judged.py` |
 | **The documentation itself** | `test_readmes_are_current.py` — every code directory has a README and it still lists what is there |
+| **The public surface** | `test_public_surface.py` — every exported name resolves, and importing the package pulls in zero engine modules |
 | **Regression locks** | `test_release_blocker_fixes.py` — each was a release-audit finding once, which is the strongest reason to keep them |
 
 ## Fixtures
