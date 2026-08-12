@@ -5,7 +5,7 @@ THE ONLY MODULE HERE THAT IMPORTS THE ENGINE
 `adaptive_store.sql` is deliberately engine-free — psycopg and nothing else — so the schema
 and the queries can be read, tested and reused without pulling in numpy and 600 KB of
 question banks. This module is the adapter, and it follows the same rule
-`adaptive_clients.engine` follows for the same reason.
+the in-process bank repository follows for the same reason.
 
 WHY THIS SUBCLASSES RATHER THAN REIMPLEMENTS
 

@@ -44,6 +44,29 @@ def stub_boundaries(monkeypatch):
     )
 
 
+@pytest.fixture(scope="session")
+def bank_items() -> dict[str, tuple[str, int]]:
+    """One active item of each modality from the DA bank, with the MCQ's answer index.
+
+    Read from the engine rather than hardcoded: an item id pinned in a test is an item id
+    that stops existing the first time a bank is rebuilt, and the failure then looks like a
+    grading bug rather than a stale fixture.
+    """
+    chosen: dict[str, tuple[str, int]] = {}
+    for item in registry.get_bank("DA").all_items():
+        if item.status != "active":
+            continue
+        if item.modality == "mcq" and "mcq" not in chosen:
+            chosen["mcq"] = (item.item_id, int(item.payload["answer_index"]))
+        elif item.modality == "code" and "code" not in chosen:
+            chosen["code"] = (item.item_id, 0)
+        elif item.modality in ("open", "voice") and "open" not in chosen:
+            chosen["open"] = (item.item_id, 0)
+    missing = {"mcq", "code", "open"} - set(chosen)
+    assert not missing, f"the DA bank no longer offers {missing}"
+    return chosen
+
+
 @pytest.fixture
 def module():
     """A freshly built `AssessmentModule`, with the config guard reset around it.

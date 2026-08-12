@@ -237,8 +237,9 @@ class InProcessPropagation:
     """The default. Applies evidence in this process, against this process's graph.
 
     What every current deployment, the evaluation harness and the whole engine suite use.
-    The HTTP implementation in `adaptive_clients` is the same call over a wire, and the
-    parity suite asserts the two produce identical sessions.
+    There was an HTTP implementation of this port once — the same call over a wire — and a
+    parity suite asserting the two produced identical sessions. Both are gone; the port
+    stays, because it is the seam that made either arrangement possible.
     """
 
     def __init__(

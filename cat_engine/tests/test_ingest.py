@@ -1,4 +1,4 @@
-"""bank-ingest: one uploaded file becomes a registered bank.
+"""One uploaded file becomes a registered bank.
 
 THE TESTS THAT MATTER HERE ARE IN `TestTheDerivedGraph`.
 
@@ -16,11 +16,8 @@ from __future__ import annotations
 import json
 
 import pytest
-from fastapi.testclient import TestClient
 
-from conftest import bank_store_at, load_service, load_services
-
-DATA = "backend/app/data"
+from cat_engine.errors import BankInvalid, WritesDisabled
 
 
 def bank_bytes(name: str) -> bytes:
@@ -30,34 +27,48 @@ def bank_bytes(name: str) -> bytes:
 
 
 def upload(api, bank_id: str, raw: bytes, *, dry_run: bool = False):
-    """The one write endpoint. Register and replace are the same call, by design."""
-    return api.put(
-        f"/banks/{bank_id}?dry_run={str(dry_run).lower()}",
-        files={"file": ("bank.json", raw, "application/json")},
-    )
+    """The one write path. Register and replace are the same call, by design.
 
-
-@pytest.fixture()
-def derive(tmp_path):
-    """The derivation module, with its service directory on the path.
-
-    Every service here names its package `service`, so the module is only importable inside
-    `load_service` — the same reason `conftest` loads them one at a time.
+    Returns a RECEIPT, not a response: a rejected bank comes back with `status="rejected"`
+    and the findings that caused it, because the caller is usually an authoring tool and the
+    useful answer is which item is at fault.
     """
-    with bank_store_at(tmp_path / "banks"):
-        with load_service("bank-ingest"):
-            import service.derive as module
-
-            yield module
+    return api.register(bank_id, raw, write=not dry_run)
 
 
 @pytest.fixture()
-def api(tmp_path):
-    with bank_store_at(tmp_path / "banks"):
-        with load_service("bank-ingest") as main:
-            main.UPLOADS.clear()
-            with TestClient(main.app) as http:
-                yield http
+def store_at(tmp_path):
+    """Point the process-wide bank store at a temporary directory for the duration.
+
+    Any test that writes a bank needs this. Without it the write lands in the checked-in
+    `engine/data/banks`, and a later run discovers a registered bank that no fixture created
+    and no assertion expects — a failure in a different file, hours later, with nothing
+    pointing back here.
+    """
+    from cat_engine.engine.services.orchestrator import registry
+    from cat_engine.engine.services.orchestrator.bank_store import BankStore, _seed_profiles
+
+    previous = registry.STORE
+    registry.use_store(BankStore(seeds=_seed_profiles(), store_dir=tmp_path / "banks"))
+    try:
+        yield registry.STORE
+    finally:
+        registry.use_store(previous)
+
+
+@pytest.fixture()
+def derive():
+    """The derivation module itself, for the tests that assert on a graph directly."""
+    from cat_engine.ingest import derive as module
+
+    return module
+
+
+@pytest.fixture()
+def api(store_at):
+    from cat_engine.ingest import Ingest
+
+    return Ingest()
 
 
 class TestTheDerivedGraph:
@@ -183,32 +194,29 @@ class TestTheDerivedGraph:
 
 class TestUploadingABank:
     def test_one_file_becomes_a_registered_bank(self, api):
-        response = upload(api, "UP1", bank_bytes("question_bank.json"))
-        assert response.status_code == 200, response.text
-        receipt = response.json()
-        assert receipt["status"] == "registered"
-        assert receipt["version"]
-        assert receipt["items"] == 34
-        assert receipt["validation"]["accepted"] is True
+        receipt = upload(api, "UP1", bank_bytes("question_bank.json"))
+        assert receipt.status == "registered"
+        assert receipt.version
+        assert receipt.items == 34
+        assert receipt.validation.accepted is True
 
     def test_the_receipt_shows_the_graph_the_author_did_not_upload(self, api):
-        receipt = upload(api, "UP1", bank_bytes("question_bank.json")).json()
-        derived = receipt["derived_graph"]
+        derived = upload(
+            api, "UP1", bank_bytes("question_bank.json")
+        ).derived_graph.model_dump()
         assert derived["mains"] == ["DA"]
         assert len(derived["sub_competencies"]) == 6
         assert derived["prerequisite_edges_are_inert"] is True
 
     def test_a_bare_list_of_items_is_accepted(self, api):
         raw = json.loads(bank_bytes("question_bank.json"))
-        response = upload(api, "UP2", json.dumps(raw["items"]).encode())
-        assert response.status_code == 200, response.text
+        assert upload(api, "UP2", json.dumps(raw["items"]).encode()).status == "registered"
 
     def test_a_dry_run_writes_nothing(self, api):
         response = upload(api, "UP3", bank_bytes("question_bank.json"), dry_run=True)
-        assert response.status_code == 200
-        assert response.json()["validation"]["accepted"] is True
-        assert response.json()["status"] == "validating"
-        assert response.json()["derived_graph"], "the derived graph is the point of a dry run"
+        assert response.validation.accepted is True
+        assert response.status == "validating"
+        assert response.derived_graph, "the derived graph is the point of a dry run"
 
         from cat_engine.engine.services.orchestrator import registry
 
@@ -218,49 +226,45 @@ class TestUploadingABank:
         """A bank is identified by its id and its content, so the same bytes under the same
         id are the same bank. Register and replace were separate verbs and a retried POST
         could fail for having succeeded; one PUT cannot."""
-        first = upload(api, "UP4", bank_bytes("question_bank.json")).json()
-        again = upload(api, "UP4", bank_bytes("question_bank.json")).json()
-        assert again["status"] == "registered"
-        assert again["version"] == first["version"], "identical bytes, identical hash"
+        first = upload(api, "UP4", bank_bytes("question_bank.json"))
+        again = upload(api, "UP4", bank_bytes("question_bank.json"))
+        assert again.status == "registered"
+        assert again.version == first.version, "identical bytes, identical hash"
 
     def test_uploading_different_content_moves_the_version(self, api):
-        first = upload(api, "UP5", bank_bytes("question_bank.json")).json()
+        first = upload(api, "UP5", bank_bytes("question_bank.json"))
         raw = json.loads(bank_bytes("question_bank.json"))
         raw["items"][0]["cat"]["b"] = 1.75
-        changed = upload(api, "UP5", json.dumps(raw).encode()).json()
-        assert changed["version"] != first["version"]
+        changed = upload(api, "UP5", json.dumps(raw).encode())
+        assert changed.version != first.version
 
     def test_deleting_an_uploaded_bank_forgets_it(self, api):
         upload(api, "UP6", bank_bytes("question_bank.json"))
-        assert api.delete("/banks/UP6").json()["deleted"] == "UP6"
+        assert api.delete("UP6") is True
 
         from cat_engine.engine.services.orchestrator import registry
 
         assert not registry.STORE.is_stored("UP6")
 
     def test_a_checked_in_bank_cannot_be_deleted_through_the_api(self, api):
-        response = api.delete("/banks/DA")
-        assert response.status_code == 404
-        assert response.json()["code"] == "bank_not_stored"
+        assert api.delete("DA") is False, "a checked-in bank is not the store's to remove"
 
 
 class TestARejectionSaysWhatToFix:
     def test_a_file_that_is_not_json(self, api):
-        response = upload(api, "BAD1", b"competency,question\nC1,what is 2+2")
-        assert response.status_code == 422
-        assert "not valid JSON" in response.json()["detail"]
+        receipt = upload(api, "BAD1", b"competency,question\nC1,what is 2+2")
+        assert receipt.status == "rejected"
+        assert "not valid JSON" in receipt.error
 
     def test_a_file_with_no_items(self, api):
-        response = upload(api, "BAD2", json.dumps({"items": []}).encode())
-        assert response.status_code == 422
-        assert "no items" in response.json()["detail"]
+        receipt = upload(api, "BAD2", json.dumps({"items": []}).encode())
+        assert receipt.status == "rejected"
+        assert "no items" in receipt.error
 
     def test_an_empty_upload(self, api):
-        response = api.put(
-            "/banks/BAD3", files={"file": ("b.json", b"", "application/json")}
-        )
-        assert response.status_code == 422
-        assert response.json()["code"] == "upload_empty"
+        with pytest.raises(BankInvalid) as caught:
+            upload(api, "BAD3", b"")
+        assert caught.value.code == "upload_empty"
 
     def test_a_main_with_more_sub_competencies_than_the_budget(self, api):
         """AIE declares sixteen sub-competencies under C6 against a twelve-question cap.
@@ -269,87 +273,71 @@ class TestARejectionSaysWhatToFix:
         uploaded as-is — and the refusal NAMES the main, at the moment an author can act on
         it, rather than surfacing later as a session that always runs to the cap.
         """
-        response = upload(api, "BIG", bank_bytes("question_bank_AIE.json"))
-        assert response.status_code == 422
-        detail = response.json()["detail"]
-        assert "coverage_unreachable" in detail
-        assert "C6" in detail
+        receipt = upload(api, "BIG", bank_bytes("question_bank_AIE.json"))
+        assert receipt.status == "rejected"
+        assert "coverage_unreachable" in receipt.error
+        assert "C6" in receipt.error
 
     def test_an_item_with_impossible_parameters(self, api):
         raw = json.loads(bank_bytes("question_bank.json"))
         raw["items"][0]["cat"]["a"] = 12.0  # bounded at 3.0 on the schema
-        response = upload(api, "BAD4", json.dumps(raw).encode())
-        assert response.status_code == 422
-        assert "item_invalid" in response.json()["detail"]
+        receipt = upload(api, "BAD4", json.dumps(raw).encode())
+        assert receipt.status == "rejected"
+        assert "item_invalid" in receipt.error
 
     def test_a_rejected_upload_is_still_retrievable(self, api):
         """The raw bytes are kept before anything is parsed. A rejection that cannot be
         reproduced from the original input is a support ticket with no evidence in it."""
         upload(api, "BAD5", b"not json at all")
-        listed = api.get("/uploads").json()
-        assert listed[0]["status"] == "rejected"
-        assert api.get(f"/uploads/{listed[0]['upload_id']}").json()["error"]
+        listed = api.uploads.recent()
+        assert listed[0].raw == b"not json at all", "the original bytes are kept"
+        assert listed[0].receipt.status == "rejected"
+        assert listed[0].receipt.error
 
 
 class TestTheWritePathCanBeTurnedOff:
     def test_uploads_are_refused_when_disabled(self, api, monkeypatch):
-        from service.config import settings
+        monkeypatch.setattr(api.settings, "ingest_api_enabled", False)
+        with pytest.raises(WritesDisabled) as caught:
+            upload(api, "OFF", bank_bytes("question_bank.json"))
+        assert caught.value.status_code == 403
 
-        monkeypatch.setattr(settings, "ingest_api_enabled", False)
-        response = upload(api, "OFF", bank_bytes("question_bank.json"))
-        assert response.status_code == 503
-        assert response.json()["code"] == "ingest_api_disabled"
+    def test_reading_still_works_when_writing_is_disabled(self, api, monkeypatch):
+        """The switch stops uploads, not the module. Was `/health` still answering."""
+        from cat_engine import catalogue
 
-    def test_health_still_answers_when_disabled(self, api, monkeypatch):
-        from service.config import settings
-
-        monkeypatch.setattr(settings, "ingest_api_enabled", False)
-        assert api.get("/health").status_code == 200
+        monkeypatch.setattr(api.settings, "ingest_api_enabled", False)
+        assert catalogue.banks()
 
 
 class TestAnUploadedBankIsAssessable:
     """The end of the chain: questions in, an assessment out, no restart and no rebuild."""
 
-    def test_an_uploaded_bank_can_be_scoped_and_assessed(self, tmp_path):
-        from adaptive_clients import BankRegistryClient
+    async def test_an_uploaded_bank_can_be_scoped_and_assessed(self, api, module):
+        """Three services and two HTTP hops once; three method calls now.
 
-        with bank_store_at(tmp_path / "banks"):
-            with load_services("bank-ingest", "bank-registry", "competency-scope") as mods:
-                ingest, scope = mods["bank-ingest"], mods["competency-scope"]
-                ingest.UPLOADS.clear()
+        The chain is the assertion: an author uploads questions, the catalogue sees the
+        bank with no restart, a scope can be built over it, and an assessment runs against
+        it. Every link was a deployment concern and none of them is one any more.
+        """
+        receipt = upload(api, "UPLOADED", bank_bytes("question_bank.json"))
+        assert receipt.status == "registered"
 
-                with TestClient(ingest.app) as http:
-                    receipt = http.put(
-                        "/banks/UPLOADED",
-                        files={
-                            "file": (
-                                "b.json",
-                                bank_bytes("question_bank.json"),
-                                "application/json",
-                            )
-                        },
-                    ).json()
-                assert receipt["status"] == "registered"
+        assert "UPLOADED" in {b.bank_id for b in module.banks()}, (
+            "the catalogue sees it with no restart"
+        )
 
-                from conftest import asgi_client
+        manifest = module.scope(["DA.1", "DA.2"], bank_id="UPLOADED")
+        assert manifest.coverage.reachable is True
+        assert manifest.item_ids
+        row = next(r for r in manifest.mains if r.main == "DA")
+        assert row.partial is True
 
-                with TestClient(mods["bank-registry"].app) as registry_http:
-                    listed = {b["bank_id"] for b in registry_http.get("/banks").json()}
-                    assert "UPLOADED" in listed, "the registry sees it with no restart"
-
-                    scope._bank = BankRegistryClient(
-                        http=asgi_client(mods["bank-registry"].app)
-                    )
-                    with TestClient(scope.app) as scope_http:
-                        manifest = scope_http.post(
-                            "/scopes",
-                            json={"bank_id": "UPLOADED", "selected": ["DA.1", "DA.2"]},
-                        ).json()
-
-                assert manifest["coverage"]["reachable"] is True
-                assert manifest["item_ids"]
-                row = next(r for r in manifest["mains"] if r["main"] == "DA")
-                assert row["partial"] is True
+        state = await module.begin(
+            bank_id="UPLOADED", scope=["DA.1", "DA.2"], use_llm=False, seed=7
+        )
+        assert state.presenting is not None
+        assert state.presenting.item.item_id in set(manifest.item_ids)
 
 
 class TestABankCanDeclareItsOwnCompetencies:
@@ -388,14 +376,14 @@ class TestABankCanDeclareItsOwnCompetencies:
         """The state of things before this block existed. Kept as a test because it is the
         reason the block exists, and because a change that silently made it pass would mean
         the coverage requirement had quietly loosened."""
-        response = upload(api, "AIE-PLAIN", bank_bytes("question_bank_AIE.json"))
-        assert response.status_code == 422
-        assert "coverage_unreachable" in response.json()["detail"]
+        receipt = upload(api, "AIE-PLAIN", bank_bytes("question_bank_AIE.json"))
+        assert receipt.status == "rejected"
+        assert "coverage_unreachable" in receipt.error
 
     def test_the_same_bank_is_accepted_once_it_declares_its_critical_set(self, api):
-        response = upload(api, "AIE-DECLARED", self.aie_with_declaration())
-        assert response.status_code == 200, response.text
-        assert response.json()["status"] == "registered"
+        assert upload(api, "AIE-DECLARED", self.aie_with_declaration()).status == (
+            "registered"
+        )
 
     def test_the_declared_critical_set_is_what_the_gate_will_require(self, api, derive):
         from cat_engine.engine.services.orchestrator import registry
@@ -444,7 +432,8 @@ class TestABankCanDeclareItsOwnCompetencies:
         )
 
     def test_the_receipt_reports_what_was_derived(self, api):
-        receipt = upload(api, "AIE-DECLARED", self.aie_with_declaration()).json()
-        derived = receipt["derived_graph"]
+        derived = upload(
+            api, "AIE-DECLARED", self.aie_with_declaration()
+        ).derived_graph.model_dump()
         assert derived["mains"] == ["C1", "C3", "C6"]
         assert derived["prerequisite_edges_are_inert"] is True
