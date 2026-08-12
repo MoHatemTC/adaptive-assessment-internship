@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from adaptive_contracts import CompetencyGraphDTO
+from cat_engine.contracts import CompetencyGraphDTO
 from cat_engine.engine.schemas.orchestration import BankItem, GradedResponse
 from cat_engine.engine.schemas.voice import GradedVoiceResponse, VoiceResponsePackage
 from cat_engine.engine.services.competency_graph.graph import CompetencyGraphService

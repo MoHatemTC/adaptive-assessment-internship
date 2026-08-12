@@ -18,8 +18,8 @@ import re
 import pytest
 from pydantic import ValidationError
 
-from adaptive_contracts import SCHEMA_VERSION
-from adaptive_contracts.envelopes import (
+from cat_engine.contracts import SCHEMA_VERSION
+from cat_engine.contracts.envelopes import (
     BankItemRef,
     CatParameters,
     GradedOutcomeDTO,
@@ -38,10 +38,10 @@ class TestSchemaVersion:
         assert re.fullmatch(r"\d+\.\d+\.\d+", SCHEMA_VERSION), SCHEMA_VERSION
 
     def test_it_is_exported_from_the_package_root(self):
-        """Services import it from the root; moving it would break every /health."""
-        import adaptive_contracts
+        """Callers import it from the root; moving it would break every version report."""
+        from cat_engine import contracts
 
-        assert adaptive_contracts.SCHEMA_VERSION == SCHEMA_VERSION
+        assert contracts.SCHEMA_VERSION == SCHEMA_VERSION
 
 
 class TestCatParameters:

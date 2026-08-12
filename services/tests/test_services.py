@@ -25,7 +25,7 @@ from pathlib import Path
 
 import pytest
 
-from adaptive_contracts import SCHEMA_VERSION
+from cat_engine.contracts import SCHEMA_VERSION
 
 from conftest import EXPECTED_PORTS, SERVICES
 

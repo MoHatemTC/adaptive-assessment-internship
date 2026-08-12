@@ -29,7 +29,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from adaptive_contracts import BankItemFull, BankItemRef, BankSummary, CompetencyGraphDTO
+from cat_engine.contracts import BankItemFull, BankItemRef, BankSummary, CompetencyGraphDTO
 
 from .transport import BaseClient, ServiceRefused
 

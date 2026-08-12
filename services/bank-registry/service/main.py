@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import logging
 
-from adaptive_contracts import (
+from cat_engine.contracts import (
     BankItemFull,
     BankItemRef,
     BankSummary,

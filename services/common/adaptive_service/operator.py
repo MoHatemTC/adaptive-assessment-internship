@@ -29,7 +29,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from adaptive_contracts import SCHEMA_VERSION
+from cat_engine.contracts import SCHEMA_VERSION
 
 #: Substrings that mark a setting as a credential. A field NAME test, not a value test —
 #: `api_key`, `jwt_secret`, `refresh_token` and `db_password` are caught; a credential

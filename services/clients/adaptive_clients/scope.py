@@ -6,7 +6,7 @@ nothing in this file needs numpy or a question bank.
 
 from __future__ import annotations
 
-from adaptive_contracts import ScopeManifest, ScopeRequest, ScopeSelection
+from cat_engine.contracts import ScopeManifest, ScopeRequest, ScopeSelection
 
 from .transport import BaseClient
 

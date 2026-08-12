@@ -19,7 +19,7 @@ import pytest
 # evidence, and evidence that depends on install state is weaker evidence.
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "services" / "contracts"))
 
-from adaptive_contracts import AnswerRequest, CreateAssessmentRequest  # noqa: E402
+from cat_engine.contracts import AnswerRequest, CreateAssessmentRequest  # noqa: E402
 
 from cat_engine.engine.config.settings import settings  # noqa: E402
 from cat_engine.engine.services.adaptive import convergence  # noqa: E402

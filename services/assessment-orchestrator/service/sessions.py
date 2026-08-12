@@ -33,7 +33,7 @@ import time
 from dataclasses import dataclass, field
 
 import numpy as np
-from adaptive_contracts import ScopeManifest
+from cat_engine.contracts import ScopeManifest
 from cat_engine.engine.config.settings import settings as engine_settings
 from cat_engine.engine.schemas.orchestration import AssessmentState
 

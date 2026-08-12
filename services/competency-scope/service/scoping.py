@@ -34,7 +34,7 @@ import hashlib
 import json
 from collections import defaultdict
 
-from adaptive_contracts import (
+from cat_engine.contracts import (
     BankItemRef,
     CompetencyGraphDTO,
     DanglingEdgeDTO,

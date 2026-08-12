@@ -39,7 +39,7 @@ from __future__ import annotations
 import json
 import logging
 
-from adaptive_contracts import (
+from cat_engine.contracts import (
     BankValidationReport,
     DerivedGraphDTO,
     ErrorResponse,

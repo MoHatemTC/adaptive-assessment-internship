@@ -33,7 +33,7 @@ import logging
 
 import numpy as np
 from adaptive_clients import ServiceRefused, ServiceUnavailable
-from adaptive_contracts import (
+from cat_engine.contracts import (
     AnswerRequest,
     AssessmentReportDTO,
     AssessmentStateResponse,

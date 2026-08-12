@@ -33,7 +33,7 @@ import binascii
 import logging
 
 from adaptive_clients import BankRegistryClient, ServiceRefused, ServiceUnavailable
-from adaptive_contracts import (
+from cat_engine.contracts import (
     ErrorResponse,
     GradeCodeRequest,
     GradeMcqRequest,

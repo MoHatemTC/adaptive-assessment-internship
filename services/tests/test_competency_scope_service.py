@@ -266,14 +266,14 @@ class TestNothingInAScopeCanCarryEvidence:
     """
 
     def test_the_manifest_declares_no_measurement_field(self):
-        from adaptive_contracts import ScopeManifest, ScopeMainDTO, ScopeNodeDTO
+        from cat_engine.contracts import ScopeManifest, ScopeMainDTO, ScopeNodeDTO
 
         forbidden = {"score", "weight", "theta", "theta_hat", "standard_error", "posterior"}
         for model in (ScopeManifest, ScopeMainDTO, ScopeNodeDTO):
             assert not forbidden & set(model.model_fields), model.__name__
 
     def test_a_payload_claiming_a_score_cannot_smuggle_one_through(self):
-        from adaptive_contracts import ScopeNodeDTO
+        from cat_engine.contracts import ScopeNodeDTO
 
         node = ScopeNodeDTO.model_validate(
             {"node_id": "C1.1", "score": 1.0, "weight": 1.0}

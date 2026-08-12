@@ -33,7 +33,7 @@ CONTRACTS = Path(__file__).resolve().parents[2] / "services" / "contracts"
 if str(CONTRACTS) not in sys.path:
     sys.path.insert(0, str(CONTRACTS))
 
-import adaptive_contracts as wire  # noqa: E402
+import cat_engine.contracts as wire  # noqa: E402
 from cat_engine.engine.schemas import orchestration as engine  # noqa: E402
 from cat_engine.engine.schemas import voice as engine_voice  # noqa: E402
 from cat_engine.engine.services.competency_graph.inference import InferredNodeSignal  # noqa: E402

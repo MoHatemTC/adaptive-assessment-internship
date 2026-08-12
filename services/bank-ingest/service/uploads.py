@@ -19,7 +19,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 
-from adaptive_contracts import UploadReceipt
+from cat_engine.contracts import UploadReceipt
 
 
 @dataclass

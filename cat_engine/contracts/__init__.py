@@ -13,7 +13,7 @@ installs the engine as a library. Two reasons:
     client and 600 KB of question banks.
 
 The duplication is therefore permanent rather than transitional, and it is policed:
-`backend/tests/test_contract_parity.py` asserts that the types which genuinely do mirror
+`cat_engine/tests/test_contract_parity.py` asserts that the types which genuinely do mirror
 engine types still agree field for field.
 
 WHY `GradedOutcome` IS THE NARROW WAIST

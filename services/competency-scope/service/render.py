@@ -13,7 +13,7 @@ and in every markdown viewer, and it diffs.
 
 from __future__ import annotations
 
-from adaptive_contracts import ScopeManifest
+from cat_engine.contracts import ScopeManifest
 
 #: Mermaid parses `-` in a node id as an operator, and bank taxonomies use dots. Both are
 #: replaced for the ID; the ORIGINAL is always what the label shows.

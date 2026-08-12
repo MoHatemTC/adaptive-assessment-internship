@@ -36,7 +36,7 @@ from __future__ import annotations
 import logging
 
 from adaptive_clients import BankRegistryClient, ServiceRefused, ServiceUnavailable
-from adaptive_contracts import ErrorResponse, ScopeManifest, ScopeRequest
+from cat_engine.contracts import ErrorResponse, ScopeManifest, ScopeRequest
 from adaptive_service import install_error_handlers, operator_router
 from adaptive_service.errors import ServiceError
 from cat_engine.engine.config.settings import settings as engine_settings

@@ -32,7 +32,7 @@ import logging
 
 from adaptive_clients import BankRegistryClient, ServiceRefused, ServiceUnavailable
 from adaptive_clients.engine import HttpGraphSource
-from adaptive_contracts import (
+from cat_engine.contracts import (
     CoverageRequest,
     CoverageResponse,
     ErrorResponse,

@@ -39,7 +39,7 @@ from adaptive_clients.engine import (
     ScopedBank,
     scoped_graph_service,
 )
-from adaptive_contracts import ScopeManifest
+from cat_engine.contracts import ScopeManifest
 from cat_engine.engine.services.orchestrator.orchestrator import Orchestrator
 from cat_engine.engine.services.orchestrator.propagation_port import InProcessPropagation
 

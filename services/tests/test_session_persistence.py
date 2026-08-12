@@ -121,7 +121,7 @@ class TestASessionOutlivesItsProcess:
     def test_a_scope_survives_the_round_trip(self, store, sessions):
         """The allowlist a candidate began under. A resumed session that lost it would widen
         silently to the whole bank — an assessment covering more than the one that started."""
-        from adaptive_contracts import ScopeManifest, ScopeMainDTO
+        from cat_engine.contracts import ScopeManifest, ScopeMainDTO
 
         from service.sessions import SessionStore
 

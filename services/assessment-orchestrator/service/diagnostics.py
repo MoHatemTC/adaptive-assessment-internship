@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from adaptive_contracts import DiagnosticsResponse, VariableDiagnosticsDTO
+from cat_engine.contracts import DiagnosticsResponse, VariableDiagnosticsDTO
 from cat_engine.engine.schemas.orchestration import AssessmentState
 from cat_engine.engine.services.adaptive.irt import ability_band
 from cat_engine.engine.services.competency_graph.coverage import unmeasured_required_nodes

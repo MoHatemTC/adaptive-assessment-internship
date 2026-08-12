@@ -21,7 +21,7 @@ confusing.
 
 from __future__ import annotations
 
-from adaptive_contracts import (
+from cat_engine.contracts import (
     AssessmentReportDTO,
     GradeReceiptDTO,
     PresentedItemDTO,

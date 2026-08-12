@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from adaptive_contracts import (
+from cat_engine.contracts import (
     BankItemFull,
     BankItemRef,
     BankSummary,
