@@ -24,12 +24,12 @@ from __future__ import annotations
 from typing import Any
 
 from adaptive_contracts import DiagnosticsResponse, VariableDiagnosticsDTO
-from app.schemas.orchestration import AssessmentState
-from app.services.adaptive.irt import ability_band
-from app.services.competency_graph.coverage import unmeasured_required_nodes
-from app.services.orchestrator import variables as variables_module
-from app.services.orchestrator.orchestrator import Orchestrator
-from app.services.orchestrator.picker import criterion_for, information_for
+from cat_engine.engine.schemas.orchestration import AssessmentState
+from cat_engine.engine.services.adaptive.irt import ability_band
+from cat_engine.engine.services.competency_graph.coverage import unmeasured_required_nodes
+from cat_engine.engine.services.orchestrator import variables as variables_module
+from cat_engine.engine.services.orchestrator.orchestrator import Orchestrator
+from cat_engine.engine.services.orchestrator.picker import criterion_for, information_for
 
 
 def _unmeasured(orchestrator: Orchestrator, state: AssessmentState, variable: str) -> list[str]:

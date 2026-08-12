@@ -288,51 +288,51 @@ class TestEachServiceImportsOnlyTheEngineSliceItOwns:
     #: service directory -> engine module prefixes it is allowed to import.
     ALLOWED: dict[str, tuple[str, ...]] = {
         "bank-registry": (
-            "app.config",
-            "app.schemas",
-            "app.services.orchestrator.bank",
-            "app.services.orchestrator.bank_store",
-            "app.services.orchestrator.registry",
-            "app.services.orchestrator.calibration",
-            "app.services.orchestrator.competency",
-            "app.services.competency_graph",
+            "cat_engine.engine.config",
+            "cat_engine.engine.schemas",
+            "cat_engine.engine.services.orchestrator.bank",
+            "cat_engine.engine.services.orchestrator.bank_store",
+            "cat_engine.engine.services.orchestrator.registry",
+            "cat_engine.engine.services.orchestrator.calibration",
+            "cat_engine.engine.services.orchestrator.competency",
+            "cat_engine.engine.services.competency_graph",
         ),
         "bank-ingest": (
-            "app.config",
+            "cat_engine.engine.config",
             # The store and its validation, which is the WHOLE point: a bank arriving as
             # an upload clears exactly the bar the checked-in banks clear, because it is
             # checked by the same function. A second implementation of those rules would
             # mean the engine's own suite was testing the seeds rather than the system.
-            "app.services.orchestrator.bank_store",
-            "app.services.orchestrator.registry",
+            "cat_engine.engine.services.orchestrator.bank_store",
+            "cat_engine.engine.services.orchestrator.registry",
         ),
         "grader": (
-            "app.config",
-            "app.schemas",
-            "app.services.orchestrator.grader",
-            "app.services.orchestrator.outcome",
-            "app.services.code_adaptive",
-            "app.services.voice",
-            "app.services.observability",
+            "cat_engine.engine.config",
+            "cat_engine.engine.schemas",
+            "cat_engine.engine.services.orchestrator.grader",
+            "cat_engine.engine.services.orchestrator.outcome",
+            "cat_engine.engine.services.code_adaptive",
+            "cat_engine.engine.services.voice",
+            "cat_engine.engine.services.observability",
             # Transcription only — NOT `voice_live` at large, which holds the realtime
             # rooms and belongs to live-voice. Turning recorded audio into text is part of
             # turning a spoken answer into a graded outcome, and putting it anywhere else
             # would cost two hops for one answer. The prefix is the module, not the
             # package, so importing a realtime room from here still fails this test.
-            "app.services.voice_live.transcribe",
+            "cat_engine.engine.services.voice_live.transcribe",
         ),
         "competency-graph": (
-            "app.config",
-            "app.schemas",
-            "app.services.competency_graph",
-            "app.services.orchestrator.graph_delta",
-            "app.services.orchestrator.competency",
+            "cat_engine.engine.config",
+            "cat_engine.engine.schemas",
+            "cat_engine.engine.services.competency_graph",
+            "cat_engine.engine.services.orchestrator.graph_delta",
+            "cat_engine.engine.services.orchestrator.competency",
             # The transaction itself. It lives beside the orchestrator because that is the
             # only caller, but the CODE is graph code — it opens the ledger, walks the
             # edges and writes node state, and none of that is the orchestrator's to do.
             # Named as a module so the rest of `orchestrator` stays out of reach: this
             # service must not be one import from a posterior.
-            "app.services.orchestrator.propagation_port",
+            "cat_engine.engine.services.orchestrator.propagation_port",
         ),
         "competency-scope": (
             # `app.config` ONLY, for `cat_max_questions` — the budget the reachability
@@ -341,24 +341,24 @@ class TestEachServiceImportsOnlyTheEngineSliceItOwns:
             # It is the narrowest slice any service declares, and that is the point: a
             # scope decides which questions MAY be asked and must never be one import from
             # a posterior.
-            "app.config",
+            "cat_engine.engine.config",
         ),
         "live-voice": (
-            "app.config",
-            "app.services.observability",
+            "cat_engine.engine.config",
+            "cat_engine.engine.services.observability",
             # The realtime rooms and their transport. NOT `app.services.voice`, which is
             # the rubric grader: this service produces a transcript and never a score, and
             # keeping the two apart is why an audio failure can be reported as an audio
             # failure rather than as a candidate who said nothing.
-            "app.services.voice_live",
+            "cat_engine.engine.services.voice_live",
         ),
         "assessment-orchestrator": (
-            "app.config",
-            "app.schemas",
-            "app.services.adaptive",
-            "app.services.competency_graph",
-            "app.services.orchestrator",
-            "app.services.observability",
+            "cat_engine.engine.config",
+            "cat_engine.engine.schemas",
+            "cat_engine.engine.services.adaptive",
+            "cat_engine.engine.services.competency_graph",
+            "cat_engine.engine.services.orchestrator",
+            "cat_engine.engine.services.observability",
         ),
     }
 

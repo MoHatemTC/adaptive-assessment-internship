@@ -39,7 +39,7 @@ def graph_service(stack):
 
 
 def da_nodes() -> list[str]:
-    from app.services.orchestrator import registry
+    from cat_engine.engine.services.orchestrator import registry
 
     graph = registry.get_graph_service("DA")
     return sorted(
@@ -204,9 +204,9 @@ class TestTheServiceAndTheInProcessPathAgree:
     """
 
     def _in_process(self, node: str, score: float) -> dict:
-        from app.schemas.orchestration import AssessmentState, BankItem, GradedResponse
-        from app.services.orchestrator import registry
-        from app.services.orchestrator.propagation_port import propagate
+        from cat_engine.engine.schemas.orchestration import AssessmentState, BankItem, GradedResponse
+        from cat_engine.engine.services.orchestrator import registry
+        from cat_engine.engine.services.orchestrator.propagation_port import propagate
 
         state = AssessmentState.model_validate({"session_id": "s1"})
         item = BankItem.model_validate(

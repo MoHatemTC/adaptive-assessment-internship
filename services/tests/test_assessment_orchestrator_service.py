@@ -78,7 +78,7 @@ def stack(monkeypatch, tmp_path):
                 key = (bank_id, version, scope.scope_hash if scope else "")
                 if key in eng._orchestrators:
                     return eng._orchestrators[key]
-                from app.services.orchestrator.orchestrator import Orchestrator
+                from cat_engine.engine.services.orchestrator.orchestrator import Orchestrator
 
                 bank = HttpUnifiedBank(eng._bank_client, bank_id)
                 bank.refresh()
@@ -138,7 +138,7 @@ def begin(api, **overrides) -> dict:
 
 def answer(api, session: dict) -> dict:
     """Answer whatever is presented, correctly where that is knowable."""
-    from app.services.orchestrator import registry
+    from cat_engine.engine.services.orchestrator import registry
 
     presenting = session["presenting"]
     item_id = presenting["item"]["item_id"]
@@ -355,7 +355,7 @@ class TestConcurrency:
         if session["presenting"]["item"]["modality"] != "mcq":
             pytest.skip("the first item is not an mcq for this seed")
 
-        from app.services.orchestrator import registry
+        from cat_engine.engine.services.orchestrator import registry
 
         item_id = session["presenting"]["item"]["item_id"]
         index = int(registry.get_bank("DA").get(item_id).payload["answer_index"])
@@ -400,7 +400,7 @@ class TestPropertiesCarriedOverFromTheReleaseAudit:
         """The scaffold is deliberately incomplete and belongs to the candidate. The
         reference solution is the answer, and shipping it turns every code item into an
         answer key."""
-        from app.services.orchestrator import registry
+        from cat_engine.engine.services.orchestrator import registry
 
         item = next(
             i for i in registry.get_bank("DA").all_items() if i.modality == "code"
@@ -430,7 +430,7 @@ class TestPropertiesCarriedOverFromTheReleaseAudit:
     ):
         """A candidate halfway through a test losing their session to a cache policy is
         not a trade-off anyone chose. At capacity the service refuses a NEW session."""
-        from app.config.settings import settings as engine_settings
+        from cat_engine.engine.config.settings import settings as engine_settings
 
         monkeypatch.setattr(engine_settings, "cat_max_retained_sessions", 1)
         first = api.post(
@@ -524,7 +524,7 @@ class TestDiagnosticsWhenEnabled:
     def test_raw_state_round_trips_as_the_engines_own_object(self, author_api):
         """It is the engine's schema on purpose. A wire copy here would be a second
         definition that drifts from the one the session is actually stored in."""
-        from app.schemas.orchestration import AssessmentState
+        from cat_engine.engine.schemas.orchestration import AssessmentState
 
         session = begin(author_api)
         raw = author_api.get(f"/assessments/{session['session_id']}/state").json()
@@ -559,7 +559,7 @@ class TestAScopedAssessment:
         """The property a candidate would notice. Asserted across a whole session rather
         than on the first item, because a narrowing that leaked later would still be a
         candidate answering a question nobody selected."""
-        from app.services.orchestrator import registry
+        from cat_engine.engine.services.orchestrator import registry
 
         session = begin(api, scope={"selected": ["DA.1", "DA.2"]})
         allowed = {
@@ -619,6 +619,6 @@ class TestAScopedAssessment:
 
     def test_the_scope_pins_the_bank_version_it_was_built_against(self, api):
         session = begin(api, scope={"selected": ["DA"]})
-        from app.services.orchestrator import registry
+        from cat_engine.engine.services.orchestrator import registry
 
         assert session["bank_version"] == registry.version("DA")

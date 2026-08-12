@@ -31,12 +31,12 @@ from pathlib import Path
 
 from adaptive_service import install_error_handlers, operator_router
 from adaptive_service.errors import ServiceError
-from app.config.settings import settings as engine_settings
-from app.config.voice_settings import voice_settings
-from app.services import observability
-from app.services.voice_live.debug_log import clear as clear_live_debug
-from app.services.voice_live.debug_log import live_debug, live_debug_exc, snapshot
-from app.services.voice_live.realtime_room import RealtimeLiveRoom
+from cat_engine.engine.config.settings import settings as engine_settings
+from cat_engine.engine.config.voice_settings import voice_settings
+from cat_engine.engine.services import observability
+from cat_engine.engine.services.voice_live.debug_log import clear as clear_live_debug
+from cat_engine.engine.services.voice_live.debug_log import live_debug, live_debug_exc, snapshot
+from cat_engine.engine.services.voice_live.realtime_room import RealtimeLiveRoom
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse

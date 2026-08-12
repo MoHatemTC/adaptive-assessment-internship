@@ -64,7 +64,7 @@ class CompetencyGraphClient(BaseClient):
         service that would use this — gets the same object an in-process run produces, and
         the parity suite asserts the two are indistinguishable.
         """
-        from app.services.orchestrator.propagation_port import PropagationResult
+        from cat_engine.engine.services.orchestrator.propagation_port import PropagationResult
 
         payload = {
             "bank_id": self._bank_id,

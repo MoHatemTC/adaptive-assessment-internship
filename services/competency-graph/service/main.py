@@ -43,10 +43,10 @@ from adaptive_contracts import (
 )
 from adaptive_service import install_error_handlers, operator_router
 from adaptive_service.errors import ServiceError
-from app.schemas.orchestration import AssessmentState, BankItem, GradedResponse
-from app.services.competency_graph import config as graph_config
-from app.services.competency_graph.coverage import sub_nodes_for_main
-from app.services.orchestrator.propagation_port import build_manifest, propagate
+from cat_engine.engine.schemas.orchestration import AssessmentState, BankItem, GradedResponse
+from cat_engine.engine.services.competency_graph import config as graph_config
+from cat_engine.engine.services.competency_graph.coverage import sub_nodes_for_main
+from cat_engine.engine.services.orchestrator.propagation_port import build_manifest, propagate
 from fastapi import FastAPI
 
 from .config import settings

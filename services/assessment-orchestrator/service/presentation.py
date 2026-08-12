@@ -29,7 +29,7 @@ from adaptive_contracts import (
     ScopeManifest,
     ScopeSummaryDTO,
 )
-from app.schemas.orchestration import AssessmentReport, BankItem, GradedResponse
+from cat_engine.engine.schemas.orchestration import AssessmentReport, BankItem, GradedResponse
 
 #: Flags a candidate is told about mid-session. Everything else waits for the report.
 #:

@@ -48,8 +48,8 @@ from adaptive_contracts import (
 )
 from adaptive_service import install_error_handlers, operator_router
 from adaptive_service.errors import ServiceError
-from app.config.settings import settings as engine_settings
-from app.services.orchestrator import registry
+from cat_engine.engine.config.settings import settings as engine_settings
+from cat_engine.engine.services.orchestrator import registry
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 

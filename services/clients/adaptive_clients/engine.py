@@ -22,16 +22,16 @@ import logging
 from typing import Any
 
 from adaptive_contracts import CompetencyGraphDTO
-from app.schemas.orchestration import BankItem, GradedResponse
-from app.schemas.voice import GradedVoiceResponse, VoiceResponsePackage
-from app.services.competency_graph.graph import CompetencyGraphService
-from app.services.competency_graph.models import (
+from cat_engine.engine.schemas.orchestration import BankItem, GradedResponse
+from cat_engine.engine.schemas.voice import GradedVoiceResponse, VoiceResponsePackage
+from cat_engine.engine.services.competency_graph.graph import CompetencyGraphService
+from cat_engine.engine.services.competency_graph.models import (
     CompetencyEdge,
     CompetencyGraph,
     CompetencyNode,
 )
-from app.services.competency_graph.policy import GraphPolicy
-from app.services.orchestrator.competency import main_competency
+from cat_engine.engine.services.competency_graph.policy import GraphPolicy
+from cat_engine.engine.services.orchestrator.competency import main_competency
 
 from .bank import BankRegistryClient
 from .transport import BaseClient, ServiceUnavailable

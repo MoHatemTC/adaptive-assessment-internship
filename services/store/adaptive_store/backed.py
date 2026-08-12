@@ -42,7 +42,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from app.services.orchestrator.bank_store import (
+from cat_engine.engine.services.orchestrator.bank_store import (
     BankProfile,
     BankStore,
     Validation,
@@ -156,7 +156,7 @@ class SqlBackedBankStore(BankStore):
             return cached
         version = self._sql.version(bank_id)
         if version is None:
-            from app.services.orchestrator.bank_store import UnknownBankError
+            from cat_engine.engine.services.orchestrator.bank_store import UnknownBankError
 
             raise UnknownBankError(bank_id, self._sql.bank_ids())
         self._versions_by_bank[bank_id] = version
@@ -174,7 +174,7 @@ class SqlBackedBankStore(BankStore):
         """
         materialised = self._materialise(bank_id)
         if materialised is None:
-            from app.services.orchestrator.bank_store import UnknownBankError
+            from cat_engine.engine.services.orchestrator.bank_store import UnknownBankError
 
             raise UnknownBankError(bank_id, self._sql.bank_ids())
         return materialised
@@ -291,7 +291,7 @@ def install(
     by hand, before the first request is a step somebody eventually forgets or repeats. It
     is idempotent on the content hash, so running it on every boot costs one query per bank.
     """
-    from app.services.orchestrator import registry
+    from cat_engine.engine.services.orchestrator import registry
 
     sql = SqlBankStore(dsn)
     _wait_for(sql)

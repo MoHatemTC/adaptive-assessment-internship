@@ -97,7 +97,7 @@ def operator_router(
         summary="Liveness, release, and the contract version this build speaks",
     )
     def health() -> HealthResponse:
-        from app.config.fingerprint import engine_config_fingerprint
+        from cat_engine.engine.config.fingerprint import engine_config_fingerprint
 
         return HealthResponse(
             service=settings.service_name,
@@ -113,7 +113,7 @@ def operator_router(
         summary="Effective configuration, credentials excluded",
     )
     def config() -> dict[str, Any]:
-        from app.config.fingerprint import measurement_settings
+        from cat_engine.engine.config.fingerprint import measurement_settings
 
         payload = redact(settings.model_dump())
         payload["engine"] = redact(measurement_settings())

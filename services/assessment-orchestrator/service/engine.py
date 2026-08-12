@@ -40,8 +40,8 @@ from adaptive_clients.engine import (
     scoped_graph_service,
 )
 from adaptive_contracts import ScopeManifest
-from app.services.orchestrator.orchestrator import Orchestrator
-from app.services.orchestrator.propagation_port import InProcessPropagation
+from cat_engine.engine.services.orchestrator.orchestrator import Orchestrator
+from cat_engine.engine.services.orchestrator.propagation_port import InProcessPropagation
 
 from .config import settings
 

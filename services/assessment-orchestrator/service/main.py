@@ -46,10 +46,10 @@ from adaptive_contracts import (
 )
 from adaptive_service import install_error_handlers, operator_router
 from adaptive_service.errors import ServiceError
-from app.config.settings import settings as engine_settings
-from app.schemas.orchestration import AssessmentState, BankItem
-from app.schemas.voice import VoiceResponsePackage
-from app.services.orchestrator import session_dump
+from cat_engine.engine.config.settings import settings as engine_settings
+from cat_engine.engine.schemas.orchestration import AssessmentState, BankItem
+from cat_engine.engine.schemas.voice import VoiceResponsePackage
+from cat_engine.engine.services.orchestrator import session_dump
 from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 

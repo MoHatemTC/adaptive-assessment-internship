@@ -24,7 +24,7 @@ DATA = "backend/app/data"
 
 
 def bank_bytes(name: str) -> bytes:
-    from app.config.paths import DATA_DIR
+    from cat_engine.engine.config.paths import DATA_DIR
 
     return (DATA_DIR / name).read_bytes()
 
@@ -76,7 +76,7 @@ class TestTheDerivedGraph:
     def test_every_checked_in_bank_derives_a_graph_that_parses(self, filename, derive):
         """The derivation has to survive the engine's own graph validator — which refuses
         a prerequisite cycle, a dangling edge endpoint and an unknown relation."""
-        from app.services.competency_graph.validator import parse_and_validate_graph
+        from cat_engine.engine.services.competency_graph.validator import parse_and_validate_graph
 
         raw = json.loads(bank_bytes(filename))
         items = raw["items"] if isinstance(raw, dict) else raw
@@ -175,7 +175,7 @@ class TestTheDerivedGraph:
     def test_main_rollup_agrees_with_the_engines_own(self, derive):
         """`main_of` is copied rather than imported, because the engine's copy is in a slice
         this service may not reach. Copied code that drifts is worse than no copy."""
-        from app.services.orchestrator.competency import main_competency
+        from cat_engine.engine.services.orchestrator.competency import main_competency
 
         for variable in ("C1.1", "C1", "DA.10", "T1.4", "PY.2"):
             assert derive.main_of(variable) == main_competency(variable)
@@ -210,7 +210,7 @@ class TestUploadingABank:
         assert response.json()["status"] == "validating"
         assert response.json()["derived_graph"], "the derived graph is the point of a dry run"
 
-        from app.services.orchestrator import registry
+        from cat_engine.engine.services.orchestrator import registry
 
         assert not registry.STORE.is_stored("UP3")
 
@@ -234,7 +234,7 @@ class TestUploadingABank:
         upload(api, "UP6", bank_bytes("question_bank.json"))
         assert api.delete("/banks/UP6").json()["deleted"] == "UP6"
 
-        from app.services.orchestrator import registry
+        from cat_engine.engine.services.orchestrator import registry
 
         assert not registry.STORE.is_stored("UP6")
 
@@ -369,7 +369,7 @@ class TestABankCanDeclareItsOwnCompetencies:
         Taken FROM that graph rather than invented, so this asserts the two routes can
         express the same bank rather than that some hand-picked set happens to fit.
         """
-        from app.services.orchestrator import registry
+        from cat_engine.engine.services.orchestrator import registry
 
         graph = registry.get_graph_service("AIE").graph
         raw = json.loads(bank_bytes("question_bank_AIE.json"))
@@ -398,7 +398,7 @@ class TestABankCanDeclareItsOwnCompetencies:
         assert response.json()["status"] == "registered"
 
     def test_the_declared_critical_set_is_what_the_gate_will_require(self, api, derive):
-        from app.services.orchestrator import registry
+        from cat_engine.engine.services.orchestrator import registry
 
         upload(api, "AIE-DECLARED", self.aie_with_declaration())
         authored = registry.get_graph_service("AIE").graph
@@ -411,7 +411,7 @@ class TestABankCanDeclareItsOwnCompetencies:
     def test_a_shared_node_survives_the_declaration(self, api):
         """`C1.6` serves both C1 and C6. An id prefix can only ever say C1, so before this
         block a derived graph could not represent a shared node at all."""
-        from app.services.orchestrator import registry
+        from cat_engine.engine.services.orchestrator import registry
 
         upload(api, "AIE-DECLARED", self.aie_with_declaration())
         node = registry.get_graph_service("AIE-DECLARED").graph.nodes["C1.6"]

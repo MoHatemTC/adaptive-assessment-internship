@@ -18,7 +18,7 @@ import logging
 
 from adaptive_clients import BankRegistryClient
 from adaptive_contracts import BankItemFull
-from app.schemas.orchestration import BankItem
+from cat_engine.engine.schemas.orchestration import BankItem
 
 logger = logging.getLogger(__name__)
 

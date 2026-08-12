@@ -195,8 +195,8 @@ class TestTheGraphAndPolicyViews:
         one any more: the write path is retired and `bank-ingest` always derives a graph. A
         graphless bank is now only reachable by deploying a seed configured without one, and
         the endpoint still has to answer for it."""
-        from app.services.orchestrator import registry
-        from app.services.orchestrator.bank_store import Validation
+        from cat_engine.engine.services.orchestrator import registry
+        from cat_engine.engine.services.orchestrator.bank_store import Validation
 
         items = [
             {

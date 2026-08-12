@@ -43,7 +43,7 @@ BANKS = ["DA", "PY", "AIE", "AIE-JR-V3", "JAI-600"]
 def stores():
     """A freshly built database beside the file store the whole system uses today."""
     from adaptive_store import SqlBankStore, seed_from_profiles
-    from app.services.orchestrator import registry
+    from cat_engine.engine.services.orchestrator import registry
 
     sql = SqlBankStore(DSN)
     sql.ensure_schema()
@@ -91,7 +91,7 @@ class TestTheItemsAreTheSameItems:
         """Not "the fields look right" — `BankItem` validates it, which is the same gate a
         bank file passes. Parameter bounds, payload matching the modality, at least one
         measured variable."""
-        from app.schemas.orchestration import BankItem
+        from cat_engine.engine.schemas.orchestration import BankItem
 
         sql, _ = stores
         for raw in sql.load(bank_id).items:
@@ -102,7 +102,7 @@ class TestTheItemsAreTheSameItems:
         """Float equality, not a tolerance. `a`, `b` and `c` go into an information
         calculation on every ranking step; a value that round-tripped differently would
         reorder shortlists rather than fail anything."""
-        from app.schemas.orchestration import BankItem
+        from cat_engine.engine.schemas.orchestration import BankItem
 
         sql, files = stores
         from_files = {i.item_id: i for i in files.bank(bank_id).all_items()}
@@ -151,7 +151,7 @@ class TestTheGraphIsTheSameGraph:
 
     @pytest.mark.parametrize("bank_id", BANKS)
     def test_it_still_parses_as_a_competency_graph(self, stores, bank_id):
-        from app.services.competency_graph.validator import parse_and_validate_graph
+        from cat_engine.engine.services.competency_graph.validator import parse_and_validate_graph
 
         sql, _ = stores
         graph = sql.load(bank_id).graph

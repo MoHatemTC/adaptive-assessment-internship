@@ -86,7 +86,7 @@ def stack(tmp_path):
     """bank-registry, with Postgres underneath it instead of two directories."""
     from adaptive_store import SqlBankStore
     from adaptive_store.backed import install
-    from app.services.orchestrator import registry
+    from cat_engine.engine.services.orchestrator import registry
 
     file_store = registry.STORE
     seeds = dict(file_store.profiles())
@@ -128,7 +128,7 @@ class TestTheCatalogueIsTheSameCatalogue:
     def test_the_version_is_the_one_the_file_store_computes(self, stack):
         """The number every orchestrator cache is keyed on and every session pins."""
         reader, writer = stack
-        from app.services.orchestrator.bank_store import BankStore, _seed_profiles
+        from cat_engine.engine.services.orchestrator.bank_store import BankStore, _seed_profiles
 
         files = BankStore(seeds=_seed_profiles())
         for bank_id in ("DA", "AIE", "JAI-600"):
@@ -190,7 +190,7 @@ class TestTheGraphSurvivesTheRoundTrip:
         item count because an item measuring two mains is counted under both — which is the
         kind of detail a hand-written expectation gets wrong and a comparison cannot."""
         reader, writer = stack
-        from app.services.orchestrator.bank_store import BankStore, _seed_profiles
+        from cat_engine.engine.services.orchestrator.bank_store import BankStore, _seed_profiles
 
         expected = BankStore(seeds=_seed_profiles()).bank("AIE").coverage()
         assert reader.get("/banks/AIE/coverage").json() == expected

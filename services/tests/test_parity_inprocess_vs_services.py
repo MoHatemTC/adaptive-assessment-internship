@@ -97,11 +97,11 @@ def in_process_report(monkeypatch):
     """One assessment, driven exactly as `backend/evaluation/` drives it."""
     import asyncio
 
-    from app.services.code_adaptive import CodeAdaptiveSession, JsonQuestionRepository
-    from app.services.orchestrator import registry
-    from app.services.orchestrator.grader import GraderAgent
-    from app.services.orchestrator.orchestrator import Orchestrator
-    from app.services.voice.evaluator import evaluate as evaluate_voice
+    from cat_engine.engine.services.code_adaptive import CodeAdaptiveSession, JsonQuestionRepository
+    from cat_engine.engine.services.orchestrator import registry
+    from cat_engine.engine.services.orchestrator.grader import GraderAgent
+    from cat_engine.engine.services.orchestrator.orchestrator import Orchestrator
+    from cat_engine.engine.services.voice.evaluator import evaluate as evaluate_voice
 
     stub_sandbox_and_model(monkeypatch)
     bank = registry.get_bank(BANK)
@@ -132,7 +132,7 @@ def in_process_report(monkeypatch):
                 # The service grades from the package; in-process the evaluation runs here,
                 # which is where `app.main` used to do it. Same evaluator, same rubric,
                 # `use_llm=False` on both sides.
-                from app.schemas.voice import VoiceResponsePackage
+                from cat_engine.engine.schemas.voice import VoiceResponsePackage
 
                 package = VoiceResponsePackage.from_text(item.item_id, response)
                 response = await evaluate_voice(item, package, use_llm=False)
@@ -155,7 +155,7 @@ def services_report(monkeypatch, tmp_path):
 
     from adaptive_clients import BankRegistryClient, CompetencyGraphClient
     from adaptive_clients.engine import HttpGrader, HttpGraphSource, HttpUnifiedBank
-    from app.services.orchestrator import registry
+    from cat_engine.engine.services.orchestrator import registry
 
     stub_sandbox_and_model(monkeypatch)
     bank = registry.get_bank(BANK)
@@ -178,7 +178,7 @@ def services_report(monkeypatch, tmp_path):
             eng.reset()
 
             def build(bank_id: str, version: str, scope=None):
-                from app.services.orchestrator.orchestrator import Orchestrator
+                from cat_engine.engine.services.orchestrator.orchestrator import Orchestrator
 
                 # This suite runs UNSCOPED assessments — that is the point of it. The
                 # parameter exists only so the stub matches the signature the service now

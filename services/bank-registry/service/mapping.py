@@ -32,10 +32,10 @@ from adaptive_contracts import (
     PolicyDTO,
     ValidationFinding,
 )
-from app.schemas.orchestration import BankItem
-from app.services.competency_graph.models import CompetencyGraph
-from app.services.competency_graph.policy import ResolvedPolicy
-from app.services.orchestrator.bank_store import Validation
+from cat_engine.engine.schemas.orchestration import BankItem
+from cat_engine.engine.services.competency_graph.models import CompetencyGraph
+from cat_engine.engine.services.competency_graph.policy import ResolvedPolicy
+from cat_engine.engine.services.orchestrator.bank_store import Validation
 
 
 def item_ref(item: BankItem) -> BankItemRef:

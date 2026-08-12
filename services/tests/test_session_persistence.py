@@ -44,7 +44,7 @@ def store():
 
 
 def a_session(session_id: str = "asmt_test000001", *, seed: int = 7):
-    from app.schemas.orchestration import AssessmentState
+    from cat_engine.engine.schemas.orchestration import AssessmentState
 
     from service.sessions import Session
 

@@ -58,7 +58,7 @@ def scope(api, selected, **overrides) -> dict:
 
 
 def active_item_ids(bank_id: str = BANK) -> set[str]:
-    from app.services.orchestrator import registry
+    from cat_engine.engine.services.orchestrator import registry
 
     return {
         item.item_id
@@ -86,8 +86,8 @@ class TestAScopeOverEverythingChangesNothing:
 
     def test_the_coverage_requirement_is_the_banks_own(self, api):
         """Against the engine's own answer, not against a number copied into this file."""
-        from app.services.competency_graph.coverage import sub_nodes_for_main
-        from app.services.orchestrator import registry
+        from cat_engine.engine.services.competency_graph.coverage import sub_nodes_for_main
+        from cat_engine.engine.services.orchestrator import registry
 
         manifest = scope(api, ["C1", "C3", "C6"])
         graph = registry.get_graph_service(BANK)
@@ -105,7 +105,7 @@ class TestNarrowingToSubCompetencies:
         retained = {node["node_id"] for node in manifest["nodes"]}
         assert {"C1.1", "C1.4", "C1"} == retained
 
-        from app.services.orchestrator import registry
+        from cat_engine.engine.services.orchestrator import registry
 
         bank = registry.get_bank(BANK)
         for item_id in manifest["item_ids"]:
@@ -159,7 +159,7 @@ class TestTheAllowlistRespectsTheBank:
                     json={"bank_id": "JAI-600", "selected": ["C1"]},
                 ).json()
 
-        from app.services.orchestrator import registry
+        from cat_engine.engine.services.orchestrator import registry
 
         bank = registry.get_bank("JAI-600")
         retired = {i.item_id for i in bank.all_items() if i.status != "active"}
@@ -251,7 +251,7 @@ class TestTheScopeIdIsDeterministicAndVersionBound:
         assert scope(api, ["C1.1"])["scope_id"] != scope(api, ["C1.2"])["scope_id"]
 
     def test_the_manifest_names_the_bank_version_it_was_built_against(self, api):
-        from app.services.orchestrator import registry
+        from cat_engine.engine.services.orchestrator import registry
 
         manifest = scope(api, ["C1"])
         assert manifest["bank_version"] == registry.version(BANK)

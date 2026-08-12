@@ -39,7 +39,7 @@ from adaptive_clients import BankRegistryClient, ServiceRefused, ServiceUnavaila
 from adaptive_contracts import ErrorResponse, ScopeManifest, ScopeRequest
 from adaptive_service import install_error_handlers, operator_router
 from adaptive_service.errors import ServiceError
-from app.config.settings import settings as engine_settings
+from cat_engine.engine.config.settings import settings as engine_settings
 from fastapi import FastAPI, Response
 
 from .config import settings

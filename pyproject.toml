@@ -1,0 +1,67 @@
+[project]
+# THE ASSESSMENT MODULE.
+#
+# One folder — `cat_engine/` — that a host project imports. It carries the psychometric
+# engine, the adapters that used to be seven FastAPI services, the wire contracts, the
+# stores and the evaluation harness. There is no web framework in it and no port: the host
+# owns transport. See docs/module.md.
+#
+# THE IMPORT ROOT IS NAMESPACED, AND THAT IS THE POINT.
+#
+# The engine imported as top-level `app` for as long as this tree WAS the deployment. A
+# module a host embeds cannot claim that name — `app` is the single most likely package
+# for a Python web project to already own, and the collision surfaces as an import that
+# silently resolves to the wrong tree. So the engine is `cat_engine.engine`, and nothing
+# this package installs sits at the top level except `cat_engine` itself.
+name = "cat-engine"
+version = "2.0.0"
+description = "Adaptive competency assessment as an embeddable module — 3PL CAT across MCQ, code and open/voice items."
+requires-python = ">=3.12"
+
+# Deliberately narrower than requirements.txt. That file is a pin for developing THIS
+# repository; this is what the module itself cannot run without. A host that never grades
+# code should not be made to install a sandbox client, so `e2b`, `google-genai`,
+# `websockets` and `langfuse` stay extras.
+dependencies = [
+    "pydantic>=2.9,<3",
+    "pydantic-settings>=2.0,<3",
+    "numpy>=1.26,<3",
+    "httpx>=0.27",
+    "openai>=1.50,<3",
+]
+
+[project.optional-dependencies]
+# Untrusted candidate code. Required to grade `code` items and nothing else.
+sandbox = ["e2b-code-interpreter>=2.0,<3"]
+# Realtime interview rooms. Required for `cat.live` and nothing else.
+live = ["google-genai>=1.0", "websockets>=13"]
+# Tracing. Runtime-optional — `engine/services/observability.py` degrades to no tracing
+# when it is absent, unconfigured or broken.
+tracing = ["langfuse>=3.0,<5"]
+# Persisting banks and sessions in Postgres instead of the file store.
+postgres = ["psycopg[binary]>=3.1,<4"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+# `cat_engine*` only. The tests and the evaluation harness live inside the package
+# directory but are excluded from a wheel below — a host installs the module, not the
+# study apparatus that measured it.
+include = ["cat_engine*"]
+exclude = ["cat_engine.tests*", "cat_engine.evaluation*", "cat_engine.scripts*"]
+
+[tool.setuptools.package-data]
+# Banks, graphs and rubrics ship with the package so a checkout and a `pip install` see the
+# same defaults. A host that wants them on a volume sets `ENGINE_DATA_DIR` instead of
+# rebuilding — see `cat_engine/engine/config/paths.py`.
+#
+# The browser client for live interviews ships too: the mic worklet must be served from the
+# same origin as the page, so a host serves these files rather than rewriting them.
+"cat_engine.engine" = [
+    "data/*.json",
+    "data/rubrics/*.json",
+    "data/voice_rubrics/*.json",
+]
+"cat_engine.live" = ["static/*"]

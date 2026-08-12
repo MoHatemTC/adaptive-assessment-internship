@@ -191,8 +191,8 @@ class TestCodeGrading:
         what is tested here is that the grader really does report weight 0, rather than a
         zero score at full weight, which would record our outage as their inability.
         """
-        from app.services.code_adaptive import session as code_session
-        from app.services.code_adaptive.execution import ExecutionEvidence
+        from cat_engine.engine.services.code_adaptive import session as code_session
+        from cat_engine.engine.services.code_adaptive.execution import ExecutionEvidence
 
         monkeypatch.setattr(
             code_session,
@@ -218,8 +218,8 @@ class TestCodeGrading:
         compile has shown a syntax problem, not an absence of every competency the question
         touches — so it counts, at a quarter strength, rather than counting fully or not at
         all."""
-        from app.services.code_adaptive import session as code_session
-        from app.services.code_adaptive.execution import ExecutionEvidence
+        from cat_engine.engine.services.code_adaptive import session as code_session
+        from cat_engine.engine.services.code_adaptive.execution import ExecutionEvidence
 
         monkeypatch.setattr(
             code_session,
@@ -248,8 +248,8 @@ class TestCodeGrading:
         Their answer moved nothing and they may be asked again. Everything else about the
         grading stays behind the candidate boundary until the session ends.
         """
-        from app.services.code_adaptive import session as code_session
-        from app.services.code_adaptive.execution import ExecutionEvidence
+        from cat_engine.engine.services.code_adaptive import session as code_session
+        from cat_engine.engine.services.code_adaptive.execution import ExecutionEvidence
 
         monkeypatch.setattr(
             code_session,

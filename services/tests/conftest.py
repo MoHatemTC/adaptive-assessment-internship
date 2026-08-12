@@ -77,8 +77,8 @@ def bank_store_at(directory: Path):
     bank that no fixture created and no assertion expects — a failure in a different
     suite, hours later, with nothing pointing back here.
     """
-    from app.services.orchestrator import registry
-    from app.services.orchestrator.bank_store import BankStore, _seed_profiles
+    from cat_engine.engine.services.orchestrator import registry
+    from cat_engine.engine.services.orchestrator.bank_store import BankStore, _seed_profiles
 
     previous = registry.STORE
     registry.use_store(BankStore(seeds=_seed_profiles(), store_dir=Path(directory)))
@@ -162,9 +162,9 @@ def stub_sandbox_and_model(monkeypatch) -> None:
     real: the sandbox costs money and needs network, and a model is not deterministic. What
     is under test is what the service does with whatever they return.
     """
-    from app.services.code_adaptive import session as code_session
-    from app.services.code_adaptive.execution import ExecutionEvidence, TestOutcome
-    from app.services.code_adaptive.llm_evaluator import LLMEvaluation
+    from cat_engine.engine.services.code_adaptive import session as code_session
+    from cat_engine.engine.services.code_adaptive.execution import ExecutionEvidence, TestOutcome
+    from cat_engine.engine.services.code_adaptive.llm_evaluator import LLMEvaluation
 
     monkeypatch.setattr(
         code_session,
@@ -190,7 +190,7 @@ def bank_items() -> dict[str, tuple[str, int]]:
     that stops existing the first time a bank is rebuilt, and the failure then looks like a
     grading bug rather than a stale fixture.
     """
-    from app.services.orchestrator import registry
+    from cat_engine.engine.services.orchestrator import registry
 
     chosen: dict[str, tuple[str, int]] = {}
     for item in registry.get_bank("DA").all_items():

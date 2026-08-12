@@ -48,12 +48,12 @@ from adaptive_contracts import (
 )
 from adaptive_service import install_error_handlers, operator_router
 from adaptive_service.errors import ServiceError
-from app.schemas.orchestration import GradedResponse
-from app.schemas.voice import VoiceResponsePackage
-from app.services.code_adaptive import CodeAdaptiveSession, JsonQuestionRepository
-from app.services.code_adaptive import trial as code_trial
-from app.services.orchestrator.grader import GraderAgent
-from app.services.voice.evaluator import evaluate as evaluate_voice
+from cat_engine.engine.schemas.orchestration import GradedResponse
+from cat_engine.engine.schemas.voice import VoiceResponsePackage
+from cat_engine.engine.services.code_adaptive import CodeAdaptiveSession, JsonQuestionRepository
+from cat_engine.engine.services.code_adaptive import trial as code_trial
+from cat_engine.engine.services.orchestrator.grader import GraderAgent
+from cat_engine.engine.services.voice.evaluator import evaluate as evaluate_voice
 from fastapi import FastAPI
 
 from .config import settings
@@ -191,7 +191,7 @@ async def grade_open(request: GradeOpenRequest) -> GradedResponseDTO:
     ),
 )
 def transcribe(request: TranscribeRequest) -> TranscribeResponse:
-    from app.services.voice_live.transcribe import transcribe_audio_bytes
+    from cat_engine.engine.services.voice_live.transcribe import transcribe_audio_bytes
 
     try:
         audio = base64.b64decode(request.audio_base64, validate=True)
