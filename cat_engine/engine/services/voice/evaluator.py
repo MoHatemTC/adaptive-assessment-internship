@@ -15,7 +15,6 @@ from cat_engine.engine.services import observability
 from cat_engine.engine.services.adaptive.llm import LLMUnavailable, chat_json
 from cat_engine.engine.services.voice.language import candidate_turns_non_english, looks_non_english
 from cat_engine.engine.services.voice.prompts import EVALUATOR_SYSTEM
-from cat_engine.engine.services.voice.rubrics import load_rubric
 from cat_engine.engine.services.voice.validation import validate
 
 logger = logging.getLogger(__name__)
@@ -49,8 +48,8 @@ async def evaluate(
     use_llm: bool = True,
 ) -> GradedVoiceResponse:
     """Async evaluation. Returns a GradedVoiceResponse ready for sync grade_voice."""
-    rubric_id = (item.payload or {}).get("rubric_id", "")
-    rubric = load_rubric(rubric_id) if rubric_id else _rubric_from_payload(item)
+    # The rubric travels inside the item. There is no second source — see `rubrics.py`.
+    rubric = _rubric_from_payload(item)
 
     if package.outcome_status in {"unscorable", "infrastructure_error"}:
         return GradedVoiceResponse(

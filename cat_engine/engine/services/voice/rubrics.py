@@ -1,36 +1,25 @@
-"""Load and project voice rubrics."""
+"""Projecting a rubric onto competencies.
+
+WHERE A RUBRIC COMES FROM
+
+From the item. Every bank carries `rubric_criteria` inside the payload of each open or voice
+item, so a rubric travels with the question it grades and a bank is one self-contained file.
+
+There used to be a second route: an item could name a `rubric_id`, and this module loaded
+`data/voice_rubrics/<id>.json`. That route is gone. No registered bank ever used it — 107
+rubric files sat there keyed `open_cN_MMM` against items keyed `voice_cN_MMM`, orphaned from
+a bank that was replaced — and an UPLOADED bank could never have used it either, because the
+write path stores a bank file and has nowhere to put a side-car rubric. A second way to
+answer "what grades this item" that one of the two could never populate is worse than one.
+
+WHAT IS LEFT IS THE PROJECTION
+
+A rubric scores CRITERIA. A posterior is over COMPETENCIES. These two functions are the map
+between them, and they are the reason a spoken answer can move the same estimate an MCQ
+moves.
+"""
 
 from __future__ import annotations
-
-import json
-from functools import lru_cache
-
-from cat_engine.engine.config.paths import DATA_DIR
-
-RUBRIC_DIR = DATA_DIR / "voice_rubrics"
-
-
-@lru_cache(maxsize=256)
-def load_rubric(rubric_id: str) -> dict:
-    path = RUBRIC_DIR / f"{rubric_id}.json"
-    if not path.exists():
-        raise FileNotFoundError(f"rubric not found: {rubric_id}")
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def measures_from_rubric(rubric: dict) -> list[dict]:
-    """Derive BankItem.measures from rubric criteria, max-normalised to 1.0."""
-    weights: dict[str, float] = {}
-    for crit in rubric.get("criteria", []):
-        cid = crit["competency_id"]
-        weights[cid] = weights.get(cid, 0.0) + float(crit.get("weight", 0.0))
-    if not weights:
-        return []
-    peak = max(weights.values()) or 1.0
-    return [
-        {"variable": cid, "weight": round(w / peak, 4)}
-        for cid, w in sorted(weights.items())
-    ]
 
 
 def criterion_to_competency_weights(rubric: dict) -> dict[str, dict[str, float]]:
@@ -43,20 +32,12 @@ def criterion_to_competency_weights(rubric: dict) -> dict[str, dict[str, float]]
 
 
 def normalize_criterion_score(raw: float, maximum: float) -> float:
+    """A criterion's raw score onto [0, 1].
+
+    Clamped rather than trusted: a model asked for a score out of 8 will occasionally return
+    9, and an out-of-range score would enter the likelihood as evidence stronger than any
+    answer can be.
+    """
     if maximum <= 0:
         return 0.0
     return min(max(float(raw) / float(maximum), 0.0), 1.0)
-
-
-def ordinal_level(score: float) -> int:
-    """Reporting transform only — not used in the posterior update."""
-    s = min(max(float(score), 0.0), 1.0)
-    if s < 0.2:
-        return 1
-    if s < 0.4:
-        return 2
-    if s < 0.6:
-        return 3
-    if s < 0.8:
-        return 4
-    return 5

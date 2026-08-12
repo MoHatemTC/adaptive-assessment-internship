@@ -17,10 +17,6 @@ def main_competency(variable: str) -> str:
     return variable.split(".")[0]
 
 
-def is_main_competency(variable: str) -> bool:
-    return "." not in variable
-
-
 def affected_mains(item: BankItem, session_variables: set[str]) -> set[str]:
     """Main competencies this item evidences that the session is measuring."""
     mains: set[str] = set()

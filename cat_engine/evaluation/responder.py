@@ -43,7 +43,6 @@ from cat_engine.engine.schemas.voice import (
     VoiceEvaluation,
 )
 from cat_engine.engine.services.voice.evaluator import _rubric_from_payload, package_from_text
-from cat_engine.engine.services.voice.rubrics import load_rubric
 
 from . import personas
 from .dgp import Simulee, _seed_of
@@ -226,9 +225,7 @@ def voice_response(item: BankItem, plan: ResponsePlan, simulee: Simulee) -> Grad
     about ability. The criterion scores here come from the simulee's true probability; the
     projection, weighting and evidence-strength rungs downstream are the engine's own.
     """
-    payload = item.payload or {}
-    rubric_id = payload.get("rubric_id", "")
-    rubric = load_rubric(rubric_id) if rubric_id else _rubric_from_payload(item)
+    rubric = _rubric_from_payload(item)
 
     rng = np.random.default_rng(_seed_of("voice", plan.simulee_id, plan.item_id))
     persona = personas.get(getattr(simulee, "persona", "P01"))

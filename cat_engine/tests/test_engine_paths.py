@@ -36,7 +36,7 @@ class TestTheDefaultIsTheCheckout:
 
     def test_the_packaged_directory_actually_holds_the_banks(self):
         assert (PACKAGED_DATA_DIR / "question_bank_AIE.json").is_file()
-        assert (PACKAGED_DATA_DIR / "voice_rubrics").is_dir()
+        assert (PACKAGED_DATA_DIR / "rubrics").is_dir()
 
 
 class TestTheEnvironmentCanMoveIt:
@@ -108,8 +108,6 @@ class TestNoModuleDerivesItsOwnDataDirectory:
         from cat_engine.engine.services.competency_graph import DEFAULT_GRAPH_PATH
         from cat_engine.engine.services.orchestrator.bank import BANK_PATH
         from cat_engine.engine.services.orchestrator.selection_calibration import CALIBRATION_PATH
-        from cat_engine.engine.services.voice.rubrics import RUBRIC_DIR as VOICE_RUBRIC_DIR
-
         for path in (
             DEFAULT_BANK_PATH,
             CODE_BANK_PATH,
@@ -117,7 +115,6 @@ class TestNoModuleDerivesItsOwnDataDirectory:
             DEFAULT_GRAPH_PATH,
             BANK_PATH,
             CALIBRATION_PATH,
-            VOICE_RUBRIC_DIR,
         ):
             assert DATA_DIR in Path(path).parents, f"{path} escapes {DATA_DIR}"
 
