@@ -47,6 +47,26 @@ def _protected_tokens(text: str) -> set[str]:
     return {m.strip("`") for m in TOKEN_PATTERN.findall(text)}
 
 
+def _in_context(token: str, text: str, width: int = 24) -> str:
+    """`3` from "…in Python 3?" reported as "…in Python 3?" rather than as `3`.
+
+    The guard is deliberately strict — a bare numeral counts, because an item calibrated
+    against Python 3 is not the same item without it. Strictness is the right bias when a
+    rejection costs only the tokens spent on the rewrite.
+
+    What was wrong was the REPORT. "drops calibrated tokens: ['3']" tells whoever reads the
+    log nothing about which `3`, in a stem that may contain several. Quoting the phrase
+    around it makes the message actionable without loosening the check.
+    """
+    index = text.find(token)
+    if index < 0:
+        return token
+    start = max(0, index - width)
+    end = min(len(text), index + len(token) + width)
+    snippet = text[start:end].strip()
+    return f"…{snippet}…" if (start or end < len(text)) else snippet
+
+
 def check_rephrase(
     original: str, rewritten: str, options: list[str], answer_index: int
 ) -> RephraseCheck:
@@ -82,8 +102,9 @@ def check_rephrase(
 
     missing = _protected_tokens(original) - _protected_tokens(candidate)
     if missing:
+        shown = [_in_context(token, original) for token in sorted(missing)[:3]]
         return RephraseCheck(
-            original, False, f"rewrite drops calibrated tokens: {sorted(missing)[:3]}"
+            original, False, f"rewrite drops calibrated tokens: {shown}"
         )
 
     return RephraseCheck(candidate, True)

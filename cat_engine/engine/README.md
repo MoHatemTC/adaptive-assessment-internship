@@ -5,8 +5,8 @@ The psychometrics. Everything outside this directory is an adapter over it.
 This is the part that decides what a candidate is measured as. It was a monolith, then a
 library installed into seven service images, and is now a subpackage — and in all three
 arrangements **not one line of the loop changed**, because the seams it depends on were
-always Protocols. See [ADR-0002](../../docs/adr/0002-engine-as-a-library.md) and
-[ADR-0004](../../docs/adr/0004-from-services-to-a-module.md).
+always Protocols. See [architecture.md](../docs/architecture.md#why-one-module) and
+[ADR-0004](../docs/architecture.md#why-one-module).
 
 It imported as top-level `app` until the module was extracted. A package a host embeds
 cannot claim that name.

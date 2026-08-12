@@ -3,9 +3,9 @@
 **Status: collapsed.** One folder — `cat_engine/` — that a host project imports. No web
 framework, no ports, no containers. The host owns transport; this owns the measurement.
 
-It was seven FastAPI services over a shared engine library. [ADR-0004](adr/0004-from-services-to-a-module.md)
-records why that came back together and what the return cost; [ADR-0001](adr/0001-service-boundaries.md)
-and [ADR-0002](adr/0002-engine-as-a-library.md) stay as the history of why it went apart.
+It was seven FastAPI services over a shared engine library. [ADR-0004](architecture.md#why-one-module)
+records why that came back together and what the return cost; [architecture.md](architecture.md#why-one-module)
+and [architecture.md](architecture.md#why-one-module) stay as the history of why it went apart.
 
 ## Installing it
 

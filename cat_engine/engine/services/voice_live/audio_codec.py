@@ -56,6 +56,18 @@ def wav_bytes_to_pcm16(
         samples = _resample_linear(samples, rate, target_rate)
         rate = target_rate
 
+    if not samples:
+        # A STRUCTURALLY VALID WAV CARRYING NO AUDIO.
+        #
+        # A capture that failed after the header was written decodes cleanly to zero
+        # frames, and returning it would hand the grader an empty transcript — which is
+        # scored as a candidate who said nothing rather than as a recording that did not
+        # happen. Those are different findings about a person, so this is refused the same
+        # way an unreadable payload is.
+        raise ValueError(
+            "the recording contains no audio — record again (16-bit PCM WAV expected)"
+        )
+
     duration = len(samples) / float(rate) if rate else 0.0
     return samples.tobytes(), duration
 

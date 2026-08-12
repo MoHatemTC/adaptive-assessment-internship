@@ -3,8 +3,8 @@
 The whole module. A host project imports this folder; everything it needs is inside.
 
 There is no web framework here and no port. The host owns transport, this owns the
-measurement — see [docs/module.md](../docs/module.md) for the embedding contract and
-[docs/adr/0004](../docs/adr/0004-from-services-to-a-module.md) for why it is one folder.
+measurement — see [docs/module.md](docs/module.md) for the embedding contract and
+[docs/architecture.md](docs/architecture.md#why-one-module) for why it is one folder.
 
 ## Files
 

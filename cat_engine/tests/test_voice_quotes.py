@@ -108,23 +108,32 @@ class TestGateTwoFuzzyIsTheLastResort:
         assert tier == "fuzzy"
         assert ratio >= voice_settings.quote_fuzzy_ratio
 
-    def test_fuzzy_is_scored_against_the_WHOLE_turn_not_the_best_window(self):
-        """A characteristic worth knowing before trusting the tier.
+    def test_a_mis_transcribed_FRAGMENT_is_matched_against_its_own_window(self):
+        """The fix for what used to be a length bias.
 
-        `SequenceMatcher` runs the quote against the entire normalised turn, so the ratio
-        falls as the turn grows — a typo'd quote of HALF a long answer scores near 0.7 and
-        is refused, while the same typos across the whole answer pass. Fuzzy therefore
-        rescues mis-transcribed FULL quotes, not mis-transcribed fragments.
+        A plain ratio divides by the combined length, so it fell as the turn grew: a
+        grader quoting one mis-transcribed sentence out of a long answer scored ~0.70
+        against a 0.82 gate and was refused, while the same typos in a short answer passed.
+        Whether real evidence counted depended on how long the candidate spoke.
 
-        That is a conservative failure — evidence refused rather than invented — which is
-        the right direction for this gate, but it means a grader quoting one sentence out
-        of a long answer needs one of the three exact tiers to match.
+        Scored against the best window, the fragment is compared with the part of the
+        transcript it is actually about.
         """
-        half_of_it = "i would profile the qeury first then add an idnex on the join colmun"
-        assert len(_normalize(half_of_it)) >= voice_settings.quote_fuzzy_min_chars
-        tier, ratio = match_quote(half_of_it, TURN)
-        assert tier is None, "a fragment reached fuzzy; the ratio is no longer whole-turn"
-        assert 0.6 < ratio < voice_settings.quote_fuzzy_ratio
+        fragment = "i would profile the qeury first then add an idnex on the join colmun"
+        assert len(_normalize(fragment)) >= voice_settings.quote_fuzzy_min_chars
+        tier, ratio = match_quote(fragment, TURN)
+        assert tier == "fuzzy"
+        assert ratio >= voice_settings.quote_fuzzy_ratio
+
+    def test_the_window_does_not_make_a_long_turn_easier_to_match(self):
+        """The risk of the change, checked: an invented quote must not find a window that
+        happens to fit. The gate is unchanged — only WHERE the comparison is made."""
+        for turn in (TURN, TURN * 4):
+            tier, ratio = match_quote(
+                "the candidate explained monad transformers in considerable detail", turn
+            )
+            assert tier is None
+            assert ratio < voice_settings.quote_fuzzy_ratio
 
     def test_a_short_quote_never_reaches_fuzzy(self):
         """The second gate. Short strings hit high ratios against anything, so fuzzy is

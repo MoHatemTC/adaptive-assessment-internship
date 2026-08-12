@@ -37,7 +37,7 @@ assessment stops on.
 A completed screening study measured upward inference wrong 22.4% of the time against a 3%
 gate, and blocking producing 8.7% false blocks against a 2% gate — on this bank, with
 prerequisite edges correct by construction. The defaults are off because the evidence says
-off. See [docs/evidence.md](../../../../docs/evidence.md) and
-[docs/propagation-policy.md](../../../../docs/propagation-policy.md).
+off. See [docs/evidence.md](../../../docs/evidence.md) and
+[docs/propagation-policy.md](../../../docs/propagation-policy.md).
 
 What IS live is the **coverage gate**.

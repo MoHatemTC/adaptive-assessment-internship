@@ -51,14 +51,46 @@ def match_quote(quote: str | None, turn_text: str) -> tuple[QuoteTier | None, fl
     if q_toks and _subsequence(q_toks, t_toks, max_gap=3):
         return "subsequence", 1.0
 
-    # fuzzy
-    ratio = SequenceMatcher(None, norm_q, norm_turn).ratio() if norm_turn else 0.0
+    # fuzzy — scored against the BEST WINDOW, not the whole turn.
+    ratio = _partial_ratio(norm_q, norm_turn)
     if (
         len(norm_q) >= voice_settings.quote_fuzzy_min_chars
         and ratio >= voice_settings.quote_fuzzy_ratio
     ):
         return "fuzzy", ratio
     return None, ratio
+
+
+def _partial_ratio(needle: str, hay: str) -> float:
+    """Similarity of `needle` to the best-matching WINDOW of `hay`.
+
+    WHY NOT A PLAIN RATIO AGAINST THE WHOLE TURN
+
+    `SequenceMatcher(needle, hay).ratio()` divides by the combined length, so it falls as
+    the turn grows however good the local match is. A grader quoting one mis-transcribed
+    sentence out of a two-minute answer scored around 0.70 against a 0.82 gate and was
+    refused, while the same typos spread across a short answer passed — so whether real
+    evidence counted depended on how long the candidate spoke.
+
+    Anchoring on the matching blocks and scoring a needle-sized window around each is the
+    standard partial-ratio construction. It compares like with like: how well does this
+    quote match the part of the transcript it is actually about.
+
+    The gates above are unchanged, so this loosens WHERE the comparison is made and not how
+    similar a quote has to be.
+    """
+    if not needle or not hay:
+        return 0.0
+    if len(needle) >= len(hay):
+        return SequenceMatcher(None, needle, hay).ratio()
+
+    best = 0.0
+    for block in SequenceMatcher(None, needle, hay).get_matching_blocks():
+        start = max(0, block.b - block.a)
+        window = hay[start : start + len(needle)]
+        if window:
+            best = max(best, SequenceMatcher(None, needle, window).ratio())
+    return best
 
 
 def _subsequence(needle: list[str], hay: list[str], max_gap: int) -> bool:

@@ -15,8 +15,8 @@ intake -> seed a posterior per competency
 Stateless between calls. The orchestrator takes an `AssessmentState`, returns a new one, and
 holds nothing — so an assessment can span requests, be persisted between them, and resume in
 a different process. That property is what made the split in
-[ADR-0001](adr/0001-service-boundaries.md) tractable, and what made undoing it in
-[ADR-0004](adr/0004-from-services-to-a-module.md) equally cheap: both directions were a
+[architecture.md](architecture.md#why-one-module) tractable, and what made undoing it in
+[ADR-0004](architecture.md#why-one-module) equally cheap: both directions were a
 change of who calls whom, not of what is computed.
 
 It is also why propagation holds no session state of its own. A second copy of the same
@@ -77,6 +77,47 @@ So the graph changes **what is asked** and **when the test may stop**. It never 
 **what is estimated**. That is a real limitation as well as a safety property — see
 [evidence.md](evidence.md) on the 9.9pp cost of one theta per competency.
 
+## Why one module
+
+This was a monolith, then seven FastAPI services over a shared engine library, and is now
+one package a host imports. The engine did not change across either move, and that is not
+luck — it is the reason both moves were cheap.
+
+Every hop the services introduced was already behind a Protocol the engine defined, and an
+in-process implementation of each already existed:
+
+| seam | as a service | in one process |
+|---|---|---|
+| bank repository | an HTTP client | `registry.get_bank()` |
+| grader | an HTTP client | `GraderAgent` |
+| propagation | an HTTP client | `InProcessPropagation` |
+| graph structure | an HTTP client | `registry.get_graph_service()` |
+| scope | an HTTP client | `build_scope()` — pure |
+
+So `wiring.py` builds an `Orchestrator` out of local objects where a service built one out
+of four clients, and nothing in the loop, the posterior, selection or stopping noticed.
+
+**What the collapse gave up, stated rather than argued away.** A service could be denied
+egress by network policy, and the sandbox client could be installed into exactly one image
+— so no other component *could* execute candidate code even if it tried. Neither is a
+deployment fact any more. Both are now `tests/test_module_boundaries.py`, which asserts that
+the parts deciding what to ask and what to show stay one import from `code_adaptive`, and
+that no module file imports a web framework. A review property with a failing test attached
+is weaker than a packaging boundary and stronger than a convention.
+
+**What it kept.** The narrow waist, the candidate boundary (now carried by return types
+rather than by which service answered), `InferredSignalDTO` carrying no score or weight, the
+contracts package staying independent of the engine, and every error code — so a frontend
+written against the HTTP API branches on the same strings.
+
+**The one thing that was not mechanical.** `GraderAgent._grade_open` requires an
+already-evaluated `GradedVoiceResponse`, because evaluation is a model call and
+`record_response` is synchronous. The grader service hid that by awaiting it before grading.
+In one process the await has to happen at the call site — which is why
+`tests/test_parity_facade_vs_engine.py` runs over two banks, one of which actually
+administers spoken items.
+
+
 ## Layout
 
 ```
@@ -107,8 +148,8 @@ The engine is one implementation rather than a copy per caller, because the 3PL 
 fractional likelihood and the stopping rule are where two implementations drifting apart is
 a measurement problem rather than a maintenance one. That argument survived the engine being
 a library behind seven services and it survives the services being gone — see
-[ADR-0002](adr/0002-engine-as-a-library.md) and
-[ADR-0004](adr/0004-from-services-to-a-module.md).
+[architecture.md](architecture.md#why-one-module) and
+[ADR-0004](architecture.md#why-one-module).
 
 Which parts of it may reach the sandbox is enforced by `tests/test_module_boundaries.py`.
 That was a packaging fact while the grader was its own image; in one process it is a test,

@@ -160,18 +160,27 @@ class TestCalibratedTokens:
         assert "sorted" in result.reason or "reversed" in result.reason
 
     def test_a_bare_numeral_is_protected_too(self):
-        """Found by writing this file: `3` in "Python 3" is a calibrated token, so a
-        rewrite dropping the version is refused.
+        """`3` in "Python 3" is a calibrated token, so dropping the version is refused.
 
-        That is the guard being right rather than over-eager — an item about Python 3 is
-        not the same item once the version goes, and its `b` was estimated against the
-        version that was there. Worth knowing before writing a rephrase prompt: the model
-        must carry numerals through.
+        The strictness is deliberate and stays: an item about Python 3 is not the same item
+        once the version goes, and its difficulty was estimated against the version that was
+        there. A rejection costs only the tokens spent on the rewrite, so erring this way is
+        the right bias.
         """
         result = check("Which claim about list comprehensions is not correct?")
         assert result.ok is False
         assert "calibrated tokens" in result.reason
-        assert "3" in result.reason
+
+    def test_the_reason_quotes_the_phrase_rather_than_the_bare_token(self):
+        """What made the numeral case confusing was the REPORT, not the check.
+
+        "drops calibrated tokens: ['3']" says nothing about WHICH `3` in a stem that may
+        contain several. The surrounding phrase makes the message actionable without
+        loosening anything.
+        """
+        result = check("Which claim about list comprehensions is not correct?")
+        assert "Python 3" in result.reason
+        assert "['3']" not in result.reason
 
     def test_keeping_every_protected_token_passes(self):
         original = "Which sort achieves `O(n log n)` in the worst case?"

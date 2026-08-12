@@ -113,6 +113,46 @@ class TestDecodingRefusesWhatItCannotHandle:
         with pytest.raises(ValueError):
             wav_bytes_to_pcm16(b"")
 
+    def test_a_structurally_valid_wav_with_no_audio_is_refused(self):
+        """The second wav bug, and the subtler of the two.
+
+        A capture that failed after the header was written decodes cleanly to zero frames.
+        Returning it handed the grader an empty transcript, which is scored as a candidate
+        who SAID NOTHING rather than as a recording that did not happen — two different
+        findings about a person, and only one of them is true.
+        """
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(LIVE_INPUT_RATE)
+        with pytest.raises(ValueError) as caught:
+            wav_bytes_to_pcm16(buf.getvalue())
+        assert "no audio" in str(caught.value)
+
+    def test_a_very_short_capture_survives_as_audio_rather_than_being_refused(self):
+        """Where the "too short" judgement belongs, checked so nobody adds it twice.
+
+        The resampler keeps at least one sample, so a three-frame capture at 48 kHz decodes
+        to 62 microseconds of audio rather than to nothing. That is deliberate: the codec
+        answers "is this readable", and only genuinely empty audio is not.
+
+        HOW SHORT IS TOO SHORT is a different question with a configured answer —
+        `voice_settings` carries the silence and speech-duration thresholds, and the room
+        applies them against `candidate_speech_seconds`. A second floor here would be a
+        second policy for one decision, and the two would disagree the first time either
+        moved.
+        """
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(48_000)
+            wf.writeframes(struct.pack("<h", 0) * 3)
+        pcm, duration = wav_bytes_to_pcm16(buf.getvalue())
+        assert pcm, "a short capture was refused; the floor belongs to turn-taking"
+        assert 0 < duration < 0.01
+
     def test_eight_bit_audio_is_refused_by_name(self):
         """Reading 8-bit samples as 16-bit produces noise at the right length — audio that
         looks valid all the way to the transcriber."""

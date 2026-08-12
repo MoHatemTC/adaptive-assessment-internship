@@ -6,7 +6,7 @@ item — of whichever modality — will narrow the weakest estimate fastest, and
 competency as soon as it is measured.
 
 It is **one module a host project imports**. There is no web framework in it and no port:
-the host owns transport, this owns the measurement. See [docs/module.md](docs/module.md) for
+the host owns transport, this owns the measurement. See [docs/module.md](cat_engine/docs/module.md) for
 the embedding contract.
 
 ```python
@@ -52,12 +52,12 @@ cat_engine/
   validation.py                      is the shipped DATA sound? bank floor, edge validity
   scripts/                           one calibration script the engine names by path
   tests/                             ~880 deterministic tests, no billed calls
-docs/module.md                       what a host project needs to know
-docs/api.md                          the surface, method by method
+cat_engine/docs/module.md            what a host project needs to know
+cat_engine/docs/api.md               the surface, method by method
 ```
 
 It was seven services over a shared engine library until
-[ADR-0004](docs/adr/0004-from-services-to-a-module.md); that record explains what the return
+[ADR-0004](cat_engine/docs/architecture.md#why-one-module); that record explains what the return
 cost as well as what it bought.
 
 ## The loop
@@ -180,14 +180,14 @@ item wording.
 
 Prerequisite propagation ships **inert**. A completed screening study measured its
 wrong-inference rate at 7-17% against a 3% gate; enabling an edge is a per-edge decision
-with an experimental design behind it. See [docs/operations.md](docs/operations.md).
+with an experimental design behind it. See [docs/operations.md](cat_engine/docs/operations.md).
 
 ## Where to read next
 
-- [docs/api.md](docs/api.md) — the contract a frontend builds against
-- [docs/architecture-proposal.md](docs/architecture-proposal.md) — the whole system drawn, and where it is going
-- [docs/architecture.md](docs/architecture.md) — the loop, the measurement, the graph
-- [docs/module.md](docs/module.md) — what runs, and what crosses the wire
-- [docs/adr/0001](docs/adr/0001-service-boundaries.md) · [0002](docs/adr/0002-engine-as-a-library.md) · [0003](docs/adr/0003-uploaded-banks-and-scoped-assessments.md) — the seams, what changed when the code moved, and uploaded banks and scoped assessments
-- [docs/operations.md](docs/operations.md) — running it, first checks, enabling inference
-- [docs/evidence.md](docs/evidence.md) — the measurements behind the defaults
+- [docs/api.md](cat_engine/docs/api.md) — the contract a frontend builds against
+- the architecture history in git — the whole system drawn, and where it is going
+- [docs/architecture.md](cat_engine/docs/architecture.md) — the loop, the measurement, the graph
+- [docs/module.md](cat_engine/docs/module.md) — what runs, and what crosses the wire
+- the architecture history in git · the architecture history in git · the architecture history in git — the seams, what changed when the code moved, and uploaded banks and scoped assessments
+- [docs/operations.md](cat_engine/docs/operations.md) — running it, first checks, enabling inference
+- [docs/evidence.md](cat_engine/docs/evidence.md) — the measurements behind the defaults

@@ -99,6 +99,15 @@ def validate(
         if quote is not None or turn_id:
             turn = turn_by_id.get(str(turn_id)) if turn_id else None
             if turn is None and len(turn_by_id) == 1:
+                # ONE TURN, SO THERE IS NO AMBIGUITY TO RESOLVE — but say so.
+                #
+                # The correction is safe: the quote is still matched against this turn's
+                # text below, so naming a turn cannot smuggle evidence in. What was wrong
+                # was doing it SILENTLY. A model that cannot address a single turn correctly
+                # is a model to watch, and a grading that was quietly repaired should not be
+                # indistinguishable from one that arrived clean.
+                if turn_id:
+                    flags.append("TURN_ID_CORRECTED")
                 turn = next(iter(turn_by_id.values()))
                 turn_id = turn.turn_id
             if turn is None:

@@ -199,6 +199,22 @@ class TestEvidenceMustComeFromTheCANDIDATE:
         assert result.criterion_evidence[0].quote_turn_id == "t0"
         assert "UNKNOWN_TURN" not in result.flags
 
+    def test_the_correction_is_recorded_rather_than_silent(self):
+        """What was wrong was the silence, not the fallback.
+
+        A grading that was quietly repaired should not be indistinguishable from one that
+        arrived clean — a model that cannot address a single turn correctly is one to watch,
+        and an appeal needs to see that the reply was adjusted.
+        """
+        result = run(reply(criterion(quote_turn_id="t_nonexistent")))
+        assert "TURN_ID_CORRECTED" in result.flags
+
+    def test_a_correctly_addressed_turn_raises_no_flag(self):
+        """The flag has to mean something, so the clean path must not raise it."""
+        result = run(reply(criterion(quote_turn_id="t0")))
+        assert "TURN_ID_CORRECTED" not in result.flags
+        assert not result.flags
+
     def test_but_the_quote_is_still_checked_against_that_turn(self):
         """Which is what makes the fallback safe rather than a hole."""
         result = run(
