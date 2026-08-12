@@ -19,6 +19,51 @@ competency graph and one that does not.
 | 2b | `run_arm.py` at small n | The discordance psi that sets the real sample size |
 | 3 | `run_arm.py`, `analyse.py` | The comparison, its gates, and its power |
 
+## Files
+
+Excluded from the wheel: a host installs the module, not the apparatus that measured it.
+It drives the same objects a host does, in-process — 36,000 simulated sessions is not
+affordable any other way.
+
+| File | Responsibility |
+|---|---|
+| `run_arm.py` | Run one arm against one cohort. The entry point every phase below eventually calls. |
+| `arms.py` | The four arms, as environment applied **before** `settings` is first imported — engine policy is read at import, so an arm has to be in place before that. |
+| `dgp.py` | The data-generating process: how a simulee's true ability becomes a response. |
+| `personas.py` | P01–P14. A persona is part of the DGP even though the arm label does not say so. |
+| `responder.py` | One simulee answering one item, per modality. The rungs downstream of the criterion scores are the engine's own. |
+| `make_cohort.py` | The frozen simulee cohorts, one per DGP arm, seeded and hashed. |
+| `design.py` | The resolution-IV screening design. |
+| `sweep.py`, `analyse_sweep.py` | Drive and analyse a whole factorial sweep. |
+| `analyse.py` | The comparison, its gates and its power. |
+| `stats.py` | Clopper-Pearson bounds, BCa bootstrap, DeLong, and the tetrachoric solve for within-candidate error correlation. |
+| `gates.py` | The pass/fail thresholds, written down before the data. |
+| `bands.py` | Band accuracy: exact, within-one, and the credible-interval coverage. |
+| `bank_check.py` | Phase 0 — can this bank support the SE target, the coverage requirement and the modality blueprint at once? |
+| `bank_floor.py` | What the bank itself puts a floor under, independent of the engine. |
+| `prestudy.py` | Band count × stopping rule, before the experiment freezes them. |
+| `edge_validity.py` | P(pass child \| fail parent) per prerequisite edge, offline. |
+| `probe.py` | The throughput probe, and E[L] for the order-free persona surrogates. |
+| `oc_curve.py` | The confidence gate's operating characteristic. |
+| `adversarial.py` | ADV-1..5 — the ways a candidate or a bank could break the measurement. |
+| `clock.py` | Modelled session duration, so the 90-minute cap is checked rather than assumed. |
+| `report.py` | Rendering a run into something a person reads. |
+| `session_runner.py` | One simulated candidate through whichever engine this branch ships. One function, both approaches — everything Approach C adds is feature-detected. |
+| `__init__.py` | The harness's own contract, and the feature detection that lets one runner produce joinable records from an engine with a graph and one without. |
+| `run_all.sh` | The whole pipeline in order. |
+| `manifest.json`, `config_snapshot.json` | What configuration a run actually executed under. |
+
+## Directories
+
+| Directory | Responsibility |
+|---|---|
+| `runs/` | **The artefacts behind published claims.** Every report in `reports/` names a run here with its cohort filename, SHA-256 and persona. 18 MB, tracked deliberately — this is evidence, not output. |
+| `reports/` | The written findings: baseline, remediation, comparison, final, and the issue log. |
+| `invariants/` | INV-01..INV-06 as executable tests, including posterior isolation. |
+| `judged/` | The judged-metric layer. **Makes billed model calls**; five separate locks keep it out of the default suite. |
+| `bank/` | Bank-check output. |
+| `code_review/` | Architecture and code-review notes taken during the study. |
+
 ## Running it
 
 ```bash
@@ -119,12 +164,12 @@ artifacts are under `reports/`.
 ```bash
 cd backend
 python -m pytest evaluation/invariants/test_c_shipped_invariants.py -q
-python -m evaluation.run_arm --arm C-shipped \
+python -m cat_engine.evaluation.run_arm --arm C-shipped \
   --cohort eval-results/cohorts/cohort_DGP-2_P01_n2000_seed42.json \
-  --out evaluation/runs/codex_postfix --limit 100 --max-steps 60 --trace-every 10
-python -m evaluation.analyse --runs evaluation/runs/codex_postfix \
+  --out cat_engine/evaluation/runs/codex_postfix --limit 100 --max-steps 60 --trace-every 10
+python -m cat_engine.evaluation.analyse --runs cat_engine/evaluation/runs/codex_postfix \
   --cohorts eval-results/cohorts/cohort_DGP-2_P01_n2000_seed42.json \
-  --out evaluation/runs/codex_postfix/report
+  --out cat_engine/evaluation/runs/codex_postfix/report
 ```
 
 Pass an exact cohort file whenever the cohort directory contains more than one persona for

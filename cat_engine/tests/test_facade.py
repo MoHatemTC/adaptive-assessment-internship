@@ -338,7 +338,7 @@ class TestPropertiesCarriedOverFromTheReleaseAudit:
         reference solution is the answer, and shipping it turns every code item into an
         answer key."""
         from cat_engine.engine.services.orchestrator import registry
-        from cat_engine.presentation import presented_item
+        from cat_engine.projection import presented_item
 
         item = next(
             i for i in registry.get_bank("DA").all_items() if i.modality == "code"

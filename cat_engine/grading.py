@@ -7,7 +7,7 @@ The fetch existed so the answer key, the hidden tests and the rubric never trans
 orchestrator — whose own responses reach a candidate's browser. In one process there is no
 transit to avoid, but the property that made it safe is worth keeping deliberately rather
 than losing by accident: NOTHING here returns a payload. `grade_*` return `GradedResponse`,
-whose `detail` is the audit record, and `presentation.grade_receipt` is what a candidate
+whose `detail` is the audit record, and `projection.grade_receipt` is what a candidate
 sees — an acknowledgement with no score in it.
 
 THE SANDBOX IS STILL THE ONLY THING THAT EXECUTES ANYTHING

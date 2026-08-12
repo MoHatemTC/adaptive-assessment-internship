@@ -29,7 +29,7 @@ import logging
 
 import numpy as np
 
-from cat_engine import catalogue, presentation, scope as scoping
+from cat_engine import catalogue, projection, scope as scoping
 from cat_engine.config import CatConfig
 from cat_engine.contracts import (
     AssessmentReportDTO,
@@ -457,7 +457,7 @@ class AssessmentModule:
                 # condition as the in-process race, for the same reason.
                 raise StaleAnswer(str(exc)) from exc
             return self._state_response(
-                session, last_graded=presentation.grade_receipt(graded)
+                session, last_graded=projection.grade_receipt(graded)
             )
 
     async def _coerce_answer(
@@ -552,12 +552,12 @@ class AssessmentModule:
                     code="item_unreadable",
                     status_code=500,
                 )
-            shown = presentation.presenting(full, candidate)
+            shown = projection.presenting(full, candidate)
 
         report = None
         if stop:
-            report = presentation.report_dto(orchestrator.summarise(state, reason))
-            report.scope = presentation.scope_summary(session.scope)
+            report = projection.report_dto(orchestrator.summarise(state, reason))
+            report.scope = projection.scope_summary(session.scope)
             if not session.recorded:
                 # Once per session: polling an assessment must not append it again.
                 session.recorded = True

@@ -93,7 +93,7 @@ class TestTheAnswerKeyStaysInTheGradedRecord:
 
     def test_the_audit_detail_does_carry_the_answer_index(self, grader, bank_items):
         """It has to — it is written to the session dump, which is what an appeal is
-        adjudicated from. Keeping it away from a CANDIDATE is `presentation.grade_receipt`,
+        adjudicated from. Keeping it away from a CANDIDATE is `projection.grade_receipt`,
         which is tested in `test_facade.py`."""
         item_id, answer = bank_items["mcq"]
         assert "answer_index" in grader.grade_mcq(BANK, item_id, answer).detail

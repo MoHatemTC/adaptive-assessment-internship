@@ -67,8 +67,18 @@ def reachable_paths() -> set[Path]:
     return found
 
 
+#: Documentation. It lives beside the data because that is where somebody looking at the
+#: data will be, and it does NOT ship — `pyproject.toml` declares package-data as `*.json`
+#: only, which `test_the_readme_does_not_ship` below holds it to.
+NOT_DATA = {"README.md"}
+
+
 def shipped_files() -> list[Path]:
-    return sorted(p.resolve() for p in PACKAGED_DATA_DIR.rglob("*") if p.is_file())
+    return sorted(
+        p.resolve()
+        for p in PACKAGED_DATA_DIR.rglob("*")
+        if p.is_file() and p.name not in NOT_DATA
+    )
 
 
 @pytest.mark.parametrize(
@@ -98,11 +108,32 @@ def test_every_reachable_path_that_should_exist_does():
     assert not missing, f"code points at data files that do not exist: {missing}"
 
 
-def test_the_data_directory_holds_nothing_but_json():
-    """A stray README, notebook or archive in here would ship to every host."""
+def test_the_data_directory_ships_nothing_but_json():
+    """A stray notebook, archive or fixture in here would ship to every host."""
     strays = [
         p.relative_to(PACKAGED_DATA_DIR)
         for p in shipped_files()
         if p.suffix != ".json"
     ]
     assert not strays, f"non-JSON files in the packaged data directory: {strays}"
+
+
+def test_the_readme_does_not_ship():
+    """The exemption above is only safe while packaging really is JSON-only.
+
+    `README.md` sits in the data directory so that somebody looking at the banks finds it,
+    and it is exempted from the reachability check for that reason. That exemption would
+    become a hole the moment package-data widened to `*`, so the declaration is asserted
+    rather than trusted.
+    """
+    import tomllib
+
+    root = Path(__file__).resolve().parents[2]
+    with (root / "pyproject.toml").open("rb") as handle:
+        config = tomllib.load(handle)
+
+    patterns = config["tool"]["setuptools"]["package-data"]["cat_engine.engine"]
+    assert all(p.endswith(".json") for p in patterns), (
+        f"package-data for the engine is no longer JSON-only ({patterns}); README.md and "
+        "anything else non-JSON in engine/data/ now ships to every host"
+    )

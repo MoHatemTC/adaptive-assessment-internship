@@ -37,9 +37,8 @@ MODULE = Path(__file__).resolve().parents[1]
 #: has any business reaching the thing that runs candidate code.
 MUST_NOT_REACH_THE_SANDBOX = (
     "catalogue.py",
-    "presentation.py",
+    "projection.py",
     "diagnostics.py",
-    "mapping.py",
     "settings.py",
     "errors.py",
     "scope/scoping.py",

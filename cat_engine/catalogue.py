@@ -32,7 +32,7 @@ from cat_engine.contracts import (
 )
 from cat_engine.engine.services.orchestrator import registry
 from cat_engine.errors import BankUnknown
-from cat_engine.mapping import (
+from cat_engine.projection import (
     bank_summary,
     graph_dto,
     item_full,
