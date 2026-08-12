@@ -103,7 +103,12 @@ class AssessmentModule:
 
     # --- construction helpers ----------------------------------------------
     def _open_bank_store(self) -> None:
-        """Point the process at a bank store other than the packaged one."""
+        """Point the process at a bank store other than the packaged one.
+
+        Both branches go through `registry.use_store`, which is the seam the engine already
+        provides for exactly this — it exists because a deployment resolves its store at
+        startup rather than from a module-level constant.
+        """
         from cat_engine.engine.services.orchestrator.bank_store import (
             BankStore,
             _seed_profiles,
@@ -111,12 +116,12 @@ class AssessmentModule:
 
         dsn = self.settings.bank_database_url.strip()
         if dsn:
-            from cat_engine.stores.sql import SqlBankStore, seed_from_profiles
+            # `install` ensures the schema and seeds the checked-in banks idempotently on
+            # their content hash, so every boot costs one query per bank and no deployment
+            # has a seeding step somebody has to remember to run exactly once.
+            from cat_engine.stores.sql.backed import install
 
-            backing = SqlBankStore(dsn)
-            backing.ensure_schema()
-            seed_from_profiles(backing, _seed_profiles())
-            registry.use_store(BankStore(seeds=_seed_profiles(), backing=backing))
+            install(dsn)
             logger.info("banks resolve from Postgres")
             return
 

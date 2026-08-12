@@ -46,7 +46,7 @@ def store():
 def a_session(session_id: str = "asmt_test000001", *, seed: int = 7):
     from cat_engine.engine.schemas.orchestration import AssessmentState
 
-    from service.sessions import Session
+    from cat_engine.stores import Session
 
     return Session(
         bank_id="DA",
@@ -58,27 +58,23 @@ def a_session(session_id: str = "asmt_test000001", *, seed: int = 7):
 
 @pytest.fixture()
 def sessions(store):
-    """A `SessionStore` writing through to the database, as the service builds one."""
-    from conftest import load_service
+    """A store writing through to the database, as `open_session_store` builds one."""
+    from cat_engine.stores import InMemorySessionStore
 
-    with load_service("assessment-orchestrator"):
-        from service.sessions import SessionStore
-
-        yield SessionStore(store)
+    yield InMemorySessionStore(store)
 
 
 class TestASessionOutlivesItsProcess:
     def test_a_store_that_never_saw_it_can_still_serve_it(self, store, sessions):
-        from conftest import load_service  # noqa: F401 - keeps the service on the path
 
-        from service.sessions import SessionStore
+        from cat_engine.stores import InMemorySessionStore
 
         original = a_session()
         sessions.add(original)
         sessions.save(original)
 
         # A second store, holding nothing — the restart, and the second replica.
-        fresh = SessionStore(store)
+        fresh = InMemorySessionStore(store)
         assert len(fresh) == 0
         resumed = fresh.get("asmt_test000001")
 
@@ -91,12 +87,12 @@ class TestASessionOutlivesItsProcess:
         """Replacing a bank must not change the pool underneath a live candidate, and a
         resumed session that forgot its version would be assessed against whatever is
         current now."""
-        from service.sessions import SessionStore
+        from cat_engine.stores import InMemorySessionStore
 
         session = a_session()
         sessions.add(session)
         sessions.save(session)
-        assert SessionStore(store).get(session.state.session_id).bank_version == (
+        assert InMemorySessionStore(store).get(session.state.session_id).bank_version == (
             "deadbeefdeadbeef"
         )
 
@@ -113,9 +109,9 @@ class TestASessionOutlivesItsProcess:
         sessions.save(session)
         expected = [int(session.rng.integers(0, 1000)) for _ in range(5)]
 
-        from service.sessions import SessionStore
+        from cat_engine.stores import InMemorySessionStore
 
-        resumed = SessionStore(store).get(session.state.session_id)
+        resumed = InMemorySessionStore(store).get(session.state.session_id)
         assert [int(resumed.rng.integers(0, 1000)) for _ in range(5)] == expected
 
     def test_a_scope_survives_the_round_trip(self, store, sessions):
@@ -123,7 +119,7 @@ class TestASessionOutlivesItsProcess:
         silently to the whole bank — an assessment covering more than the one that started."""
         from cat_engine.contracts import ScopeManifest, ScopeMainDTO
 
-        from service.sessions import SessionStore
+        from cat_engine.stores import InMemorySessionStore
 
         session = a_session()
         session.scope = ScopeManifest(
@@ -138,7 +134,7 @@ class TestASessionOutlivesItsProcess:
         sessions.add(session)
         sessions.save(session)
 
-        resumed = SessionStore(store).get(session.state.session_id)
+        resumed = InMemorySessionStore(store).get(session.state.session_id)
         assert resumed.scope is not None
         assert resumed.scope.scope_id == "scp_abc"
         assert resumed.scope.item_ids == ["q1", "q2"]
@@ -153,14 +149,14 @@ class TestTwoWritersCannotBothWin:
     def test_the_second_writer_is_refused(self, store, sessions):
         from cat_engine.stores.sql import SessionConflict
 
-        from service.sessions import SessionStore
+        from cat_engine.stores import InMemorySessionStore
 
         session = a_session()
         sessions.add(session)
         sessions.save(session)
 
         # Another replica loads the same session, so both hold revision 1.
-        other = SessionStore(store)
+        other = InMemorySessionStore(store)
         other.get(session.state.session_id)
 
         sessions.save(session)  # this one lands, revision -> 2
@@ -168,7 +164,7 @@ class TestTwoWritersCannotBothWin:
             other.save(other.get(session.state.session_id))
 
     def test_the_winner_is_the_one_that_persisted(self, store, sessions):
-        from service.sessions import SessionStore
+        from cat_engine.stores import InMemorySessionStore
 
         session = a_session()
         sessions.add(session)
@@ -176,7 +172,7 @@ class TestTwoWritersCannotBothWin:
         session.state = session.state.model_copy(update={"items_administered": 3})
         sessions.save(session)
 
-        resumed = SessionStore(store).get(session.state.session_id)
+        resumed = InMemorySessionStore(store).get(session.state.session_id)
         assert resumed.state.items_administered == 3
 
 
