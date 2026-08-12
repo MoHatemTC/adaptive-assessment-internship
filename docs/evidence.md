@@ -5,7 +5,10 @@ sat this assessment**, and the un-run layers are listed at the end.
 
 Full study, external to this repository: the B/C evaluation results and architecture
 proposal on the
-`eval/bc-graph-augmented` branch, with the harness in `backend/evaluation/`.
+`eval/bc-graph-augmented` branch. **The harness itself is no longer on this branch** — it
+was removed when the repository was reduced to the engine, and is recoverable from git
+history. The numbers below are what it found, and they are why the shipped defaults are
+what they are; reproducing them means checking out the harness again.
 
 ## Design
 

@@ -167,7 +167,8 @@ asserts that no module file imports a web framework.
 
 **The engine is one implementation.** The 3PL core, the fractional likelihood and the
 stopping rule are where two implementations drifting apart is a measurement problem rather
-than a maintenance one. `cat_engine/evaluation/` drives the same objects a host does.
+than a maintenance one. The simulation harness that measured it drove the same objects a
+host does; it has since been removed from this branch — see [evidence.md](evidence.md).
 
 ## Known limits
 

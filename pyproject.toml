@@ -46,11 +46,11 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-# `cat_engine*` only. The tests and the evaluation harness live inside the package
+# `cat_engine*` only. The tests and the one calibration script live inside the package
 # directory but are excluded from a wheel below — a host installs the module, not the
-# study apparatus that measured it.
+# apparatus around it.
 include = ["cat_engine*"]
-exclude = ["cat_engine.tests*", "cat_engine.evaluation*", "cat_engine.scripts*"]
+exclude = ["cat_engine.tests*", "cat_engine.scripts*"]
 
 [tool.setuptools.package-data]
 # Banks, graphs and rubrics ship with the package so a checkout and a `pip install` see the

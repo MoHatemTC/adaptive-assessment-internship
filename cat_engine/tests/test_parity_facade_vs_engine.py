@@ -3,7 +3,7 @@
 WHAT THIS DOES
 
 Runs one identical, seeded assessment twice — once through `AssessmentModule`, and once by
-driving `Orchestrator` directly the way `cat_engine/evaluation/` does — and asserts the two
+driving `Orchestrator` directly, with no facade in between — and asserts the two
 produce the same report. Same theta, same standard error, same band, same stopping reason,
 same items, in the same order.
 
@@ -109,7 +109,7 @@ def bank_id(request) -> str:
 
 @pytest.fixture()
 def engine_report(stub_boundaries, bank_id):
-    """One assessment, driven exactly as `cat_engine/evaluation/` drives it."""
+    """One assessment, driven straight against the engine's own objects."""
     import asyncio
 
     from cat_engine.engine.schemas.voice import VoiceResponsePackage

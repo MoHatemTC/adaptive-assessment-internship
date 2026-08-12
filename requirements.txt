@@ -35,6 +35,10 @@ websockets>=13
 # LITELLM_*/E2B placeholders, and without the plugin pytest ignores that block silently —
 # Settings then fails to construct and the whole suite errors at collection. A missing
 # plugin that turns a config block into a no-op is worse than a missing dependency.
+#
+# There is no `requirements-eval.txt` any more. It existed for the simulation harness —
+# scipy for the interval arithmetic, an exact deepeval pin for the judged layer — and both
+# went with it. Nothing here can make a billed call.
 pytest>=8.0
 pytest-asyncio>=0.24
 pytest-env>=1.0

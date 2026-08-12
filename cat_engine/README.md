@@ -20,6 +20,7 @@ measurement — see [docs/module.md](../docs/module.md) for the embedding contra
 | `grading.py` | `Grader`: one response to `GradedOutcome[]`, per modality. Owns the only path that reaches the sandbox, plus transcription and trial runs, which grade nothing. |
 | `projection.py` | Engine objects to what a host receives. Both item views and the candidate boundary live here together, because the difference between them is easier to keep right when you can see both. |
 | `diagnostics.py` | The author view: posteriors, shortlists, the criterion phase, which item the engine would have picked. **Not candidate-safe**; the facade refuses it unless enabled. |
+| `validation.py` | Is the shipped DATA sound? Whether a bank can reach its precision target, and whether a graph's prerequisite edges survive contact with a real session corpus. |
 
 ## Directories
 
@@ -31,8 +32,7 @@ measurement — see [docs/module.md](../docs/module.md) for the embedding contra
 | [`ingest/`](ingest/README.md) | One uploaded file to a registered bank, with the competency graph derived from the questions. The only write path. |
 | [`stores/`](stores/README.md) | Where live assessments and registered banks are kept. Memory by default, Postgres when configured, the host's own when it has one. |
 | [`live/`](live/README.md) | Realtime interview rooms as a Python API, plus the browser client for them. The host writes the socket. |
-| [`evaluation/`](evaluation/README.md) | The simulation harness and the propagation study. In-process, never a component; excluded from the wheel. |
-| [`scripts/`](scripts/README.md) | How the shipped banks were built. Provenance, not runtime; excluded from the wheel. |
+| [`scripts/`](scripts/README.md) | One calibration script the engine names by path. Excluded from the wheel. |
 | [`tests/`](tests/README.md) | ~900 deterministic tests. No billed calls, no infrastructure. |
 
 ## The one rule everything else rests on

@@ -49,8 +49,9 @@ cat_engine/
     services/competency_graph/       graph, propagation, policy, coverage
     services/orchestrator/           the loop, selection, the bank store, reporting
     data/                            registered banks and their competency graphs
-  evaluation/                        the simulation harness — in-process, never a component
-  tests/                             ~900 deterministic tests, no billed calls
+  validation.py                      is the shipped DATA sound? bank floor, edge validity
+  scripts/                           one calibration script the engine names by path
+  tests/                             ~880 deterministic tests, no billed calls
 docs/module.md                       what a host project needs to know
 docs/api.md                          the surface, method by method
 ```

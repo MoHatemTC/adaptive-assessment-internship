@@ -252,7 +252,7 @@ class TestTheBankFloorArithmeticIsSound:
     """
 
     def test_adding_the_prescribed_items_reaches_the_target(self):
-        from cat_engine.evaluation.bank_floor import analyse_bank
+        from cat_engine.validation import analyse_bank
 
         report = analyse_bank("AIE", theta=0.0)
         required = report["rows"][0]["required_precision"]
@@ -280,7 +280,7 @@ class TestTheBankFloorArithmeticIsSound:
 
     def test_attained_precision_and_best_se_agree(self):
         """SE = 1/sqrt(precision). If these disagree, one of them is being computed wrong."""
-        from cat_engine.evaluation.bank_floor import analyse_bank
+        from cat_engine.validation import analyse_bank
 
         for row in analyse_bank("AIE", theta=0.0)["rows"]:
             assert row["best_attainable_se"] == pytest.approx(
@@ -289,7 +289,7 @@ class TestTheBankFloorArithmeticIsSound:
 
     def test_it_agrees_with_the_reachability_test_above(self):
         """Two independent routes to 'which variables are short' must name the same set."""
-        from cat_engine.evaluation.bank_floor import analyse_bank
+        from cat_engine.validation import analyse_bank
 
         computed = {
             r["variable"] for r in analyse_bank("AIE", theta=0.0)["rows"] if not r["reachable"]

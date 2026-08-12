@@ -36,8 +36,7 @@ file-store tests through Postgres, where they fail against a store they never me
 | **Competency graph** | `test_competency_graph_propagation.py`, `test_competency_graph_blocking.py`, `test_competency_graph_contradiction.py`, `test_competency_graph_coverage.py`, `test_competency_graph_report.py`, `test_propagation_policy.py`, `test_propagation_factors.py`, `test_propagation_safety_fixes.py`, `test_inference_preview.py`, `test_graph_posterior_isolation.py`, `test_shared_competencies.py`, `test_edge_validity.py` |
 | **Orchestration** | `test_orchestration.py`, `test_orchestration_flow.py`, `test_main_competency_flow.py`, `test_multimodality_smoke.py`, `test_time_budget.py` |
 | **Config and paths** | `test_engine_paths.py`, `test_llm_boundary.py`, `test_observability.py` |
-| **Banks as data** | `test_imported_human_test_banks.py` |
-| **The study apparatus** | `test_evaluation_harness.py`, `test_sweep_design.py`, `test_sweep_statistics.py`, `test_personas.py`, `test_adversarial_and_judged.py` |
+| **Banks and graphs as data** | `test_imported_human_test_banks.py`, `test_edge_validity.py` — the shipped artefacts hold up, checked through `cat_engine/validation.py` |
 | **The documentation itself** | `test_readmes_are_current.py` — every code directory has a README and it still lists what is there |
 | **The public surface** | `test_public_surface.py` — every exported name resolves, and importing the package pulls in zero engine modules |
 | **Configuration** | `test_config_guard.py` — what two modules in one process may and may not disagree about |
@@ -49,9 +48,8 @@ file-store tests through Postgres, where they fail against a store they never me
 is ever called), `module` (a fresh `AssessmentModule` with the config guard reset around it),
 `bank_items`, `orchestrator_for`, and the per-bank profile fixtures.
 
-## Five locks stop the judged layer costing money
+## Nothing here can spend money
 
-`evaluation/judged/` makes billed model calls. It is outside `testpaths`, excluded by a
-marker, absent from `requirements.txt`, importable without `deepeval` installed, and
-asserted to be all four by `test_adversarial_and_judged.py`. An accidental `pytest` cannot
-spend money even if someone moves the files.
+The judged-metric layer that could — five locks and a `deepeval` pin — went with the
+simulation harness. What is left stubs the sandbox and the model in `conftest.py`, so an
+accidental `pytest` makes no billed call because there is no code path to one.

@@ -18,21 +18,15 @@ venv/
 build/
 dist/
 
-# DeepEval's local cache. The judged-metric layer makes billed model calls and is excluded
-# from the default suite by five separate locks; its cache should not be a sixth surprise.
-.deepeval
-.deepeval-cache/
-
 # Graphify local knowledge-graph outputs
 graphify-out/
 **/graphify-out/
 
-# Evaluation harness outputs (research scaffolding, not part of this branch)
-eval-results/
-
-# Simulation outputs. Large, regenerable, and specific to one run.
+# Simulation outputs. The harness that wrote them is no longer on this branch; the
+# directory is left ignored so an existing checkout does not suddenly show 431 MB as
+# untracked.
 eval-results/
 
 # Banks posted to the local bank-registry. Content, not code — a deployment mounts a
 # volume here (BANK_STORE_DIR); a checkout should not commit what it experimented with.
-backend/app/data/banks/
+cat_engine/engine/data/banks/

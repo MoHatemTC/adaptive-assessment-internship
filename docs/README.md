@@ -22,18 +22,16 @@ optional competency graph layer.
 | [propagation-policy.md](propagation-policy.md) | you want to turn inference or blocking on, or work out why it is off |
 | [evidence.md](evidence.md) | you want the measurements behind the defaults |
 | [adr/](adr/) | you want to know why the seams are where they are |
-| [preregistration/](preregistration/) | you are running, reading or extending the propagation study |
 
 There are no machine-readable specs any more: the surface is Python, and its signatures and
 docstrings are the specification. `docs/api/openapi-*.json` went with the services.
 
 ## The propagation study
 
-| Document | What it is |
-|---|---|
-| [C_Shipped_Propagation_Test_Plan.md](preregistration/C_Shipped_Propagation_Test_Plan.md) | the pre-registration, signed before any data. Amendments in §13, never by editing the text above them |
-| [plan_math.py](preregistration/plan_math.py) | the design arithmetic. Every sample size in the plan is derived here, not chosen |
-| [S1_Screening_Report.md](preregistration/S1_Screening_Report.md) | **what the screening stage found** |
+The study apparatus — the harness, the pre-registration and the run artefacts — was removed
+when this branch was reduced to the engine. It is in git history.
+
+What it found is kept, because it is why the shipped defaults are what they are:
 
 The short version of the report: corroboration — the plan's headline lever — is inoperable
 on this bank. The AIE graph is a forest of chains, every parent having exactly one direct

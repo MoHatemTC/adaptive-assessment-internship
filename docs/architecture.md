@@ -85,6 +85,7 @@ cat_engine/
   wiring.py                          an Orchestrator built from in-process parts
   contracts/                         the DTOs a host receives; independent of the engine
   catalogue.py  grading.py           reading banks; grading one response
+  projection.py  diagnostics.py      engine objects to what a host receives; the author view
   scope/  ingest/  stores/  live/    scoping, the write path, persistence, interviews
   engine/                            THE ENGINE
     config/settings.py               all engine policy, one place
@@ -96,7 +97,8 @@ cat_engine/
     services/competency_graph/       graph, propagation, policy, coverage
     services/orchestrator/           the loop, selection, the bank store, reporting
     data/                            the checked-in banks and their graphs
-  evaluation/                        the simulation harness. In-process, never a component
+  validation.py                      is the shipped DATA sound? bank floor, edge validity
+  scripts/                           one calibration script the engine names by path
 docs/module.md                       the embedding contract
 docs/api.md                          the surface, method by method
 ```

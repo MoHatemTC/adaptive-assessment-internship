@@ -13,7 +13,7 @@ import pytest
 
 from cat_engine.engine.schemas.orchestration import AssessmentState
 from cat_engine.engine.services.orchestrator import session_dump
-from cat_engine.scripts.validate_prerequisite_edges import (
+from cat_engine.validation import (
     INSUFFICIENT,
     REFUTED,
     VALIDATED,
