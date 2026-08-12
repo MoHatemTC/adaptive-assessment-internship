@@ -1,4 +1,4 @@
-"""The competency-scope surface: a selection in, an induced sub-graph and an allowlist out.
+"""The scoping surface: a selection in, an induced sub-graph and an allowlist out.
 
 WHAT A SCOPE IS, AND WHAT IT DELIBERATELY IS NOT
 
@@ -7,19 +7,17 @@ which sub-competency nodes are in play, and which items may therefore be adminis
 answers neither by returning items — `item_ids` is a list of identifiers, never
 `BankItemRef`s and certainly never payloads.
 
-That is the same boundary ADR-0001 drew across `bank-registry`'s two read paths. One service
-serves items. A scope service that returned questions would be a second one, with different
-authorisation and a second answer to "what is in this bank", and the orchestrator does not
-need it: it already holds the whole parameter pool for the bank version, so an id allowlist
-costs a set intersection and no hop at all.
+That is the same boundary `catalogue` draws across its two read paths. One place serves
+items. A scope that returned questions would be a second one, with a second answer to "what
+is in this bank" — and it is not needed: selection already holds the whole parameter pool
+for the bank version, so an id allowlist costs a set intersection and nothing else.
 
 A SCOPE CANNOT MOVE A POSTERIOR EITHER
 
 There is no `score`, no `weight` and no theta anywhere in this module. A scope changes which
-questions are asked and what coverage requires. Like the graph service, the worst a
-compromised or buggy scope service can do is narrow a pool — which is a
-quality-of-measurement problem, visible in the report, rather than a wrong number nobody can
-see.
+questions are asked and what coverage requires. As with the graph, the worst a buggy scope
+can do is narrow a pool — which is a quality-of-measurement problem, visible in the report,
+rather than a wrong number nobody can see.
 
 WHY A MAIN CAN BE PARTIAL, AND WHY THAT HAS TO BE SAID OUT LOUD
 

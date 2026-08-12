@@ -25,7 +25,9 @@ threaded through the engine: threading it would touch every one of those call si
 capability nothing has asked for.
 
 The cost is real and is stated rather than hidden: **one measurement policy per process.**
-Two `AssessmentModule`s cannot disagree about what a candidate is scored by.
+Two `AssessmentModule`s cannot disagree about what a candidate is scored by — though they
+may differ freely on topology, which is the case a host actually hits. See
+`tests/test_config_guard.py`, which holds both halves to exactly that.
 
 The failure that would cause is the one `engine_config_fingerprint` was written for. A
 grader running `CODE_APPROACH=C` beside an orchestrator that believes it is `B` produces a

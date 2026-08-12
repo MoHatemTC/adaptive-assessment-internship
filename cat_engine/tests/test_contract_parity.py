@@ -2,12 +2,12 @@
 
 WHY THE DUPLICATION IS PERMANENT
 
-`adaptive_contracts` deliberately does not import the engine, even though every service now
-installs it. The wire contract is not the internal one — `BankItemRef` OMITS the payload
-that `BankItem` carries, and that omission is the security boundary of the whole bank
-surface. Re-exporting would delete it. And a consumer that is not this engine should be
-able to depend on these shapes without pulling in numpy, a sandbox client and 600 KB of
-question banks.
+`contracts` deliberately does not import `engine`, even though both now live in one
+package — which is exactly when the temptation to merge them is strongest. The wire contract
+is not the internal one: `BankItemRef` OMITS the payload that `BankItem` carries, and that
+omission is the security boundary of the whole bank surface. Re-exporting would delete it.
+And a consumer that is not this engine should be able to depend on these shapes without
+pulling in numpy, a sandbox client and 600 KB of question banks.
 
 So the duplication stays, and this file is the price of keeping it. It is the only place
 where both definitions are in scope at once, which is what makes it the only place the

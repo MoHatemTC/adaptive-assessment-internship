@@ -12,7 +12,7 @@ measuring, not just what it reveals.
 
 A tester or an author needs all of it, which is what `/diagnostics` and `/state` are for.
 They are separate endpoints, refused unless the deployment enables them, so the boundary
-is enforced by the service rather than by whichever client chooses not to render a field.
+is enforced by the TYPE rather than by whichever client chooses not to render a field.
 """
 
 from __future__ import annotations

@@ -4,7 +4,7 @@ WHAT MOVED, AND WHERE
 
 Three of these used to assert against `backend/app/main.py`, which no longer exists — the
 CAT API is `services/assessment-orchestrator`. The properties did not move with the file:
-they are asserted in `services/tests/test_assessment_orchestrator_service.py`, under
+they are asserted in `test_facade.py`, under
 `TestPropertiesCarriedOverFromTheReleaseAudit`, against the routes that now serve them.
 
 What is left here is what is genuinely about the ENGINE, plus one that is about the whole

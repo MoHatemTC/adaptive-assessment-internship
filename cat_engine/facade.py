@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from pathlib import Path
 
 import numpy as np
 
@@ -140,10 +141,14 @@ class AssessmentModule:
             logger.info("banks resolve from Postgres")
             return
 
-        registry.use_store(
-            BankStore(seeds=_seed_profiles(), store_dir=self.settings.bank_store_dir)
-        )
-        logger.info("banks resolve from %s", self.settings.bank_store_dir)
+        # `Path`, not the raw string. `BankStore` calls `.is_dir()` on it, and a setting
+        # arrives from the environment or from `CatConfig` as text — so passing it straight
+        # through raised `AttributeError: 'str' object has no attribute 'is_dir'` for every
+        # host that configured `BANK_STORE_DIR`. Nothing covered it until
+        # `tests/test_config_guard.py` set one.
+        store_dir = Path(self.settings.bank_store_dir).expanduser()
+        registry.use_store(BankStore(seeds=_seed_profiles(), store_dir=store_dir))
+        logger.info("banks resolve from %s", store_dir)
 
     def _session(self, session_id: str) -> Session:
         session = self.sessions.get(session_id)

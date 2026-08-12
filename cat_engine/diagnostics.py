@@ -1,22 +1,25 @@
 """The instrumented author view. Everything the candidate boundary withholds.
 
-WHY THIS EXISTS AS AN ENDPOINT AT ALL
+WHY THIS EXISTS AT ALL
 
-The deleted tester UI read these numbers out of engine internals directly —
+A tester UI once read these numbers out of engine internals directly —
 `variables.certainty`, `posterior_interval`, `picker.criterion_for`, `information_for`,
-`ability_band`, `rollup_outcomes`. An external frontend cannot, so either the API serves
-them or the ability to see why an item was chosen disappears with the UI that used to show
-it. An assessment nobody can audit mid-flight is a worse thing to ship than one whose
-diagnostics need a flag.
+`ability_band`, `rollup_outcomes`. A host cannot reach into those, so either the module
+offers them or the ability to see why an item was chosen disappears with the UI that used
+to show it. An assessment nobody can audit mid-flight is a worse thing to ship than one
+whose diagnostics need a flag.
 
-WHY IT IS GATED SERVER-SIDE
+WHY IT IS GATED HERE RATHER THAN LEFT TO THE HOST
 
-Because the alternative is a client choosing not to render a field. These responses carry
-the posterior, the shortlist, and which item the engine would have picked — enough to
+Because the alternative is a caller choosing not to render a field. These carry the
+posterior, the shortlist, and which item the engine would have picked — enough to
 reverse-engineer difficulty, and enough for a candidate to tell how they are doing while
-they are still being measured. `AUTHOR_DIAGNOSTICS_ENABLED` is off by default, and the
-service refuses rather than returning a thinner body: a 404 tells an operator the feature
-is off, an empty object tells them nothing.
+they are still being measured.
+
+`AUTHOR_DIAGNOSTICS_ENABLED` is off by default, and the facade RAISES rather than returning
+a thinner object: `DiagnosticsDisabled` tells an operator the feature is off, an empty
+object tells them nothing. Refusing also means "is this safe to return" is never a
+judgement call made at a call site.
 """
 
 from __future__ import annotations

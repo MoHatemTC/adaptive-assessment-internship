@@ -1,25 +1,25 @@
-"""The competency-graph surface: node state in, a delta out. No session store.
+"""The propagation surface: node state in, a delta out. No session store.
 
-WHY THIS SERVICE IS STATELESS
+WHY PROPAGATION HOLDS NOTHING
 
-`MIGRATION.md` planned `POST /sessions/{id}/evidence`, with the graph owning per-session
-node state. It does not, and the reason is the property the whole architecture rests on:
-the orchestrator is stateless between calls, so an assessment can be persisted between
-requests and resumed on a different worker. That only works while `AssessmentState` is the
-single source of truth. A graph service holding its own copy of the same session's node
-state creates a second one, and the two disagree the first time a request is retried.
+The graph layer was once planned to own per-session node state. It does not, and the reason
+is the property the whole design rests on: the orchestrator is stateless between calls, so
+an assessment can be persisted between them and resumed in a different process. That only
+works while `AssessmentState` is the single source of truth. A graph holding its own copy of
+the same session's node state creates a second one, and the two disagree the first time a
+call is retried.
 
-So the caller sends what it knows and gets back what changed. The service holds nothing, it
-scales horizontally for free, and a restart loses nothing.
+So the caller passes what it knows and gets back what changed. That was true when
+propagation was a service and it is true now that it is a function — which is why collapsing
+one into the other changed nothing here.
 
 WHAT COMES BACK CANNOT BE MISTAKEN FOR EVIDENCE
 
 `InferredSignalDTO` has no `score` and no `weight` field. A deduction FROM a response is
 not a second response; multiplying it into a likelihood counts one answer twice, and the
 damage lands on the standard error, which is what the assessment stops on. Because the type
-has no such field, a compromised or buggy graph service cannot hand the orchestrator
-something it could mistake for evidence — the boundary is enforced by the contract rather
-than by a reviewer noticing.
+has no such field, a buggy graph cannot hand the loop something it could mistake for
+evidence — the boundary is enforced by the contract rather than by a reviewer noticing.
 """
 
 from __future__ import annotations

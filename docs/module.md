@@ -125,8 +125,17 @@ cat = AssessmentModule(CatConfig(
 
 The engine reads its policy from a module-level singleton, imported by name at a hundred
 call sites. `CatConfig` is applied onto it rather than threaded through the engine, and the
-cost is stated rather than hidden: **two `AssessmentModule`s cannot disagree about what a
-candidate is scored by.**
+cost is stated rather than hidden — but it is narrower than "one configuration per process",
+and the difference decides whether a host can run two modules at once:
+
+| | |
+|---|---|
+| **measurement policy** | SHARED. A second module that disagrees raises `ConfigConflict`. |
+| **topology** | PER INSTANCE. Store locations, which surfaces are open, upload ceilings. |
+
+So a host CAN run a candidate-facing module with diagnostics off beside an authoring one
+with them on, reading different bank stores — it cannot run two that disagree about the
+stopping rule. `tests/test_config_guard.py` holds both halves to that.
 
 A second module whose MEASUREMENT settings differ raises `ConfigConflict`. That is the
 failure `engine_config_fingerprint` was written for — a grader running `CODE_APPROACH=C`
@@ -169,7 +178,7 @@ than a maintenance one. `cat_engine/evaluation/` drives the same objects a host 
   live assessment is running against. Carried forward rather than introduced; the host owns
   it now, which is the right place for it. `ADMIN_API_ENABLED=false` and
   `INGEST_API_ENABLED=false` close the write paths.
-- **One measurement policy per process**, as above.
+- **One measurement policy per process**, as above. Topology is per instance.
 - The **latency budget** the split had to respect no longer applies: there are no hops. The
   90-minute cap and the per-response budgets in [architecture.md](architecture.md) are
   unchanged, because they were always about grading and selection rather than transport.

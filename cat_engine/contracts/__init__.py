@@ -1,27 +1,27 @@
-"""The envelope types every service speaks.
+"""The types a host receives.
 
 ONE PACKAGE, VERSIONED, OWNED BY NOBODY IN PARTICULAR
 
-Deliberately independent of the engine, and it stays that way even though every service now
-installs the engine as a library. Two reasons:
+Deliberately independent of `engine`, and it stays that way now that both live in one
+package. Two reasons:
 
   - The wire contract is not the internal one. `BankItemRef` deliberately OMITS the payload
     that `BankItem` carries, and that omission is the security boundary of the whole bank
     surface. Re-exporting the engine's schema would delete it.
   - A consumer that is not this engine — a frontend's generated client, another team's
-    service — should be able to depend on these shapes without pulling in numpy, a sandbox
-    client and 600 KB of question banks.
+    service, a host's own routes — should be able to depend on these shapes without pulling
+    in numpy, a sandbox client and 600 KB of question banks.
 
 The duplication is therefore permanent rather than transitional, and it is policed:
-`cat_engine/tests/test_contract_parity.py` asserts that the types which genuinely do mirror
+`tests/test_contract_parity.py` asserts that the types which genuinely do mirror
 engine types still agree field for field.
 
 WHY `GradedOutcome` IS THE NARROW WAIST
 
 An MCQ answer, a code submission and a spoken response are graded by completely different
 machinery and end in the same statement: *this response says this much about this variable*.
-That is the only thing the measurement layer knows about, and it is why a grader can be a
-separate service without the orchestrator learning what a test case is.
+That is the only thing the measurement layer knows about, and it is why a modality can be
+added without the loop learning what a test case is.
 """
 
 from .assessment import (
@@ -97,7 +97,7 @@ from .scope import (
 
 # Grouped by surface rather than sorted. The comments are the point: they say which part of
 # the system each type belongs to, and alphabetising would scatter every group.
-__all__ = [  # noqa: RUF022
+__all__ = [
     "SCHEMA_VERSION",
     # the narrow waist
     "CatParameters",

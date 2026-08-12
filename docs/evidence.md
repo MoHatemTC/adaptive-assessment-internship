@@ -3,7 +3,8 @@
 Why the defaults are what they are. Everything here is simulated: **no real candidate has
 sat this assessment**, and the un-run layers are listed at the end.
 
-Full study: `BC_EVALUATION_RESULTS.md` and `BC_ARCHITECTURE_PROPOSAL.md` on the
+Full study, external to this repository: the B/C evaluation results and architecture
+proposal on the
 `eval/bc-graph-augmented` branch, with the harness in `backend/evaluation/`.
 
 ## Design

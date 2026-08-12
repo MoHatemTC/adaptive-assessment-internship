@@ -2,7 +2,7 @@
 
 THE ONLY MODULE HERE THAT IMPORTS THE ENGINE
 
-`adaptive_store.sql` is deliberately engine-free — psycopg and nothing else — so the schema
+`stores.sql` is deliberately engine-free — psycopg and nothing else — so the schema
 and the queries can be read, tested and reused without pulling in numpy and 600 KB of
 question banks. This module is the adapter, and it follows the same rule
 the in-process bank repository follows for the same reason.
@@ -273,7 +273,7 @@ def _wait_for(sql: SqlBankStore, *, attempts: int = 30, delay: float = 1.0) -> N
         try:
             with sql.connect():
                 return
-        except Exception as exc:  # noqa: BLE001 - any connection failure is worth retrying
+        except Exception as exc:
             last = exc
             if attempt == 0:
                 logger.info("waiting for the bank database to accept connections")

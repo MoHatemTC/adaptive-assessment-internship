@@ -3,8 +3,10 @@
 What the graph is allowed to do, what it is not, and the decisions that are easy to
 re-break. Written because three of them had already been broken once, silently.
 
-Implements `CAT_DAG_FULL_IMPLEMENTATION_ARCHITECTURE.md` as amended by
-`CAT_DAG_Architecture_Review.md`. Where they conflict, the review wins.
+Implements an external architecture document as amended by its review; where they
+conflicted, the review won. **Neither is checked in.** What is, and what governs the
+behaviour described below, is [propagation-policy.md](propagation-policy.md) for the
+configuration and [evidence.md](evidence.md) for the measurements behind the defaults.
 
 ---
 

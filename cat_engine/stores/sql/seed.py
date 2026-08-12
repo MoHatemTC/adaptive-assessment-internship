@@ -15,7 +15,7 @@ stores those bytes, and the hash is taken over them exactly as `BankStore.versio
 IDEMPOTENT ON (bank_id, version)
 
 Running it twice is a no-op, because the version IS the content. That matters more than it
-sounds: this runs at service startup, and a seeder that had to be run exactly once would be
+sounds: this runs when a module is built, and a seeder that had to be run exactly once would be
 a deployment step somebody eventually forgets or repeats.
 """
 

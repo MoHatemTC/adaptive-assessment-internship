@@ -96,7 +96,7 @@ def parse_bank(raw: bytes) -> tuple[list[dict], str, dict]:
         # turn a bad upload into a REJECTION RECEIPT naming what is wrong. A TypeError
         # would escape that catch and reach the caller as a crash, which is the opposite
         # of what an authoring tool needs.
-        raise ValueError(  # noqa: TRY004
+        raise ValueError(
             "expected a bank object with an `items` list, or a bare list of items"
         )
 

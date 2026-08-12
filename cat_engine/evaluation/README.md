@@ -1,7 +1,10 @@
 # B/C evaluation harness
 
-Executable core of `APPROACH_B_C_EVALUATION_METRICS_TEST_PLAN.md`, as amended by
-`BC_Test_Plan_Validation_and_Amendments.md`.
+Executable core of the B/C evaluation test plan and its amendments. **Those two documents
+are external to this repository** — what is checked in is the pre-registration they became,
+in [`docs/preregistration/`](../../docs/preregistration/), and the findings in
+[`reports/`](reports/README.md). Read `C_Shipped_Propagation_Test_Plan.md` for the design
+that was signed before any data, and `S1_Screening_Report.md` for what it found.
 
 The same file set ships on both approach branches. Everything Approach C adds is
 feature-detected, so one runner produces joinable records from an engine that has a

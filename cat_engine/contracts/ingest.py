@@ -1,11 +1,13 @@
-"""The bank-ingest surface: one uploaded file becomes a registered bank.
+"""The ingest surface: one uploaded file becomes a registered bank.
 
 ONE FILE, AND IT IS THE BANK
 
 An author uploads questions. They do not author a competency graph and are never asked for
-one, so the graph is DERIVED from the items — see `services/bank-ingest/service/derive.py`.
-That is the difference between this and `bank-registry`'s write path, where items and graph
-arrive together and a bank without its graph is refused.
+one, so the graph is DERIVED from the items — see `ingest/derive.py`, which is where that
+modelling decision lives and the only file that has to change to replace it.
+
+This is the only write path. There was a second once, taking items and an AUTHORED graph
+together; it went with the services, and having one way in is the better arrangement.
 
 THE RECEIPT SAYS WHAT WAS INVENTED ON THE AUTHOR'S BEHALF
 

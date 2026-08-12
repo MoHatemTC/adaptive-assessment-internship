@@ -11,10 +11,10 @@ forward.
 
 WHY `/grade/open` EVALUATES AS WELL AS GRADES
 
-`MIGRATION.md` planned for a pre-evaluated rubric package, because in the monolith the
+The original plan was a pre-evaluated rubric package, because in the monolith the
 evaluation ran in `app.main` before the sync grading path. There is no `app.main` any
 more, and rubric evaluation is a model call — so putting it anywhere but here would give
-a second service egress, which is most of what splitting the grader out bought.
+a second component with egress, which is most of what having one grader buys.
 """
 
 from __future__ import annotations
@@ -86,7 +86,7 @@ class TranscribeRequest(BaseModel):
 
     item_id: str
     filename: str = "answer.wav"
-    #: base64. Bytes rather than a URL because the grader is the only service with egress,
+    #: base64. Bytes rather than a URL because the grader is the only component with egress,
     #: and giving it one more reason to fetch from an arbitrary host is not a trade worth
     #: making for a payload this size.
     audio_base64: str

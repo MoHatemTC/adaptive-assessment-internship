@@ -1,4 +1,4 @@
-"""Wire types. Deliberately anaemic — no behaviour, no imports from any service."""
+"""Wire types. Deliberately anaemic — no behaviour, and no imports from anything above."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 # described that body describe nothing. A removal, so the version moves; `scope` on
 # `CreateAssessmentRequest` and `status` on `BankItemRef` arrived in the same release and
 # are additive, so they did not.
-# Every service reports the version it was built against on `GET /health`, so a mismatch is
+# Reported by the module and by any host built against it, so a mismatch is
 # visible in a dashboard rather than in a decoding error three hops away.
 SCHEMA_VERSION = "1.1.0"
 
@@ -24,7 +24,7 @@ class CatParameters(BaseModel):
     """Item parameters ON THETA, for every modality.
 
     The invariant the whole design rests on: a code question and a multiple-choice question
-    are comparable because both are calibrated to the same latent scale. A service that
+    are comparable because both are calibrated to the same latent scale. A caller that
     returns items without these is not a bank.
     """
 

@@ -94,8 +94,10 @@ that actually administers spoken items.
 
 ## Consequences
 
-- One measurement policy per process. `CatConfig` is applied onto a module-level singleton,
-  and a second module that disagrees raises rather than silently rescoring the first.
+- One measurement policy per process — but only that. `CatConfig` is applied onto a
+  module-level singleton, and a second module that disagrees about MEASUREMENT raises
+  rather than silently rescoring the first; two modules differ freely on topology, which is
+  the case a host actually hits.
 - The latency budget the split had to respect is moot; there are no hops.
 - 15,551 lines removed: seven `main.py`, seven Dockerfiles, a compose file, an HTTP client
   layer, a FastAPI runtime package, and the tests that asserted on ports and specs.

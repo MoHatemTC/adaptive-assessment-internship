@@ -1,13 +1,13 @@
 """The wire types. These are the reviewable artefact, so they are tested hardest.
 
-`adaptive_contracts` is the only code here that every service depends on and the only code
-whose meaning survives the migration. A bug in a 501 stub costs nothing; a bug in an
-envelope is a bug in every service that will ever speak it.
+`contracts` is what a host actually receives, and the only code whose meaning has survived
+two migrations unchanged. A bug in an adapter costs one caller; a bug in an envelope is a
+bug in everything that will ever speak it.
 
 The most important test in this file is `TestInferredSignalCannotCarryEvidence`. The whole
 decomposition rests on one rule — only a directly observed response may move a posterior —
-and the contract is what enforces it. If `InferredSignalDTO` ever grows a `score`, a graph
-service can hand the orchestrator something it will mistake for evidence, and the failure
+and the contract is what enforces it. If `InferredSignalDTO` ever grows a `score`, the graph
+can hand the loop something it will mistake for evidence, and the failure
 lands on the standard error, which is what the assessment stops on.
 """
 

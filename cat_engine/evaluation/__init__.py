@@ -1,7 +1,8 @@
 """The B-vs-C evaluation harness.
 
-Implements the executable core of `APPROACH_B_C_EVALUATION_METRICS_TEST_PLAN.md` as
-amended by `BC_Test_Plan_Validation_and_Amendments.md`.
+The executable core of the B/C evaluation test plan and its amendments. Those two
+documents are external to this repository; the pre-registration they became is checked in
+under `docs/preregistration/`, and the findings are in `evaluation/reports/`.
 
 WHY THIS IS A SEPARATE PACKAGE AND NOT A TEST
 

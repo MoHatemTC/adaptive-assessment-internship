@@ -107,7 +107,7 @@ PREREQUISITE = "PREREQUISITE"
 def main_of(variable: str) -> str:
     """`C1.1` -> `C1`. The engine's own rule, copied rather than imported.
 
-    `competency.main_competency` is in the orchestrator slice, which this service may not
+    `competency.main_competency` lives in the orchestrator, which ingest deliberately does not
     import. One line, and a test asserts the two agree.
     """
     return variable.split(".")[0]
@@ -352,7 +352,7 @@ def derive_graph(
             "Derived from the uploaded bank's items. Node membership comes from the id "
             "prefix, so there are no shared nodes; edge weights come from item "
             "co-measurement, and every prerequisite edge ships inert and unvalidated. "
-            "See services/bank-ingest/service/derive.py."
+            "See cat_engine/ingest/derive.py."
         ),
         "policy": {
             # OFF at the bank level, not only at the deployment level, so a deployment that
