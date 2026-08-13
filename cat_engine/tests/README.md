@@ -62,10 +62,13 @@ topology.
     export BANK_DATABASE_URL=postgresql://... SESSION_DATABASE_URL=postgresql://...
     pytest cat_engine/tests
 
-Every test runs, not just the 75 that are otherwise skipped: **1254 passed, 1 skipped**. The
-remaining skip is data-dependent (no shipped bank has an item measuring two mains). Without
-the DSNs the same suite is 1180 passed, 75 skipped — the skips are the three Postgres-gated
-files.
+Every test runs, not just the 74 that are otherwise skipped. The one remaining skip is
+data-dependent — no shipped bank has an item measuring two mains. Without the DSNs the same
+suite is **1182 passed, 75 skipped**, of 1257 collected.
+
+The last measured Postgres run was 1169 passed, 1 skipped at commit `b964863`. It is quoted
+as history rather than as the current number: 88 tests have been added since, and nobody has
+had a DSN to re-run it against. Run it before trusting a Postgres deployment.
 
 ## Nothing here can spend money
 

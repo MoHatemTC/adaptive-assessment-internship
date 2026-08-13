@@ -161,14 +161,14 @@ ranking: `rarely_selected` (loses *with* loading applied — expected) from `mis
 ## Tests
 
 ```bash
-python -m pytest                                     # 1180 passed, 75 skipped
+python -m pytest                                     # 1182 passed, 75 skipped
 BANK_DATABASE_URL=... SESSION_DATABASE_URL=... \
-  python -m pytest                                   # 1254 passed, 1 skipped
+  python -m pytest                                   # runs the 74 that are otherwise skipped
 ```
 
-One suite, one rootdir. The 75 skips are the three Postgres-gated files; supplying both DSNs
-runs them too and the single remaining skip is data-dependent — no shipped bank has an item
-measuring two mains.
+One suite, one rootdir, 1257 tests collected. The 75 skips are the three Postgres-gated files
+(74 tests) plus one that is data-dependent — no shipped bank has an item measuring two mains.
+Supplying both DSNs runs the 74 and leaves only that one skipped.
 
 ```bash
 ruff check .                                         # All checks passed!
