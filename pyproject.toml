@@ -65,3 +65,70 @@ exclude = ["cat_engine.tests*", "cat_engine.scripts*"]
     "data/voice_rubrics/*.json",
 ]
 "cat_engine.live" = ["static/*"]
+
+[tool.ruff]
+target-version = "py312"
+
+# 100, not 88. The code wraps around 88-90 by hand and its prose comments run to the low
+# 90s; three lines in the whole tree exceed 100. Setting 88 would flag 1,627 lines and the
+# only way to clear it is a mass reflow that rewrites git blame across the repository and
+# buries every real finding under whitespace. The limit is set where the code actually is.
+line-length = 100
+
+exclude = [".venv", ".venv-cat", "build", "dist", "graphify-out", "*.egg-info"]
+
+[tool.ruff.lint]
+# Chosen to match what this codebase already does rather than to impose a house style:
+# every rule below had at most a handful of violations when it was switched on, and each
+# one is fixed rather than ignored.
+select = [
+    "F",      # pyflakes — undefined names, unused imports
+    "E", "W", # pycodestyle
+    "I",      # import sorting
+    "UP",     # pyupgrade — this is a 3.12-only package
+    "B",      # bugbear
+    "C4",     # comprehensions
+    "SIM",    # simplify
+    "PIE",
+    "RUF",
+    "DTZ",    # naive datetimes; sessions carry deletion deadlines
+    "BLE",    # blind except
+    "S",      # bandit — this module runs untrusted candidate code
+    "EXE",    # shebang/executable-bit agreement
+    "TRY004", # raise TypeError for a type check, not something else
+]
+
+ignore = [
+    # THE REPOSITORY LIVES ON AN exFAT VOLUME, WHICH HAS NO PERMISSION BITS.
+    #
+    # Every file in the tree therefore reads as mode 0755, and EXE002 fires on all 194 of
+    # them. It is reporting the mount, not the code: `chmod -x` cannot stick, so there is no
+    # fix, and 194 unfixable findings is how a linter gets turned off entirely. EXE001 and
+    # EXE003 (a shebang that is wrong, or on a non-executable file) stay on — those are
+    # about file CONTENT and are still meaningful here.
+    "EXE002",
+    # Assert is how a test states its claim, and this package's runtime asserts are
+    # invariant checks in code paths where the alternative is a silent wrong number.
+    "S101",
+    # `random` is used for exposure control and item shuffling, never for anything
+    # security-bearing. The one stream that must not be predictable — selection — uses
+    # `numpy.random.default_rng` seeded from OS entropy, which S311 does not flag.
+    "S311",
+]
+
+# Typography this codebase uses on purpose. The en dash punctuates its prose, and the true
+# MINUS SIGN appears in the formulae the docstrings carry — `z = √w·(s − p̄)/√(p̄(1−p̄))` is
+# the person-fit residual as written in the literature, and replacing it with a hyphen to
+# satisfy a confusable check would make the maths worse to read for no reader's benefit.
+allowed-confusables = ["–", "−", "·"]
+
+[tool.ruff.lint.per-file-ignores]
+# A test's whole job is to reach past a public surface and assert on what it finds.
+"cat_engine/tests/*" = [
+    "S105", "S106",  # hardcoded "passwords" in fixtures are fixture data
+    "S108",          # /tmp paths in temporary-directory tests
+    "B011",          # `assert False` is a legitimate way to fail a branch
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["cat_engine"]

@@ -212,7 +212,7 @@ class TestInfrastructureFailure:
         # infrastructure failure does to an estimate, not which item selection happened to
         # offer. Every variable carrying code items also carries MCQ ones, so waiting for
         # the queue to serve a code item would make the test depend on the ranking.
-        code_item = [i for i in bank.all_items() if i.modality == "code"][0]
+        code_item = next(i for i in bank.all_items() if i.modality == "code")
         code_main = code_item.measures[0].variable.split(".")[0]
 
         state = engine.begin([code_main])
@@ -232,7 +232,9 @@ class TestGrader:
         item = next(i for i in bank.all_items() if i.modality == "mcq")
         grader = GraderAgent()
         correct = grader.grade(item, int(item.payload["answer_index"]))
-        wrong = grader.grade(item, (int(item.payload["answer_index"]) + 1) % len(item.payload["options"]))
+        wrong = grader.grade(
+            item, (int(item.payload["answer_index"]) + 1) % len(item.payload["options"])
+        )
         assert correct.outcomes[0]["score"] == 1.0
         assert wrong.outcomes[0]["score"] == 0.0
 

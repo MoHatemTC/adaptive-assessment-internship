@@ -186,8 +186,24 @@ BAND_LABELS = {
 # instrument cannot resolve a tenth of a logit at six to twelve observations; claiming a
 # level that fine was a claim about precision nobody had.
 #
-# Near a cut point no width helps much (0.569 at 1.6) — a candidate sitting on a boundary
-# is genuinely between two levels. `p_reported_band` in the report says so.
+# Near a cut point no width helps much — a candidate sitting on a boundary is genuinely
+# between two levels — and it is WORSE THAN ONE NUMBER SUGGESTS, because it is asymmetric.
+# Re-measured on this grid at the SE target:
+#
+#     theta on a cut    P(reported band correct)
+#     -2.4, -0.8        0.570
+#     +0.8, +2.4        0.427
+#
+# `ability_band` reports the band containing the point estimate, and `np.digitize` is
+# right-open, so a boundary candidate is placed in the band ABOVE the cut — which is the
+# band their posterior has less than half its mass in whenever the cut is above the middle
+# of the scale. Deliberately left as it is rather than tuned: any tie-break at a boundary is
+# arbitrary, and the honest fix is not a better rule but the two fields the report already
+# carries. `p_reported_band` says how likely the reported level is, and `most_probable_band`
+# names the level with the most mass when that is a different one.
+#
+# At a band CENTRE the five levels run 0.850, 0.850, 0.850 for the interior and 0.894/0.947
+# for the unbounded ends — mean 0.878. Within-one-level is 1.000 at every centre.
 BAND_WIDTH = 1.6
 BAND_CUTS: tuple[float, ...] = (-2.4, -0.8, 0.8, 2.4)
 

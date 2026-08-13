@@ -6,6 +6,8 @@ rather than sampled. Several of them encode a defect that reached a live session
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
 from cat_engine.engine.services.code_adaptive.irt import (
@@ -73,7 +75,7 @@ def test_posterior_survives_large_parameters():
     """
     grid = beta_posterior_grid(60.0, 25.0)
     assert sum(grid) == pytest.approx(1.0, abs=1e-9)
-    grid_mean = sum(m * w for m, w in zip(MASTERY_GRID, grid))
+    grid_mean = sum(m * w for m, w in zip(MASTERY_GRID, grid, strict=True))
     assert grid_mean == pytest.approx(posterior_mean(60.0, 25.0), abs=0.01)
     assert sum(1 for w in grid if w > 1e-6) > 5  # not degenerate
 
@@ -119,12 +121,51 @@ def test_unmeasured_competency_has_no_level():
 
 @pytest.mark.parametrize(
     "mastery,expected_level",
-    [(0.10, 1), (0.30, 2), (0.50, 3), (0.70, 4), (0.90, 5), (1.0, 5)],
+    [(0.05, 1), (0.20, 2), (0.50, 3), (0.80, 4), (0.95, 5), (1.0, 5)],
 )
 def test_bands_cover_the_whole_scale(mastery, expected_level):
     level, band = mastery_band(mastery, observed=True)
     assert level == expected_level
     assert band != "Not assessed"
+
+
+def test_the_five_bands_are_the_theta_engine_s_five_bands():
+    """One ability continuum, one set of five bands, whichever engine reports it.
+
+    The two used to be different fives. `BANDS` was equal fifths of [0, 1] and `BAND_CUTS`
+    cut theta at (-2.4, -0.8, 0.8, 2.4), while `orchestrator/calibration.py` declares the
+    scales logit-linked — so the same candidate was banded differently over 35.2% of
+    [-4, 4], Proficient by one engine and Expert by the other at theta 1.5.
+
+    Swept rather than spot-checked, and every exact cut point is included: the first
+    attempt at this fix rounded the derived cuts to four places, which moved two of the
+    four the wrong side of the boundary and left a candidate sitting exactly on a cut
+    disagreeing with themselves.
+
+    The grid is `(i - 2000) / 500` rather than `-4.0 + i * 0.002` so that a cut lands on
+    the same double as its literal. The accumulating form puts 0.8 one ulp low, and sigmoid
+    maps that ulp onto the cut's own double — so the two engines were compared either side
+    of a boundary neither of them could represent as distinct. That is a property of binary
+    floats, not of the calibration, and a sweep that trips over it reports a defect that is
+    not there.
+    """
+    from cat_engine.engine.services.adaptive.irt import BAND_CUTS, ability_band
+
+    def to_mastery(theta: float) -> float:
+        return 1.0 / (1.0 + math.exp(-theta))
+
+    thetas = [(i - 2000) / 500 for i in range(4001)] + list(BAND_CUTS)
+    disagreeing = [
+        theta
+        for theta in thetas
+        if ability_band(theta)[0] != mastery_band(to_mastery(theta), observed=True)[0]
+    ]
+    assert not disagreeing, (
+        f"{len(disagreeing)} points on theta are banded differently by the two engines, "
+        f"first at {disagreeing[0]:.4f}. Both report a 1-5 level for one ability; two "
+        "definitions of where those levels begin means the level depends on which engine "
+        "a host happened to read."
+    )
 
 
 class TestStopRuleCalibration:

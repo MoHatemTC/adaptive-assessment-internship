@@ -106,7 +106,7 @@ class WeightProfile:
             deterministic = {s: base.get(s, 0.0) for s in DETERMINISTIC_SOURCES}
             total = sum(deterministic.values())
             if total <= 0.0:
-                deterministic = {s: 1.0 for s in _plausible_sources(criterion)}
+                deterministic = dict.fromkeys(_plausible_sources(criterion), 1.0)
                 total = sum(deterministic.values())
 
             weights = {

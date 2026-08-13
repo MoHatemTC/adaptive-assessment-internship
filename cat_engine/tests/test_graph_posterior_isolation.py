@@ -84,7 +84,7 @@ def test_apply_outcome_refuses_an_inferred_signal() -> None:
 async def _run_session(orchestrator, targets: list[str], *, max_steps: int = 20):
     from cat_engine.tests.test_orchestration_flow import answer_for
 
-    state = orchestrator.begin(targets, intake={t: 3 for t in targets})
+    state = orchestrator.begin(targets, intake=dict.fromkeys(targets, 3))
     rng = np.random.default_rng(11)
     for _ in range(max_steps):
         state = await orchestrator.fill_queue(state, use_llm=False, rng=rng)

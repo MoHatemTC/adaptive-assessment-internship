@@ -154,7 +154,10 @@ class TestIntegrityCap:
         """Competency evidence is projected from criteria, so capping the headline alone
         would leave the learner model updating as though competence had been shown."""
         signals = analyse("def f(xs):\n    return [1, 2, 3]\n", "f")
-        scores = [CriterionScore("functional_correctness", 1.0, {}), CriterionScore("code_quality", 0.9, {})]
+        scores = [
+            CriterionScore("functional_correctness", 1.0, {}),
+            CriterionScore("code_quality", 0.9, {}),
+        ]
         capped, reason = scoring.apply_integrity_cap(scores, signals)
         assert all(c.score <= 0.25 for c in capped)
         assert reason

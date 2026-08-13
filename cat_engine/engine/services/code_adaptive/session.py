@@ -45,7 +45,11 @@ from cat_engine.engine.schemas.code_adaptive import (
 )
 from cat_engine.engine.services.code_adaptive import scoring
 from cat_engine.engine.services.code_adaptive.bank import QuestionRepository
-from cat_engine.engine.services.code_adaptive.competency import CompetencyState, LearnerModel, update
+from cat_engine.engine.services.code_adaptive.competency import (
+    CompetencyState,
+    LearnerModel,
+    update,
+)
 from cat_engine.engine.services.code_adaptive.evidence import normalize
 from cat_engine.engine.services.code_adaptive.execution import run_submission
 from cat_engine.engine.services.code_adaptive.llm_evaluator import LLMEvaluation

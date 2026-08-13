@@ -26,6 +26,7 @@ from __future__ import annotations
 import dataclasses
 import sys
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -185,7 +186,7 @@ class TestTheInferredSignalStillCannotCarryEvidence:
     type and then widens the DTO to match".
     """
 
-    FORBIDDEN = {"score", "weight"}
+    FORBIDDEN: ClassVar[set[str]] = {"score", "weight"}
 
     def test_neither_definition_has_a_score_or_a_weight(self):
         assert not (field_names(wire.InferredSignalDTO) & self.FORBIDDEN)

@@ -15,6 +15,7 @@ runs a turn-based Live conversation that still feels human↔human:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import uuid
 from dataclasses import dataclass, field
@@ -406,13 +407,11 @@ class ConversationalLiveSession:
                         turn_complete=True,
                     )
                     # Drain a short goodbye if it arrives quickly.
-                    try:
+                    with contextlib.suppress(TimeoutError):
                         await asyncio.wait_for(
                             self._collect_model_audio(role_label="interviewer"),
                             timeout=8.0,
                         )
-                    except asyncio.TimeoutError:
-                        pass
                 except Exception:
                     logger.debug("live finish cue failed", exc_info=True)
         finally:

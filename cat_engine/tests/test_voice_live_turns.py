@@ -30,9 +30,11 @@ class TestObservabilitySession:
         Wrapping the `yield` in `except Exception` and yielding again turns any failure
         inside the block into `RuntimeError: generator didn't stop after throw()`.
         """
-        with pytest.raises(ValueError, match="the real error"):
-            with observability.session("s", stage="test"):
-                raise ValueError("the real error")
+        with (
+            pytest.raises(ValueError, match="the real error"),
+            observability.session("s", stage="test"),
+        ):
+            raise ValueError("the real error")
 
     def test_a_broken_collector_does_not_skip_the_work(self, monkeypatch) -> None:
         def explode(**_kwargs):
@@ -55,9 +57,11 @@ class TestObservabilitySession:
         monkeypatch.setattr(observability, "_state", True)
         monkeypatch.setattr(observability, "_propagate", explode)
 
-        with pytest.raises(ValueError, match="the real error"):
-            with observability.session("s", stage="test"):
-                raise ValueError("the real error")
+        with (
+            pytest.raises(ValueError, match="the real error"),
+            observability.session("s", stage="test"),
+        ):
+            raise ValueError("the real error")
 
     def test_a_collector_that_fails_on_exit_cannot_suppress_the_body(
         self, monkeypatch
@@ -74,9 +78,11 @@ class TestObservabilitySession:
         monkeypatch.setattr(observability, "_state", True)
         monkeypatch.setattr(observability, "_propagate", lambda **kw: Failing())
 
-        with pytest.raises(ValueError, match="the real error"):
-            with observability.session("s", stage="test"):
-                raise ValueError("the real error")
+        with (
+            pytest.raises(ValueError, match="the real error"),
+            observability.session("s", stage="test"),
+        ):
+            raise ValueError("the real error")
 
 
 class TestGraderSignature:

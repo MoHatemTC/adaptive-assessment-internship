@@ -170,6 +170,16 @@ One suite, one rootdir. The 75 skips are the three Postgres-gated files; supplyi
 runs them too and the single remaining skip is data-dependent — no shipped bank has an item
 measuring two mains.
 
+```bash
+ruff check .                                         # All checks passed!
+```
+
+Configured in `pyproject.toml` under `[tool.ruff]`. The rule set was chosen to match what
+this codebase already does rather than to impose a house style, so it is clean rather than
+mostly clean — every remaining suppression names the reason on the line above it. `EXE002` is
+the one rule ignored wholesale: the repository sits on an exFAT volume with no permission
+bits, so all 194 files read as executable and the finding is about the mount, not the code.
+
 **Nothing here can spend money.** The sandbox and the model are stubbed in `conftest.py`, so
 an accidental `pytest` makes no billed call because there is no code path to one. The suite
 opens zero non-loopback sockets even with live credentials in the environment.

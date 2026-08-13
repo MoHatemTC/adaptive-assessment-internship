@@ -45,7 +45,6 @@ def store():
 
 def a_session(session_id: str = "asmt_test000001", *, seed: int = 7):
     from cat_engine.engine.schemas.orchestration import AssessmentState
-
     from cat_engine.stores import Session
 
     return Session(
@@ -117,8 +116,7 @@ class TestASessionOutlivesItsProcess:
     def test_a_scope_survives_the_round_trip(self, store, sessions):
         """The allowlist a candidate began under. A resumed session that lost it would widen
         silently to the whole bank — an assessment covering more than the one that started."""
-        from cat_engine.contracts import ScopeManifest, ScopeMainDTO
-
+        from cat_engine.contracts import ScopeMainDTO, ScopeManifest
         from cat_engine.stores import InMemorySessionStore
 
         session = a_session()
@@ -147,9 +145,8 @@ class TestTwoWritersCannotBothWin:
     nobody should hold anyway."""
 
     def test_the_second_writer_is_refused(self, store, sessions):
-        from cat_engine.stores.sql import SessionConflict
-
         from cat_engine.stores import InMemorySessionStore
+        from cat_engine.stores.sql import SessionConflict
 
         session = a_session()
         sessions.add(session)

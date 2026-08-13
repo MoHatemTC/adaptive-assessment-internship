@@ -8,6 +8,7 @@ permission system that has not been tested.
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 
@@ -233,7 +234,9 @@ class TestLoadingFromDisk:
                         {"competency_id": "A", "node_type": "sub_competency"},
                         {"competency_id": "B", "node_type": "sub_competency"},
                     ],
-                    "edges": [{"from": "A", "to": "B", "relation": "PREREQUISITE", "strength": 0.6}],
+                    "edges": [
+                        {"from": "A", "to": "B", "relation": "PREREQUISITE", "strength": 0.6}
+                    ],
                 }
             ),
             encoding="utf-8",
@@ -273,7 +276,7 @@ class TestLoadingFromDisk:
             ),
             encoding="utf-8",
         )
-        with pytest.raises(CompetencyGraphValidationError, match="graph.json"):
+        with pytest.raises(CompetencyGraphValidationError, match=re.escape("graph.json")):
             load_and_validate_graph(path)
 
 

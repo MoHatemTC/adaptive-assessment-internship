@@ -11,8 +11,8 @@ import json
 from pathlib import Path
 from typing import Protocol
 
-from cat_engine.engine.config.settings import settings
 from cat_engine.engine.config.paths import DATA_DIR
+from cat_engine.engine.config.settings import settings
 from cat_engine.engine.schemas.adaptive import Item
 from cat_engine.engine.services.adaptive.irt import (
     DIFFICULTY_TO_B,

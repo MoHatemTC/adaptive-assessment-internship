@@ -41,6 +41,12 @@ from __future__ import annotations
 import math
 from typing import Literal
 
+# The theta engine's band definition. Imported rather than mirrored: five bands on two
+# scales that the calibration module declares logit-linked must be the SAME five bands, and
+# the only way to guarantee that is to have one definition. `adaptive.irt` imports numpy and
+# nothing else, so this direction is acyclic and reaches no I/O.
+from cat_engine.engine.services.adaptive.irt import BAND_CUTS, BAND_LABELS
+
 # Mastery grid for posterior-weighted quantities. 41 points over [0, 1], mirroring the MCQ
 # engine's 41 points over [-4, 4]: fine enough that discretisation error is far below any
 # realistic standard error, coarse enough to be microseconds.
@@ -62,12 +68,38 @@ SCALING = 1.7
 
 # Mastery bands, as reported to a candidate. Derived from the posterior on demand and
 # never stored, so a band can never drift from the estimate it describes.
+#
+# ONE FIVE-BAND DEFINITION, EXPRESSED ON THIS ENGINE'S SCALE.
+#
+# These used to be equal fifths of [0, 1] — 0.20, 0.40, 0.60, 0.80 — while the theta engine
+# cut at (-2.4, -0.8, 0.8, 2.4). Both are five bands, and they are not the same five:
+# `orchestrator/calibration.py` declares the two scales logit-linked (b_theta =
+# logit(difficulty)), so the equal-fifths cuts sit at theta (-1.386, -0.405, 0.405, 1.386)
+# and the two schemes disagree over **35.2% of [-4, 4]**. A candidate at theta 1.5 was
+# Proficient by one engine and Expert by the other, with nothing in either report saying
+# which scale it had been banded on.
+#
+# So they are DERIVED from `BAND_CUTS` through the mapping that defines the relationship,
+# rather than restated as literals that were already 35% apart. The labels come from the
+# same place for the same reason. Nothing here can drift again without `BAND_CUTS` moving,
+# which is the intent `competency.CompetencyState.level` documented and did not have:
+# "thresholds live in irt.BANDS so a band can never disagree with the measurement model
+# that produced it".
+#
+# The cut is the mastery at which the band OPENS, and `mastery_band` compares with `<`, so
+# the last entry is the open top: mastery is bounded above by 1.0 and 1.01 is unreachable.
+#
+# NOT ROUNDED, and the four decimal places it would have cost are worth more than they look.
+# sigmoid(-2.4) is 0.0831727; rounded to 0.0832 it sits ABOVE the true cut, so a candidate
+# exactly on the boundary fell to Novice here while `ability_band` — which is right-open and
+# puts a theta on a cut in the higher band — called them Developing. Two of the four cuts
+# rounded the wrong way, which is the whole disagreement this constant exists to remove.
 BANDS: tuple[tuple[float, int, str], ...] = (
-    (0.20, 1, "Novice"),
-    (0.40, 2, "Developing"),
-    (0.60, 3, "Competent"),
-    (0.80, 4, "Proficient"),
-    (1.01, 5, "Expert"),
+    *(
+        (1.0 / (1.0 + math.exp(-cut)), level, BAND_LABELS[level])
+        for level, cut in enumerate(BAND_CUTS, start=1)
+    ),
+    (1.01, 5, BAND_LABELS[5]),
 )
 
 
@@ -134,7 +166,7 @@ def expected_fisher_information(
     """
     return sum(
         w * fisher_information(m, a, b, loading)
-        for m, w in zip(MASTERY_GRID, posterior)
+        for m, w in zip(MASTERY_GRID, posterior, strict=True)
     )
 
 

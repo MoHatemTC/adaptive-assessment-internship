@@ -66,7 +66,7 @@ class TestFractionalUpdate:
     def test_zero_weight_leaves_the_posterior_untouched(self):
         """An infrastructure failure must move no estimate — from the maths, not a branch."""
         prior = uniform_prior()
-        posterior, theta, se = graded_posterior_update(prior, 1.5, 0.0, 0.25, 0.0, weight=0.0)
+        posterior, _theta, _se = graded_posterior_update(prior, 1.5, 0.0, 0.25, 0.0, weight=0.0)
         assert np.array_equal(prior, posterior)
 
     def test_partial_credit_lands_between_the_two_extremes(self):
@@ -324,7 +324,9 @@ class TestPicker:
     def test_ranking_is_ordered_and_bounded_by_the_shortlist(self, bank, mixed_variable):
         state = variables_module.seed_variable(mixed_variable)
         pool = bank.shortlist(mixed_variable, exclude=set())
-        shortlist, criterion = rank(pool, state, mixed_variable, rng=np.random.default_rng(0), top_k=1)
+        shortlist, criterion = rank(
+            pool, state, mixed_variable, rng=np.random.default_rng(0), top_k=1
+        )
         assert criterion == "KL"
         assert len(shortlist) <= 5
         assert [s for _, s in shortlist] == sorted((s for _, s in shortlist), reverse=True)
@@ -378,7 +380,7 @@ class TestFinalisation:
         monkeypatch.setattr(
             variables_module,
             "band_probability",
-            lambda _state: {level: 0.99 for level in range(1, 6)},
+            lambda _state: dict.fromkeys(range(1, 6), 0.99),
         )
         state = VariableState(
             variable="T1.1", posterior=list(uniform_prior()),
@@ -410,7 +412,7 @@ class TestFinalisation:
         monkeypatch.setattr(
             variables_module,
             "band_probability",
-            lambda _state: {level: 0.99 for level in range(1, 6)},
+            lambda _state: dict.fromkeys(range(1, 6), 0.99),
         )
         state = VariableState(
             variable="PY",

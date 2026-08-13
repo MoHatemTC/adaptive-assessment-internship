@@ -38,8 +38,12 @@ def code_revision() -> str:
     stop a session; an unrecorded revision costs traceability, an exception costs the run.
     """
     try:
+        # `git` off PATH rather than an absolute path: there is no portable one, and the
+        # call is already best-effort — `check=False`, a two-second timeout, and any OSError
+        # swallowed. A wrong or missing `git` costs a blank revision string, which is the
+        # documented outcome for a container that has no git directory either.
         result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
+            ["git", "rev-parse", "HEAD"],  # noqa: S607 - see above
             capture_output=True,
             text=True,
             timeout=2,

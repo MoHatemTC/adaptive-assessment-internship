@@ -293,7 +293,7 @@ class TestIsolation:
         from cat_engine.engine.services.orchestrator import registry
 
         orchestrator = orchestrator_for("AIE")
-        state = orchestrator.begin(MAINS, intake={m: 3 for m in MAINS})
+        state = orchestrator.begin(MAINS, intake=dict.fromkeys(MAINS, 3))
         graph = registry.get_graph_service("AIE")
 
         state = state.model_copy(
@@ -324,7 +324,7 @@ class TestIsolation:
 
         async def run() -> list[tuple]:
             orchestrator = orchestrator_for("AIE")
-            state = orchestrator.begin(MAINS, intake={m: 3 for m in MAINS})
+            state = orchestrator.begin(MAINS, intake=dict.fromkeys(MAINS, 3))
             rng = np.random.default_rng(11)
             for _ in range(6):
                 state = await orchestrator.fill_queue(state, use_llm=False, rng=rng)
@@ -380,7 +380,7 @@ class TestEndToEnd:
             if i.modality == "code" and i.measures[0].variable == "C1.6"
         )
 
-        state = orchestrator.begin(MAINS, intake={m: 3 for m in MAINS})
+        state = orchestrator.begin(MAINS, intake=dict.fromkeys(MAINS, 3))
         state, graded = orchestrator.record_response(
             state, item, "def solve(*a, **k):\n    return None\n"
         )

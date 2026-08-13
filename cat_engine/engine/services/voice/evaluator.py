@@ -203,7 +203,7 @@ def _apply_english_only_clamp(
         maximum = float(ev.maximum_score)
         score = float(ev.raw_score)
         cid = ev.criterion_id
-        if only_non_en or whole and not english_turns:
+        if only_non_en or (whole and not english_turns):
             score = min(score, 0.15 * maximum)
         elif last_non_en and cid in {
             "technical_accuracy",

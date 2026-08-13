@@ -34,11 +34,9 @@ for the edges.
 
 from __future__ import annotations
 
-import json
 import math
 from collections import defaultdict
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from cat_engine.engine.config.paths import DATA_DIR
 from cat_engine.engine.config.settings import settings

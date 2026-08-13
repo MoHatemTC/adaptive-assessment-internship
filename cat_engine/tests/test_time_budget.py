@@ -304,7 +304,7 @@ class TestModalityBlueprint:
             "AIE", GraderAgent(CodeAdaptiveSession(JsonQuestionRepository()))
         )
         mains = ["C1", "C3", "C6"]
-        state = orchestrator.begin(mains, intake={m: 3 for m in mains})
+        state = orchestrator.begin(mains, intake=dict.fromkeys(mains, 3))
         rng = np.random.default_rng(3)
 
         for _ in range(80):

@@ -8,7 +8,7 @@ from __future__ import annotations
 import threading
 import traceback
 from collections import deque
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 _LOCK = threading.Lock()
@@ -17,7 +17,7 @@ _LOGS: deque[dict[str, Any]] = deque(maxlen=200)
 
 def live_debug(event: str, **fields: Any) -> None:
     line = {
-        "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "ts": datetime.now(UTC).isoformat(timespec="seconds"),
         "source": "live_server",
         "event": event,
         **fields,

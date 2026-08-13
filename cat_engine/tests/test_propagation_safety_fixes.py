@@ -17,7 +17,9 @@ from cat_engine.engine.services.orchestrator.grader import GraderAgent
 from cat_engine.engine.services.orchestrator.orchestrator import Orchestrator
 
 try:
-    from cat_engine.engine.services.competency_graph import config as graph_config
+    from cat_engine.engine.services.competency_graph import (  # noqa: F401
+        config as graph_config,
+    )
 
     HAS_GRAPH = True
 except ImportError:

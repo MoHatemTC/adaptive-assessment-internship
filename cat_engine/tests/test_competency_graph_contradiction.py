@@ -18,7 +18,10 @@ from cat_engine.engine.services.competency_graph import load_default_competency_
 from cat_engine.engine.services.competency_graph.config import PropagationConfig
 from cat_engine.engine.services.competency_graph.evidence import EvidenceEvent, evidence_id_for
 from cat_engine.engine.services.competency_graph.graph import CompetencyGraphService
-from cat_engine.engine.services.competency_graph.ledger import DuplicateEvidenceError, EvidenceLedger
+from cat_engine.engine.services.competency_graph.ledger import (
+    DuplicateEvidenceError,
+    EvidenceLedger,
+)
 from cat_engine.engine.services.competency_graph.models import CompetencyStatus
 from cat_engine.engine.services.competency_graph.propagation import (
     apply_direct_evidence,
@@ -52,7 +55,9 @@ class TestReopening:
     def test_direct_success_reopens_a_blocked_node(self, graph) -> None:
         """Spec 48.2: new direct evidence can reopen the node."""
         results, state, ledger = apply_events(
-            graph, [_event("DA.1", score=0.0)], config=PropagationConfig(minimum_failures_to_block=1)
+            graph,
+            [_event("DA.1", score=0.0)],
+            config=PropagationConfig(minimum_failures_to_block=1),
         )
         assert "DA.4" in results[0].blocked_nodes
         assert state.nodes["DA.4"].status is CompetencyStatus.BLOCKED
@@ -76,7 +81,9 @@ class TestReopening:
     ) -> None:
         """DA.4 passing does not put DA.4 in doubt — it puts DA.1's failure in doubt."""
         _results, state, ledger = apply_events(
-            graph, [_event("DA.1", score=0.0)], config=PropagationConfig(minimum_failures_to_block=1)
+            graph,
+            [_event("DA.1", score=0.0)],
+            config=PropagationConfig(minimum_failures_to_block=1),
         )
         result = apply_direct_evidence(
             graph,
@@ -96,7 +103,9 @@ class TestReopening:
     ) -> None:
         """Evidence against the edge, not a reason to hide a node already passed."""
         _results, state, ledger = apply_events(
-            graph, [_event("DA.4", score=1.0, modality="mcq")], config=PropagationConfig(minimum_failures_to_block=1)
+            graph,
+            [_event("DA.4", score=1.0, modality="mcq")],
+            config=PropagationConfig(minimum_failures_to_block=1),
         )
         result = apply_direct_evidence(
             graph,
@@ -113,7 +122,9 @@ class TestReopening:
 class TestDirectReversal:
     def test_the_same_node_graded_both_ways_needs_verification(self, graph) -> None:
         _results, state, ledger = apply_events(
-            graph, [_event("DA.5", score=0.0)], config=PropagationConfig(minimum_failures_to_block=1)
+            graph,
+            [_event("DA.5", score=0.0)],
+            config=PropagationConfig(minimum_failures_to_block=1),
         )
         result = apply_direct_evidence(
             graph,
@@ -132,7 +143,9 @@ class TestWrongInference:
     def test_failing_an_inferred_node_names_the_inference_that_was_wrong(self, graph) -> None:
         """The only in-band source of ground truth for the wrong-inference rate."""
         _results, state, ledger = apply_events(
-            graph, [_event("DA.6", score=1.0)], config=PropagationConfig(minimum_failures_to_block=1)
+            graph,
+            [_event("DA.6", score=1.0)],
+            config=PropagationConfig(minimum_failures_to_block=1),
         )
         assert state.nodes["DA.3"].status is CompetencyStatus.INFERRED_MASTERED
 
@@ -153,7 +166,9 @@ class TestWrongInference:
 class TestInferenceNeverOverridesDirect:
     def test_an_inference_does_not_overwrite_a_direct_verdict(self, graph) -> None:
         _results, state, ledger = apply_events(
-            graph, [_event("DA.3", score=0.0)], config=PropagationConfig(minimum_failures_to_block=1)
+            graph,
+            [_event("DA.3", score=0.0)],
+            config=PropagationConfig(minimum_failures_to_block=1),
         )
         assert state.nodes["DA.3"].status is CompetencyStatus.DIRECT_NOT_MASTERED
 
@@ -174,17 +189,29 @@ class TestLedger:
         ledger = EvidenceLedger()
         event = _event("DA.1", score=1.0)
 
-        apply_direct_evidence(graph, state, event, ledger=ledger, config=PropagationConfig(minimum_failures_to_block=1))
+        apply_direct_evidence(
+            graph,
+            state,
+            event,
+            ledger=ledger,
+            config=PropagationConfig(minimum_failures_to_block=1),
+        )
         with pytest.raises(DuplicateEvidenceError):
             apply_direct_evidence(
-                graph, state, event, ledger=ledger, config=PropagationConfig(minimum_failures_to_block=1)
+                graph,
+                state,
+                event,
+                ledger=ledger,
+                config=PropagationConfig(minimum_failures_to_block=1),
             )
         assert state.nodes["DA.1"].direct_observations == 1
 
     def test_it_survives_a_round_trip_through_persisted_state(self, graph) -> None:
         """A resumed session must not re-apply evidence it already applied."""
         _results, state, ledger = apply_events(
-            graph, [_event("DA.1", score=1.0)], config=PropagationConfig(minimum_failures_to_block=1)
+            graph,
+            [_event("DA.1", score=1.0)],
+            config=PropagationConfig(minimum_failures_to_block=1),
         )
 
         restored_state = CompetencyGraphState.from_dict(state.to_dict())
@@ -221,7 +248,7 @@ class TestLedger:
         assert first != second
 
     def test_a_re_administration_is_a_different_attempt(self) -> None:
-        kwargs = dict(session_id="s", item_id="i", modality="mcq", target_node="DA.1")
+        kwargs = {"session_id": "s", "item_id": "i", "modality": "mcq", "target_node": "DA.1"}
         assert evidence_id_for(attempt_no=1, **kwargs) != evidence_id_for(
             attempt_no=2, **kwargs
         )
@@ -248,7 +275,11 @@ class TestUnscorable:
         )
 
         result = apply_direct_evidence(
-            graph, state, event, ledger=EvidenceLedger(), config=PropagationConfig(minimum_failures_to_block=1)
+            graph,
+            state,
+            event,
+            ledger=EvidenceLedger(),
+            config=PropagationConfig(minimum_failures_to_block=1),
         )
 
         assert result.unscorable is True
@@ -264,7 +295,9 @@ class TestChangedVersusStatusChanged:
     ) -> None:
         """Review C17: a blocked descendant is a reason to re-pick, not to re-measure."""
         [result], _state, _ledger = apply_events(
-            graph, [_event("DA.1", score=0.0)], config=PropagationConfig(minimum_failures_to_block=1)
+            graph,
+            [_event("DA.1", score=0.0)],
+            config=PropagationConfig(minimum_failures_to_block=1),
         )
 
         assert result.changed_nodes == frozenset({"DA.1"})

@@ -160,7 +160,14 @@ class TestWeightProfile:
 
     def test_zero_share_everywhere_means_no_model_call_is_needed(self, bank):
         profile = WeightProfile.from_preset("B", scoring.SOURCE_WEIGHTS).with_llm_shares(
-            {c: 0.0 for c in ["functional_correctness", "edge_case_handling",
-                              "algorithm_choice", "code_quality"]}
+            dict.fromkeys(
+                [
+                    "functional_correctness",
+                    "edge_case_handling",
+                    "algorithm_choice",
+                    "code_quality",
+                ],
+                0.0,
+            )
         )
         assert profile.uses_llm() is False

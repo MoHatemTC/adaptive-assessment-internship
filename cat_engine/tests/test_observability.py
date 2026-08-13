@@ -246,7 +246,9 @@ async def test_trace_labels_never_reach_the_gateway(monkeypatch):
             from langfuse import get_client
 
             get_client().shutdown()
-        except Exception:  # pragma: no cover — cleanup is best effort
+        # pragma: no cover - cleanup is best effort, and a failure here must not fail a
+        # test that has already made its assertion.
+        except Exception:  # noqa: BLE001, S110
             pass
 
     assert "name" not in received["body"], "langfuse label leaked into the request"

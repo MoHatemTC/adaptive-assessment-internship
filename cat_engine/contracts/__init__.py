@@ -97,7 +97,7 @@ from .scope import (
 
 # Grouped by surface rather than sorted. The comments are the point: they say which part of
 # the system each type belongs to, and alphabetising would scatter every group.
-__all__ = [
+__all__ = [  # noqa: RUF022
     "SCHEMA_VERSION",
     # the narrow waist
     "CatParameters",

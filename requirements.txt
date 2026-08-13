@@ -15,19 +15,20 @@ httpx>=0.27,<1
 # there when these modules are merged in.
 numpy>=1.26,<3
 
-# Tracing. Optional at RUNTIME — services/observability.py degrades to no tracing when it
+# Tracing. Optional at RUNTIME — engine/services/observability.py degrades to no tracing when it
 # is absent, unconfigured, or broken — but listed here so a deployment that sets the keys
 # gets a working collector instead of a warning nobody reads. The floor is 3.0 because the
 # session-grouping API this uses (propagate_attributes) does not exist below it; its
 # absence costs only the grouping, so the ceiling is the real constraint.
 langfuse>=3.0,<5
 
-# Realtime voice. Used by `app/services/voice_live/`, which the live-voice service owns.
+# Realtime voice. Used by `cat_engine/engine/services/voice_live/`, behind `cat.live`. An
+# OPTIONAL extra for a host — `pip install cat-engine[live]` — and pinned here because this
+# repository's own suite exercises the room.
 #
-# FastAPI, uvicorn and python-multipart are NOT here any more. `backend/` is a library —
-# there is no application in it since `app/main.py` became two services — and each service
-# declares its own web stack in `services/<name>/requirements.txt`. Listing them here made
-# a checkout look like it could serve traffic.
+# FastAPI, uvicorn and python-multipart are NOT here. There is no application in this tree:
+# `cat_engine` is a module a host imports, and the host owns transport. Listing a web stack
+# here would make a checkout look like it could serve traffic.
 google-genai>=1.0
 websockets>=13
 
@@ -42,6 +43,11 @@ websockets>=13
 pytest>=8.0
 pytest-asyncio>=0.24
 pytest-env>=1.0
+
+# Linting. Configured in pyproject.toml under [tool.ruff]; `ruff check .` must come back
+# clean. Pinned to a minor range because ruff adds rules in minor releases, and a selected
+# rule family that grows on its own turns an unrelated upgrade into a red build.
+ruff>=0.16,<0.17
 
 # Untrusted code execution for the code engine. 2.x only: 1.x has no Sandbox.create() and
 # no files/commands API, which the engine needs to run submissions outside the sandbox's

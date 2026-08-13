@@ -42,8 +42,8 @@ BANKS = ["DA", "PY", "AIE", "AIE-JR-V3", "JAI-600"]
 @pytest.fixture(scope="module")
 def stores():
     """A freshly built database beside the file store the whole system uses today."""
-    from cat_engine.stores.sql import SqlBankStore, seed_from_profiles
     from cat_engine.engine.services.orchestrator import registry
+    from cat_engine.stores.sql import SqlBankStore, seed_from_profiles
 
     sql = SqlBankStore(DSN)
     sql.ensure_schema()

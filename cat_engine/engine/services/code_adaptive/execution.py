@@ -26,8 +26,10 @@ logger = logging.getLogger(__name__)
 # not a property of the harness.
 EXECUTION_TIMEOUT_SECONDS = settings.code_execution_timeout_seconds
 
-# Inside the sandbox only; never a host path.
-_HARNESS_PATH = "/tmp/_cat_harness.py"
+# Inside the sandbox only; never a host path. The E2B container is single-tenant and
+# discarded after the submission, so the usual /tmp hazards — a symlink planted by another
+# user, a predictable name racing a second writer — have nobody to come from.
+_HARNESS_PATH = "/tmp/_cat_harness.py"  # noqa: S108
 
 
 @dataclass

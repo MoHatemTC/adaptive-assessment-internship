@@ -55,7 +55,7 @@ def test_an_unknown_name_is_an_attribute_error_not_an_import_error():
     """A typo should say what it is. `__getattr__` that let something else escape would
     report a missing dependency for a name that was simply misspelled."""
     with pytest.raises(AttributeError) as caught:
-        cat_engine.NoSuchThing
+        cat_engine.NoSuchThing  # noqa: B018 - the attribute access IS the assertion
     assert "NoSuchThing" in str(caught.value)
 
 
@@ -71,7 +71,10 @@ def test_importing_the_package_does_not_import_the_engine():
         "heavy = [m for m in sys.modules if m.startswith('cat_engine.engine')];"
         "print(len(heavy))"
     )
-    out = subprocess.run(
+    # `code` is the literal above and the interpreter is this one. Nothing here is
+    # untrusted; the subprocess exists to get a PRISTINE import, which is the whole
+    # measurement — `sys.modules` in this process is already full of engine modules.
+    out = subprocess.run(  # noqa: S603
         [sys.executable, "-c", code], capture_output=True, text=True, check=True
     )
     assert out.stdout.strip() == "0", (
@@ -89,7 +92,10 @@ def test_the_error_hierarchy_is_reachable_without_touching_the_engine():
         "assert issubclass(StaleAnswer, CatError);"
         "print(len([m for m in sys.modules if m.startswith('cat_engine.engine')]))"
     )
-    out = subprocess.run(
+    # `code` is the literal above and the interpreter is this one. Nothing here is
+    # untrusted; the subprocess exists to get a PRISTINE import, which is the whole
+    # measurement — `sys.modules` in this process is already full of engine modules.
+    out = subprocess.run(  # noqa: S603
         [sys.executable, "-c", code], capture_output=True, text=True, check=True
     )
     assert out.stdout.strip() == "0", "importing the errors pulled in the engine"

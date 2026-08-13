@@ -49,7 +49,9 @@ def stub_execution(question: dict, *, passing: bool) -> ExecutionEvidence:
 
 @pytest.fixture
 def no_llm(monkeypatch):
-    monkeypatch.setattr(session_module, "llm_evaluate", lambda *a, **k: LLMEvaluation(available=False))
+    monkeypatch.setattr(
+        session_module, "llm_evaluate", lambda *a, **k: LLMEvaluation(available=False)
+    )
 
 
 def install_execution(monkeypatch, repository, *, passing: bool):

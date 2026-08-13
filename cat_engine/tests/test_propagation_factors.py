@@ -16,6 +16,7 @@ properties, checked directly rather than assumed.
 from __future__ import annotations
 
 import dataclasses
+from itertools import pairwise
 
 import pytest
 
@@ -164,7 +165,7 @@ class TestINVP2InferenceIsMonotoneInDepth:
     def test_each_depth_contains_the_one_below(self, graph):
         child = _deepest_child(graph)
         sets = [_inferred_at(graph, child, maximum_propagation_depth=d) for d in range(6)]
-        for shallow, deep in zip(sets, sets[1:]):
+        for shallow, deep in pairwise(sets):
             assert shallow <= deep, f"raising D lost {sorted(shallow - deep)}"
 
         # Non-vacuity, as for K: a factor that changes nothing is trivially monotone and
@@ -221,7 +222,7 @@ class TestINVP3CorroborationIsMonotoneAndUnfarmable:
         sets = [
             _inferred_at(graph, child, minimum_corroborations=k) for k in range(1, 5)
         ]
-        for loose, strict in zip(sets, sets[1:]):
+        for loose, strict in pairwise(sets):
             assert strict <= loose, f"raising K added {sorted(strict - loose)}"
 
         # NON-VACUITY. Monotonicity alone is satisfied by a factor that does nothing —
@@ -364,7 +365,7 @@ class TestINVP11InferenceNeverOverwritesAStrongerVerdict:
     )
     def test_a_held_status_survives_an_inference(self, graph, status):
         child = _deepest_child(graph)
-        results, state, ledger = apply_events(
+        results, _state, _ledger = apply_events(
             graph, [_success(child)], config=PropagationConfig()
         )
         ancestors = sorted(results[0].corroborated_nodes)
@@ -457,7 +458,7 @@ class TestINVP12ProvenanceIsCompleteAndWellFormed:
             (e.from_id, e.to_id) for e in graph.graph.edges if e.relation == "PREREQUISITE"
         }
         for signal in results[0].inferred_signals:
-            for parent, node in zip(signal.edge_path[1:], signal.edge_path):
+            for parent, node in zip(signal.edge_path[1:], signal.edge_path, strict=False):
                 # Traversal runs child -> parent, so the edge is (parent, child).
                 assert (parent, node) in real, f"{(parent, node)} is not an edge"
 

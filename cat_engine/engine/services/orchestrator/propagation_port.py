@@ -31,7 +31,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Protocol, runtime_checkable
 
 from cat_engine.engine.schemas.orchestration import AssessmentState, BankItem, GradedResponse
@@ -166,7 +166,7 @@ def propagate(
     config = graph_config.propagation_config_from_settings(
         minimum_failures_to_block=minimum_failures_to_block
     )
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     events = build_events(state=state, item=item, graded=graded, attempt_no=attempt_no)
 

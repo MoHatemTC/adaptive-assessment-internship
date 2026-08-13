@@ -279,7 +279,8 @@ def build_scope(
         required = [
             node_id
             for node_id in kept
-            if not critical_only or (index.nodes[node_id].critical if node_id in index.nodes else False)
+            if not critical_only
+            or (index.nodes[node_id].critical if node_id in index.nodes else False)
         ]
         required_by_main[main] = len(required)
         unserved.extend(node_id for node_id in required if per_node.get(node_id, 0) == 0)

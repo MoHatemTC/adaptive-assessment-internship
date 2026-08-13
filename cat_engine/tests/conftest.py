@@ -81,9 +81,9 @@ def _clear_sql_sessions() -> None:
         with psycopg.connect(dsn) as conn:
             conn.execute("DELETE FROM assessment_session")
             conn.commit()
-    except Exception:  # pragma: no cover - the DB is not up, or has no schema yet
-        # Never fail a test because cleanup could not run: a test that passed did pass,
-        # and the next one will rebuild the schema it needs.
+    # Blind and silent by intent: never fail a test because CLEANUP could not run. A
+    # test that passed did pass, and the next one rebuilds the schema it needs.
+    except Exception:  # noqa: BLE001, S110  # pragma: no cover - the DB is not up
         pass
 
 

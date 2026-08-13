@@ -249,7 +249,7 @@ class TestNothingInAScopeCanCarryEvidence:
     """
 
     def test_the_manifest_declares_no_measurement_field(self):
-        from cat_engine.contracts import ScopeManifest, ScopeMainDTO, ScopeNodeDTO
+        from cat_engine.contracts import ScopeMainDTO, ScopeManifest, ScopeNodeDTO
 
         forbidden = {"score", "weight", "theta", "theta_hat", "standard_error", "posterior"}
         for model in (ScopeManifest, ScopeMainDTO, ScopeNodeDTO):

@@ -243,8 +243,8 @@ class TestMalformedRepliesDoNotCrash:
         [
             {},
             {"item_id": ITEM, "rubric_id": "rub_1", "rubric_version": "1.0"},
-            reply(**{"criterion_evidence": []}),
-            reply(**{"criterion_evidence": None}),
+            reply(criterion_evidence=[]),
+            reply(criterion_evidence=None),
         ],
     )
     def test_an_empty_or_missing_evidence_list_returns_no_evidence(self, body):

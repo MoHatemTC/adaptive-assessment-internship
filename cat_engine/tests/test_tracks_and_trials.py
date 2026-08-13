@@ -88,7 +88,7 @@ def test_a_trial_run_reports_per_case_outcomes(bank, monkeypatch):
         return ExecutionEvidence(
             compiled=True,
             execution_completed=True,
-            passed_tests=1 if len(given_tests) == 1 else 1,
+            passed_tests=1,
             total_tests=len(given_tests),
             test_results=[
                 TestOutcome(

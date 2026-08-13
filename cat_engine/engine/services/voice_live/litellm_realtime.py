@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 import json
 import logging
 import ssl
@@ -131,7 +132,7 @@ class AsyncLiteLLMLiveSession:
                     event = await asyncio.wait_for(
                         self._events.get(), timeout=min(1.0, remaining)
                     )
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     continue
                 if event.get("type") == "connected":
                     self.connected = True
@@ -218,10 +219,8 @@ class AsyncLiteLLMLiveSession:
         for task in (self._reader_task, self._writer_task):
             if task is not None:
                 task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await task
-                except asyncio.CancelledError:
-                    pass
         if self._ws is not None:
             try:
                 await self._ws.close()
@@ -293,12 +292,10 @@ class AsyncLiteLLMLiveSession:
         elif kind in AUDIO_DELTA_EVENTS:
             delta = event.get("delta") or ""
             if delta:
-                try:
+                with contextlib.suppress(ValueError, TypeError):
                     self._events.put_nowait(
                         {"type": "audio", "data": base64.b64decode(delta)}
                     )
-                except (ValueError, TypeError):
-                    pass
         elif kind in TEXT_DELTA_EVENTS:
             delta = event.get("delta") or ""
             if delta:

@@ -106,7 +106,7 @@ def infer_ancestors(
             known = best.get(parent)
             if known is not None and known[1] >= strength:
                 continue
-            parent_path = path + (parent,)
+            parent_path = (*path, parent)
             best[parent] = (depth + 1, strength, parent_path)
             queue.append((parent, depth + 1, strength, parent_path))
 

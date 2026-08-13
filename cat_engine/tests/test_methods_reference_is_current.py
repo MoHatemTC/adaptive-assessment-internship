@@ -46,7 +46,7 @@ def index() -> str:
     return "\n".join(
         line
         for line in REFERENCE.read_text(encoding="utf-8").splitlines()
-        if line.startswith("#") or line.startswith("|")
+        if line.startswith(("#", "|"))
     )
 
 

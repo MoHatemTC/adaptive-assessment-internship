@@ -38,7 +38,7 @@ import re
 import shutil
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -366,7 +366,7 @@ class BankStore:
                         "title": title or bank_id,
                         "mains": validation.mains,
                         "coverage_critical_only": coverage_critical_only,
-                        "registered_at": datetime.now(timezone.utc).isoformat(),
+                        "registered_at": datetime.now(UTC).isoformat(),
                     },
                     indent=2,
                 ),

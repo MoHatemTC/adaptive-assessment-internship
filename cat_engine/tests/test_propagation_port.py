@@ -61,7 +61,6 @@ def a_response(node: str, *, score: float = 1.0):
     test — the kind that passes while production's does not.
     """
     from cat_engine.engine.schemas.orchestration import BankItem, GradedResponse
-
     from cat_engine.tests.conftest import orchestrator_for
 
     item = BankItem.model_validate(

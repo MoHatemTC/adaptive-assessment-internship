@@ -35,7 +35,9 @@ def _event(target: str, *, score: float, modality: str = "code") -> EvidenceEven
 class TestNodeReports:
     def test_it_records_direct_and_inferred_provenance_separately(self, da_graph) -> None:
         _results, state, _ledger = apply_events(
-            da_graph, [_event("DA.6", score=1.0)], config=PropagationConfig(minimum_failures_to_block=1)
+            da_graph,
+            [_event("DA.6", score=1.0)],
+            config=PropagationConfig(minimum_failures_to_block=1),
         )
 
         by_id = {r.competency_id: r for r in build_node_reports(da_graph, state)}
@@ -52,7 +54,9 @@ class TestNodeReports:
 
     def test_a_blocked_node_names_what_blocked_it(self, da_graph) -> None:
         _results, state, _ledger = apply_events(
-            da_graph, [_event("DA.1", score=0.0)], config=PropagationConfig(minimum_failures_to_block=1)
+            da_graph,
+            [_event("DA.1", score=0.0)],
+            config=PropagationConfig(minimum_failures_to_block=1),
         )
 
         by_id = {r.competency_id: r for r in build_node_reports(da_graph, state)}
@@ -67,7 +71,9 @@ class TestNodeReports:
         the gate about what had been measured.
         """
         _results, state, _ledger = apply_events(
-            da_graph, [_event("DA.5", score=0.5)], config=PropagationConfig(minimum_failures_to_block=1)
+            da_graph,
+            [_event("DA.5", score=0.5)],
+            config=PropagationConfig(minimum_failures_to_block=1),
         )
 
         reports = build_node_reports(da_graph, state)
@@ -83,7 +89,9 @@ class TestMainReport:
     def test_an_inference_does_not_resolve_a_critical_node(self, da_graph) -> None:
         """The substitution the coverage gate exists to prevent, stated in the report."""
         _results, state, _ledger = apply_events(
-            da_graph, [_event("DA.6", score=1.0)], config=PropagationConfig(minimum_failures_to_block=1)
+            da_graph,
+            [_event("DA.6", score=1.0)],
+            config=PropagationConfig(minimum_failures_to_block=1),
         )
 
         report = build_main_report(
@@ -103,7 +111,9 @@ class TestMainReport:
         posterior — and all three convergence guards read it and nothing else.
         """
         _results, state, _ledger = apply_events(
-            da_graph, [_event("DA.6", score=1.0)], config=PropagationConfig(minimum_failures_to_block=1)
+            da_graph,
+            [_event("DA.6", score=1.0)],
+            config=PropagationConfig(minimum_failures_to_block=1),
         )
         report = build_main_report(da_graph, state, "DA", unmeasured_nodes=[])
 

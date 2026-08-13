@@ -35,7 +35,7 @@ import json
 import statistics
 import sys
 from collections import defaultdict
-from datetime import date
+from datetime import UTC, datetime
 from pathlib import Path
 
 from cat_engine.engine.schemas.orchestration import DEFAULT_SECONDS_BY_MODALITY
@@ -162,7 +162,7 @@ def main() -> int:
         )
 
     payload = {
-        "generated": date.today().isoformat(),
+        "generated": datetime.now(UTC).date().isoformat(),
         "corpus": str(args.sessions),
         "sessions": live,
         "minimum_observations": MINIMUM_OBSERVATIONS,

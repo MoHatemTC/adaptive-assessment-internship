@@ -7,6 +7,7 @@ Picker and open rubric grading stay on separate LiteLLM chat completions.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import re
 import time
@@ -672,10 +673,8 @@ class RealtimeLiveRoom:
         self._closed = True
         if self._receive_task is not None:
             self._receive_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._receive_task
-            except asyncio.CancelledError:
-                pass
             self._receive_task = None
         if self._session is not None:
             try:

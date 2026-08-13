@@ -110,9 +110,16 @@ class SqlBackedBankStore(BankStore):
         return profile
 
     def _sql_bytes(self, version: str, column: str) -> bytes:
+        """One blob column for one version.
+
+        `column` is interpolated because a column name cannot be a bind parameter. It is
+        never caller-supplied: this method is private and its only two call sites pass the
+        literals `items_bytes` and `graph_bytes`. `version` — the one value that does come
+        from outside — is bound, not interpolated.
+        """
         with self._sql.connect() as conn:
             row = conn.execute(
-                f"SELECT {column} AS blob FROM bank_version WHERE version = %s",
+                f"SELECT {column} AS blob FROM bank_version WHERE version = %s",  # noqa: S608
                 (version,),
             ).fetchone()
         return bytes(row["blob"]) if row and row["blob"] is not None else b""
@@ -273,7 +280,11 @@ def _wait_for(sql: SqlBankStore, *, attempts: int = 30, delay: float = 1.0) -> N
         try:
             with sql.connect():
                 return
-        except Exception as exc:
+        # Blind by intent: this waits for a container to come up, and psycopg raises half a
+        # dozen unrelated types on the way — refused connection, no such database, no
+        # password supplied. Narrowing it would turn one of them into a crash during the
+        # exact window this loop exists to survive.
+        except Exception as exc:  # noqa: BLE001
             last = exc
             if attempt == 0:
                 logger.info("waiting for the bank database to accept connections")

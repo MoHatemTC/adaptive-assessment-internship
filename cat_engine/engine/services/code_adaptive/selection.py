@@ -227,17 +227,17 @@ def rank_candidates(
             ability = (
                 sum(s.mastery for s in observed) / len(observed) if observed else 0.5
             )
-            uncertainty = sum(s.standard_error * w for s, w in zip(states, weights))
+            uncertainty = sum(s.standard_error * w for s, w in zip(states, weights, strict=True))
             # No target: information about the whole blueprint, each competency weighted
             # by how much the question loads on it.
             information = sum(
                 expected_information(question, st.mastery if st.observed else 0.5, w)
-                for st, w in zip(states, weights)
+                for st, w in zip(states, weights, strict=True)
             )
 
         # Coverage: unassessed competencies first, so a report is not built on three of
         # eight competencies because the sharpest questions happened to cluster.
-        coverage = sum(w for s, w in zip(states, weights) if not s.observed)
+        coverage = sum(w for s, w in zip(states, weights, strict=True) if not s.observed)
 
         # Misconception relevance: verifying a suspected misconception is the highest-value
         # evidence available — it either confirms a real gap or clears a false positive.

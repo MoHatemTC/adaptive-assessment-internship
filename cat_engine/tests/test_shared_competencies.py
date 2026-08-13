@@ -153,7 +153,7 @@ class TestSharedMainGain:
 
         monkeypatch.setattr(settings, "graph_utility_enabled", False)
         orchestrator = orchestrator_for("AIE")
-        state = orchestrator.begin(MAINS, intake={m: 3 for m in MAINS})
+        state = orchestrator.begin(MAINS, intake=dict.fromkeys(MAINS, 3))
 
         modifiers, _pool = self._modifiers(orchestrator, state, "C1")
 
@@ -167,9 +167,9 @@ class TestSharedMainGain:
 
         monkeypatch.setattr(settings, "graph_utility_enabled", True)
         orchestrator = orchestrator_for("AIE")
-        state = orchestrator.begin(MAINS, intake={m: 3 for m in MAINS})
+        state = orchestrator.begin(MAINS, intake=dict.fromkeys(MAINS, 3))
 
-        modifiers, pool = self._modifiers(orchestrator, state, "C1")
+        modifiers, _pool = self._modifiers(orchestrator, state, "C1")
         shared = {i.item_id for i in cross_loaded}
 
         bonused = {k for k, v in modifiers.items() if v > 0}
@@ -185,7 +185,7 @@ class TestSharedMainGain:
 
         monkeypatch.setattr(settings, "graph_utility_enabled", True)
         orchestrator = orchestrator_for("AIE")
-        state = orchestrator.begin(MAINS, intake={m: 3 for m in MAINS})
+        state = orchestrator.begin(MAINS, intake=dict.fromkeys(MAINS, 3))
         closed = {
             main: (
                 variable.model_copy(update={"finalised": True, "stop_reason": "precision"})
@@ -212,7 +212,7 @@ class TestEndToEnd:
         touched = sorted(affected_mains(item, set(MAINS)))
         assert len(touched) > 1
 
-        state = orchestrator.begin(MAINS, intake={m: 3 for m in MAINS})
+        state = orchestrator.begin(MAINS, intake=dict.fromkeys(MAINS, 3))
         before = {m: state.variables[m].theta_hat for m in touched}
 
         state, _ = orchestrator.record_response(
@@ -234,7 +234,7 @@ class TestEndToEnd:
         item = next(i for i in cross_loaded if i.modality == "mcq")
         touched = affected_mains(item, set(MAINS))
 
-        state = orchestrator.begin(MAINS, intake={m: 3 for m in MAINS})
+        state = orchestrator.begin(MAINS, intake=dict.fromkeys(MAINS, 3))
         state = await orchestrator.fill_queue(
             state, use_llm=False, rng=np.random.default_rng(0)
         )
@@ -256,7 +256,7 @@ class TestEndToEnd:
             i for i in cross_loaded if i.modality == "mcq" and i.measures[0].variable == "C1.6"
         )
 
-        state = orchestrator.begin(MAINS, intake={m: 3 for m in MAINS})
+        state = orchestrator.begin(MAINS, intake=dict.fromkeys(MAINS, 3))
         state, _ = orchestrator.record_response(
             state, item, int(item.payload["answer_index"])
         )

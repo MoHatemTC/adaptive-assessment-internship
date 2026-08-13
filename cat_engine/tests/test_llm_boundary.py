@@ -14,6 +14,7 @@ screen. Two independent faults, each of which alone would have been survivable.
 from __future__ import annotations
 
 import json
+import re
 
 import httpx
 import pytest
@@ -38,7 +39,7 @@ async def test_a_non_string_payload_is_refused_at_the_boundary():
     A TypeError naming the call site beats a gateway error about the proxy's own parser,
     which is what the deployment actually reported and which pointed nowhere useful.
     """
-    with pytest.raises(TypeError, match="json.dumps"):
+    with pytest.raises(TypeError, match=re.escape("json.dumps")):
         await chat_json("system", {"variable": "C1"}, require=("selected_id",))
 
 

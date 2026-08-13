@@ -35,7 +35,11 @@ async def simulate(session: AdaptiveSession, competency: str, true_theta: float,
         item = selected.item
         p = probability_correct(true_theta, item.a, item.b, item.c)
         # Answer as a real candidate of this ability would: right with probability p.
-        chosen = item.answer_index if rng.random() < p else (item.answer_index + 1) % len(item.options)
+        chosen = (
+            item.answer_index
+            if rng.random() < p
+            else (item.answer_index + 1) % len(item.options)
+        )
         state, stop = await session.record_answer(state, item, chosen)
         if stop.should_stop:
             break

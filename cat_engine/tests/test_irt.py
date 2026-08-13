@@ -5,6 +5,8 @@ item response theory, so a failure here means the measurement is wrong — not t
 number moved.
 """
 
+from itertools import pairwise
+
 import numpy as np
 import pytest
 
@@ -26,7 +28,7 @@ from cat_engine.engine.services.adaptive.irt import (
 def test_probability_is_monotone_in_ability():
     """P(correct) must rise with ability. Everything else depends on this."""
     p = [probability_correct(t, 1.2, 0.0, 0.25) for t in np.linspace(-4, 4, 50)]
-    assert all(b >= a for a, b in zip(p, p[1:]))
+    assert all(b >= a for a, b in pairwise(p))
 
 
 def test_probability_respects_the_guessing_floor():
@@ -118,8 +120,8 @@ def test_kl_widens_with_delta():
 
 def test_percentile_is_monotone_and_bounded():
     values = [ability_percentile(t) for t in np.linspace(-4, 4, 40)]
-    assert all(b >= a for a, b in zip(values, values[1:]))
-    assert 0.0 <= values[0] and values[-1] <= 100.0
+    assert all(b >= a for a, b in pairwise(values))
+    assert values[0] >= 0.0 and values[-1] <= 100.0
     assert ability_percentile(0.0) == pytest.approx(50.0, abs=0.5)
 
 
