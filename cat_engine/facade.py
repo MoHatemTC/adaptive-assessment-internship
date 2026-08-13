@@ -217,7 +217,10 @@ class AssessmentModule:
         """
         return scoping.build_manifest(
             ScopeRequest(
-                bank_id=registry.resolve_bank_id(bank_id),
+                # `catalogue.resolve`, not `registry.resolve_bank_id`. The engine's raises
+                # `UnknownBankError`, which is not a `CatError` and would go straight past a
+                # host's one except clause.
+                bank_id=catalogue.resolve(bank_id),
                 selected=list(selected),
                 critical_only=critical_only,
                 include_prerequisites=include_prerequisites,

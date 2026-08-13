@@ -51,17 +51,26 @@ __all__ = [
     "items",
     "parity",
     "policy",
+    "resolve",
     "summary",
     "version",
 ]
 
 
-def _resolve(bank_id: str | None) -> str:
+def resolve(bank_id: str | None) -> str:
     """The bank id in force, or a `BankUnknown` naming what is registered.
 
     `registry.UnknownBankError` already lists the registered ids; it is re-raised as a
     module error so a host has one exception type to catch and does not have to import an
     engine-internal one to handle a bad request.
+
+    PUBLIC, AND THE ONLY WAY A BANK ID SHOULD BE RESOLVED AT THE MODULE BOUNDARY.
+
+    It was `_resolve` and private to this file, so `facade.scope`, `facade.scope_graph`,
+    `public_tests` and `trial_run` each called `registry.resolve_bank_id` directly and each
+    raised `UnknownBankError` — an engine-internal type — straight past a host's
+    `except CatError`. Six methods converted it and four did not, which is the shape of
+    defect a private helper produces: the right thing was available and not reachable.
     """
     try:
         return registry.resolve_bank_id(bank_id)
@@ -80,7 +89,7 @@ def banks() -> list[BankSummary]:
 
 
 def summary(bank_id: str | None = None) -> BankSummary:
-    resolved = _resolve(bank_id)
+    resolved = resolve(bank_id)
     for row in registry.describe():
         if row["bank_id"] == resolved:
             return bank_summary(row)
@@ -93,7 +102,7 @@ def version(bank_id: str | None = None) -> str:
     Pinned into an assessment at `begin`, so replacing a bank cannot change the item pool
     underneath a candidate half way through a session.
     """
-    return registry.version(_resolve(bank_id))
+    return registry.version(resolve(bank_id))
 
 
 def item_refs(bank_id: str | None = None) -> tuple[str, list[BankItemRef]]:
@@ -102,7 +111,7 @@ def item_refs(bank_id: str | None = None) -> tuple[str, list[BankItemRef]]:
     The version travels with the list because the two are only meaningful together: a
     caller caching these has to know which bank state they describe.
     """
-    resolved = _resolve(bank_id)
+    resolved = resolve(bank_id)
     bank = registry.get_bank(resolved)
     return registry.version(resolved), [
         item_ref(i) for i in bank.all_items() if i.status == "active"
@@ -111,14 +120,14 @@ def item_refs(bank_id: str | None = None) -> tuple[str, list[BankItemRef]]:
 
 def items(bank_id: str | None = None) -> list[BankItemFull]:
     """Every item WITH its payload. Rendering and grading only."""
-    return [item_full(i) for i in registry.get_bank(_resolve(bank_id)).all_items()]
+    return [item_full(i) for i in registry.get_bank(resolve(bank_id)).all_items()]
 
 
 def item(bank_id: str | None, item_id: str) -> BankItemFull:
     """One item with its payload — the answer key, the hidden tests, the rubric."""
-    found = registry.get_bank(_resolve(bank_id)).get(item_id)
+    found = registry.get_bank(resolve(bank_id)).get(item_id)
     if found is None:
-        raise BankUnknown(f"no item {item_id} in bank {_resolve(bank_id)}")
+        raise BankUnknown(f"no item {item_id} in bank {resolve(bank_id)}")
     return item_full(found)
 
 
@@ -128,7 +137,7 @@ def graph(bank_id: str | None = None) -> CompetencyGraphDTO | None:
     None rather than an error: a bank without a graph is legal, and the coverage gate
     simply does not run for it.
     """
-    service = registry.get_graph_service(_resolve(bank_id))
+    service = registry.get_graph_service(resolve(bank_id))
     return None if service is None else graph_dto(service.graph)
 
 
@@ -138,10 +147,10 @@ def policy(bank_id: str | None = None) -> PolicyDTO | None:
     Exposed so an operator can ask "why is this edge inert?" without reading three files
     and doing the AND in their head.
     """
-    resolved = registry.get_propagation_policy(_resolve(bank_id))
+    resolved = registry.get_propagation_policy(resolve(bank_id))
     return None if resolved is None else policy_dto(resolved)
 
 
 def parity(bank_id: str | None = None):
     """The bank's own parity report — whether each variable is measurable as declared."""
-    return parity_rows(registry.get_bank(_resolve(bank_id)).parity_report())
+    return parity_rows(registry.get_bank(resolve(bank_id)).parity_report())

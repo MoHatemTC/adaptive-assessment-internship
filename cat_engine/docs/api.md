@@ -4,6 +4,10 @@ Written for someone building on the module — most likely putting HTTP routes o
 frontend. It is the part a signature cannot tell you: which calls to make in which order,
 and why some things are deliberately not in the return value.
 
+For the signatures themselves — every method, every parameter, every returned field, every
+exception — see [`METHODS.md`](../../METHODS.md) at the repository root. This page is the
+narrative; that one is the reference, and a test keeps it complete.
+
 This was seven HTTP services and this page was the contract a frontend built against. It is
 the same contract; the transport is the host's now. Every error `code` is unchanged, so a
 frontend written against the old API branches correctly against a host that maps

@@ -72,3 +72,50 @@ def test_nothing_in_the_repository_disables_tls_verification() -> None:
             if "verify=False" in stripped or "verify = False" in stripped:
                 offenders.append(f"{source.relative_to(REPOSITORY_ROOT)}:{number}")
     assert not offenders, f"TLS verification is disabled at {offenders}"
+
+
+def test_no_public_method_raises_an_engine_exception_for_an_unknown_bank() -> None:
+    """`errors.py` promises one except clause. Four methods did not honour it.
+
+    `catalogue` converted `registry.UnknownBankError` into `BankUnknown` through a private
+    `_resolve`; `facade.scope`, `facade.scope_graph`, `public_tests` and `trial_run` called
+    `registry.resolve_bank_id` directly and raised the engine's own type straight past a
+    host's `except CatError`. Six methods got it right and four did not, which is what a
+    private helper produces: the right thing was available and not reachable.
+
+    Every path a host can reach with a bank id it supplied is checked here, because the
+    fix was to make the converting resolver public and the regression is to add a
+    tenth method that spells it the old way.
+    """
+    from cat_engine import AssessmentModule
+    from cat_engine.errors import BankUnknown
+
+    cat = AssessmentModule()
+    calls = {
+        "bank": lambda: cat.bank("nope"),
+        "items": lambda: cat.items("nope"),
+        "item": lambda: cat.item("q1", "nope"),
+        "graph": lambda: cat.graph("nope"),
+        "policy": lambda: cat.policy("nope"),
+        "scope": lambda: cat.scope(["C1"], bank_id="nope"),
+        "scope_graph": lambda: cat.scope_graph(["C1"], bank_id="nope"),
+        "public_tests": lambda: cat.public_tests("q1", "nope"),
+        "trial_run": lambda: cat.trial_run("q1", "source", "nope"),
+    }
+
+    wrong: dict[str, str] = {}
+    for name, call in calls.items():
+        try:
+            call()
+        except BankUnknown:
+            continue
+        except Exception as exc:  # noqa: BLE001 - the type is what is under test
+            wrong[name] = type(exc).__name__
+        else:
+            wrong[name] = "did not raise"
+
+    assert not wrong, (
+        f"these do not raise BankUnknown for an unknown bank: {wrong}. A host catches "
+        "CatError and nothing else; an engine exception escaping is a bug in the module, "
+        "not a condition it models."
+    )

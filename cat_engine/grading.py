@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 
+from cat_engine import catalogue
 from cat_engine.contracts import BankItemFull, TrialCaseDTO, TrialRunResponse
 from cat_engine.engine.schemas.orchestration import BankItem, GradedResponse
 from cat_engine.engine.schemas.voice import VoiceResponsePackage
@@ -95,7 +96,11 @@ class Grader:
         produces a confident zero rather than an error — so it is refused rather than
         attempted.
         """
-        resolved = registry.resolve_bank_id(bank_id)
+        # `catalogue.resolve` rather than `registry.resolve_bank_id`: the engine's raises
+        # `UnknownBankError`, which is not a `CatError`, and this method is reached from the
+        # facade's `public_tests` and `trial_run` — both public, both called with a bank id
+        # a host supplied.
+        resolved = catalogue.resolve(bank_id)
         found = registry.get_bank(resolved).get(item_id)
         if found is None:
             raise BankUnknown(f"no item {item_id} in bank {resolved}")

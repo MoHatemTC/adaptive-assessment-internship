@@ -1,18 +1,20 @@
 # `cat_engine/tests/`
 
-~900 deterministic tests. **No billed calls, no infrastructure, no network.** The sandbox and
-the model are stubbed everywhere: one costs money and needs egress, the other is not
+~1,250 deterministic tests. **No billed calls, no infrastructure, no network.** The sandbox
+and the model are stubbed everywhere: one costs money and needs egress, the other is not
 deterministic, and neither is what these tests are about.
 
 ```bash
 python -m pytest                                    # everything, file store
 BANK_DATABASE_URL=... SESSION_DATABASE_URL=... \
-  python -m pytest tests/test_sql_*.py tests/test_session_persistence.py
+  python -m pytest                                  # everything, Postgres
 ```
 
-The database-backed files skip themselves without a DSN and **must run as their own
-session** — those urls are read when a module is built, so setting them globally sends the
-file-store tests through Postgres, where they fail against a store they never meant to use.
+The database-backed files skip themselves without a DSN. Exporting both urls for the whole
+suite is supported and is how a Postgres deployment gets validated — see
+`process_wide_state_is_restored` below, which is what makes it so. It was not always: those
+urls are read when a module is built, so before that fixture existed, setting them globally
+sent the file-store tests through a store they never meant to use.
 
 ## The four that matter most
 
@@ -37,7 +39,7 @@ file-store tests through Postgres, where they fail against a store they never me
 | **Orchestration** | `test_orchestration.py`, `test_orchestration_flow.py`, `test_main_competency_flow.py`, `test_multimodality_smoke.py`, `test_time_budget.py`, `test_stop_reason_reachability.py` — which stopping rules can fire, and under which configuration, `test_aberrance_verification.py` — what a response the posterior could not explain is allowed to change |
 | **Config and paths** | `test_engine_paths.py`, `test_llm_boundary.py`, `test_observability.py` |
 | **Banks and graphs as data** | `test_imported_human_test_banks.py`, `test_edge_validity.py` — the shipped artefacts hold up, checked through `cat_engine/validation.py` |
-| **The documentation itself** | `test_readmes_are_current.py` — every code directory has a README and it still lists what is there |
+| **The documentation itself** | `test_readmes_are_current.py` — every code directory has a README and it still lists what is there, `test_methods_reference_is_current.py` — the root `METHODS.md` names every callable method and none that is gone |
 | **The public surface** | `test_public_surface.py` — every exported name resolves, and importing the package pulls in zero engine modules |
 | **Configuration** | `test_config_guard.py` — what two modules in one process may and may not disagree about, `test_no_inert_settings.py` — every declared setting is read by something, because a lever wired to nothing is a lie told to an operator |
 | **Regression locks** | `test_release_blocker_fixes.py` — each was a release-audit finding once, which is the strongest reason to keep them |
@@ -60,9 +62,9 @@ topology.
     export BANK_DATABASE_URL=postgresql://... SESSION_DATABASE_URL=postgresql://...
     pytest cat_engine/tests
 
-Every test runs, not just the 75 that are otherwise skipped: **1169 passed, 1 skipped**. The
+Every test runs, not just the 75 that are otherwise skipped: **1254 passed, 1 skipped**. The
 remaining skip is data-dependent (no shipped bank has an item measuring two mains). Without
-the DSNs the same suite is 1095 passed, 75 skipped — the skips are the three Postgres-gated
+the DSNs the same suite is 1180 passed, 75 skipped — the skips are the three Postgres-gated
 files.
 
 ## Nothing here can spend money

@@ -51,9 +51,10 @@ cat_engine/
     data/                            registered banks and their competency graphs
   validation.py                      is the shipped DATA sound? bank floor, edge validity
   scripts/                           one calibration script the engine names by path
-  tests/                             ~880 deterministic tests, no billed calls
+  tests/                             ~1,250 deterministic tests, no billed calls
+METHODS.md                           every method, its inputs and its outputs
 cat_engine/docs/module.md            what a host project needs to know
-cat_engine/docs/api.md               the surface, method by method
+cat_engine/docs/api.md               which calls to make, in which order, and why
 ```
 
 It was seven services over a shared engine library until
@@ -121,7 +122,8 @@ engine's own choice.
 
 ## Banks are content
 
-`POST /banks` registers one. Items and graph go together — a bank without its graph pairs
+`cat.upload_bank(bank_id, content)` registers one, and it is the only way in. Items and graph
+go together — a bank without its graph pairs
 with nothing, and the coverage gate then asks a graph authored for a different bank what a
 competency requires, marking every required node unmeasured and vetoing convergence for the
 whole session.
@@ -152,22 +154,31 @@ carry an authored mastery-scale difficulty mapped onto θ in `orchestrator/calib
 passing test suite. This is a **modelling decision, not a derivation**, confined to one
 module so real calibration later touches one file.
 
-`GET /banks/{id}/parity` guards it, and separates the two reasons a modality can lose a
+`cat_engine.catalogue.parity(bank_id)` guards it, and separates the two reasons a modality can lose a
 ranking: `rarely_selected` (loses *with* loading applied — expected) from `miscalibrated`
 (loses even at full loading — the parameters are wrong).
 
 ## Tests
 
 ```bash
-cd backend  && PYTHONPATH=. pytest   # 700: the engine and the study harness
-cd services && python -m pytest      # 190: the services, the seams and the contracts
+python -m pytest                                     # 1180 passed, 75 skipped
+BANK_DATABASE_URL=... SESSION_DATABASE_URL=... \
+  python -m pytest                                   # 1254 passed, 1 skipped
 ```
 
-Neither makes a billed model call or a sandbox call. Between them they cover the
-binary-update identity, fractional updates, calibration mapping, parity diagnostics,
-queue/finalisation invariants, mixed-modality sessions, the candidate boundary, bank
-validation, and that propagation over a wire produces state identical to propagation in a
-process. Sandbox failures are explicitly tested to ensure they move no candidate estimate.
+One suite, one rootdir. The 75 skips are the three Postgres-gated files; supplying both DSNs
+runs them too and the single remaining skip is data-dependent — no shipped bank has an item
+measuring two mains.
+
+**Nothing here can spend money.** The sandbox and the model are stubbed in `conftest.py`, so
+an accidental `pytest` makes no billed call because there is no code path to one. The suite
+opens zero non-loopback sockets even with live credentials in the environment.
+
+The tests cover the binary-update identity, fractional updates, calibration mapping, parity
+diagnostics, queue/finalisation invariants, mixed-modality sessions, the candidate boundary,
+bank validation, and that the facade and a raw `Orchestrator` produce identical reports for
+one seeded assessment. Sandbox failures are explicitly tested to ensure they move no
+candidate estimate.
 
 ## Status
 
@@ -179,15 +190,19 @@ syntheses from semantically related prior-bank strata, not empirical calibration
 item wording.
 
 Prerequisite propagation ships **inert**. A completed screening study measured its
-wrong-inference rate at 7-17% against a 3% gate; enabling an edge is a per-edge decision
-with an experimental design behind it. See [docs/operations.md](cat_engine/docs/operations.md).
+wrong-inference rate at **22.4%** (95% UCB 24.4%) against a 3% gate, and false blocking at
+8.7%; enabling an edge is a per-edge decision with an experimental design behind it. The
+coverage gate — the one propagation feature that is on — is a different mechanism and was
+measured under 3%. See [docs/operations.md](cat_engine/docs/operations.md).
 
 ## Where to read next
 
-- [docs/api.md](cat_engine/docs/api.md) — the contract a frontend builds against
-- the architecture history in git — the whole system drawn, and where it is going
+- [METHODS.md](METHODS.md) — every method, its inputs, its outputs, and what it raises
+- [docs/api.md](cat_engine/docs/api.md) — which calls to make in which order, and why some
+  things are deliberately not in the return value
+- [docs/module.md](cat_engine/docs/module.md) — the embedding contract: what a host supplies
 - [docs/architecture.md](cat_engine/docs/architecture.md) — the loop, the measurement, the graph
-- [docs/module.md](cat_engine/docs/module.md) — what runs, and what crosses the wire
-- the architecture history in git · the architecture history in git · the architecture history in git — the seams, what changed when the code moved, and uploaded banks and scoped assessments
+- [docs/configuration.md](cat_engine/docs/configuration.md) — every setting and what it moves
 - [docs/operations.md](cat_engine/docs/operations.md) — running it, first checks, enabling inference
-- [docs/evidence.md](cat_engine/docs/evidence.md) — the measurements behind the defaults
+- [docs/evidence.md](cat_engine/docs/evidence.md) — the measurements behind the defaults, and
+  what has never been measured
