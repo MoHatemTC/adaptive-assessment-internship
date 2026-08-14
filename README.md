@@ -39,7 +39,11 @@ while decision.status == "question":
 show_report(decision.report)
 ```
 
-See [adaptive_engine/README.md](adaptive_engine/README.md) for the full contract.
+**Integrating from another service?** Start with
+[docs/integration-guide.md](docs/integration-guide.md) — schemas, validation findings,
+error codes, the state contract, and external grading. AI coding agents should read
+[CLAUDE.md](CLAUDE.md). Package overview:
+[adaptive_engine/README.md](adaptive_engine/README.md).
 
 ## The authoring module: `cat_engine` (legacy surface)
 

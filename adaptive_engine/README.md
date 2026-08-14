@@ -1,5 +1,9 @@
 # `adaptive_engine` — the stateless boundary around the proven assessment engine
 
+> Integrating from another service? The complete contract — schemas, validation
+> findings, error codes, state rules, external grading — is
+> [docs/integration-guide.md](../docs/integration-guide.md).
+
 A small, pure Python API for running an adaptive assessment. The engine is a state
 transition and nothing more:
 
