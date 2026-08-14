@@ -263,7 +263,22 @@ class AssessmentModule:
 
         Do not pass `seed` in production. It exists for deterministic replay; omitting it
         draws OS entropy, and exposure control must not be predictable.
+
+        .. deprecated:: 2.0
+            The stateful runtime lifecycle (`begin`/`answer`/`state`/`report`) is
+            replaced by the stateless `adaptive_engine` package, where the host persists
+            the adaptive state and the engine holds nothing. This path remains only until
+            the authoring surfaces are revamped; do not build new runtime callers on it.
         """
+        import warnings
+
+        warnings.warn(
+            "AssessmentModule.begin() is deprecated: the assessment runtime moved to the "
+            "stateless adaptive_engine package (compile_assessment / start_assessment / "
+            "advance_assessment)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         try:
             resolved = registry.resolve_bank_id(bank_id)
         except registry.UnknownBankError as exc:

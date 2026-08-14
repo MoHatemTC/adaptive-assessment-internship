@@ -46,11 +46,14 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-# `cat_engine*` only. The tests and the one calibration script live inside the package
-# directory but are excluded from a wheel below — a host installs the module, not the
+# Two import roots. `adaptive_engine` is the stateless assessment runtime — the public
+# API a host builds on. `cat_engine` carries the authoring surfaces (banks, graphs,
+# scoping, ingest) and the deprecated stateful runtime, kept until the authoring branch
+# is revamped in its turn. Tests and the one calibration script live inside the package
+# directories but are excluded from a wheel below — a host installs the module, not the
 # apparatus around it.
-include = ["cat_engine*"]
-exclude = ["cat_engine.tests*", "cat_engine.scripts*"]
+include = ["adaptive_engine*", "cat_engine*"]
+exclude = ["adaptive_engine.tests*", "cat_engine.tests*", "cat_engine.scripts*"]
 
 [tool.setuptools.package-data]
 # Banks, graphs and rubrics ship with the package so a checkout and a `pip install` see the
@@ -131,4 +134,4 @@ allowed-confusables = ["–", "−", "·"]
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["cat_engine"]
+known-first-party = ["adaptive_engine", "cat_engine"]

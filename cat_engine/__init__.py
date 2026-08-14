@@ -1,5 +1,16 @@
 """Adaptive competency assessment, as one embeddable module.
 
+THE STATEFUL RUNTIME IN THIS PACKAGE IS DEPRECATED. The assessment runtime — begin,
+answer, report, sessions, session stores — has been replaced by the stateless
+``adaptive_engine`` package at the repository root:
+
+    from adaptive_engine import compile_assessment, start_assessment, advance_assessment
+
+The host persists the returned adaptive state; the engine holds nothing between calls.
+`AssessmentModule.begin()`/`answer()` remain only until the authoring branch (banks,
+graphs, scoping, ingest) is revamped in its turn, and warn when used. Do not build new
+runtime callers on them.
+
     from cat_engine import AssessmentModule, CatConfig
 
     cat = AssessmentModule(CatConfig(active_bank="AIE"))

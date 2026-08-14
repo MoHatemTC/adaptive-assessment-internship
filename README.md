@@ -1,20 +1,57 @@
 # Adaptive Competency Assessment
 
-An agent-driven CAT engine that measures a candidate across many competencies using
-**multiple-choice, coding, and open/voice items in the same session**, choosing whichever
-item — of whichever modality — will narrow the weakest estimate fastest, and finishing each
-competency as soon as it is measured.
+An adaptive (CAT) engine that measures a candidate across many competencies, choosing
+whichever question will narrow the weakest estimate fastest and finishing each competency
+as soon as it is measured.
 
-It is **one module a host project imports**. There is no web framework in it and no port:
-the host owns transport, this owns the measurement. See [docs/module.md](cat_engine/docs/module.md) for
-the embedding contract.
+## The runtime: `adaptive_engine` (stateless)
+
+The assessment **runtime** is the [`adaptive_engine`](adaptive_engine/README.md) package —
+a pure state transition with no sessions, no database and no web framework. The host
+persists the returned adaptive state and sends it back with each response:
+
+```python
+from adaptive_engine import (
+    InitialCompetency, QuestionResponse,
+    advance_assessment, compile_assessment, start_assessment,
+)
+
+compiled = compile_assessment(definition)          # the host supplies the definition
+
+decision = start_assessment(
+    compiled,
+    initial_competencies={"python": InitialCompetency(level=3, confidence=0.8)},
+)
+save_state(decision.state)
+
+while decision.status == "question":
+    response = QuestionResponse(
+        question_id=decision.question.question_id,
+        answer=get_answer(decision.question),
+    )
+    decision = advance_assessment(compiled, state=load_state(), response=response)
+    save_state(decision.state)
+
+show_report(decision.report)
+```
+
+See [adaptive_engine/README.md](adaptive_engine/README.md) for the full contract.
+
+## The authoring module: `cat_engine` (legacy surface)
+
+`cat_engine` carries the authoring surfaces — banks, competency graphs, scoping, ingest —
+and the **deprecated** stateful runtime it used to expose. The stateful lifecycle
+(`begin`/`answer`/`report`, session stores) is replaced by `adaptive_engine` and remains
+only until the authoring branch is revamped in its turn; `begin()` warns when used. Do
+not build new runtime callers on it. See [docs/module.md](cat_engine/docs/module.md) for
+the legacy embedding contract.
 
 ```python
 from cat_engine import AssessmentModule, CatConfig
 
 cat = AssessmentModule(CatConfig(active_bank="AIE"))
 
-state = await cat.begin(intake={"C1": 3})
+state = await cat.begin(intake={"C1": 3})           # DEPRECATED — use adaptive_engine
 while state.presenting:
     state = await cat.answer(state.session_id, mcq=2)   # or code= / transcript= / audio=
 report = state.report
@@ -28,6 +65,12 @@ pip install cat-engine[sandbox,live]   # grading code, and realtime interviews
 Or copy `cat_engine/` into the host tree and import it — everything it needs is inside.
 
 ```text
+adaptive_engine/                     THE STATELESS RUNTIME — see its README
+  models.py, compilation.py          AssessmentDefinition; compile_assessment
+  runtime.py, state.py               start/advance; the state the host persists
+  evidence.py, selection.py          one evidence path; one selection path
+  convergence.py, graph.py           one convergence evaluator; graph blocking
+  irt.py, report.py, errors.py       the 3PL core; the report; typed errors
 cat_engine/
   facade.py                          AssessmentModule — the surface a host calls
   wiring.py                          builds an Orchestrator out of in-process parts
