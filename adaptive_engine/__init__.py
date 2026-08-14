@@ -1,16 +1,17 @@
-"""adaptive_engine — a stateless adaptive assessment engine.
+"""adaptive_engine — the stateless boundary around the proven assessment engine.
 
 The engine is a pure state transition:
 
-    assessment definition + previous adaptive state + optional response
+    compiled assessment + previous adaptive state + optional response
                                |
                  new adaptive state + decision
 
-It owns adaptive assessment logic only: definition validation, compilation, belief
-initialization, question selection, evidence application, convergence, and the final
-report. The host backend owns everything else — users, sessions, persistence,
-assignments, transport, and external grading. There is no database, no HTTP layer, no
-session store and no registry in this package, and importing it starts nothing.
+Every measurement decision — per-competency grading rollup, person-fit checks, graph
+propagation and coverage gates, the shipped stopping rules, the full report — is made by
+``cat_engine``'s existing, battle-tested Orchestrator. This package contributes the
+boundary a host backend needs: caller-supplied content, a JSON-safe state the host
+persists, strict response validation, and host-side grading input for non-mcq
+modalities. It holds no sessions, no stores, no registries, and does no network I/O.
 
 The complete lifecycle:
 
@@ -26,13 +27,13 @@ The complete lifecycle:
 
     decision = start_assessment(
         compiled,
-        initial_competencies={"python": InitialCompetency(level=3, confidence=0.8)},
+        initial_competencies={"C1": InitialCompetency(level=3, confidence=0.8)},
     )
     save_state(decision.state)
 
     while decision.status == "question":
         response = QuestionResponse(
-            question_id=decision.question.question_id,
+            question_id=decision.question.item.item_id,
             answer=get_answer(decision.question),
         )
         decision = advance_assessment(compiled, state=load_state(), response=response)
@@ -41,8 +42,11 @@ The complete lifecycle:
     show_report(decision.report)
 """
 
-from adaptive_engine.compilation import CompiledAssessment, compile_assessment
-from adaptive_engine.convergence import StopReason
+from adaptive_engine.compilation import (
+    CompiledAssessment,
+    compile_assessment,
+    content_hash_of,
+)
 from adaptive_engine.errors import (
     AdaptiveEngineError,
     AssessmentFinished,
@@ -53,29 +57,19 @@ from adaptive_engine.errors import (
     StaleResponse,
     StateMismatch,
 )
-from adaptive_engine.evidence import Evidence, GradedAnswer
-from adaptive_engine.models import (
-    AssessmentDefinition,
-    AssessmentGraph,
-    AssessmentPolicy,
-    Competency,
-    GraphEdge,
-    Measurement,
-    Question,
-)
-from adaptive_engine.report import AssessmentReport, CompetencyReport
+from adaptive_engine.models import AssessmentDefinition, MeasurementPolicy
 from adaptive_engine.runtime import (
     AdaptiveDecision,
+    GradedAnswer,
     InitialCompetency,
-    PresentedQuestion,
     QuestionResponse,
     advance_assessment,
-    present_question,
     start_assessment,
 )
-from adaptive_engine.state import AdaptiveState, CompetencyState, GraphNodeEvidence
+from adaptive_engine.state import AdaptiveState
+from cat_engine.contracts import AssessmentReportDTO, PresentedItemDTO, PresentingDTO
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 
 __all__ = [
     "AdaptiveDecision",
@@ -83,32 +77,23 @@ __all__ = [
     "AdaptiveState",
     "AssessmentDefinition",
     "AssessmentFinished",
-    "AssessmentGraph",
-    "AssessmentPolicy",
-    "AssessmentReport",
-    "Competency",
-    "CompetencyReport",
-    "CompetencyState",
+    "AssessmentReportDTO",
     "CompiledAssessment",
-    "Evidence",
     "GradedAnswer",
-    "GraphEdge",
-    "GraphNodeEvidence",
     "InitialCompetency",
     "InvalidAnswer",
     "InvalidDefinition",
     "InvalidInitialCompetency",
     "InvalidState",
-    "Measurement",
-    "PresentedQuestion",
-    "Question",
+    "MeasurementPolicy",
+    "PresentedItemDTO",
+    "PresentingDTO",
     "QuestionResponse",
     "StaleResponse",
     "StateMismatch",
-    "StopReason",
     "__version__",
     "advance_assessment",
     "compile_assessment",
-    "present_question",
+    "content_hash_of",
     "start_assessment",
 ]

@@ -4,11 +4,14 @@ An adaptive (CAT) engine that measures a candidate across many competencies, cho
 whichever question will narrow the weakest estimate fastest and finishing each competency
 as soon as it is measured.
 
-## The runtime: `adaptive_engine` (stateless)
+## The runtime boundary: `adaptive_engine` (stateless)
 
-The assessment **runtime** is the [`adaptive_engine`](adaptive_engine/README.md) package —
-a pure state transition with no sessions, no database and no web framework. The host
-persists the returned adaptive state and sends it back with each response:
+The assessment **runtime API** is the [`adaptive_engine`](adaptive_engine/README.md)
+package — a thin stateless boundary over the engine below: no sessions, no database, no
+web framework, no network I/O. The caller supplies the assessment content (bank items +
+competency graph, in the engine's own wire shapes), and persists the returned adaptive
+state between calls. Every measurement decision is made by the same proven engine loop
+the legacy module runs.
 
 ```python
 from adaptive_engine import (
@@ -25,9 +28,10 @@ decision = start_assessment(
 save_state(decision.state)
 
 while decision.status == "question":
+    item = decision.question.item                  # candidate-safe, by type
     response = QuestionResponse(
-        question_id=decision.question.question_id,
-        answer=get_answer(decision.question),
+        question_id=item.item_id,
+        answer=get_answer(item),                   # option index, or host-graded result
     )
     decision = advance_assessment(compiled, state=load_state(), response=response)
     save_state(decision.state)
@@ -65,12 +69,10 @@ pip install cat-engine[sandbox,live]   # grading code, and realtime interviews
 Or copy `cat_engine/` into the host tree and import it — everything it needs is inside.
 
 ```text
-adaptive_engine/                     THE STATELESS RUNTIME — see its README
-  models.py, compilation.py          AssessmentDefinition; compile_assessment
-  runtime.py, state.py               start/advance; the state the host persists
-  evidence.py, selection.py          one evidence path; one selection path
-  convergence.py, graph.py           one convergence evaluator; graph blocking
-  irt.py, report.py, errors.py       the 3PL core; the report; typed errors
+adaptive_engine/                     THE STATELESS RUNTIME BOUNDARY — see its README
+  models.py, compilation.py          AssessmentDefinition; compile_assessment (engine validators)
+  runtime.py, state.py               start/advance over the Orchestrator; the persisted state
+  errors.py                          typed errors with stable codes
 cat_engine/
   facade.py                          AssessmentModule — the surface a host calls
   wiring.py                          builds an Orchestrator out of in-process parts

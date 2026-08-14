@@ -1,8 +1,6 @@
-"""Starting a run: seeding beliefs, validating them, and presenting the first question."""
+"""Starting a run: seeding beliefs, validating them, presenting the first question."""
 
 from __future__ import annotations
-
-import math
 
 import pytest
 from pydantic import ValidationError
@@ -20,7 +18,7 @@ def test_starting_returns_an_initial_question_and_state(definition):
     decision = start_assessment(compiled, seed=7)
     assert decision.status == "question"
     assert decision.question is not None
-    assert decision.state.current_question_id == decision.question.question_id
+    assert decision.state.current_question_id == decision.question.item.item_id
     assert decision.report is None and decision.stop_reason is None
     assert decision.converged is False
 
@@ -33,36 +31,51 @@ def test_initial_beliefs_do_not_count_as_answered_questions(definition):
         seed=7,
     )
     assert decision.state.questions_answered == 0
-    assert decision.state.administered_question_ids == []
     assert all(
-        competency.observations == 0
-        for competency in decision.state.competency_states.values()
+        variable.observations == 0
+        for variable in decision.state.engine_state.variables.values()
     )
 
 
-def test_different_initial_beliefs_can_influence_initial_selection(definition):
+def test_initial_beliefs_seed_the_prior(definition):
     compiled = compile_assessment(definition)
-
     neutral = start_assessment(compiled, seed=7)
-    confident_databases = start_assessment(
+    believed = start_assessment(
         compiled,
-        initial_competencies={"databases": InitialCompetency(level=3, confidence=0.9)},
+        initial_competencies={"python": InitialCompetency(level=5, confidence=0.9)},
         seed=7,
     )
+    flat = neutral.state.engine_state.variables["python"]
+    seeded = believed.state.engine_state.variables["python"]
+    assert seeded.posterior != flat.posterior
+    assert seeded.theta_hat > flat.theta_hat
+    assert seeded.standard_error < flat.standard_error
 
-    # With no beliefs both competencies tie at maximum uncertainty and the id breaks the
-    # tie toward databases. A confident databases belief narrows its posterior, so python
-    # becomes the most uncertain competency and is asked about first.
-    assert neutral.question.question_id.startswith("databases-")
-    assert confident_databases.question.question_id.startswith("python-")
+
+def test_confidence_selects_the_narrow_or_wide_prior(definition):
+    compiled = compile_assessment(definition)
+    trusted = start_assessment(
+        compiled,
+        initial_competencies={"python": InitialCompetency(level=3, confidence=0.9)},
+        seed=1,
+    )
+    tentative = start_assessment(
+        compiled,
+        initial_competencies={"python": InitialCompetency(level=3, confidence=0.2)},
+        seed=1,
+    )
+    assert (
+        trusted.state.engine_state.variables["python"].standard_error
+        < tentative.state.engine_state.variables["python"].standard_error
+    )
 
 
-def test_the_same_seed_reproduces_the_same_first_question(definition):
+def test_the_same_seed_reproduces_the_same_run_start(definition):
     compiled = compile_assessment(definition)
     first = start_assessment(compiled, seed=99)
     second = start_assessment(compiled, seed=99)
-    assert first.question.question_id == second.question.question_id
-    assert first.state == second.state
+    assert first.question.item.item_id == second.question.item.item_id
+    assert first.state.rng_state == second.state.rng_state
 
 
 def test_an_initial_belief_for_an_unknown_competency_is_rejected(definition):
@@ -97,21 +110,7 @@ def test_raw_initial_values_are_validated_through_start(definition):
         )
 
 
-def test_confidence_widens_or_narrows_the_prior(definition):
+def test_a_bool_seed_is_rejected(definition):
     compiled = compile_assessment(definition)
-    sure = start_assessment(
-        compiled,
-        initial_competencies={"python": InitialCompetency(level=3, confidence=1.0)},
-        seed=1,
-    )
-    unsure = start_assessment(
-        compiled,
-        initial_competencies={"python": InitialCompetency(level=3, confidence=0.0)},
-        seed=1,
-    )
-    spread = lambda posterior: math.sqrt(  # noqa: E731
-        sum(w * (i - 20) ** 2 for i, w in enumerate(posterior))
-    )
-    assert spread(sure.state.competency_states["python"].posterior) < spread(
-        unsure.state.competency_states["python"].posterior
-    )
+    with pytest.raises(TypeError):
+        start_assessment(compiled, seed=True)

@@ -1015,15 +1015,27 @@ class Orchestrator:
 
     # --- steps 5-7: grade, update, finalise --------------------------------
     def record_response(
-        self, state: AssessmentState, item: BankItem, response: object
+        self,
+        state: AssessmentState,
+        item: BankItem,
+        response: object,
+        *,
+        graded: GradedResponse | None = None,
     ) -> tuple[AssessmentState, GradedResponse]:
         """Grade one response, fold it into every main competency it evidences, finalise.
 
         A code submission may update several main competencies. Queue slots for every
         competency touched are cleared and must be refilled — those picks were made against
         stale estimates.
+
+        `graded` lets a caller that ran grading OUTSIDE this process — a host backend
+        grading code or voice with its own infrastructure — hand in the finished
+        `GradedResponse` instead of a raw answer. Everything downstream (rollup, person
+        fit, propagation, finalisation) runs identically; only the grading call is
+        skipped. Left None, grading happens here as it always has.
         """
-        graded = self._grader.grade(item, response)
+        if graded is None:
+            graded = self._grader.grade(item, response)
 
         session_variables = set(state.variables)
         touched = affected_mains(item, session_variables)

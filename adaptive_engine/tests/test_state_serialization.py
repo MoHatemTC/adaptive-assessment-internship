@@ -21,7 +21,7 @@ def mid_run_decision(compiled, steps=4, seed=11):
             compiled,
             state=decision.state,
             response=QuestionResponse(
-                question_id=decision.question.question_id, answer=0
+                question_id=decision.question.item.item_id, answer=0
             ),
         )
     return decision
@@ -32,14 +32,28 @@ def test_state_survives_json_serialization_and_restoration(definition):
     decision = mid_run_decision(compiled)
     payload = json.dumps(decision.state.model_dump(mode="json"))
     restored = AdaptiveState.model_validate(json.loads(payload))
-    assert restored == decision.state
+    assert restored.model_dump(mode="json") == decision.state.model_dump(mode="json")
+
+
+def without_wall_clock(state: AdaptiveState) -> dict:
+    """The dump minus the fields that read the real clock.
+
+    Question timing (`presenting_since`, `item_seconds`, `elapsed_minutes`) legitimately
+    differs between two live calls made milliseconds apart; everything the DECISIONS are
+    made from must not.
+    """
+    payload = state.model_dump(mode="json")
+    for volatile in ("presenting_since", "item_seconds", "elapsed_minutes"):
+        payload["engine_state"].pop(volatile, None)
+    return payload
 
 
 def test_restored_state_produces_the_same_next_decision(definition):
+    """Selection randomness included: the RNG state travels inside the adaptive state."""
     compiled = compile_assessment(definition)
     decision = mid_run_decision(compiled)
     response = QuestionResponse(
-        question_id=decision.question.question_id, answer=1
+        question_id=decision.question.item.item_id, answer=1
     )
 
     from_original = advance_assessment(compiled, state=decision.state, response=response)
@@ -47,30 +61,24 @@ def test_restored_state_produces_the_same_next_decision(definition):
     from_restored = advance_assessment(compiled, state=restored, response=response)
 
     assert from_original.status == from_restored.status
-    assert from_original.state == from_restored.state
+    assert without_wall_clock(from_original.state) == without_wall_clock(
+        from_restored.state
+    )
     if from_original.status == "question":
-        assert from_original.question == from_restored.question
-
-
-def test_the_dump_contains_no_derived_ability_summaries(definition):
-    """theta-hat and the standard error are read from the posterior, never stored beside
-    it where the two could drift apart."""
-    compiled = compile_assessment(definition)
-    payload = mid_run_decision(compiled).state.model_dump(mode="json")
-    for competency_payload in payload["competency_states"].values():
-        assert set(competency_payload) == {"posterior", "observations"}
+        assert (
+            from_original.question.item.item_id == from_restored.question.item.item_id
+        )
 
 
 def test_the_state_carries_no_host_concerns(definition):
+    """Pinning and engine runtime state only — no users, no host sessions, no storage."""
     compiled = compile_assessment(definition)
     payload = mid_run_decision(compiled).state.model_dump(mode="json")
     assert set(payload) == {
         "schema_version",
         "assessment_id",
         "assessment_version",
-        "competency_states",
-        "administered_question_ids",
-        "current_question_id",
-        "graph_evidence",
-        "random_seed",
+        "content_hash",
+        "engine_state",
+        "rng_state",
     }

@@ -1,113 +1,95 @@
-"""Compilation is the one validation path: everything broken is refused with a code."""
+"""Compilation reuses the engine's validators and refuses anything broken."""
 
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
 
 from adaptive_engine import (
-    AssessmentPolicy,
     InvalidDefinition,
-    Measurement,
-    Question,
+    MeasurementPolicy,
     compile_assessment,
+    content_hash_of,
 )
-from adaptive_engine.tests.conftest import definition_with, mcq
+from adaptive_engine.tests.conftest import definition_with, mcq_item, two_main_graph
 
 
 def test_a_valid_assessment_compiles(definition):
     compiled = compile_assessment(definition)
     assert compiled.assessment_id == "python-backend"
     assert compiled.version == "v1"
-    assert compiled.competency_ids == ("python", "databases")
-    assert set(compiled.questions_by_id) == {q.question_id for q in definition.questions}
+    assert compiled.targets == ("databases", "python")
     assert compiled.definition is definition, "the definition is held once, not copied"
+    assert compiled.graph_service is None
 
 
-def test_indexes_cover_every_competency(definition):
-    compiled = compile_assessment(definition)
-    for competency_id in compiled.competency_ids:
-        assert compiled.question_ids_by_competency[competency_id]
+def test_a_graph_compiles_with_its_policy_resolved():
+    compiled = compile_assessment(definition_with(graph=two_main_graph()))
+    assert compiled.graph_service is not None
+    assert compiled.resolved_policy is not None
 
 
-def test_duplicate_competency_ids_are_rejected():
+def test_an_item_the_engine_schema_rejects_is_rejected():
+    bad = mcq_item("q-1", "python")
+    bad["cat"]["a"] = 99.0  # discrimination far outside the calibrated range
     with pytest.raises(InvalidDefinition) as caught:
-        compile_assessment(definition_with(competencies=["python", "python"]))
+        compile_assessment(definition_with(items=[bad]))
     assert caught.value.code == "invalid_definition"
-    assert "duplicate competency" in str(caught.value)
 
 
-def test_duplicate_question_ids_are_rejected():
-    questions = [mcq("q-1", "python"), mcq("q-1", "python")]
-    with pytest.raises(InvalidDefinition, match="duplicate question"):
-        compile_assessment(definition_with(competencies=["python"], questions=questions))
+def test_an_mcq_item_without_an_answer_key_is_rejected():
+    bad = mcq_item("q-1", "python")
+    del bad["mcq"]["answer_index"]
+    with pytest.raises(InvalidDefinition, match="q-1"):
+        compile_assessment(definition_with(items=[bad]))
 
 
-def test_a_question_measuring_an_unknown_competency_is_rejected():
-    questions = [mcq("q-1", "python"), mcq("q-2", "no-such-competency")]
-    with pytest.raises(InvalidDefinition, match="unknown competency"):
-        compile_assessment(definition_with(competencies=["python"], questions=questions))
+def test_duplicate_item_ids_are_rejected():
+    items = [mcq_item("q-1", "python"), mcq_item("q-1", "python")]
+    with pytest.raises(InvalidDefinition, match="duplicate item id"):
+        compile_assessment(definition_with(items=items))
 
 
-def test_a_competency_no_question_measures_is_rejected():
-    questions = [mcq("q-1", "python")]
-    with pytest.raises(InvalidDefinition, match="never be assessed"):
-        compile_assessment(
-            definition_with(competencies=["python", "databases"], questions=questions)
-        )
+def test_an_invalid_graph_is_rejected():
+    graph = two_main_graph()
+    graph["edges"][0]["to"] = "no-such-node"
+    with pytest.raises(InvalidDefinition, match="graph"):
+        compile_assessment(definition_with(graph=graph))
 
 
-def test_a_graph_edge_to_an_unknown_competency_is_rejected():
-    with pytest.raises(InvalidDefinition, match="unknown"):
-        compile_assessment(definition_with(edges=[("python", "no-such-competency")]))
-
-
-def test_a_self_loop_is_rejected():
-    with pytest.raises(InvalidDefinition, match="self-loop"):
-        compile_assessment(definition_with(edges=[("python", "python")]))
-
-
-def test_a_duplicate_edge_is_rejected():
-    with pytest.raises(InvalidDefinition, match="duplicate graph edge"):
-        compile_assessment(
-            definition_with(edges=[("python", "databases"), ("python", "databases")])
-        )
-
-
-def test_a_prerequisite_cycle_is_rejected():
-    with pytest.raises(InvalidDefinition, match="cycle"):
-        compile_assessment(
-            definition_with(edges=[("python", "databases"), ("databases", "python")])
-        )
-
-
-def test_prerequisite_closure_is_transitive():
-    compiled = compile_assessment(
-        definition_with(
-            competencies=["a", "b", "c"],
-            questions=[mcq("qa", "a"), mcq("qb", "b"), mcq("qc", "c")],
-            edges=[("a", "b"), ("b", "c")],
-        )
+def test_a_cyclic_prerequisite_graph_is_rejected():
+    graph = two_main_graph()
+    graph["edges"].append(
+        {"from": "databases", "to": "python", "relation": "PREREQUISITE", "strength": 0.9}
     )
-    assert compiled.ancestors_by_competency["c"] == {"a", "b"}
-    assert compiled.ancestors_by_competency["a"] == frozenset()
+    with pytest.raises(InvalidDefinition, match="graph"):
+        compile_assessment(definition_with(graph=graph))
 
 
-def test_an_mcq_question_without_an_answer_key_is_rejected_at_the_model():
-    with pytest.raises(ValidationError, match="answer_index"):
-        Question(
-            question_id="q-1",
-            prompt="?",
-            options=["a", "b"],
-            measures=[Measurement(competency_id="python")],
-        )
+def test_a_target_no_item_measures_is_rejected():
+    with pytest.raises(InvalidDefinition, match="kubernetes"):
+        compile_assessment(definition_with(targets=["python", "kubernetes"]))
 
 
-def test_out_of_range_adaptive_parameters_are_rejected_at_the_model():
-    with pytest.raises(ValidationError):
-        mcq("q-1", "python", discrimination=5.0)
+def test_the_content_hash_pins_the_answer_keys():
+    original = definition_with()
+    edited_items = [dict(item) for item in original.items]
+    edited_items[0] = dict(edited_items[0])
+    edited_items[0]["mcq"] = {**edited_items[0]["mcq"], "answer_index": 2}
+    edited = definition_with(items=edited_items)
+    assert content_hash_of(original) != content_hash_of(edited)
+    assert content_hash_of(original) == content_hash_of(definition_with())
 
 
-def test_a_policy_with_the_cap_below_the_floor_is_rejected():
-    with pytest.raises(ValidationError, match="min_questions_per_competency"):
-        AssessmentPolicy(min_questions_per_competency=6, max_questions_per_competency=3)
+def test_policy_overrides_map_onto_engine_setting_names():
+    policy = MeasurementPolicy(
+        se_target=0.6,
+        max_questions_total=30,
+        time_limit_minutes=45,
+        graph_enabled=False,
+    )
+    assert policy.overrides() == {
+        "cat_se_target": 0.6,
+        "orchestrator_max_items": 30,
+        "orchestrator_time_limit_minutes": 45,
+        "competency_graph_enabled": False,
+    }

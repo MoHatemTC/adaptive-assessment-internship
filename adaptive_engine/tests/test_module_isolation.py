@@ -1,4 +1,11 @@
-"""The engine is only adaptive logic: it imports and runs with no infrastructure at all."""
+"""The layer runs with no web framework, no database, and none of the legacy machinery.
+
+The measurement brain (`cat_engine.engine`) is a dependency by design now — reuse, not a
+copy — so this no longer asserts "cat_engine is never imported". What it pins instead:
+running a complete assessment touches no session store, no facade, no wiring cache, no
+database driver and no web framework, and performs no network I/O (the run would hang or
+fail on the placeholder endpoints if it tried).
+"""
 
 from __future__ import annotations
 
@@ -14,44 +21,45 @@ FORBIDDEN_IMPORT_ROOTS = (
     "sqlalchemy",
     "psycopg",
     "psycopg2",
-    "httpx",
-    "openai",
-    "requests",
-    "cat_engine",  # the legacy stateful module must not be a hidden dependency
+    "e2b",
+    "e2b_code_interpreter",
+    # The legacy stateful machinery must stay out of the stateless path entirely.
+    "cat_engine.facade",
+    "cat_engine.wiring",
+    "cat_engine.stores",
+    "cat_engine.ingest",
+    "cat_engine.live",
 )
 
 
-def test_the_engine_imports_and_runs_without_a_database_or_web_framework():
-    """Run a complete assessment in a fresh interpreter, then assert nothing
-    infrastructure-shaped was ever imported."""
+def test_a_full_run_touches_no_infrastructure():
     program = textwrap.dedent(
         f"""
         import sys
 
         from adaptive_engine import (
-            AssessmentDefinition, Competency, Measurement, Question, QuestionResponse,
+            AssessmentDefinition, QuestionResponse,
             advance_assessment, compile_assessment, start_assessment,
         )
 
-        definition = AssessmentDefinition(
-            assessment_id="iso", version="v1",
-            competencies=[Competency(competency_id="c")],
-            questions=[
-                Question(
-                    question_id=f"q{{i}}", prompt="?", options=["a", "b"],
-                    answer_index=0, measures=[Measurement(competency_id="c")],
-                    difficulty=float(i - 2), discrimination=2.0,
-                )
-                for i in range(5)
-            ],
+        items = [
+            {{
+                "item_id": f"q{{i}}", "modality": "mcq",
+                "measures": [{{"variable": "c", "weight": 1.0}}],
+                "cat": {{"a": 2.0, "b": float(i - 2), "c": 0.0}},
+                "mcq": {{"stem": "?", "options": ["a", "b"], "answer_index": 0}},
+            }}
+            for i in range(5)
+        ]
+        compiled = compile_assessment(
+            AssessmentDefinition(assessment_id="iso", version="v1", items=items)
         )
-        compiled = compile_assessment(definition)
         decision = start_assessment(compiled, seed=1)
         while decision.status == "question":
             decision = advance_assessment(
                 compiled, state=decision.state,
                 response=QuestionResponse(
-                    question_id=decision.question.question_id, answer=0
+                    question_id=decision.question.item.item_id, answer=0
                 ),
             )
         assert decision.report is not None
@@ -61,7 +69,7 @@ def test_the_engine_imports_and_runs_without_a_database_or_web_framework():
             name for name in sys.modules
             if any(name == root or name.startswith(root + ".") for root in roots)
         )
-        assert not loaded, f"infrastructure imported by the engine: {{loaded}}"
+        assert not loaded, f"infrastructure imported by the stateless path: {{loaded}}"
         """
     )
     completed = subprocess.run(  # noqa: S603 — our own interpreter, our own program
