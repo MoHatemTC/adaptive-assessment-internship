@@ -15,9 +15,12 @@ gates, the shipped stopping rules, the full report — is made by `cat_engine`'s
 battle-tested `Orchestrator`, which was already written in the stateless style (state in,
 new state out, nothing held). What this layer adds is the boundary a host backend needs:
 
-- **Caller-supplied content.** The definition carries bank items and the competency
-  graph in the engine's own wire shapes — exactly what the authoring branch produces —
-  validated by the engine's own validators. No bank store, no registry, no files.
+- **Caller-supplied content, on a typed boundary.** The definition carries bank items
+  and the competency graph as declared models — `BankItem` (the engine's own item
+  schema) and `CompetencyGraph` (the engine's wire DTOs, `from`/`to` aliases included,
+  plus provenance) — so an external service gets a schema and field-level errors. Raw
+  JSON dicts coerce into every model automatically. No bank store, no registry, no
+  files.
 - **One JSON-safe state blob** the host persists and sends back, carrying the engine's
   complete runtime state plus the exposure-control RNG, pinned to the assessment id,
   version, **and a content hash** so edited content behind an unchanged version string is
@@ -99,6 +102,39 @@ Every call returns an `AdaptiveDecision`, and its invariants are enforced by the
 `stop_reason` and `decision_status` — a competency that was never asked about reads
 `not_assessed`, never a level.
 
+## Authoring: creating and revising assessments
+
+`adaptive_engine.authoring` is the pure authoring companion — questions in, a validated
+definition out, nothing written anywhere (the host persists definitions exactly as it
+persists states):
+
+```python
+from adaptive_engine import authoring
+
+# THE general-purpose operation: a competency graph from the question list alone.
+# Edge weights come from item co-measurement; derived prerequisite edges ship inert
+# and unvalidated; the thresholds used are stamped into the artifact.
+graph = authoring.derive_graph("python-backend", items,
+                               declaration=[{"id": "C1.1", "critical": True}],
+                               relation_threshold=0.5, edge_floor=0.05)
+
+# The engine's own soundness checks, as typed findings instead of exceptions:
+report = authoring.validate_content("python-backend", items, graph)
+
+# Create: derives the graph when none is given, validates, compiles once as the gate.
+definition = authoring.build_assessment("python-backend", "v1", items)
+
+# Revise: add / update-by-id / retire items; rederive or keep the graph; always a new
+# version, always a new definition — the old one is untouched.
+updated = authoring.revise_assessment(definition, version="v2",
+                                      add_items=[...], retire_item_ids=["py-9"])
+```
+
+Validation reuses the exact checks the engine's checked-in banks are held to
+(`item_invalid`, `graph_bank_mismatch`, `measured_node_absent`, `coverage_unreachable`,
+`required_node_unmeasured`, …), and graph derivation is `cat_engine.ingest.derive`
+verbatim — deterministic, no LLM, no network.
+
 ## Ownership boundaries
 
 The host owns: users, authentication, application sessions, assignments, question and
@@ -127,6 +163,7 @@ adaptive_engine/
   compilation.py  compile_assessment: engine validators + InMemoryBank + Orchestrator wiring
   runtime.py      start/advance, response validation, host-graded evidence, decisions
   state.py        AdaptiveState: engine state + RNG + content-hash pinning, JSON-safe
+  authoring.py    derive_graph / validate_content / build_assessment / revise_assessment
   errors.py       the typed error hierarchy with stable codes
   tests/          the behavioral contract, one file per concern
 ```

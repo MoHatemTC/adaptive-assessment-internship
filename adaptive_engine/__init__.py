@@ -57,7 +57,15 @@ from adaptive_engine.errors import (
     StaleResponse,
     StateMismatch,
 )
-from adaptive_engine.models import AssessmentDefinition, MeasurementPolicy
+from adaptive_engine.models import (
+    AssessmentDefinition,
+    BankItem,
+    CompetencyDeclaration,
+    CompetencyGraph,
+    GraphDerivation,
+    GraphPolicy,
+    MeasurementPolicy,
+)
 from adaptive_engine.runtime import (
     AdaptiveDecision,
     GradedAnswer,
@@ -78,8 +86,13 @@ __all__ = [
     "AssessmentDefinition",
     "AssessmentFinished",
     "AssessmentReportDTO",
+    "BankItem",
+    "CompetencyDeclaration",
+    "CompetencyGraph",
     "CompiledAssessment",
     "GradedAnswer",
+    "GraphDerivation",
+    "GraphPolicy",
     "InitialCompetency",
     "InvalidAnswer",
     "InvalidDefinition",

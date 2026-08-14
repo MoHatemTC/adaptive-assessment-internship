@@ -146,8 +146,7 @@ def test_edited_content_behind_an_unchanged_version_is_rejected(definition):
     compiled = compile_assessment(definition)
     decision = start_assessment(compiled, seed=7)
 
-    edited_items = [dict(item) for item in definition.items]
-    edited_items[0] = dict(edited_items[0])
+    edited_items = [item.model_dump() for item in definition.items]
     edited_items[0]["mcq"] = {**edited_items[0]["mcq"], "answer_index": 2}
     edited = compile_assessment(definition_with(items=edited_items))
 

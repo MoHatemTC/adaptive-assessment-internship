@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from adaptive_engine import (
     InvalidDefinition,
@@ -31,8 +32,15 @@ def test_a_graph_compiles_with_its_policy_resolved():
 def test_an_item_the_engine_schema_rejects_is_rejected():
     bad = mcq_item("q-1", "python")
     bad["cat"]["a"] = 99.0  # discrimination far outside the calibrated range
+
+    # Constructing the typed definition already refuses it, with a field-level error...
+    with pytest.raises(ValidationError, match=r"cat\.a"):
+        definition_with(items=[bad])
+    # ...and a raw payload sent straight to compile gets the typed error code instead.
     with pytest.raises(InvalidDefinition) as caught:
-        compile_assessment(definition_with(items=[bad]))
+        compile_assessment(
+            {"assessment_id": "python-backend", "version": "v1", "items": [bad]}
+        )
     assert caught.value.code == "invalid_definition"
 
 
@@ -72,8 +80,7 @@ def test_a_target_no_item_measures_is_rejected():
 
 def test_the_content_hash_pins_the_answer_keys():
     original = definition_with()
-    edited_items = [dict(item) for item in original.items]
-    edited_items[0] = dict(edited_items[0])
+    edited_items = [item.model_dump() for item in original.items]
     edited_items[0]["mcq"] = {**edited_items[0]["mcq"], "answer_index": 2}
     edited = definition_with(items=edited_items)
     assert content_hash_of(original) != content_hash_of(edited)

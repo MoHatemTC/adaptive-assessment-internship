@@ -109,27 +109,26 @@ def content_hash_of(definition: AssessmentDefinition) -> str:
 def compile_assessment(definition: AssessmentDefinition) -> CompiledAssessment:
     """Validate the definition end to end and construct the engine over it.
 
-    Raises ``InvalidDefinition`` for: an item the ``BankItem`` schema rejects, duplicate
-    item ids, a graph the graph validator rejects, or a target no item measures.
+    Field-level item and graph validation happens on the typed models themselves (the
+    ``BankItem`` schema, the graph DTOs); this adds what only the whole definition can
+    know. Raises ``InvalidDefinition`` for: a definition the models reject, duplicate
+    item ids, an mcq item without a usable answer key, a graph the graph validator
+    rejects, or a target no item measures.
     """
     if not isinstance(definition, AssessmentDefinition):
-        definition = AssessmentDefinition.model_validate(definition)
-
-    items: list[BankItem] = []
-    seen: set[str] = set()
-    for raw in definition.items:
         try:
-            item = BankItem.model_validate(raw)
+            definition = AssessmentDefinition.model_validate(definition)
         except ValidationError as exc:
-            identifier = raw.get("item_id", "<no id>") if isinstance(raw, dict) else "?"
-            raise InvalidDefinition(f"item {identifier} is invalid: {exc}") from exc
+            raise InvalidDefinition(f"assessment definition is invalid: {exc}") from exc
+
+    seen: set[str] = set()
+    for item in definition.items:
         if item.item_id in seen:
             raise InvalidDefinition(f"duplicate item id: {item.item_id}")
         seen.add(item.item_id)
         _require_gradable(item)
-        items.append(item)
 
-    bank = InMemoryBank(tuple(items))
+    bank = InMemoryBank(tuple(definition.items))
     available = bank.variables()
     targets = tuple(definition.targets) if definition.targets else tuple(available)
     unknown = [t for t in targets if t not in available]
@@ -141,7 +140,7 @@ def compile_assessment(definition: AssessmentDefinition) -> CompiledAssessment:
     if definition.graph is not None:
         try:
             graph = parse_and_validate_graph(
-                definition.graph, source=definition.assessment_id
+                definition.graph.wire_format(), source=definition.assessment_id
             )
         except CompetencyGraphValidationError as exc:
             raise InvalidDefinition(f"competency graph is invalid: {exc}") from exc

@@ -1,6 +1,7 @@
 # Design: `adaptive_engine` as a stateless boundary over the existing engine
 
 Status: implemented (phase 1 + the `graded=` seam). 2026-08-14.
+Authoring layer (`adaptive_engine.authoring`) added 2026-08-15 — see §Authoring below.
 
 ## Problem
 
@@ -68,6 +69,33 @@ skipped, everything downstream (rollup, person-fit, propagation, gates) runs unc
 One private opt-out at construction: an assessment defined without a graph sets the
 orchestrator's graph check so the deprecated registry fallback ("borrow the active
 bank's graph") can never fire.
+
+## Authoring (`adaptive_engine.authoring`)
+
+The generation branch's first slice, built on the same reuse principle. Four pure
+functions, nothing written — the host persists definitions as it persists states:
+
+- `derive_graph(assessment_id, items, declaration=, relation_threshold=, edge_floor=)` —
+  the general-purpose questions→graph operation, delegating to
+  `cat_engine.ingest.derive.derive_graph` (item co-measurement; deterministic; derived
+  prerequisite edges ship inert/unvalidated). The thresholds are explicit per-call
+  arguments and are stamped into the graph under `derivation` — fixing the legacy
+  hazard where they were ambient settings read at ingest time.
+- `validate_content(assessment_id, items, graph, question_budget=, critical_only=)` —
+  `BankStore.validate`'s findings (item validity, graph/bank pairing,
+  `coverage_unreachable`, `required_node_unmeasured`, …) as a frozen report.
+- `build_assessment(...)` — items (+ optional authored graph or declaration) → validated
+  `AssessmentDefinition`; derives the graph when none is given, derives
+  `coverage_critical_only` from graph content (the legacy rule), refuses invalid content
+  naming every error finding, and compiles once as the final gate.
+- `revise_assessment(definition, version=, add_items=, update_items=, retire_item_ids=,
+  graph="rederive"|"keep"|dict)` — returns a NEW definition; requires a new version;
+  retiring keeps the item in the definition (history stays whole; the engine never
+  administers retired items).
+
+Not wrapped, deliberately: the legacy upload store/receipt cache (host persistence),
+`analyse_bank` (bank information floor) and the edge-validity Wilson checks in
+`cat_engine/validation.py` — candidates for a later authoring slice if needed.
 
 ## Known limitations and the follow-up phases
 

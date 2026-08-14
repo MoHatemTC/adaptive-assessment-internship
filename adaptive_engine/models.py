@@ -1,13 +1,23 @@
-"""The assessment definition: what the caller supplies, in the engine's own shapes.
+"""The assessment definition: typed input models for an external caller.
 
-This layer deliberately does NOT invent a second content model. ``items`` are bank-item
-payloads exactly as ``cat_engine``'s ``BankItem`` schema defines them (and as the
-authoring branch produces them), and ``graph`` is the competency-graph JSON the graph
-validator already parses. Compilation validates both with the engine's own validators, so
-there is one definition of "a valid item" and "a valid graph" in the whole repository.
+This package is called by another service, so every input crossing the boundary is a
+declared pydantic model — a caller can generate a schema, and a malformed payload fails
+with a field-level error naming exactly what is wrong, never a KeyError three layers
+down.
 
-Everything here is immutable and validated at the door; the caller owns persistence and
-versioning of the definition itself.
+The models deliberately REUSE the engine's own shapes rather than inventing parallel
+ones:
+
+- Items are the engine's ``BankItem`` — the one authoritative item schema (modality,
+  measures, IRT parameters, payload with grading data). Re-exported here as the public
+  input type.
+- The graph builds on the engine's wire DTOs (``GraphNodeDTO``/``GraphEdgeDTO``), which
+  keep the file format's ``from``/``to`` spelling as aliases — a caller can send exactly
+  the graph JSON they would otherwise check in. ``CompetencyGraph`` adds the provenance
+  fields this layer's artifacts carry.
+
+Raw JSON dicts still coerce into every model automatically, so hosts sending parsed
+JSON keep working — they just get typed validation for free.
 """
 
 from __future__ import annotations
@@ -16,11 +26,85 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from cat_engine.contracts import CompetencyGraphDTO
+from cat_engine.engine.schemas.orchestration import BankItem
+
+__all__ = [
+    "AssessmentDefinition",
+    "BankItem",
+    "CompetencyDeclaration",
+    "CompetencyGraph",
+    "FrozenModel",
+    "GraphDerivation",
+    "GraphPolicy",
+    "MeasurementPolicy",
+]
+
 
 class FrozenModel(BaseModel):
     """Base for this layer's models: immutable, strict about shape and floats."""
 
     model_config = ConfigDict(frozen=True, extra="forbid", allow_inf_nan=False)
+
+
+class GraphPolicy(FrozenModel):
+    """The graph's own propagation policy block, as the graph file spells it.
+
+    ``None`` means "no opinion — the deployment decides". A derived graph ships with
+    both switches explicitly off, because its edges come from co-measurement rather than
+    expertise.
+    """
+
+    upward_inference: bool | None = None
+    descendant_blocking: bool | None = None
+    accepted_validation_statuses: list[str] = Field(default_factory=lambda: ["validated"])
+    minimum_failures_to_block: int | None = Field(default=None, ge=1)
+    notes: str = ""
+
+
+class GraphDerivation(FrozenModel):
+    """How a derived graph was built — stamped into the artifact, never ambient."""
+
+    basis: str
+    relation_threshold: float
+    edge_floor: float
+
+
+class CompetencyGraph(CompetencyGraphDTO):
+    """A competency graph in the engine's wire shape, plus this layer's provenance.
+
+    Inherits ``nodes`` (``GraphNodeDTO``) and ``edges`` (``GraphEdgeDTO``, wire aliases
+    ``from``/``to``) from the engine's own DTO, so the JSON a caller sends is the JSON
+    the graph files use. ``policy`` is typed here; ``derivation`` records the rules a
+    derived graph was built under.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    bank_id: str = ""
+    notes: str = ""
+    policy: GraphPolicy | None = None  # type: ignore[assignment] — typed, not a raw dict
+    derivation: GraphDerivation | None = None
+
+    def wire_format(self) -> dict[str, Any]:
+        """The raw dict the engine's graph validator reads (``from``/``to`` spelling)."""
+        return self.model_dump(mode="json", by_alias=True, exclude_none=True)
+
+
+class CompetencyDeclaration(FrozenModel):
+    """One entry of the optional ``competencies`` block an author supplies alongside
+    questions — the two facts a question list cannot imply, plus a display title.
+
+    ``mains`` names every main competency a shared sub-competency serves; left ``None``
+    the id prefix decides (``C1.6`` serves ``C1``).
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid", populate_by_name=True)
+
+    competency_id: str = Field(alias="id", min_length=1)
+    title: str = ""
+    critical: bool = True
+    mains: list[str] | None = None
 
 
 class MeasurementPolicy(FrozenModel):
@@ -70,13 +154,10 @@ class MeasurementPolicy(FrozenModel):
 class AssessmentDefinition(FrozenModel):
     """Everything the engine needs to run one assessment, supplied by the caller.
 
-    ``items``: bank items in the engine's ``BankItem`` wire shape — modality, measures
-    (sub-competency loadings), IRT parameters, and the modality payload including grading
-    data where grading is deterministic. THIS MODEL IS NOT CANDIDATE-SAFE; only
+    ``items`` are engine ``BankItem`` models — modality, measures (sub-competency
+    loadings), IRT parameters, and the modality payload including grading data where
+    grading is deterministic. THIS MODEL IS NOT CANDIDATE-SAFE; only
     ``decision.question`` ever is.
-
-    ``graph``: the competency-graph JSON (nodes, edges, optional bank policy) as the
-    authoring branch emits it, or None for an ungated assessment.
 
     ``targets``: the main competencies to assess. None assesses every main the items
     measure.
@@ -84,7 +165,7 @@ class AssessmentDefinition(FrozenModel):
 
     assessment_id: str = Field(min_length=1)
     version: str = Field(min_length=1)
-    items: list[dict[str, Any]] = Field(min_length=1)
-    graph: dict[str, Any] | None = None
+    items: list[BankItem] = Field(min_length=1)
+    graph: CompetencyGraph | None = None
     targets: list[str] | None = None
     policy: MeasurementPolicy | None = None

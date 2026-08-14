@@ -65,9 +65,9 @@ def load_definition(targets: list[str] | None) -> AssessmentDefinition:
 
 def main_titles(definition: AssessmentDefinition) -> dict[str, str]:
     return {
-        node["competency_id"]: node.get("title", node["competency_id"])
-        for node in definition.graph["nodes"]
-        if node.get("node_type") == "main"
+        node.competency_id: node.title or node.competency_id
+        for node in definition.graph.nodes
+        if node.node_type == "main"
     }
 
 
